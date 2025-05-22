@@ -16,6 +16,7 @@
 // System includes
 #include <string>
 #include <iostream>
+#include <algorithm> // Added for std::lower_bound
 
 // External includes
 
@@ -504,19 +505,32 @@ public:
 
         KRATOS_ERROR_IF(size == 0) << "Get value from empty table" << std::endl;
 
-        if(size==1) // constant table. Returning the only value we have.
+        if (size == 1) // constant table. Returning the only value we have.
             return mData.begin()->second[0];
 
         TResultType result;
-        if(X <= mData[0].first)
+
+        // Use std::lower_bound to find the iterator to the first element whose argument is not less than X.
+        auto it = std::lower_bound(mData.begin(), mData.end(), X,
+            [](const RecordType& record, TArgumentType val) {
+                return record.first < val;
+            });
+
+        if (it == mData.begin()) {
+            // X is less than or equal to the first element's argument.
+            // Interpolate/extrapolate using mData[0] and mData[1].
+            // Note: mData[1] is safe to access because size >= 2 here (size == 1 case handled above)
             return Interpolate(X, mData[0].first, mData[0].second[0], mData[1].first, mData[1].second[0], result);
-
-        for(std::size_t i = 1 ; i < size ; i++)
-            if(X <= mData[i].first)
-                return Interpolate(X, mData[i-1].first, mData[i-1].second[0], mData[i].first, mData[i].second[0], result);
-
-        // now the x is outside the table and we have to extrapolate it using last two records of table.
-        return Interpolate(X, mData[size-2].first, mData[size-2].second[0], mData[size-1].first, mData[size-1].second[0], result);
+        } else if (it == mData.end()) {
+            // X is greater than the last element's argument.
+            // Extrapolate using the last two elements mData[size-2] and mData[size-1].
+            // Note: mData[size-2] is safe to access because size >= 2
+            return Interpolate(X, mData[size-2].first, mData[size-2].second[0], mData[size-1].first, mData[size-1].second[0], result);
+        } else {
+            // X falls between (it-1)->first and it->first (general case).
+            // Interpolate using *(it-1) and *it.
+            return Interpolate(X, (it-1)->first, (it-1)->second[0], it->first, it->second[0], result);
+        }
     }
 
     // Get the nesrest value for the given argument
@@ -641,20 +655,34 @@ public:
     {
         std::size_t size = mData.size();
 
-        KRATOS_ERROR_IF(size == 0) << "Get value from empty table" << std::endl;
+        KRATOS_ERROR_IF(size == 0) << "Get derivative from empty table" << std::endl;
 
-        if(size==1) // constant table. Returning the only value we have.
+        if (size == 1) // constant table, derivative is 0.
             return 0.0;
 
         TResultType result;
-        if(X <= mData[0].first)
+
+        // Use std::lower_bound to find the iterator to the first element whose argument is not less than X.
+        auto it = std::lower_bound(mData.begin(), mData.end(), X,
+            [](const RecordType& record, TArgumentType val) {
+                return record.first < val;
+            });
+
+        if (it == mData.begin()) {
+            // X is less than or equal to the first element's argument.
+            // Calculate derivative using mData[0] and mData[1].
+            // Note: mData[1] is safe to access because size >= 2 here (size == 1 case handled above)
             return InterpolateDerivative(mData[0].first, mData[0].second[0], mData[1].first, mData[1].second[0], result);
-
-        for(std::size_t i = 1 ; i < size ; i++)
-            if(X <= mData[i].first)
-                return InterpolateDerivative( mData[i-1].first, mData[i-1].second[0], mData[i].first, mData[i].second[0], result);
-
-        return InterpolateDerivative(mData[size-2].first, mData[size-2].second[0], mData[size-1].first, mData[size-1].second[0], result);
+        } else if (it == mData.end()) {
+            // X is greater than the last element's argument.
+            // Calculate derivative using the last two elements mData[size-2] and mData[size-1].
+            // Note: mData[size-2] is safe to access because size >= 2
+            return InterpolateDerivative(mData[size-2].first, mData[size-2].second[0], mData[size-1].first, mData[size-1].second[0], result);
+        } else {
+            // X falls between (it-1)->first and it->first (general case).
+            // Calculate derivative using *(it-1) and *it.
+            return InterpolateDerivative((it-1)->first, (it-1)->second[0], it->first, it->second[0], result);
+        }
     }
      TResultType& InterpolateDerivative( TArgumentType const& X1, TResultType const& Y1, TArgumentType const& X2, TResultType const& Y2, TResultType& Result) const
     {
