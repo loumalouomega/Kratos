@@ -48,11 +48,11 @@ The `CsrMatrix` can be created in several ways, depending on whether the sparsit
     // Populate Agraph based on connectivities (e.g., from a mesh)
     // This part is highly dependent on how 'connectivities' are defined and added.
     // For example, if connectivities = {{0,1}, {1,2}, {0,2}} for a 3-node graph:
-    // std::vector<std::vector<Kratos::CsrMatrix<double>::IndexType>> connectivities_example = {{0,1},{1,2},{0,2}};
-    // for(const auto& c : connectivities_example) {
-    //     Agraph.AddEntries(c); // Add symmetric entries for each connectivity
-    // }
-    // Agraph.Finalize(); // Finalize graph structure
+    std::vector<std::vector<Kratos::CsrMatrix<double>::IndexType>> connectivities_example = {{0,1},{1,2},{0,2}};
+    for(const auto& c : connectivities_example) {
+        Agraph.AddEntries(c); // Add symmetric entries for each connectivity
+    }
+    Agraph.Finalize(); // Finalize graph structure
 
     // Create CsrMatrix from the graph
     Kratos::CsrMatrix<double> A(Agraph); 
@@ -77,9 +77,9 @@ The `CsrMatrix` can be created in several ways, depending on whether the sparsit
     // (1,1) = 3.0
     // size1() and size2() will be determined by the max indices in the map.
     // For this example, size1() would likely be 2, size2() would be 2.
-    // KRATOS_EXPECT_EQ(matrix_from_map(0,0), 1.0); // Example check
-    // KRATOS_EXPECT_EQ(matrix_from_map(0,1), 2.0); // Example check
-    // KRATOS_EXPECT_EQ(matrix_from_map(1,1), 3.0); // Example check
+    KRATOS_EXPECT_EQ(matrix_from_map(0,0), 1.0); // Example check
+    KRATOS_EXPECT_EQ(matrix_from_map(0,1), 2.0); // Example check
+    KRATOS_EXPECT_EQ(matrix_from_map(1,1), 3.0); // Example check
     ```
 
 *   `CsrMatrix(const CsrMatrix<TDataType,TIndexType>& rOtherMatrix)`: Copy constructor. Performs a deep copy of the other matrix's data.
@@ -87,28 +87,28 @@ The `CsrMatrix` can be created in several ways, depending on whether the sparsit
     Kratos::CsrMatrix<double> original_matrix; 
     // ... (original_matrix is initialized and filled) ...
     // For example:
-    // Kratos::CsrMatrix<double>::MatrixMapType temp_map;
-    // temp_map[{0,0}] = 5.0; temp_map[{1,1}] = 6.0;
-    // original_matrix = Kratos::CsrMatrix<double>(temp_map);
+    Kratos::CsrMatrix<double>::MatrixMapType temp_map;
+    temp_map[{0,0}] = 5.0; temp_map[{1,1}] = 6.0;
+    original_matrix = Kratos::CsrMatrix<double>(temp_map);
 
     Kratos::CsrMatrix<double> copied_matrix(original_matrix);
     // copied_matrix now has its own copy of the data from original_matrix.
-    // KRATOS_EXPECT_EQ(copied_matrix(0,0), original_matrix(0,0)); // Example check
+    KRATOS_EXPECT_EQ(copied_matrix(0,0), original_matrix(0,0)); // Example check
     ```
 
 *   `CsrMatrix(CsrMatrix<TDataType,TIndexType>&& rOtherMatrix)`: Move constructor. Takes ownership of the data from `rOtherMatrix`. `rOtherMatrix` is left in a valid but unspecified state (typically empty).
     ```cpp
     Kratos::CsrMatrix<double> source_matrix;
     // ... (source_matrix is initialized and filled) ...
-    // Kratos::CsrMatrix<double>::MatrixMapType temp_map_move;
-    // temp_map_move[{0,0}] = 7.0;
-    // source_matrix = Kratos::CsrMatrix<double>(temp_map_move);
-    // Kratos::CsrMatrix<double>::IndexType original_nnz = source_matrix.nnz();
+    Kratos::CsrMatrix<double>::MatrixMapType temp_map_move;
+    temp_map_move[{0,0}] = 7.0;
+    source_matrix = Kratos::CsrMatrix<double>(temp_map_move);
+    Kratos::CsrMatrix<double>::IndexType original_nnz = source_matrix.nnz();
 
     Kratos::CsrMatrix<double> moved_matrix(std::move(source_matrix));
     // moved_matrix now owns the data previously in source_matrix.
-    // KRATOS_EXPECT_EQ(moved_matrix.nnz(), original_nnz); // Example check
-    // KRATOS_EXPECT_EQ(source_matrix.nnz(), 0);       // Example check: source is empty
+    KRATOS_EXPECT_EQ(moved_matrix.nnz(), original_nnz); // Example check
+    KRATOS_EXPECT_EQ(source_matrix.nnz(), 0);           // Example check: source is empty
     // source_matrix should not be used unless reinitialized.
     ```
 
@@ -125,15 +125,15 @@ The `CsrMatrix` can be created in several ways, depending on whether the sparsit
     Kratos::CsrMatrix<double> matrix_to_assign_to;
     Kratos::CsrMatrix<double> another_matrix;
     // ... (another_matrix is initialized and filled) ...
-    // Kratos::CsrMatrix<double>::MatrixMapType temp_map_assign;
-    // temp_map_assign[{0,1}] = 8.0;
-    // another_matrix = Kratos::CsrMatrix<double>(temp_map_assign);
-    // Kratos::CsrMatrix<double>::IndexType original_nnz_assign = another_matrix.nnz();
+    Kratos::CsrMatrix<double>::MatrixMapType temp_map_assign;
+    temp_map_assign[{0,1}] = 8.0;
+    another_matrix = Kratos::CsrMatrix<double>(temp_map_assign);
+    Kratos::CsrMatrix<double>::IndexType original_nnz_assign = another_matrix.nnz();
 
     matrix_to_assign_to = std::move(another_matrix);
     // matrix_to_assign_to now owns the data from another_matrix.
-    // KRATOS_EXPECT_EQ(matrix_to_assign_to.nnz(), original_nnz_assign); // Example check
-    // KRATOS_EXPECT_EQ(another_matrix.nnz(), 0);                    // Example check
+    KRATOS_EXPECT_EQ(matrix_to_assign_to.nnz(), original_nnz_assign); // Example check
+    KRATOS_EXPECT_EQ(another_matrix.nnz(), 0);                        // Example check
     ```
 
 ### Main Operators and Member Functions
@@ -146,9 +146,9 @@ This section details various functions for interacting with and manipulating the
     ```cpp
     Kratos::CsrMatrix<double> matrix_to_clear;
     // ... (matrix_to_clear is initialized and filled) ...
-    // Kratos::CsrMatrix<double>::MatrixMapType temp_map_clear;
-    // temp_map_clear[{0,0}] = 1.0;
-    // matrix_to_clear = Kratos::CsrMatrix<double>(temp_map_clear);
+    Kratos::CsrMatrix<double>::MatrixMapType temp_map_clear;
+    temp_map_clear[{0,0}] = 1.0;
+    matrix_to_clear = Kratos::CsrMatrix<double>(temp_map_clear);
 
     matrix_to_clear.Clear();
     KRATOS_EXPECT_EQ(matrix_to_clear.size1(), 0);
@@ -161,31 +161,31 @@ This section details various functions for interacting with and manipulating the
 *   `void SetValue(const TDataType value)`: Sets all *existing* non-zero entries (i.e., entries present in the sparsity pattern) in the matrix to the specified `value`. This does not change the sparsity pattern.
     ```cpp
     // Assume 'A' is a CsrMatrix initialized with a sparsity pattern
-    // Kratos::CsrMatrix<double>::MatrixMapType sv_map;
-    // sv_map[{0,0}]=1.0; sv_map[{1,1}]=1.0;
-    // Kratos::CsrMatrix<double> A_setval(sv_map);
+    Kratos::CsrMatrix<double>::MatrixMapType sv_map;
+    sv_map[{0,0}]=1.0; sv_map[{1,1}]=1.0;
+    Kratos::CsrMatrix<double> A_setval(sv_map);
     A_setval.SetValue(10.0); // All stored entries in A_setval are now 10.0
-    // KRATOS_EXPECT_EQ(A_setval(0,0), 10.0); // Example check
-    // KRATOS_EXPECT_EQ(A_setval(1,1), 10.0); // Example check
+    KRATOS_EXPECT_EQ(A_setval(0,0), 10.0); // Example check
+    KRATOS_EXPECT_EQ(A_setval(1,1), 10.0); // Example check
     ```
 
 *   `IndexType size1() const`: Returns the number of rows in the matrix.
     ```cpp
     // Given CsrMatrix A
-    // Kratos::CsrMatrix<double> A_s1; // Assume A_s1 is 3xN
-    // Kratos::CsrMatrix<double>::MatrixMapType s1_map;
-    // s1_map[{0,0}]=1; s1_map[{1,0}]=1; s1_map[{2,0}]=1;
-    // A_s1 = Kratos::CsrMatrix<double>(s1_map);
+    Kratos::CsrMatrix<double> A_s1; // Assume A_s1 is 3xN
+    Kratos::CsrMatrix<double>::MatrixMapType s1_map;
+    s1_map[{0,0}]=1; s1_map[{1,0}]=1; s1_map[{2,0}]=1;
+    A_s1 = Kratos::CsrMatrix<double>(s1_map);
     Kratos::CsrMatrix<double>::IndexType num_rows = A_s1.size1(); // num_rows would be 3
     ```
 
 *   `IndexType size2() const`: Returns the number of columns in the matrix.
     ```cpp
     // Given CsrMatrix A
-    // Kratos::CsrMatrix<double> A_s2; // Assume A_s2 is Mx2
-    // Kratos::CsrMatrix<double>::MatrixMapType s2_map;
-    // s2_map[{0,0}]=1; s2_map[{0,1}]=1;
-    // A_s2 = Kratos::CsrMatrix<double>(s2_map);
+    Kratos::CsrMatrix<double> A_s2; // Assume A_s2 is Mx2
+    Kratos::CsrMatrix<double>::MatrixMapType s2_map;
+    s2_map[{0,0}]=1; s2_map[{0,1}]=1;
+    A_s2 = Kratos::CsrMatrix<double>(s2_map);
     Kratos::CsrMatrix<double>::IndexType num_cols = A_s2.size2(); // num_cols would be 2
     ```
     *Note: `size2()` is typically set via `SetColSize()` or `ComputeColSize()` after the sparsity pattern is defined.*
@@ -193,9 +193,9 @@ This section details various functions for interacting with and manipulating the
 *   `IndexType nnz() const`: Returns the number of non-zero entries (or stored entries, as CSR can store explicit zeros if they are part of the pattern).
     ```cpp
     // Given CsrMatrix A
-    // Kratos::CsrMatrix<double>::MatrixMapType nnz_map;
-    // nnz_map[{0,0}]=1; nnz_map[{0,1}]=2; nnz_map[{1,0}]=3;
-    // Kratos::CsrMatrix<double> A_nnz(nnz_map);
+    Kratos::CsrMatrix<double>::MatrixMapType nnz_map;
+    nnz_map[{0,0}]=1; nnz_map[{0,1}]=2; nnz_map[{1,0}]=3;
+    Kratos::CsrMatrix<double> A_nnz(nnz_map);
     Kratos::CsrMatrix<double>::IndexType non_zeros = A_nnz.nnz(); // non_zeros would be 3
     ```
 
@@ -216,9 +216,9 @@ These methods provide access to the raw CSR data arrays. Modifying these directl
     ```cpp
     // Example: Iterating through entries of row `i` (conceptual)
     // Assume A_iter is an initialized CsrMatrix
-    // Kratos::CsrMatrix<double>::MatrixMapType iter_map;
-    // iter_map[{0,0}]=1.0; iter_map[{0,1}]=2.0; iter_map[{1,1}]=3.0;
-    // Kratos::CsrMatrix<double> A_iter(iter_map);
+    Kratos::CsrMatrix<double>::MatrixMapType iter_map;
+    iter_map[{0,0}]=1.0; iter_map[{0,1}]=2.0; iter_map[{1,1}]=3.0;
+    Kratos::CsrMatrix<double> A_iter(iter_map);
     Kratos::CsrMatrix<double>::IndexType row_i = 0; // some row index
     if (row_i < A_iter.size1()) {
         const auto& row_indices = A_iter.index1_data();
@@ -232,7 +232,7 @@ These methods provide access to the raw CSR data arrays. Modifying these directl
             Kratos::CsrMatrix<double>::IndexType col_j = col_indices[k];
             Kratos::CsrMatrix<double>::DataType value = values[k];
             // Process (row_i, col_j, value)
-            // std::cout << "A(" << row_i << "," << col_j << ") = " << value << std::endl; // Example action
+            std::cout << "A(" << row_i << "," << col_j << ") = " << value << std::endl; // Example action
         }
     }
     ```
@@ -244,12 +244,12 @@ These methods provide access to the raw CSR data arrays. Modifying these directl
 *   `void ComputeColSize()`: Calculates `mNcols` (the value returned by `size2()`) by finding the maximum column index present in `index2_data()` and adding 1. Call this if you manually populate `index2_data()` or construct the matrix from external CSR arrays without initially setting `mNcols`.
     ```cpp
     // Assume matrix A_compcol is constructed, and its column indices are populated.
-    // Kratos::CsrMatrix<double>::MatrixMapType compcol_map;
-    // compcol_map[{0,0}]=1; compcol_map[{0,2}]=1; // Max column index is 2
-    // Kratos::CsrMatrix<double> A_compcol(compcol_map);
+    Kratos::CsrMatrix<double>::MatrixMapType compcol_map;
+    compcol_map[{0,0}]=1; compcol_map[{0,2}]=1; // Max column index is 2
+    Kratos::CsrMatrix<double> A_compcol(compcol_map);
     A_compcol.ComputeColSize(); 
     // Now A_compcol.size2() will reflect the maximum column index found + 1 (i.e., 3).
-    // KRATOS_EXPECT_EQ(A_compcol.size2(), 3); // Example check
+    KRATOS_EXPECT_EQ(A_compcol.size2(), 3); // Example check
     ```
 *   `void CheckColSize()`: Verifies if any column index in `mColIndices` is greater than or equal to `mNcols`. Throws an error if an inconsistency is found. Useful for debugging.
 
@@ -278,7 +278,7 @@ These methods are for advanced use cases, allowing the `CsrMatrix` to use extern
     A_ext.SetColSize(2);      // Manually set sizes (or ComputeColSize if indices are complex)
     
     // ... use A_ext ...
-    // KRATOS_EXPECT_EQ(A_ext(1,1), 3.0); // Example check
+    KRATOS_EXPECT_EQ(A_ext(1,1), 3.0); // Example check
     
     // User must delete the arrays when done, as A_ext does not own them.
     delete[] my_row_ptr;
@@ -299,7 +299,7 @@ These methods are for advanced use cases, allowing the `CsrMatrix` to use extern
     // Now B_resize.index1_data(), B_resize.index2_data(), B_resize.value_data() can be populated.
     // Remember to set B_resize.index1_data()[0] = 0; and fill row pointers correctly.
     // Then call B_resize.ComputeColSize();
-    // KRATOS_EXPECT_EQ(B_resize.index1_data().size(), 101); // Example check
+    KRATOS_EXPECT_EQ(B_resize.index1_data().size(), 101); // Example check
     ```
 
 #### Element Access
@@ -324,7 +324,7 @@ These methods are for advanced use cases, allowing the `CsrMatrix` to use extern
     if (A_access.Has(0, 3)) {
         double val = A_access(0, 3); // val will be 7.0
         A_access(0, 3) = 10.0;       // Modify existing entry
-        // KRATOS_EXPECT_EQ(A_access(0,3), 10.0); // Example check
+        KRATOS_EXPECT_EQ(A_access(0,3), 10.0); // Example check
     }
     
     bool has_entry = A_access.Has(1, 0); // has_entry will be false
@@ -357,7 +357,7 @@ These methods are for advanced use cases, allowing the `CsrMatrix` to use extern
     
     A_spmv.SpMV(x_vec, y_vec); // y_vec now contains A_spmv * x_vec
     // Expected y_vec = [2*1-1*2, -1*1+2*2-1*3, -1*2+2*3] = [0, 0, 4]
-    // KRATOS_EXPECT_VECTOR_NEAR(y_vec, Kratos::Vector{0.0, 0.0, 4.0}, 1e-9); // Example check
+    KRATOS_EXPECT_VECTOR_NEAR(y_vec, Kratos::Vector{0.0, 0.0, 4.0}, 1e-9); // Example check
 
     // For y = alpha*A*x + beta*y
     double alpha = 2.0;
@@ -365,9 +365,9 @@ These methods are for advanced use cases, allowing the `CsrMatrix` to use extern
     // Re-initialize y_vec for clarity of the beta term
     for(unsigned int i=0; i<y_vec.size(); ++i) y_vec[i] = static_cast<double>(i); // y_initial = [0,1,2]
     // y_vec will be 2.0 * A_spmv * x_vec + 0.5 * y_initial
-    // A_spmv.SpMV(alpha, x_vec, beta, y_vec); 
+    A_spmv.SpMV(alpha, x_vec, beta, y_vec); 
     // Expected y_vec = 2.0*[0,0,4] + 0.5*[0,1,2] = [0, 0, 8] + [0, 0.5, 1] = [0, 0.5, 9]
-    // KRATOS_EXPECT_VECTOR_NEAR(y_vec, Kratos::Vector{0.0, 0.5, 9.0}, 1e-9); // Example check
+    KRATOS_EXPECT_VECTOR_NEAR(y_vec, Kratos::Vector{0.0, 0.5, 9.0}, 1e-9); // Example check
     ```
 
 *   `template<class TInputVectorType, class TOutputVectorType> void TransposeSpMV(const TInputVectorType& rX, TOutputVectorType& rY) const`: Performs **y += A<sup>T</sup>\*x**.
@@ -392,7 +392,7 @@ These methods are for advanced use cases, allowing the `CsrMatrix` to use extern
     A_tspmv.TransposeSpMV(x_for_transpose, y_from_transpose); // y_from_transpose = A_tspmv^T * x_for_transpose
     // A_tspmv^T = [[1,4],[2,5],[3,6]]
     // y_from_transpose = [[1,4],[2,5],[3,6]] * [1,1]^T = [1*1+4*1, 2*1+5*1, 3*1+6*1]^T = [5,7,9]^T
-    // KRATOS_EXPECT_VECTOR_NEAR(y_from_transpose, Kratos::Vector{5.0,7.0,9.0}, 1e-9); // Example check
+    KRATOS_EXPECT_VECTOR_NEAR(y_from_transpose, Kratos::Vector{5.0,7.0,9.0}, 1e-9); // Example check
     ```
 
 #### Norms
@@ -406,7 +406,7 @@ These methods are for advanced use cases, allowing the `CsrMatrix` to use extern
     Kratos::CsrMatrix<double> A_frob(frob_map);
     double frob_norm = A_frob.NormFrobenius();
     // Expected: sqrt(1^2 + 2^2 + 3^2 + 4^2) = sqrt(1+4+9+16) = sqrt(30) approx 5.477
-    // KRATOS_EXPECT_NEAR(frob_norm, std::sqrt(30.0), 1e-9); // Example check
+    KRATOS_EXPECT_NEAR(frob_norm, std::sqrt(30.0), 1e-9); // Example check
     ```
 
 ### Assembly Operations
@@ -427,7 +427,7 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
     // A_manual_reserve.index2_data() is size 5
     // A_manual_reserve.value_data() is size 5
     // Now, one would manually populate these arrays and then call ComputeColSize().
-    // KRATOS_EXPECT_EQ(A_manual_reserve.index1_data().size(), num_rows_reserve + 1); // Example check
+    KRATOS_EXPECT_EQ(A_manual_reserve.index1_data().size(), num_rows_reserve + 1); // Example check
     ```
 
 *   `MatrixMapType ToMap() const`: Converts the `CsrMatrix` to a `MatrixMapType` (an `std::unordered_map<std::pair<IndexType, IndexType>, TDataType, ...>`). This can be useful for debugging, converting to other formats, or if you need easy lookup of arbitrary elements (though it's less efficient than direct CSR access for iteration).
@@ -438,13 +438,13 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
     Kratos::CsrMatrix<double> A_tomap(tomap_orig_map);
 
     Kratos::CsrMatrix<double>::MatrixMapType A_map_result = A_tomap.ToMap();
-    // for(const auto& entry : A_map_result) {
-    //     Kratos::CsrMatrix<double>::IndexType r = entry.first.first;
-    //     Kratos::CsrMatrix<double>::IndexType c = entry.first.second;
-    //     double val = entry.second;
-    //     std::cout << "(" << r << ", " << c << "): " << val << std::endl;
-    // }
-    // KRATOS_EXPECT_EQ(A_map_result.size(), 2); // Example check
+    for(const auto& entry : A_map_result) {
+        Kratos::CsrMatrix<double>::IndexType r = entry.first.first;
+        Kratos::CsrMatrix<double>::IndexType c = entry.first.second;
+        double val = entry.second;
+        std::cout << "(" << r << ", " << c << "): " << val << std::endl;
+    }
+    KRATOS_EXPECT_EQ(A_map_result.size(), 2); // Example check
     ```
 
 *   `void BeginAssemble()`: In the serial `CsrMatrix` implementation, this function currently does nothing. It's a placeholder for compatibility with potential MPI (distributed memory) versions where it might initiate communication or locking mechanisms required before assembly.
@@ -452,9 +452,9 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
 
     ```cpp
     // Typical assembly workflow:
-    // Kratos::SparseContiguousRowGraph<> Agraph_assembly(3); // Example graph
-    // Agraph_assembly.AddEntry(0,0); Agraph_assembly.AddEntry(1,1); Agraph_assembly.AddEntry(2,2);
-    // Agraph_assembly.Finalize();
+    Kratos::SparseContiguousRowGraph<> Agraph_assembly(3); // Example graph
+    Agraph_assembly.AddEntry(0,0); Agraph_assembly.AddEntry(1,1); Agraph_assembly.AddEntry(2,2);
+    Agraph_assembly.Finalize();
     Kratos::CsrMatrix<double> A_workflow(Agraph_assembly); // Assume Agraph_assembly defines the sparsity
     A_workflow.BeginAssemble(); // No-op in serial, but good practice
     // ... calls to Assemble() or AssembleEntry() ...
@@ -495,7 +495,7 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
     // A(0,0) should be 1.0, A(0,1) should be 1.0
     // A(1,0) should be 1.0, A(1,1) should be 1.0 (from {0,1}) + 1.0 (from {1,2}) = 2.0
     // A(1,2) should be 1.0, A(2,1) should be 1.0, A(2,2) should be 1.0
-    // KRATOS_EXPECT_EQ(A_glob_assem(1,1), 2.0); // Example check
+    KRATOS_EXPECT_EQ(A_glob_assem(1,1), 2.0); // Example check
     ```
 
 *   `template<class TMatrixType, class TIndexVectorType> void Assemble(const TMatrixType& rMatrixInput, const TIndexVectorType& rRowEquationId, const TIndexVectorType& rColEquationId)`: Assembles a local (possibly rectangular) matrix `rMatrixInput` into the global `CsrMatrix`.
@@ -522,8 +522,8 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
     local_contribution_matrix(1,1) = 8.0; // Contributes to A(row_ids_rect[1], col_ids_rect[1]) = A(1,2)
     
     A_rect_assem.Assemble(local_contribution_matrix, row_ids_rect, col_ids_rect);
-    // KRATOS_EXPECT_EQ(A_rect_assem(0,1), 5.0); // Example check
-    // KRATOS_EXPECT_EQ(A_rect_assem(1,2), 8.0); // Example check
+    KRATOS_EXPECT_EQ(A_rect_assem(0,1), 5.0); // Example check
+    KRATOS_EXPECT_EQ(A_rect_assem(1,2), 8.0); // Example check
     ```
 
 *   `void AssembleEntry(const TDataType Value, const IndexType GlobalI, const IndexType GlobalJ)`: Atomically adds `Value` to the entry at global row `GlobalI` and global column `GlobalJ`. The entry `(GlobalI, GlobalJ)` must already exist in the matrix's sparsity pattern.
@@ -548,7 +548,7 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
     A_entry_assem.AssembleEntry(7.0, 2, 3); // A_entry_assem(2,3) += 7.0
     A_entry_assem.AssembleEntry(7.0, 2, 4); // A_entry_assem(2,4) += 7.0
     A_entry_assem.FinalizeAssemble();
-    // KRATOS_EXPECT_EQ(A_entry_assem(0,3), 7.0); // Example check
+    KRATOS_EXPECT_EQ(A_entry_assem(0,3), 7.0); // Example check
     ```
 
 ### Other Operations
@@ -598,8 +598,8 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
     //  [0,  0,  2]]  // Row 2: A(2,1) zeroed as DOF 1 is fixed
     // b_bc would become:
     // [1, 0, 3]     // b_bc[1] (fixed DOF) is zeroed
-    // KRATOS_EXPECT_EQ(A_bc(1,1), diagonal_val_for_fixed_dofs); // Example check
-    // KRATOS_EXPECT_EQ(b_bc[1], 0.0); // Example check
+    KRATOS_EXPECT_EQ(A_bc(1,1), diagonal_val_for_fixed_dofs); // Example check
+    KRATOS_EXPECT_EQ(b_bc[1], 0.0); // Example check
     ```
 
 #### Diagonal Properties
@@ -608,35 +608,33 @@ These methods are crucial for constructing the matrix, especially in Finite Elem
     ```cpp
     // From KratosCoreFastSuite :: CSRMatrixDiagonalValues
     // Assume CsrMatrix 'A_diag' is initialized.
-    // Kratos::CsrMatrix<double>::MatrixMapType diag_map;
-    // diag_map[{0,0}]=6.0; diag_map[{1,1}]=1.0; diag_map[{2,2}]=2.0; diag_map[{3,3}]=4.0;
-    // diag_map[{4,4}]=5.0; diag_map[{5,5}]=6.0; diag_map[{6,6}]=1.0; diag_map[{7,7}]=2.0;
-    // diag_map[{8,8}]=3.0; diag_map[{9,9}]=4.0; diag_map[{10,10}]=5.0; diag_map[{11,11}]=6.0;
-    // diag_map[{12,12}]=1.0; diag_map[{13,13}]=2.0; diag_map[{14,14}]=3.0; diag_map[{15,15}]=4.0;
-    // diag_map[{16,16}]=5.0; diag_map[{17,17}]=6.0; diag_map[{18,18}]=1.0; diag_map[{19,19}]=2.0;
-    // diag_map[{20,20}]=3.0; diag_map[{21,21}]=4.0; diag_map[{22,22}]=5.0; diag_map[{23,23}]=6.0;
-    // Kratos::CsrMatrix<double> A_diag(diag_map); // Using map from test data for example
-    // double norm_diag = A_diag.NormDiagonal();
-    // KRATOS_CHECK_NEAR(norm_diag, 22.135943621179, 1.0e-12); // Example from test
+    Kratos::CsrMatrix<double>::MatrixMapType diag_map;
+    diag_map[{0,0}]=6.0; diag_map[{1,1}]=1.0; diag_map[{2,2}]=2.0; diag_map[{3,3}]=4.0;
+    diag_map[{4,4}]=5.0; diag_map[{5,5}]=6.0; diag_map[{6,6}]=1.0; diag_map[{7,7}]=2.0;
+    diag_map[{8,8}]=3.0; diag_map[{9,9}]=4.0; diag_map[{10,10}]=5.0; diag_map[{11,11}]=6.0;
+    diag_map[{12,12}]=1.0; diag_map[{13,13}]=2.0; diag_map[{14,14}]=3.0; diag_map[{15,15}]=4.0;
+    diag_map[{16,16}]=5.0; diag_map[{17,17}]=6.0; diag_map[{18,18}]=1.0; diag_map[{19,19}]=2.0;
+    diag_map[{20,20}]=3.0; diag_map[{21,21}]=4.0; diag_map[{22,22}]=5.0; diag_map[{23,23}]=6.0;
+    Kratos::CsrMatrix<double> A_diag(diag_map); // Using map from test data for example
+    double norm_diag = A_diag.NormDiagonal();
+    KRATOS_CHECK_NEAR(norm_diag, 22.135943621179, 1.0e-12); // Example from test
     ```
 
 *   `TDataType MaxDiagonal() const`: Returns the maximum absolute value found on the diagonal of the matrix.
     ```cpp
     // From KratosCoreFastSuite :: CSRMatrixDiagonalValues
     // Assume CsrMatrix 'A_diag' (from above) is initialized.
-    // double max_diag = A_diag.MaxDiagonal();
-    // KRATOS_CHECK_NEAR(max_diag, 6.0, 1.0e-12); // Example from test
+    double max_diag = A_diag.MaxDiagonal();
+    KRATOS_CHECK_NEAR(max_diag, 6.0, 1.0e-12); // Example from test
     ```
 
 *   `TDataType MinDiagonal() const`: Returns the minimum absolute value found on the diagonal of the matrix.
     ```cpp
     // From KratosCoreFastSuite :: CSRMatrixDiagonalValues
     // Assume CsrMatrix 'A_diag' (from above) is initialized.
-    // double min_diag = A_diag.MinDiagonal();
-    // KRATOS_CHECK_NEAR(min_diag, 1.0, 1.0e-12); // Example from test
+    double min_diag = A_diag.MinDiagonal();
+    KRATOS_CHECK_NEAR(min_diag, 1.0, 1.0e-12); // Example from test
     ```
-
-```
 
 ### Input and output
 
@@ -646,7 +644,7 @@ These methods provide ways to get textual information about the matrix or print 
     ```cpp
     Kratos::CsrMatrix<double> A_info;
     std::string matrix_info = A_info.Info();
-    // std::cout << matrix_info << std::endl; 
+    std::cout << matrix_info << std::endl; 
     // Output would be something like: "CsrMatrix"
     ```
 
@@ -661,8 +659,8 @@ These methods provide ways to get textual information about the matrix or print 
 *   `void PrintData(std::ostream& rOStream) const`: Prints detailed data of the matrix to the output stream. This includes its dimensions (`size1`, `size2`), number of non-zeros (`nnz`), and the content of its internal CSR arrays (`index1_data`, `index2_data`, `value_data`).
     ```cpp
     // Assume CsrMatrix 'A_pdata' is initialized, e.g. a small 2x2 matrix:
-    // A_pdata(0,0) = 1.0, A_pdata(0,1) = 2.0
-    // A_pdata(1,1) = 3.0
+    A_pdata(0,0) = 1.0, A_pdata(0,1) = 2.0
+    A_pdata(1,1) = 3.0
     // (Sparsity pattern must allow these entries)
     
     // Example setup:
@@ -685,8 +683,6 @@ These methods provide ways to get textual information about the matrix or print 
     // value_data  : 
     // 1,2,3, 
     ```
-
-```
 
 ### Stream operators
 
@@ -721,5 +717,3 @@ These methods provide ways to get textual information about the matrix or print 
 
 *   `template<class TDataType> std::istream& operator >> (std::istream& rIStream, CsrMatrix<TDataType>& rThis)`:
     The input stream operator is defined but is generally not used for populating a `CsrMatrix` due to the complexity of CSR structure. Constructing from a graph, map, or by reserving and assembling are the preferred methods.
-
-```
