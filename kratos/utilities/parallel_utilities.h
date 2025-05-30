@@ -1,3 +1,18 @@
+// -- BEGIN WORKAROUND for define.h access issues --
+#if defined(KRATOS_SMP_TBB)
+  #if defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
+  #endif
+  #define KRATOS_PARALLEL_FRAMEWORK_TBB
+#elif defined(KRATOS_SMP_OPENMP)
+  #define KRATOS_PARALLEL_FRAMEWORK_OPENMP
+#elif defined(KRATOS_SMP_CXX11)
+  #define KRATOS_PARALLEL_FRAMEWORK_CXX11
+#else
+  #define KRATOS_PARALLEL_FRAMEWORK_NONE
+#endif
+// -- END WORKAROUND --
+
 //    |  /           |
 //    ' /   __| _` | __|  _ \   __|
 //    . \  |   (   | |   (   |\__ `
@@ -24,41 +39,53 @@
 #include <limits>
 #include <future>
 #include <thread>
-#include <mutex>
+#include <mutex> // For std::lock_guard
+#include <memory> // For std::unique_ptr
 
 // External includes
-#ifdef KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
 #include <omp.h>
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+#include <tbb/global_control.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+#include <tbb/blocked_range.h>
+#include <tbb/combinable.h>
+// #include <tbb/task_arena.h> // Potentially for max_concurrency, if global_control is not suitable
 #endif
 
 // Project includes
-#include "includes/define.h"
+#include "includes/define.h" // This define.h should ideally have the framework selection
 #include "includes/global_variables.h"
 #include "includes/lock_object.h"
 
-#define KRATOS_CRITICAL_SECTION const std::lock_guard scope_lock(ParallelUtilities::GetGlobalLock());
+#define KRATOS_CRITICAL_SECTION const std::lock_guard<LockObject> scope_lock(ParallelUtilities::GetGlobalLock());
 
-#define KRATOS_PREPARE_CATCH_THREAD_EXCEPTION std::stringstream err_stream;
-
-#ifndef KRATOS_NO_TRY_CATCH
-    #define KRATOS_CATCH_THREAD_EXCEPTION \
-    } catch(Exception& e) { \
-        KRATOS_CRITICAL_SECTION \
-        err_stream << "Thread #" << i << " caught exception: " << e.what(); \
-    } catch(std::exception& e) { \
-        KRATOS_CRITICAL_SECTION \
-        err_stream << "Thread #" << i << " caught exception: " << e.what(); \
-    } catch(...) { \
-        KRATOS_CRITICAL_SECTION \
-        err_stream << "Thread #" << i << " caught unknown exception:"; \
-    }
-#else
-    #define KRATOS_CATCH_THREAD_EXCEPTION {}
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
+    #define KRATOS_PREPARE_CATCH_THREAD_EXCEPTION std::stringstream err_stream;
+    #ifndef KRATOS_NO_TRY_CATCH
+        #define KRATOS_CATCH_THREAD_EXCEPTION \
+        } catch(Exception& e) { \
+            KRATOS_CRITICAL_SECTION \
+            err_stream << "Thread #" << i << " caught exception: " << e.what(); \
+        } catch(std::exception& e) { \
+            KRATOS_CRITICAL_SECTION \
+            err_stream << "Thread #" << i << " caught exception: " << e.what(); \
+        } catch(...) { \
+            KRATOS_CRITICAL_SECTION \
+            err_stream << "Thread #" << i << " caught unknown exception:"; \
+        }
+    #else
+        #define KRATOS_CATCH_THREAD_EXCEPTION {}
+    #endif
+    #define KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION \
+    const std::string& err_msg = err_stream.str(); \
+    KRATOS_ERROR_IF_NOT(err_msg.empty()) << "The following errors occured in a parallel region!\n" << err_msg << std::endl;
+#else // For TBB, CXX11, NONE - TBB handles exceptions by propagation, no special macros needed here.
+    #define KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
+    #define KRATOS_CATCH_THREAD_EXCEPTION
+    #define KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
 #endif
-
-#define KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION \
-const std::string& err_msg = err_stream.str(); \
-KRATOS_ERROR_IF_NOT(err_msg.empty()) << "The following errors occured in a parallel region!\n" << err_msg << std::endl;
 
 namespace Kratos
 {
@@ -109,8 +136,14 @@ private:
     ///@{
 
     static LockObject* mspGlobalLock;
-
+#if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+    static std::unique_ptr<tbb::global_control> mspTbbGlobalControl;
+#else
+    // For OpenMP and CXX11 (manual static int), keep previous mspNumThreads for now
+    // It will be removed once OpenMP and CXX11 paths for thread count are fully refactored or removed
     static int* mspNumThreads;
+#endif
+
 
     ///@}
     ///@name Private Operations
@@ -119,17 +152,19 @@ private:
     /// Default constructor.
     ParallelUtilities() = delete;
 
-    /** @brief Initializes the number of threads to be used.
-     * @return number of threads
+    /** @brief Initializes the number of threads to be used based on environment or hardware.
+     * This will call SetNumThreads internally.
      */
-    static int InitializeNumberOfThreads();
+    static void InitializeNumberOfThreads();
     ///@}
 
     ///@name Private Access
     ///@{
 
+#if !defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+    // This is only needed if not using TBB's global_control
     static int& GetNumberOfThreads();
-
+#endif
     ///@}
 }; // Class ParallelUtilities
 
@@ -181,8 +216,8 @@ public:
     template <class TUnaryFunction>
     inline void for_each(TUnaryFunction&& f)
     {
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         #pragma omp parallel for
         for (int i=0; i<mNchunks; ++i) {
             KRATOS_TRY
@@ -191,8 +226,20 @@ public:
             }
             KRATOS_CATCH_THREAD_EXCEPTION
         }
-
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        tbb::parallel_for(tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            [&](const tbb::blocked_range<TIterator>& r) {
+                for (auto it = r.begin(); it != r.end(); ++it) {
+                    f(*it);
+                }
+            }
+        );
+#else // Serial execution for CXX11 and NONE
+        for (auto it = mBlockPartition[0]; it != mBlockPartition[mNchunks]; ++it) {
+            f(*it);
+        }
+#endif
     }
 
     /** @brief loop allowing reductions. f called on every entry in rData
@@ -203,8 +250,8 @@ public:
     template <class TReducer, class TUnaryFunction>
     [[nodiscard]] inline typename TReducer::return_type for_each(TUnaryFunction &&f)
     {
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         TReducer global_reducer;
         #pragma omp parallel for
         for (int i=0; i<mNchunks; ++i) {
@@ -216,10 +263,31 @@ public:
             global_reducer.ThreadSafeReduce(local_reducer);
             KRATOS_CATCH_THREAD_EXCEPTION
         }
-
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
-
         return global_reducer.GetValue();
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        TReducer global_reducer; // Assuming default constructor provides identity
+        global_reducer = tbb::parallel_reduce(
+            tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            global_reducer, // Identity value
+            [&](const tbb::blocked_range<TIterator>& r, TReducer local_reducer) -> TReducer {
+                for (auto it = r.begin(); it != r.end(); ++it) {
+                    local_reducer.LocalReduce(f(*it));
+                }
+                return local_reducer;
+            },
+            [](TReducer& a, const TReducer& b) { // Joiner
+                a.ThreadSafeReduce(b); // Assuming ThreadSafeReduce is the join operation
+            }
+        );
+        return global_reducer.GetValue();
+#else // Serial execution
+        TReducer global_reducer;
+        for (auto it = mBlockPartition[0]; it != mBlockPartition[mNchunks]; ++it) {
+            global_reducer.LocalReduce(f(*it));
+        }
+        return global_reducer.GetValue();
+#endif
     }
 
     /** @brief loop with thread local storage (TLS). f called on every entry in rData
@@ -230,9 +298,8 @@ public:
     inline void for_each(const TThreadLocalStorage& rThreadLocalStoragePrototype, TFunction &&f)
     {
         static_assert(std::is_copy_constructible<TThreadLocalStorage>::value, "TThreadLocalStorage must be copy constructible!");
-
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         #pragma omp parallel
         {
             // copy the prototype to create the thread local storage
@@ -248,6 +315,22 @@ public:
             }
         }
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        tbb::combinable<TThreadLocalStorage> tls_combinable(rThreadLocalStoragePrototype);
+        tbb::parallel_for(tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            [&](const tbb::blocked_range<TIterator>& r) {
+                TThreadLocalStorage& local_tls = tls_combinable.local();
+                for (auto it = r.begin(); it != r.end(); ++it) {
+                    f(*it, local_tls);
+                }
+            }
+        );
+#else // Serial execution
+        TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
+        for (auto it = mBlockPartition[0]; it != mBlockPartition[mNchunks]; ++it) {
+            f(*it, thread_local_storage);
+        }
+#endif
     }
 
     /** @brief loop with thread local storage (TLS) allowing reductions. f called on every entry in rData
@@ -260,16 +343,13 @@ public:
     [[nodiscard]] inline typename TReducer::return_type for_each(const TThreadLocalStorage& rThreadLocalStoragePrototype, TFunction &&f)
     {
         static_assert(std::is_copy_constructible<TThreadLocalStorage>::value, "TThreadLocalStorage must be copy constructible!");
-
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         TReducer global_reducer;
-
         #pragma omp parallel
         {
             // copy the prototype to create the thread local storage
             TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
-
             #pragma omp for
             for (int i=0; i<mNchunks; ++i) {
                 KRATOS_TRY
@@ -283,6 +363,32 @@ public:
         }
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
         return global_reducer.GetValue();
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        tbb::combinable<TThreadLocalStorage> tls_combinable(rThreadLocalStoragePrototype);
+        TReducer global_reducer; // Assuming default constructor provides identity
+        global_reducer = tbb::parallel_reduce(
+            tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            global_reducer, // Identity
+            [&](const tbb::blocked_range<TIterator>& r, TReducer local_reducer) -> TReducer {
+                TThreadLocalStorage& local_tls = tls_combinable.local();
+                for (auto it = r.begin(); it != r.end(); ++it) {
+                    local_reducer.LocalReduce(f(*it, local_tls));
+                }
+                return local_reducer;
+            },
+            [](TReducer& a, const TReducer& b) { // Joiner
+                a.ThreadSafeReduce(b);
+            }
+        );
+        return global_reducer.GetValue();
+#else // Serial execution
+        TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
+        TReducer global_reducer;
+        for (auto it = mBlockPartition[0]; it != mBlockPartition[mNchunks]; ++it) {
+            global_reducer.LocalReduce(f(*it, thread_local_storage));
+        }
+        return global_reducer.GetValue();
+#endif
     }
 
 private:
@@ -517,8 +623,8 @@ public:
     template <class TUnaryFunction>
     inline void for_each(TUnaryFunction &&f)
     {
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         #pragma omp parallel for
         for (int i=0; i<mNchunks; ++i) {
             KRATOS_TRY
@@ -528,6 +634,19 @@ public:
             KRATOS_CATCH_THREAD_EXCEPTION
         }
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        tbb::parallel_for(tbb::blocked_range<TIndexType>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            [&](const tbb::blocked_range<TIndexType>& r) {
+                for (TIndexType k = r.begin(); k < r.end(); ++k) {
+                    f(k);
+                }
+            }
+        );
+#else // Serial execution
+        for (TIndexType k = mBlockPartition[0]; k < mBlockPartition[mNchunks]; ++k) {
+            f(k);
+        }
+#endif
     }
 
     /** version with reduction to be called for each index in the partition
@@ -538,8 +657,8 @@ public:
     template <class TReducer, class TUnaryFunction>
     [[nodiscard]] inline typename TReducer::return_type for_each(TUnaryFunction &&f)
     {
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         TReducer global_reducer;
         #pragma omp parallel for
         for (int i=0; i<mNchunks; ++i) {
@@ -553,6 +672,29 @@ public:
         }
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
         return global_reducer.GetValue();
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        TReducer global_reducer; // Assuming default constructor provides identity
+        global_reducer = tbb::parallel_reduce(
+            tbb::blocked_range<TIndexType>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            global_reducer, // Identity
+            [&](const tbb::blocked_range<TIndexType>& r, TReducer local_reducer) -> TReducer {
+                for (TIndexType k = r.begin(); k < r.end(); ++k) {
+                    local_reducer.LocalReduce(f(k));
+                }
+                return local_reducer;
+            },
+            [](TReducer& a, const TReducer& b) { // Joiner
+                a.ThreadSafeReduce(b);
+            }
+        );
+        return global_reducer.GetValue();
+#else // Serial execution
+        TReducer global_reducer;
+        for (TIndexType k = mBlockPartition[0]; k < mBlockPartition[mNchunks]; ++k) {
+            global_reducer.LocalReduce(f(k));
+        }
+        return global_reducer.GetValue();
+#endif
     }
 
 
@@ -564,9 +706,8 @@ public:
     inline void for_each(const TThreadLocalStorage& rThreadLocalStoragePrototype, TFunction &&f)
     {
         static_assert(std::is_copy_constructible<TThreadLocalStorage>::value, "TThreadLocalStorage must be copy constructible!");
-
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         #pragma omp parallel
         {
             // copy the prototype to create the thread local storage
@@ -582,6 +723,22 @@ public:
             }
         }
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        tbb::combinable<TThreadLocalStorage> tls_combinable(rThreadLocalStoragePrototype);
+        tbb::parallel_for(tbb::blocked_range<TIndexType>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            [&](const tbb::blocked_range<TIndexType>& r) {
+                TThreadLocalStorage& local_tls = tls_combinable.local();
+                for (TIndexType k = r.begin(); k < r.end(); ++k) {
+                    f(k, local_tls);
+                }
+            }
+        );
+#else // Serial execution
+        TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
+        for (TIndexType k = mBlockPartition[0]; k < mBlockPartition[mNchunks]; ++k) {
+            f(k, thread_local_storage);
+        }
+#endif
     }
 
     /** version with reduction and thread local storage (TLS) to be called for each index in the partition
@@ -594,11 +751,9 @@ public:
     [[nodiscard]] inline typename TReducer::return_type for_each(const TThreadLocalStorage& rThreadLocalStoragePrototype, TFunction &&f)
     {
         static_assert(std::is_copy_constructible<TThreadLocalStorage>::value, "TThreadLocalStorage must be copy constructible!");
-
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-
         TReducer global_reducer;
-
         #pragma omp parallel
         {
             // copy the prototype to create the thread local storage
@@ -616,8 +771,33 @@ public:
             }
         }
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
-
         return global_reducer.GetValue();
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        tbb::combinable<TThreadLocalStorage> tls_combinable(rThreadLocalStoragePrototype);
+        TReducer global_reducer; // Assuming default constructor provides identity
+        global_reducer = tbb::parallel_reduce(
+            tbb::blocked_range<TIndexType>(mBlockPartition[0], mBlockPartition[mNchunks]),
+            global_reducer, // Identity
+            [&](const tbb::blocked_range<TIndexType>& r, TReducer local_reducer) -> TReducer {
+                TThreadLocalStorage& local_tls = tls_combinable.local();
+                for (TIndexType k = r.begin(); k < r.end(); ++k) {
+                    local_reducer.LocalReduce(f(k, local_tls));
+                }
+                return local_reducer;
+            },
+            [](TReducer& a, const TReducer& b) { // Joiner
+                a.ThreadSafeReduce(b);
+            }
+        );
+        return global_reducer.GetValue();
+#else // Serial execution
+        TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
+        TReducer global_reducer;
+        for (TIndexType k = mBlockPartition[0]; k < mBlockPartition[mNchunks]; ++k) {
+            global_reducer.LocalReduce(f(k, thread_local_storage));
+        }
+        return global_reducer.GetValue();
+#endif
     }
 
 private:
@@ -627,6 +807,6 @@ private:
 
 } // namespace Kratos.
 
-#undef KRATOS_PREPARE_CATCH_THREAD_EXCEPTION
-#undef KRATOS_CATCH_THREAD_EXCEPTION
-#undef KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
+// #undef KRATOS_PREPARE_CATCH_THREAD_EXCEPTION // Moved these into the #if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP) block
+// #undef KRATOS_CATCH_THREAD_EXCEPTION
+// #undef KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION

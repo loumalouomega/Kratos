@@ -1,3 +1,18 @@
+// -- BEGIN WORKAROUND for define.h access issues --
+#if defined(KRATOS_SMP_TBB)
+  #if defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
+  #endif
+  #define KRATOS_PARALLEL_FRAMEWORK_TBB
+#elif defined(KRATOS_SMP_OPENMP)
+  #define KRATOS_PARALLEL_FRAMEWORK_OPENMP
+#elif defined(KRATOS_SMP_CXX11)
+  #define KRATOS_PARALLEL_FRAMEWORK_CXX11
+#else
+  #define KRATOS_PARALLEL_FRAMEWORK_NONE
+#endif
+// -- END WORKAROUND --
+
 //    |  /           |
 //    ' /   __| _` | __|  _ \   __|
 //    . \  |   (   | |   (   |\__ `

@@ -119,6 +119,11 @@ add_library(KratosCore SHARED ${KRATOS_CORE_SOURCES} ${KRATOS_CORE_INPUT_OUTPUT_
 # Set the shared external libraries for kratos (gidpost, tyniexpr, json, etc...)
 set(KRATOS_EXTERNAL_LIBRARIES gidpost tinyexpr clipper)
 
+# Add TBB to external libraries if found
+if(TBB_FOUND)
+  list(APPEND KRATOS_EXTERNAL_LIBRARIES TBB::tbb)
+endif()
+
 # Set the TPL libraries if enabled (triangle, tetgen, etc...)
 if(${USE_TRIANGLE_NONFREE_TPL} MATCHES ON )
   set(KRATOS_EXTERNAL_LIBRARIES ${KRATOS_EXTERNAL_LIBRARIES} triangle)

@@ -1,3 +1,5 @@
+find_package(TBB REQUIRED)
+
 # This function manages application dependencies
 macro(kratos_add_dependency application_path)
     get_filename_component(application_name ${application_path} NAME )

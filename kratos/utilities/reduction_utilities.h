@@ -1,3 +1,18 @@
+// -- BEGIN WORKAROUND for define.h access issues --
+#if defined(KRATOS_SMP_TBB)
+  #if defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
+  #endif
+  #define KRATOS_PARALLEL_FRAMEWORK_TBB
+#elif defined(KRATOS_SMP_OPENMP)
+  #define KRATOS_PARALLEL_FRAMEWORK_OPENMP
+#elif defined(KRATOS_SMP_CXX11)
+  #define KRATOS_PARALLEL_FRAMEWORK_CXX11
+#else
+  #define KRATOS_PARALLEL_FRAMEWORK_NONE
+#endif
+// -- END WORKAROUND --
+
 //    |  /           |
 //    ' /   __| _` | __|  _ \   __|
 //    . \  |   (   | |   (   |\__ `
@@ -88,6 +103,12 @@ public:
     {
         AtomicAdd(mValue, rOther.mValue);
     }
+
+    /// Lock-free join operation for TBB
+    void join(const SumReduction<TDataType, TReturnType>& rOther)
+    {
+        mValue += rOther.mValue;
+    }
 };
 
 //***********************************************************************************
@@ -118,6 +139,14 @@ public:
     {
         AtomicAdd(mValue, rOther.mValue);
     }
+
+    /// Lock-free join operation for TBB
+    void join(const SubReduction<TDataType, TReturnType>& rOther)
+    {
+        // When joining two partial results of subtractions, we still sum them.
+        // E.g., thread1: (a-b-c), thread2: (d-e-f). Joined: (a-b-c) + (d-e-f)
+        mValue += rOther.mValue;
+    }
 };
 
 //***********************************************************************************
@@ -146,8 +175,16 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const MaxReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION
+        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
         LocalReduce(rOther.mValue);
+    }
+
+    /// Lock-free join operation for TBB
+    void join(const MaxReduction<TDataType, TReturnType>& rOther)
+    {
+        if (rOther.mValue > mValue) { // or std::max, but this is explicit
+            mValue = rOther.mValue;
+        }
     }
 };
 
@@ -177,8 +214,16 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const AbsMaxReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION
+        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
         LocalReduce(rOther.mValue);
+    }
+
+    /// Lock-free join operation for TBB
+    void join(const AbsMaxReduction<TDataType, TReturnType>& rOther)
+    {
+        if (std::abs(rOther.mValue) > std::abs(mValue)) {
+            mValue = rOther.mValue;
+        }
     }
 };
 
@@ -208,8 +253,16 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const MinReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION
+        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
         LocalReduce(rOther.mValue);
+    }
+
+    /// Lock-free join operation for TBB
+    void join(const MinReduction<TDataType, TReturnType>& rOther)
+    {
+        if (rOther.mValue < mValue) { // or std::min, but this is explicit
+            mValue = rOther.mValue;
+        }
     }
 };
 
@@ -241,8 +294,16 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const AbsMinReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION
+        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
         LocalReduce(rOther.mValue);
+    }
+
+    /// Lock-free join operation for TBB
+    void join(const AbsMinReduction<TDataType, TReturnType>& rOther)
+    {
+        if (std::abs(rOther.mValue) < std::abs(mValue)) {
+            mValue = rOther.mValue;
+        }
     }
 };
 
@@ -287,8 +348,14 @@ public:
      */
     void ThreadSafeReduce(const AccumReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION
+        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
         std::copy(rOther.mValue.begin(), rOther.mValue.end(), std::inserter(mValue, mValue.end()));
+    }
+
+    /// Lock-free join operation for TBB
+    void join(const AccumReduction<TDataType, TReturnType>& rOther)
+    {
+        mValue.insert(mValue.end(), rOther.mValue.begin(), rOther.mValue.end());
     }
 };
 
@@ -336,8 +403,18 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(MapReduction<MapType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION
-        mValue.merge(rOther.mValue);
+        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
+        // mValue.merge(rOther.mValue); // C++17, ensure Kratos compatibility or use insert
+        for(const auto& item : rOther.mValue) {
+            mValue.insert(item); // General solution
+        }
+    }
+
+    /// Lock-free join operation for TBB
+    void join(const MapReduction<MapType>& rOther)
+    {
+        // mValue.merge(rOther.mValue); // C++17
+        mValue.insert(rOther.mValue.begin(), rOther.mValue.end()); // General solution
     }
 };
 
@@ -377,7 +454,12 @@ struct CombinedReduction {
 
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const CombinedReduction &other) {
-        reduce_global<0>(other);
+        reduce_global<0>(other); // Retain for OpenMP/other custom parallel loops
+    }
+
+    /// Lock-free join operation for TBB
+    void join(const CombinedReduction &other) {
+        join_detail<0>(other);
     }
 
     private:
@@ -406,6 +488,16 @@ struct CombinedReduction {
         typename std::enable_if<(I == sizeof...(Reducer)), void>::type
         reduce_global(const CombinedReduction &other) {
             // Exit static recursion
+        }
+
+        // For TBB join
+        template <int Index = 0>
+        typename std::enable_if<(Index < sizeof...(Reducer)), void>::type
+        join_detail(const CombinedReduction &other) {
+            std::get<Index>(mChild).join(std::get<Index>(other.mChild));
+            if constexpr (Index + 1 < sizeof...(Reducer)) {
+                 join_detail<Index + 1>(other);
+            }
         }
 };
 
