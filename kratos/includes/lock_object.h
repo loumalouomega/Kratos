@@ -14,9 +14,9 @@
 #pragma once
 
 // -- BEGIN WORKAROUND for define.h access issues --
-#if defined(KRATOS_SMP_TBB)
+#if defined(KRATOS_SMP_ONETBB)
   #if defined(KRATOS_SMP_OPENMP)
-    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
+    #error "KRATOS_SMP_ONETBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
   #endif
   #define KRATOS_PARALLEL_FRAMEWORK_TBB
 #elif defined(KRATOS_SMP_OPENMP)

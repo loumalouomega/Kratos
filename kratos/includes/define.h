@@ -848,14 +848,14 @@ namespace Kratos
 
 // Shared Memory Parallelism (SMP) framework selection
 // These macros determine which parallel loop constructs are used (e.g., in parallel_utilities.h).
-// The CMake build system is responsible for defining at most one of KRATOS_SMP_TBB or KRATOS_SMP_OPENMP.
+// The CMake build system is responsible for defining at most one of KRATOS_SMP_ONETBB or KRATOS_SMP_OPENMP.
 // KRATOS_SMP_CXX11 is a fallback for basic C++11 thread support (atomics, locks) but not typically for parallel loops if TBB/OpenMP are available.
 
-#if defined(KRATOS_SMP_TBB) && defined(KRATOS_SMP_OPENMP)
-    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please ensure your CMake configuration selects only one."
+#if defined(KRATOS_SMP_ONETBB) && defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_ONETBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please ensure your CMake configuration selects only one."
 #endif
 
-#if defined(KRATOS_SMP_TBB)
+#if defined(KRATOS_SMP_ONETBB)
     #define KRATOS_PARALLEL_FRAMEWORK_TBB
     // KRATOS_SMP_CXX11 might still be defined for std::atomic, std::mutex etc.
     // TBB is compatible with these. If KRATOS_SMP_CXX11 was for a competing
