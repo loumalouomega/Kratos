@@ -442,13 +442,26 @@ option(KRATOS_SMP_TBB "Enable TBB-based shared memory parallelism (experimental,
 
 if(KRATOS_SMP_TBB)
   message(STATUS "TBB parallelism explicitly requested via KRATOS_SMP_TBB.")
-  if(NOT TBB_FOUND) # TBB_FOUND should be set by find_package(TBB REQUIRED) in KratosDependencies.cmake
-    message(FATAL_ERROR "KRATOS_SMP_TBB is ON but TBB was not found. Please ensure TBB is installed and findable by CMake.")
+
+  # Use FetchContent to get oneTBB
+  FetchContent_Declare(
+    oneTBB
+    URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2022.1.0.zip
+    URL_HASH SHA256=b489b380e91722d37baa58fe56b81e8ad6026149c7d0b2f75499a6360cdfa450
+  )
+  FetchContent_MakeAvailable(oneTBB)
+
+  if(TARGET TBB::tbb)
+    message(STATUS "oneTBB successfully fetched and configured by FetchContent.")
+    add_definitions( -DKRATOS_SMP_TBB )
+    # KratosCore will be linked with TBB::tbb in kratos/CMakeLists.txt
+    # No need to call find_package(TBB REQUIRED) if FetchContent provides it.
+    # Ensure TBB_FOUND is set to true so that other parts of the build system know TBB is available.
+    set(TBB_FOUND TRUE CACHE BOOL "TBB found via FetchContent" FORCE)
+  else()
+    message(FATAL_ERROR "KRATOS_SMP_TBB is ON, but FetchContent failed to provide oneTBB. Check CMake logs for FetchContent errors.")
   endif()
-  add_definitions( -DKRATOS_SMP_TBB )
-  # Remove OpenMP and CXX11 flags if TBB is chosen, to ensure TBB is the primary mechanism
-  # However, KratosDependencies.cmake already calls find_package(TBB REQUIRED) which adds TBB::includes and TBB::tbb to KratosCore
-  # We might not need to add CMAKE_CXX_FLAGS for TBB here if handled by target_link_libraries(KratosCore PUBLIC TBB::tbb)
+
   message(STATUS "Using TBB for shared memory parallelization.")
   # If KRATOS_SHARED_MEMORY_PARALLELIZATION was set to OpenMP, TBB overrides it.
   # We should ensure that OpenMP flags are not added if TBB is the choice.
@@ -604,9 +617,23 @@ if(${USE_MPI} MATCHES ON )
   include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 endif(${USE_MPI} MATCHES ON )
 
-# Add TBB include directories
+  # Add TBB include directories if TBB was found (either by FetchContent or find_package)
 if(TBB_FOUND)
-  include_directories(${TBB_INCLUDE_DIRS})
+  # If TBB::tbb target exists (from FetchContent or modern find_package), its usage via target_link_libraries is preferred.
+  # However, some older modules might still rely on TBB_INCLUDE_DIRS.
+  # TBB_INCLUDE_DIRS should be set by find_package(TBB) or by oneTBB's CMake scripts.
+  if (DEFINED TBB_INCLUDE_DIRS)
+    include_directories(${TBB_INCLUDE_DIRS})
+  elseif(TARGET TBB::tbb)
+    # If TBB_INCLUDE_DIRS is not set, but TBB::tbb target exists,
+    # it's generally better to rely on target_include_directories via TBB::tbb.
+    # However, for broader compatibility with existing Kratos code, let's try to get the include path.
+    # This might not be necessary if all TBB usage is through TBB::tbb.
+    get_target_property(TBB_INCLUDE_DIRS TBB::tbb INTERFACE_INCLUDE_DIRECTORIES)
+    if(TBB_INCLUDE_DIRS)
+      include_directories(${TBB_INCLUDE_DIRS})
+    endif()
+  endif()
 endif()
 
 # If we do not locally compile ZLIB we will find ZLIB in the system, if we cannot find it we will enforce the local compilation

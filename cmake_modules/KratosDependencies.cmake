@@ -1,4 +1,8 @@
-find_package(TBB REQUIRED)
+# Find TBB only if KRATOS_SMP_TBB is not enabled (FetchContent handles it otherwise)
+# Or if TBB_FOUND is not already set (e.g. by FetchContent in the main CMakeLists.txt)
+if(NOT KRATOS_SMP_TBB AND NOT TBB_FOUND)
+  find_package(TBB REQUIRED)
+endif()
 
 # This function manages application dependencies
 macro(kratos_add_dependency application_path)
