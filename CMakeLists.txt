@@ -438,43 +438,7 @@ if(NOT DEFINED KRATOS_SHARED_MEMORY_PARALLELIZATION)
   SET(KRATOS_SHARED_MEMORY_PARALLELIZATION "OpenMP")
 endif(NOT DEFINED KRATOS_SHARED_MEMORY_PARALLELIZATION)
 
-option(KRATOS_SMP_TBB "Enable TBB-based shared memory parallelism (experimental, overrides KRATOS_SHARED_MEMORY_PARALLELIZATION if ON)" OFF)
-
-if(KRATOS_SMP_TBB)
-  message(STATUS "TBB parallelism explicitly requested via KRATOS_SMP_TBB.")
-
-  # Use FetchContent to get oneTBB
-  FetchContent_Declare(
-    oneTBB
-    URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2022.1.0.zip
-    URL_HASH SHA256=b489b380e91722d37baa58fe56b81e8ad6026149c7d0b2f75499a6360cdfa450
-  )
-  FetchContent_MakeAvailable(oneTBB)
-
-  if(TARGET TBB::tbb)
-    message(STATUS "oneTBB successfully fetched and configured by FetchContent.")
-    add_definitions( -DKRATOS_SMP_TBB )
-    # KratosCore will be linked with TBB::tbb in kratos/CMakeLists.txt
-    # No need to call find_package(TBB REQUIRED) if FetchContent provides it.
-    # Ensure TBB_FOUND is set to true so that other parts of the build system know TBB is available.
-    set(TBB_FOUND TRUE CACHE BOOL "TBB found via FetchContent" FORCE)
-  else()
-    message(FATAL_ERROR "KRATOS_SMP_TBB is ON, but FetchContent failed to provide oneTBB. Check CMake logs for FetchContent errors.")
-  endif()
-
-  message(STATUS "Using TBB for shared memory parallelization.")
-  # If KRATOS_SHARED_MEMORY_PARALLELIZATION was set to OpenMP, TBB overrides it.
-  # We should ensure that OpenMP flags are not added if TBB is the choice.
-  # Also, ensure KRATOS_SMP_OPENMP and KRATOS_SMP_CXX11 are not defined at C++ level if TBB is active.
-  # This will be handled by preprocessor directives in define.h for finer control.
-  # For CMake flags, we avoid adding OpenMP flags if TBB is chosen.
-  if (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "OpenMP")
-    message(STATUS "KRATOS_SMP_TBB is ON, OpenMP will be disabled for Kratos parallel constructs.")
-  endif()
-  # Set KRATOS_SHARED_MEMORY_PARALLELIZATION to a new value or handle define.h to prioritize KRATOS_SMP_TBB
-  set(KRATOS_SHARED_MEMORY_PARALLELIZATION "TBB_OVERRIDE") # Special value to prevent OpenMP/CXX11 paths below if TBB is ON.
-
-elseif (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "OpenMP")
+if (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "OpenMP")
   find_package(OpenMP)
   if (OPENMP_FOUND)
     message(STATUS "Using OpenMP for shared memory parallelization")
@@ -486,6 +450,28 @@ elseif (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "OpenMP")
     message(FATAL_ERROR "OpenMP could not be found! KRATOS_SHARED_MEMORY_PARALLELIZATION was set to OpenMP.")
   endif (OPENMP_FOUND)
 
+elseif (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "OneTBB")
+  message(STATUS "Using OneTBB for shared memory parallelization.")
+  # Use FetchContent to get oneTBB
+  FetchContent_Declare(
+    oneTBB
+    URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2022.1.0.zip
+    URL_HASH SHA256=b489b380e91722d37baa58fe56b81e8ad6026149c7d0b2f75499a6360cdfa450
+  )
+  FetchContent_MakeAvailable(oneTBB)
+
+  if(TARGET TBB::tbb)
+    message(STATUS "oneTBB successfully fetched and configured by FetchContent.")
+    add_definitions( -DKRATOS_SMP_ONETBB )
+    add_definitions( -DKRATOS_SMP_TBB ) # For compatibility
+    # KratosCore will be linked with TBB::tbb in kratos/CMakeLists.txt
+    # No need to call find_package(TBB REQUIRED) if FetchContent provides it.
+    # Ensure TBB_FOUND is set to true so that other parts of the build system know TBB is available.
+    set(TBB_FOUND TRUE CACHE BOOL "TBB found via FetchContent" FORCE)
+  else()
+    message(FATAL_ERROR "KRATOS_SHARED_MEMORY_PARALLELIZATION is set to OneTBB, but FetchContent failed to provide oneTBB. Check CMake logs for FetchContent errors.")
+  endif()
+
 elseif (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "C++11")
   message(STATUS "Using C++11 for shared memory parallelization (limited support, atomics and locks only)")
   add_definitions( -DKRATOS_SMP_CXX11 )
@@ -495,14 +481,8 @@ elseif (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "None")
   add_definitions( -DKRATOS_SMP_NONE )
   message(STATUS "Shared memory parallelization is disabled!")
 
-elseif (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "TBB_OVERRIDE")
-  # This case is when KRATOS_SMP_TBB=ON. Handled above.
-  # The add_definitions(-DKRATOS_SMP_TBB) is already done.
-  # No further CMake flags for TBB are typically needed here as find_package(TBB) and target_link_libraries handle it.
-  message(STATUS "TBB is active (override path).")
-
 else()
-  message(FATAL_ERROR "Invalid option chosen for \"KRATOS_SHARED_MEMORY_PARALLELIZATION\"! Available options are: \"OpenMP\", \"C++11\", \"None\". Or enable KRATOS_SMP_TBB=ON.")
+  message(FATAL_ERROR "Invalid option chosen for \"KRATOS_SHARED_MEMORY_PARALLELIZATION\"! Available options are: \"OpenMP\", \"OneTBB\", \"C++11\", \"None\".")
 endif ()
 
 OPTION(KRATOS_NO_TRY_CATCH "Disabled the use of try/catch through the code" OFF)

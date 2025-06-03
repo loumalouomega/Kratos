@@ -844,6 +844,8 @@ We recommend you to disable parallel compilation unless you know what you are do
 Building *Kratos* with support for **MPI** requires an advanced configuration of its building script, as well as the building of dependencies and parallel applications.
 Here you can find [guidelines](https://github.com/KratosMultiphysics/Kratos/wiki/Compiling-Kratos-with-MPI-support) for the compilation of Kratos and its dependencies.
 
+For shared memory parallelism, Kratos can be configured using the `KRATOS_SHARED_MEMORY_PARALLELIZATION` CMake variable. Valid options include "OpenMP" (default), "OneTBB" (for Intel TBB), "C++11" (for basic C++11 thread support), and "None" (to disable).
+
 ### Logging
 `-DKRATOS_COLORED_OUTPUT=ON/OFF`
 Enables colored output of the Logger. If switched on, e.g. warning level messages will be printed in yellow to the terminal. Please notice that colored output is not supported by all terminals.

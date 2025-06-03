@@ -1,6 +1,6 @@
-# Find TBB only if KRATOS_SMP_TBB is not enabled (FetchContent handles it otherwise)
-# Or if TBB_FOUND is not already set (e.g. by FetchContent in the main CMakeLists.txt)
-if(NOT KRATOS_SMP_TBB AND NOT TBB_FOUND)
+# Find TBB using find_package only if it hasn't been found already
+# (e.g., via FetchContent in the main CMakeLists.txt when KRATOS_SHARED_MEMORY_PARALLELIZATION="OneTBB").
+if(NOT TBB_FOUND)
   find_package(TBB REQUIRED)
 endif()
 
