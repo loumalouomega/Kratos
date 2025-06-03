@@ -25,11 +25,14 @@
 
 // Project includes
 #include "includes/define.h"
-#include "includes/ublas_interface.h"
+#include "includes/ublas_interface.h" // This no longer brings ublas into Kratos namespace
 
 #include <boost/numeric/ublas/vector_expression.hpp>
 #include <boost/numeric/ublas/storage.hpp>
 #include <boost/numeric/ublas/detail/vector_assign.hpp>
+#include <boost/numeric/ublas/detail/iterator.hpp> // For container_const_reference etc.
+#include <boost/numeric/ublas/functional.hpp> // For scalar_assign etc.
+
 
 namespace Kratos
 {
@@ -60,10 +63,6 @@ template<class T,	std::size_t	N>
 class	array_1d	: public boost::numeric::ublas::vector_expression< array_1d<T, N> >
 {
 public:
-//#ifndef	BOOST_UBLAS_NO_PROXY_SHORTCUTS
-//		BOOST_UBLAS_USING vector_expression<array_1d<T, N> >::operator ();
-//#endif
-
     ///@name Type	Definitions
     ///@{
 
@@ -82,7 +81,6 @@ public:
     typedef	boost::numeric::ublas::vector_reference<self_type>	closure_type;
     typedef	self_type vector_temporary_type;
     typedef	boost::numeric::ublas::dense_tag storage_category;
-//		typedef	concrete_tag simd_category; //removed for the new ublas
 
     ///@}
     ///@name Life	Cycle
@@ -91,62 +89,46 @@ public:
     /// Default constructor.
     BOOST_UBLAS_INLINE
     array_1d ():
-        vector_expression<self_type> ()
+        boost::numeric::ublas::vector_expression<self_type> ()
     {
-        // intentionally does not initialize the contents for performance reasons
     }
 
     explicit BOOST_UBLAS_INLINE
     array_1d (size_type array_size):
-        vector_expression<self_type> ()
+        boost::numeric::ublas::vector_expression<self_type> ()
     {
-        // intentionally does not initialize the contents for performance reasons
     }
 
     explicit BOOST_UBLAS_INLINE
     array_1d (size_type array_size, value_type v):
-        vector_expression<self_type> ()
+        boost::numeric::ublas::vector_expression<self_type> ()
     {
         KRATOS_DEBUG_ERROR_IF(array_size>N) << "Given size is greater than the size of the array!" << std::endl;
-
         std::fill(data().begin(), data().begin() + array_size, v);
-        // intentionally does not initialize the remaining entries for performance reasons
     }
 
     explicit BOOST_UBLAS_INLINE
     array_1d (const std::initializer_list<value_type>& rInitList):
-        vector_expression<self_type> ()
+        boost::numeric::ublas::vector_expression<self_type> ()
     {
         KRATOS_DEBUG_ERROR_IF(rInitList.size()>N) << "Size of list greater than the size of the array!" << std::endl;
-
-        std::copy(rInitList.begin(), rInitList.end(), data().begin()); // copy content of initializer list
-        // intentionally does not initialize the remaining entries for performance reasons
+        std::copy(rInitList.begin(), rInitList.end(), data().begin());
     }
 
     BOOST_UBLAS_INLINE
     array_1d (size_type array_size,	const array_type & rdata):
-        vector_expression<self_type> (),
+        boost::numeric::ublas::vector_expression<self_type> (),
         data_ (rdata) {}
 
     BOOST_UBLAS_INLINE
     array_1d (const array_1d &v):
-        vector_expression<self_type> (),
+        boost::numeric::ublas::vector_expression<self_type> (),
         data_ (v.data_)	{}
-
-//		template<class AE>
-//		BOOST_UBLAS_INLINE
-//		array_1d (const vector_expression<AE>	&ae):
-//			vector_expression<self_type> ()	{
-//			vector_assign (scalar_assign<reference,	typename AE::value_type> (), *this,	ae);
-//		template<class AE> //boost 1.33.1
-//		BOOST_UBLAS_INLINE
-//		array_1d (const vector_expression<AE> &ae):
-//            vector_expression<self_type> () {
-//            vector_assign<scalar_assign> (*this, ae);
 
     template<class AE>
     BOOST_UBLAS_INLINE
-    array_1d (const boost::numeric::ublas::vector_expression<AE> &ae)
+    array_1d (const boost::numeric::ublas::vector_expression<AE> &ae) :
+      boost::numeric::ublas::vector_expression<self_type> () // Initialize base class
     {
         boost::numeric::ublas::vector_assign<boost::numeric::ublas::scalar_assign> (*this, ae);
     }
@@ -155,7 +137,6 @@ public:
     ///@name Operators
     ///@{
 
-    // Element access
     BOOST_UBLAS_INLINE
     const_reference	operator ()	(size_type i) const
     {
@@ -182,7 +163,6 @@ public:
         return data_[i];
     }
 
-    // Assignment
     BOOST_UBLAS_INLINE
     array_1d &operator = (const array_1d &v)
     {
@@ -195,38 +175,27 @@ public:
     array_1d &operator = (const boost::numeric::ublas::vector_expression<AE>	&ae)
     {
         return assign (self_type	(ae));
-        //self_type temporary	(ae);
-        //return assign_temporary	(temporary);
     }
     template<class AE>
     BOOST_UBLAS_INLINE
     array_1d &operator +=	(const boost::numeric::ublas::vector_expression<AE> &ae)
     {
         return assign (self_type	(*this + ae));
-        //self_type temporary	(*this + ae);
-        //return assign_temporary	(temporary);
     }
     template<class AE>
     BOOST_UBLAS_INLINE
     array_1d &operator -=	(const boost::numeric::ublas::vector_expression<AE> &ae)
     {
         return assign (self_type	(*this - ae));
-        //self_type temporary	(*this - ae);
-        //return assign_temporary	(temporary);
     }
     template<class AT>
     BOOST_UBLAS_INLINE
     array_1d &operator /=	(const AT &at)
     {
-        vector_assign_scalar<scalar_divides_assign> (*this, at); //included for ublas 1.33.1
+        boost::numeric::ublas::vector_assign_scalar<boost::numeric::ublas::scalar_divides_assign> (*this, at);
         return *this;
     }
 
-    /**
-     * @brief Compares whether this array_1d is equal to the given array_1d.
-     * @param v the array_1d to compare to
-     * @return true if the two arrays are equal, false otherwise
-     */
     BOOST_UBLAS_INLINE
     bool operator == (const array_1d &v) const
     {
@@ -237,7 +206,6 @@ public:
     ///@name Operations
     ///@{
 
-    // Resizing
     BOOST_UBLAS_INLINE
     void resize	(size_type array_size, bool preserve = true)
     {
@@ -252,36 +220,32 @@ public:
         return *this;
     }
 
-
     template<class AT>
     BOOST_UBLAS_INLINE
     array_1d &operator *=	(const AT &at)
     {
-        vector_assign_scalar<scalar_multiplies_assign> (*this, at); //included for ublas 1.33.1
+        boost::numeric::ublas::vector_assign_scalar<boost::numeric::ublas::scalar_multiplies_assign> (*this, at);
         return *this;
     }
     template<class AE>
     BOOST_UBLAS_INLINE
     array_1d &plus_assign	(const boost::numeric::ublas::vector_expression<AE> &ae)
     {
-        vector_assign<scalar_plus_assign> (*this, ae); //included for ublas 1.33.1
-        //vector_assign (scalar_plus_assign<reference, typename AE::value_type> (), *this, ae);
+        boost::numeric::ublas::vector_assign<boost::numeric::ublas::scalar_plus_assign> (*this, ae);
         return *this;
     }
     template<class AE>
     BOOST_UBLAS_INLINE
     array_1d &assign (const boost::numeric::ublas::vector_expression<AE>	&ae)
     {
-        vector_assign<scalar_assign> (*this, ae); //included for ublas 1.33.1
-        //vector_assign (scalar_assign<reference,	typename AE::value_type> (), *this,	ae);
+        boost::numeric::ublas::vector_assign<boost::numeric::ublas::scalar_assign> (*this, ae);
         return *this;
     }
-    // Swapping
+
     BOOST_UBLAS_INLINE
     void swap (array_1d &v)
     {
-        if (this !=	&v)
-        {
+        if (this !=	&v) {
             data ().swap (v.data ());
         }
     }
@@ -293,22 +257,6 @@ public:
     }
 #endif
 
-    // Element insertion and erasure
-    // These functions should work with	std::vector.
-    // Thanks to Kresimir Fresl	for	spotting this.
-//		BOOST_UBLAS_INLINE
-//		void insert	(size_type i, const_reference t) {
-    // FIXME: only works for EqualityComparable	value types.
-    // BOOST_UBLAS_CHECK (data () [i] == value_type	(0), bad_index ());
-    // Previously: data	().insert (data	().begin ()	+ i, t);
-//			data ()	[i]	= t;
-//		}
-//		BOOST_UBLAS_INLINE
-//		void erase (size_type i) {
-//			// Previously: data	().erase (data ().begin	() + i);
-//			data ()	[i]	= value_type (0);
-//		}
-    // Element assignment
     BOOST_UBLAS_INLINE
     reference insert_element (size_type i, const_reference t)
     {
@@ -324,7 +272,6 @@ public:
     BOOST_UBLAS_INLINE
     void clear ()
     {
-        // Previously: data	().clear ();
         std::fill (data	().begin (), data ().end (), value_type	(0));
     }
 
@@ -332,22 +279,19 @@ public:
     ///@name Access
     ///@{
 
-    // Iterator	types
 private:
-    // Use the storage array1 iterator
     typedef	typename array_type::const_iterator const_iterator_type;
     typedef	typename array_type::iterator iterator_type;
 
 public:
 #ifdef BOOST_UBLAS_USE_INDEXED_ITERATOR
-    typedef	indexed_iterator<self_type,	dense_random_access_iterator_tag> iterator;
-    typedef	indexed_const_iterator<self_type, dense_random_access_iterator_tag>	const_iterator;
+    typedef	boost::numeric::ublas::indexed_iterator<self_type,	boost::numeric::ublas::dense_random_access_iterator_tag> iterator;
+    typedef	boost::numeric::ublas::indexed_const_iterator<self_type, boost::numeric::ublas::dense_random_access_iterator_tag>	const_iterator;
 #else
     class const_iterator;
     class iterator;
 #endif
 
-    // Element lookup
     BOOST_UBLAS_INLINE
     const_iterator find	(size_type i) const
     {
@@ -375,8 +319,7 @@ public:
     BOOST_UBLAS_INLINE
     array_1d &minus_assign (const	boost::numeric::ublas::vector_expression<AE> &ae)
     {
-        vector_assign<scalar_minus_assign>(*this,ae);
-        //vector_assign (scalar_minus_assign<reference, typename AE::value_type> (), *this, ae);
+        boost::numeric::ublas::vector_assign<boost::numeric::ublas::scalar_minus_assign>(*this,ae);
         return *this;
     }
     BOOST_UBLAS_INLINE
@@ -392,12 +335,12 @@ public:
 
 #ifndef	BOOST_UBLAS_USE_INDEXED_ITERATOR
     class const_iterator:
-        public container_const_reference<array_1d>,
-        public random_access_iterator_base<dense_random_access_iterator_tag,
+        public boost::numeric::ublas::container_const_reference<self_type>,
+        public boost::numeric::ublas::random_access_iterator_base<typename boost::numeric::ublas::dense_random_access_iterator_tag, //dense_random_access_iterator_tag
         const_iterator, value_type, difference_type>
     {
     public:
-        typedef	dense_random_access_iterator_tag iterator_category;
+        typedef	typename boost::numeric::ublas::dense_random_access_iterator_tag iterator_category; //dense_random_access_iterator_tag
 #ifdef BOOST_MSVC_STD_ITERATOR
         typedef	const_reference	reference;
 #else
@@ -407,107 +350,59 @@ public:
         typedef	const typename array_1d::pointer pointer;
 #endif
 
-        // Construction	and	destruction
         BOOST_UBLAS_INLINE
         const_iterator ():
-            container_const_reference<self_type> (), it_ ()	{}
+            boost::numeric::ublas::container_const_reference<self_type> (), it_ ()	{}
         BOOST_UBLAS_INLINE
         const_iterator (const self_type	&v,	const const_iterator_type &it):
-            container_const_reference<self_type> (v), it_ (it) {}
+            boost::numeric::ublas::container_const_reference<self_type> (v), it_ (it) {}
         BOOST_UBLAS_INLINE
 #ifndef	BOOST_UBLAS_QUALIFIED_TYPENAME
         const_iterator (const iterator &it):
 #else
         const_iterator (const typename self_type::iterator &it):
 #endif
-            container_const_reference<self_type> (it ()), it_ (it.it_) {}
+            boost::numeric::ublas::container_const_reference<self_type> (it ()), it_ (it.it_) {}
 
-        // Arithmetic
         BOOST_UBLAS_INLINE
-        const_iterator &operator ++	()
-        {
-            ++ it_;
-            return *this;
-        }
+        const_iterator &operator ++	() { ++ it_; return *this; }
         BOOST_UBLAS_INLINE
-        const_iterator &operator --	()
-        {
-            -- it_;
-            return *this;
-        }
+        const_iterator &operator --	() { -- it_; return *this; }
         BOOST_UBLAS_INLINE
-        const_iterator &operator +=	(difference_type n)
-        {
-            it_	+= n;
-            return *this;
-        }
+        const_iterator &operator +=	(difference_type n) { it_	+= n; return *this; }
         BOOST_UBLAS_INLINE
-        const_iterator &operator -=	(difference_type n)
-        {
-            it_	-= n;
-            return *this;
-        }
+        const_iterator &operator -=	(difference_type n) { it_	-= n; return *this; }
         BOOST_UBLAS_INLINE
-        difference_type	operator - (const const_iterator &it) const
-        {
-            BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ());
-            return it_ - it.it_;
-        }
+        difference_type	operator - (const const_iterator &it) const { BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ()); return it_ - it.it_; }
 
-        // Dereference
         BOOST_UBLAS_INLINE
-        const_reference	operator * () const
-        {
-            BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_, bad_index	());
-            return *it_;
-        }
+        const_reference	operator * () const { BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_, bad_index	()); return *it_; }
 
-        // Index
         BOOST_UBLAS_INLINE
-        size_type index	() const
-        {
-            BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_, bad_index	());
-            return it_ - (*this) ().begin ().it_;
-        }
+        size_type index	() const { BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_, bad_index	()); return it_ - (*this) ().begin ().it_; }
 
-        // Assignment
         BOOST_UBLAS_INLINE
-        const_iterator &operator = (const const_iterator &it)
-        {
-            container_const_reference<self_type>::assign (&it ());
-            it_	= it.it_;
-            return *this;
-        }
+        const_iterator &operator = (const const_iterator &it) { boost::numeric::ublas::container_const_reference<self_type>::assign (&it ()); it_	= it.it_; return *this; }
 
-        // Comparison
         BOOST_UBLAS_INLINE
-        bool operator == (const	const_iterator &it)	const
-        {
-            BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ());
-            return it_ == it.it_;
-        }
+        bool operator == (const	const_iterator &it)	const { BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ()); return it_ == it.it_; }
         BOOST_UBLAS_INLINE
-        bool operator <	(const const_iterator &it) const
-        {
-            BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ());
-            return it_ < it.it_;
-        }
+        bool operator <	(const const_iterator &it) const { BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ()); return it_ < it.it_; }
 
     private:
         const_iterator_type	it_;
-
         friend class iterator;
     };
 #endif
 
 #ifndef	BOOST_UBLAS_USE_INDEXED_ITERATOR
     class iterator:
-        public container_reference<array_1d>,
-        public random_access_iterator_base<dense_random_access_iterator_tag,
+        public boost::numeric::ublas::container_reference<self_type>,
+        public boost::numeric::ublas::random_access_iterator_base<typename boost::numeric::ublas::dense_random_access_iterator_tag, //dense_random_access_iterator_tag
         iterator, value_type, difference_type>
     {
     public:
-        typedef	dense_random_access_iterator_tag iterator_category;
+        typedef	typename boost::numeric::ublas::dense_random_access_iterator_tag iterator_category; //dense_random_access_iterator_tag
 #ifndef	BOOST_MSVC_STD_ITERATOR
         typedef	typename array_1d::difference_type difference_type;
         typedef	typename array_1d::value_type	value_type;
@@ -515,269 +410,83 @@ public:
         typedef	typename array_1d::pointer pointer;
 #endif
 
-        // Construction	and	destruction
         BOOST_UBLAS_INLINE
         iterator ():
-            container_reference<self_type> (), it_ () {}
+            boost::numeric::ublas::container_reference<self_type> (), it_ () {}
         BOOST_UBLAS_INLINE
         iterator (self_type	&v,	const iterator_type	&it):
-            container_reference<self_type> (v),	it_	(it) {}
+            boost::numeric::ublas::container_reference<self_type> (v),	it_	(it) {}
 
-        // Arithmetic
         BOOST_UBLAS_INLINE
-        iterator &operator ++ ()
-        {
-            ++ it_;
-            return *this;
-        }
+        iterator &operator ++ () { ++ it_; return *this; }
         BOOST_UBLAS_INLINE
-        iterator &operator -- ()
-        {
-            -- it_;
-            return *this;
-        }
+        iterator &operator -- () { -- it_; return *this; }
         BOOST_UBLAS_INLINE
-        iterator &operator += (difference_type n)
-        {
-            it_	+= n;
-            return *this;
-        }
+        iterator &operator += (difference_type n) { it_	+= n; return *this; }
         BOOST_UBLAS_INLINE
-        iterator &operator -= (difference_type n)
-        {
-            it_	-= n;
-            return *this;
-        }
+        iterator &operator -= (difference_type n) { it_	-= n; return *this; }
         BOOST_UBLAS_INLINE
-        difference_type	operator - (const iterator &it)	const
-        {
-            BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ());
-            return it_ - it.it_;
-        }
+        difference_type	operator - (const iterator &it)	const { BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ()); return it_ - it.it_; }
 
-        // Dereference
         BOOST_UBLAS_INLINE
-        reference operator * ()	const
-        {
-            BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_ , bad_index ());
-            return *it_;
-        }
+        reference operator * ()	const { BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_ , bad_index ()); return *it_; }
 
-        // Index
         BOOST_UBLAS_INLINE
-        size_type index	() const
-        {
-            BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_ , bad_index ());
-            return it_ - (*this) ().begin ().it_;
-        }
+        size_type index	() const { BOOST_UBLAS_CHECK (it_ >= (*this) ().begin ().it_ && it_ < (*this) ().end ().it_ , bad_index ()); return it_ - (*this) ().begin ().it_; }
 
-        // Assignment
         BOOST_UBLAS_INLINE
-        iterator &operator = (const	iterator &it)
-        {
-            container_reference<self_type>::assign (&it	());
-            it_	= it.it_;
-            return *this;
-        }
+        iterator &operator = (const	iterator &it) { boost::numeric::ublas::container_reference<self_type>::assign (&it	()); it_	= it.it_; return *this; }
 
-        // Comparison
         BOOST_UBLAS_INLINE
-        bool operator == (const	iterator &it) const
-        {
-            BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ());
-            return it_ == it.it_;
-        }
+        bool operator == (const	iterator &it) const { BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ()); return it_ == it.it_; }
         BOOST_UBLAS_INLINE
-        bool operator <	(const iterator	&it) const
-        {
-            BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ());
-            return it_ < it.it_;
-        }
+        bool operator <	(const iterator	&it) const { BOOST_UBLAS_CHECK (&(*this)	() == &it (), external_logic ()); return it_ < it.it_; }
 
     private:
         iterator_type it_;
-
         friend class const_iterator;
     };
 #endif
 
-
     BOOST_UBLAS_INLINE
-    const_iterator begin ()	const
-    {
-        return find	(0);
-    }
+    const_iterator begin ()	const { return find	(0); }
     BOOST_UBLAS_INLINE
-    const_iterator end () const
-    {
-        return find	(data_.size	());
-    }
-
+    const_iterator end () const { return find	(data_.size	()); }
     BOOST_UBLAS_INLINE
-    iterator begin ()
-    {
-        return find	(0);
-    }
+    iterator begin () { return find	(0); }
     BOOST_UBLAS_INLINE
-    iterator end ()
-    {
-        return find	(data_.size	());
-    }
-
-    // Reverse iterator
+    iterator end () { return find	(data_.size	()); }
 
 #ifdef BOOST_MSVC_STD_ITERATOR
-    typedef	reverse_iterator_base<const_iterator, value_type, const_reference> const_reverse_iterator;
+    typedef	boost::numeric::ublas::reverse_iterator_base<const_iterator, value_type, const_reference> const_reverse_iterator;
 #else
     typedef	boost::numeric::ublas::reverse_iterator_base<const_iterator> const_reverse_iterator;
 #endif
 
     BOOST_UBLAS_INLINE
-    const_reverse_iterator rbegin () const
-    {
-        return const_reverse_iterator (end ());
-    }
+    const_reverse_iterator rbegin () const { return const_reverse_iterator (end ()); }
     BOOST_UBLAS_INLINE
-    const_reverse_iterator rend	() const
-    {
-        return const_reverse_iterator (begin ());
-    }
+    const_reverse_iterator rend	() const { return const_reverse_iterator (begin ()); }
 
 #ifdef BOOST_MSVC_STD_ITERATOR
-    typedef	reverse_iterator_base<iterator,	value_type,	reference> reverse_iterator;
+    typedef	boost::numeric::ublas::reverse_iterator_base<iterator,	value_type,	reference> reverse_iterator;
 #else
     typedef	boost::numeric::ublas::reverse_iterator_base<iterator>	reverse_iterator;
 #endif
 
     BOOST_UBLAS_INLINE
-    reverse_iterator rbegin	()
-    {
-        return reverse_iterator	(end ());
-    }
+    reverse_iterator rbegin	() { return reverse_iterator	(end ()); }
     BOOST_UBLAS_INLINE
-    reverse_iterator rend ()
-    {
-        return reverse_iterator	(begin ());
-    }
-    ///@}
-    ///@name Inquiry
-    ///@{
-
-
-    ///@}
-    ///@name Input and output
-    ///@{
-
-
-    ///@}
-    ///@name Friends
-    ///@{
-
-
-    ///@}
-
-protected:
-    ///@name Protected static	Member Variables
-    ///@{
-
-
-    ///@}
-    ///@name Protected member	Variables
-    ///@{
-
-
-    ///@}
-    ///@name Protected Operators
-    ///@{
-
-
-    ///@}
-    ///@name Protected Operations
-    ///@{
-
-
-    ///@}
-    ///@name Protected  Access
-    ///@{
-
-
-    ///@}
-    ///@name Protected Inquiry
-    ///@{
-
-
-    ///@}
-    ///@name Protected LifeCycle
-    ///@{
-
-
-    ///@}
+    reverse_iterator rend () { return reverse_iterator	(begin ()); }
 
 private:
-
-
-    ///@name Static Member Variables
-    ///@{
-
-
-    ///@}
-    ///@name Member Variables
-    ///@{
-
     array_type data_;
-
-    ///@}
-    ///@name Private Operators
-    ///@{
-
-
-    ///@}
-    ///@name Private Operations
-    ///@{
-
-
-    ///@}
-    ///@name Private	Access
-    ///@{
-
-
-    ///@}
-    ///@name Private Inquiry
-    ///@{
-
-
-    ///@}
-    ///@name Un accessible methods
-    ///@{
-
-
-    ///@}
-
-}; // Class	array_1d
-
-///@}
-///@name Type	Definitions
-///@{
-
-///@}
-///@name Input and output
-///@{
-
-///@}
-
+};
 
 }  // namespace	Kratos.
 
 namespace AuxiliaryHashCombine
 {
-    /**
-     * @brief This method creates an "unique" hash for the input value
-     * @details It comes from boost, taken from here: https://www.boost.org/doc/libs/1_55_0/doc/html/hash/reference.html#boost.hash_combine
-     * @tparam TClassType The type of class to be hashed
-     * @param rSeed This is the seed used to create the hash
-     * @param rValue This is the value to be hashed
-     * @todo Once the hashers and comparors are moved from key_hash.h, include key_hash and remove this. Right now there is a cross inclussion
-     */
     template <class TClassType>
     inline void HashCombine(
         std::size_t& rSeed,
@@ -787,7 +496,7 @@ namespace AuxiliaryHashCombine
         std::hash<TClassType> hasher;
         rSeed ^= hasher(rValue) + 0x9e3779b9 + (rSeed<<6) + (rSeed>>2);
     }
-} /// namespace
+}
 
 namespace std
 {
@@ -800,4 +509,4 @@ struct hash<Kratos::array_1d<T,N>>
             return seed;
         }
 };
-} // namespace std.
+}

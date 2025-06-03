@@ -260,8 +260,8 @@ public:
         const double max_condition_number = (1.0/Tolerance) * 1.0e-4;
 
         // Find the condition number to define is inverse is OK
-        const double input_matrix_norm = norm_frobenius(rInputMatrix);
-        const double inverted_matrix_norm = norm_frobenius(rInvertedMatrix);
+        const double input_matrix_norm = boost::numeric::ublas::norm_frobenius(rInputMatrix);
+        const double inverted_matrix_norm = boost::numeric::ublas::norm_frobenius(rInvertedMatrix);
 
         // Now the condition number is the product of both norms
         const double cond_number = input_matrix_norm * inverted_matrix_norm ;
@@ -303,20 +303,20 @@ public:
             if (rInvertedMatrix.size1() != size_2 || rInvertedMatrix.size2() != size_1) {
                 rInvertedMatrix.resize(size_2, size_1, false);
             }
-            const Matrix aux = prod(rInputMatrix, trans(rInputMatrix));
+            const Matrix aux = boost::numeric::ublas::prod(rInputMatrix, boost::numeric::ublas::trans(rInputMatrix));
             Matrix auxInv;
             InvertMatrix(aux, auxInv, rInputMatrixDet, Tolerance);
             rInputMatrixDet = std::sqrt(rInputMatrixDet);
-            noalias(rInvertedMatrix) = prod(trans(rInputMatrix), auxInv);
+            noalias(rInvertedMatrix) = boost::numeric::ublas::prod(boost::numeric::ublas::trans(rInputMatrix), auxInv);
         } else { // Left inverse
             if (rInvertedMatrix.size1() != size_2 || rInvertedMatrix.size2() != size_1) {
                 rInvertedMatrix.resize(size_2, size_1, false);
             }
-            const Matrix aux = prod(trans(rInputMatrix), rInputMatrix);
+            const Matrix aux = boost::numeric::ublas::prod(boost::numeric::ublas::trans(rInputMatrix), rInputMatrix);
             Matrix auxInv;
             InvertMatrix(aux, auxInv, rInputMatrixDet, Tolerance);
             rInputMatrixDet = std::sqrt(rInputMatrixDet);
-            noalias(rInvertedMatrix) = prod(auxInv, trans(rInputMatrix));
+            noalias(rInvertedMatrix) = boost::numeric::ublas::prod(auxInv, boost::numeric::ublas::trans(rInputMatrix));
         }
     }
 
@@ -327,10 +327,17 @@ public:
      * @param rB Right hand side vector.
      */
     static void Solve(
-        MatrixType A,
+        MatrixType A, // Note: A is copied
         VectorType& rX,
         const VectorType& rB
-        );
+        )
+    {
+        SizeType size = A.size1();
+        boost::numeric::ublas::permutation_matrix<SizeType> pm(size);
+        boost::numeric::ublas::lu_factorize(A,pm);
+        rX = rB; //do an assign
+        boost::numeric::ublas::lu_substitute(A,pm,rX);
+    }
 
     /**
      * @brief It inverts matrices of order 2, 3 and 4
@@ -373,12 +380,12 @@ public:
             }
 
             Matrix A(rInputMatrix);
-            typedef permutation_matrix<SizeType> pmatrix;
+            typedef boost::numeric::ublas::permutation_matrix<SizeType> pmatrix;
             pmatrix pm(A.size1());
-            const int singular = lu_factorize(A,pm);
-            rInvertedMatrix.assign( IdentityMatrix(A.size1()));
+            const int singular = boost::numeric::ublas::lu_factorize(A,pm);
+            rInvertedMatrix.assign( boost::numeric::ublas::identity_matrix<double>(A.size1()));
             KRATOS_ERROR_IF(singular == 1) << "Matrix is singular: " << rInputMatrix << std::endl;
-            lu_substitute(A, pm, rInvertedMatrix);
+            boost::numeric::ublas::lu_substitute(A, pm, rInvertedMatrix);
 
             // Calculating determinant
             rInputMatrixDet = 1.0;
@@ -394,12 +401,12 @@ public:
             Matrix A(rInputMatrix);
             Matrix invA(rInvertedMatrix);
 
-            typedef permutation_matrix<SizeType> pmatrix;
+            typedef boost::numeric::ublas::permutation_matrix<SizeType> pmatrix;
             pmatrix pm(size1);
-            const int singular = lu_factorize(A,pm);
-            invA.assign( IdentityMatrix(size1));
+            const int singular = boost::numeric::ublas::lu_factorize(A,pm);
+            invA.assign( boost::numeric::ublas::identity_matrix<double>(size1));
             KRATOS_ERROR_IF(singular == 1) << "Matrix is singular: " << rInputMatrix << std::endl;
-            lu_substitute(A, pm, invA);
+            boost::numeric::ublas::lu_substitute(A, pm, invA);
 
             // Calculating determinant
             rInputMatrixDet = 1.0;
@@ -498,7 +505,7 @@ public:
         // Finalizing the calculation of the inverted matrix
         rInvertedMatrix /= rInputMatrixDet;
 
-        KRATOS_CATCH("")
+        KRATOS_CATCH("");
     }
 
     /**
@@ -624,10 +631,10 @@ public:
             default:
                 double det = 1.0;
                 using namespace boost::numeric::ublas;
-                typedef permutation_matrix<SizeType> pmatrix;
+                typedef boost::numeric::ublas::permutation_matrix<SizeType> pmatrix;
                 Matrix Aux(rA);
                 pmatrix pm(Aux.size1());
-                bool singular = lu_factorize(Aux,pm);
+                bool singular = boost::numeric::ublas::lu_factorize(Aux,pm);
 
                 if (singular) {
                     return 0.0;
@@ -652,10 +659,10 @@ public:
         if (rA.size1() == rA.size2()) {
             return Det(rA);
         } else if (rA.size1() < rA.size2()) { // Right determinant
-            const Matrix AAT = prod( rA, trans(rA) );
+            const Matrix AAT = boost::numeric::ublas::prod( rA, boost::numeric::ublas::trans(rA) );
             return std::sqrt(Det(AAT));
         } else { // Left determinant
-            const Matrix ATA = prod( trans(rA), rA );
+            const Matrix ATA = boost::numeric::ublas::prod( boost::numeric::ublas::trans(rA), rA );
             return std::sqrt(Det(ATA));
         }
     }
@@ -925,7 +932,7 @@ public:
     template< class T1, class T2 , class T3>
     static inline void UnitCrossProduct(T1& c, const T2& a, const T3& b ){
         CrossProduct(c,a,b);
-        const double norm = norm_2(c);
+        const double norm = boost::numeric::ublas::norm_2(c);
         KRATOS_DEBUG_ERROR_IF(norm < 1000.0*ZeroTolerance)
             << "norm is 0 when making the UnitCrossProduct of the vectors "
             << a << " and " << b << std::endl;
@@ -969,7 +976,7 @@ public:
             b[1] =   c[2];
             b[2]  = -c[1];
         }
-        b /=  norm_2(b); //  Normalize  b
+        b /=  boost::numeric::ublas::norm_2(b); //  Normalize  b
         UnitCrossProduct(a, b , c); //  Construct  a  using a cross  product
     }
 
@@ -987,12 +994,12 @@ public:
             a[0] = 1.0 - std::pow(c[0], 2)/(1.0 + c[2]);
             a[1] = - (c[0] * c[1])/(1.0 + c[2]);
             a[2] = - c[0];
-            const double norm_a = norm_2(a);
+            const double norm_a = boost::numeric::ublas::norm_2(a);
             a /= norm_a;
             b[0] = - (c[0] * c[1])/(1.0 + c[2]);
             b[1] = 1.0 - std::pow(c[1], 2)/(1.0 + c[2]);
             b[2] = -c[1];
-            const double norm_b = norm_2(b);
+            const double norm_b = boost::numeric::ublas::norm_2(b);
             b /= norm_b;
         } else { // In case that the vector is in negative Z direction
             a[0] = 1.0;
@@ -1024,8 +1031,8 @@ public:
             a[1] = 0.0;
             a[2] = 0.0;
         }
-        a  -= c * inner_prod(a, c); // Make a  orthogonal  to c
-        a /=  norm_2(a);            //  Normalize  a
+        a  -= c * boost::numeric::ublas::inner_prod(a, c); // Make a  orthogonal  to c
+        a /=  boost::numeric::ublas::norm_2(a);            //  Normalize  a
         UnitCrossProduct(b, c, a);  //  Construct  b  using a cross  product
     }
 
@@ -1036,10 +1043,10 @@ public:
      */
     template< class T1, class T2>
     static inline double VectorsAngle(const T1& rV1, const T2& rV2 ){
-        const T1 aux_1 = rV1 * norm_2(rV2);
-        const T2 aux_2 = norm_2(rV1) * rV2;
-        const double num = norm_2(aux_1 - aux_2);
-        const double denom = norm_2(aux_1 + aux_2);
+        const T1 aux_1 = rV1 * boost::numeric::ublas::norm_2(rV2);
+        const T2 aux_2 = boost::numeric::ublas::norm_2(rV1) * rV2;
+        const double num = boost::numeric::ublas::norm_2(aux_1 - aux_2);
+        const double denom = boost::numeric::ublas::norm_2(aux_1 + aux_2);
         return 2.0 * std::atan2( num , denom);
     }
 
@@ -1696,7 +1703,7 @@ public:
         if (rEigenValuesMatrix.size1() != size || rEigenValuesMatrix.size2() != size)
             rEigenValuesMatrix.resize(size, size, false);
 
-        const TMatrixType2 identity_matrix = IdentityMatrix(size);
+        const TMatrixType2 identity_matrix = boost::numeric::ublas::identity_matrix<double>(size);
         noalias(rEigenVectorsMatrix) = identity_matrix;
         noalias(rEigenValuesMatrix) = rA;
 
@@ -1772,7 +1779,7 @@ public:
             rotation_matrix(index1, index1) =  c;
             rotation_matrix(index2, index2) =  c;
 
-            noalias(aux_V_matrix) = ZeroMatrix(size, size);
+            noalias(aux_V_matrix) = boost::numeric::ublas::zero_matrix<double>(size, size);
 
             for(IndexType i = 0; i < size; ++i) {
                 for(IndexType j = 0; j < size; ++j) {
@@ -1899,16 +1906,16 @@ public:
         SizeType factorial = 1;
         const SizeType dimension = rMatrix.size1();
 
-        noalias(rExponentialMatrix) = IdentityMatrix(dimension) + rMatrix;
+        noalias(rExponentialMatrix) = boost::numeric::ublas::identity_matrix<double>(dimension) + rMatrix;
         TMatrixType exponent_matrix = rMatrix;
         TMatrixType aux_matrix;
 
         while (series_term < MaxTerms) {
-            noalias(aux_matrix) = prod(exponent_matrix, rMatrix);
+            noalias(aux_matrix) = boost::numeric::ublas::prod(exponent_matrix, rMatrix);
             noalias(exponent_matrix) = aux_matrix;
             factorial = Factorial(series_term);
             noalias(rExponentialMatrix) += exponent_matrix / factorial;
-            const double norm_series_term = std::abs(norm_frobenius(exponent_matrix) / factorial);
+            const double norm_series_term = std::abs(boost::numeric::ublas::norm_frobenius(exponent_matrix) / factorial);
             if (norm_series_term < Tolerance)
                 break;
             series_term++;

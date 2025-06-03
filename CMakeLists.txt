@@ -447,7 +447,7 @@ if(KRATOS_SMP_TBB)
   FetchContent_Declare(
     oneTBB
     URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2022.1.0.zip
-    URL_HASH SHA256=b489b380e91722d37baa58fe56b81e8ad6026149c7d0b2f75499a6360cdfa450
+    URL_HASH SHA256=f053185da53c6eef0a40c471390c33e55e4d035a263558cf16ff9bbc9ce6a032
   )
   FetchContent_MakeAvailable(oneTBB)
 

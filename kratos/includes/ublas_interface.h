@@ -46,7 +46,7 @@ namespace Kratos
 ///@}
 ///@name Type Definitions
 ///@{
-    using namespace boost::numeric::ublas;
+    // using namespace boost::numeric::ublas; // This was causing namespace pollution
 
     template <typename TDataType> using DenseMatrix = boost::numeric::ublas::matrix<TDataType>;
     template <typename TDataType> using DenseVector = boost::numeric::ublas::vector<TDataType>;
@@ -56,35 +56,35 @@ namespace Kratos
 
 
     typedef boost::numeric::ublas::vector<double> Vector;
-    typedef unit_vector<double> UnitVector;
-    typedef zero_vector<double> ZeroVector;
-    typedef scalar_vector<double> ScalarVector;
-    //typedef sparse_vector<double> SparseVector;
-    typedef mapped_vector<double> SparseVector;
+    typedef boost::numeric::ublas::unit_vector<double> UnitVector;
+    typedef boost::numeric::ublas::zero_vector<double> ZeroVector;
+    typedef boost::numeric::ublas::scalar_vector<double> ScalarVector;
+    //typedef boost::numeric::ublas::sparse_vector<double> SparseVector;
+    typedef boost::numeric::ublas::mapped_vector<double> SparseVector;
 
-    typedef compressed_vector<double> CompressedVector;
-    typedef coordinate_vector<double> CoordinateVector;
-    typedef vector_range<Vector> VectorRange;
-    typedef vector_slice<Vector> VectorSlice;
+    typedef boost::numeric::ublas::compressed_vector<double> CompressedVector;
+    typedef boost::numeric::ublas::coordinate_vector<double> CoordinateVector;
+    typedef boost::numeric::ublas::vector_range<Vector> VectorRange; // Vector is already boost::numeric::ublas::vector
+    typedef boost::numeric::ublas::vector_slice<Vector> VectorSlice; // Vector is already boost::numeric::ublas::vector
 
-    typedef matrix<double> Matrix;
-    typedef identity_matrix<double> IdentityMatrix;
-    typedef zero_matrix<double> ZeroMatrix;
-    typedef scalar_matrix<double> ScalarMatrix;
-    typedef triangular_matrix<double> TriangularMatrix;
-    typedef symmetric_matrix<double> SymmetricMatrix;
-    typedef hermitian_matrix<double> HermitianMatrix;
-    typedef banded_matrix<double> BandedMatrix;
-    //typedef sparse_matrix<double> SparseMatrix;
-    typedef mapped_matrix<double> SparseMatrix;
-    typedef coordinate_matrix<double> CoordinateMatrix;
-    typedef matrix_column<Matrix> MatrixColumn;
-    typedef matrix_vector_range<Matrix> MatrixVectorRange;
-    typedef matrix_vector_slice<Matrix> MatrixVectorSlice;
-    typedef matrix_range<Matrix> MatrixRange;
-    typedef matrix_slice<Matrix> MatrixSlice;
+    typedef boost::numeric::ublas::matrix<double> Matrix;
+    typedef boost::numeric::ublas::identity_matrix<double> IdentityMatrix;
+    typedef boost::numeric::ublas::zero_matrix<double> ZeroMatrix;
+    typedef boost::numeric::ublas::scalar_matrix<double> ScalarMatrix;
+    typedef boost::numeric::ublas::triangular_matrix<double> TriangularMatrix;
+    typedef boost::numeric::ublas::symmetric_matrix<double> SymmetricMatrix;
+    typedef boost::numeric::ublas::hermitian_matrix<double> HermitianMatrix;
+    typedef boost::numeric::ublas::banded_matrix<double> BandedMatrix;
+    //typedef boost::numeric::ublas::sparse_matrix<double> SparseMatrix;
+    typedef boost::numeric::ublas::mapped_matrix<double> SparseMatrix;
+    typedef boost::numeric::ublas::coordinate_matrix<double> CoordinateMatrix;
+    typedef boost::numeric::ublas::matrix_column<Matrix> MatrixColumn; // Matrix is already boost::numeric::ublas::matrix
+    typedef boost::numeric::ublas::matrix_vector_range<Matrix> MatrixVectorRange; // Matrix is already boost::numeric::ublas::matrix
+    typedef boost::numeric::ublas::matrix_vector_slice<Matrix> MatrixVectorSlice; // Matrix is already boost::numeric::ublas::matrix
+    typedef boost::numeric::ublas::matrix_range<Matrix> MatrixRange; // Matrix is already boost::numeric::ublas::matrix
+    typedef boost::numeric::ublas::matrix_slice<Matrix> MatrixSlice; // Matrix is already boost::numeric::ublas::matrix
 
-	template <typename TExpressionType> using MatrixRow = matrix_row<TExpressionType>;
+	template <typename TExpressionType> using MatrixRow = boost::numeric::ublas::matrix_row<TExpressionType>;
 
     typedef boost::numeric::ublas::compressed_matrix<double> CompressedMatrix;
 
