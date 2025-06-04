@@ -40,7 +40,7 @@ Table<double, double> CreateAndPopulateTable(const std::size_t NumElements) {
 // "TableGetValuePerformance" is the "name" part for KRATOS_BENCHMARK macro,
 // corresponding to "TableNameGetValue" from prompt.
 template <std::size_t Size>
-static void TestTableGetValuePerformance()
+static void TestTableGetValuePerformance(benchmark::State& state)
 {
     const int num_lookups_to_perform = 5 * Size;
 
@@ -59,10 +59,11 @@ static void TestTableGetValuePerformance()
         lookup_x_values[i] = distribution(random_engine);
     }
 
-    volatile double sum_of_values = 0.0; // Use volatile to prevent compiler from optimizing away the loop
-
-    for (int i = 0; i < num_lookups_to_perform; ++i) {
-        sum_of_values += table.GetValue(lookup_x_values[i]);
+    for (auto _ : state) {
+        volatile double sum_of_values = 0.0; // Use volatile to prevent compiler from optimizing away the loop
+        for (int i = 0; i < num_lookups_to_perform; ++i) {
+            sum_of_values += table.GetValue(lookup_x_values[i]);
+        }
     }
 }
 
@@ -75,7 +76,7 @@ BENCHMARK_TEMPLATE(TestTableGetValuePerformance, 20000);
 // "TableGetDerivativePerformance" is the "name" part for KRATOS_BENCHMARK macro,
 // corresponding to "TableNameGetDerivative" from prompt.
 template <std::size_t Size>
-static void TestTableGetDerivativePerformance()
+static void TestTableGetDerivativePerformance(benchmark::State& state)
 {
     const int num_lookups_to_perform = 5 * Size;
 
@@ -93,10 +94,11 @@ static void TestTableGetDerivativePerformance()
         lookup_x_values[i] = distribution(random_engine);
     }
 
-    volatile double sum_of_derivatives = 0.0; // Use volatile
-
-    for (int i = 0; i < num_lookups_to_perform; ++i) {
-        sum_of_derivatives += table.GetDerivative(lookup_x_values[i]);
+    for (auto _ : state) {
+        volatile double sum_of_derivatives = 0.0; // Use volatile
+        for (int i = 0; i < num_lookups_to_perform; ++i) {
+            sum_of_derivatives += table.GetDerivative(lookup_x_values[i]);
+        }
     }
 }
 
