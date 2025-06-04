@@ -41,6 +41,10 @@
 #include <boost/atomic/atomic_ref.hpp>
 #endif
 
+#if defined(KRATOS_SMP_TBB)
+#include <oneapi/tbb/atomic.h>
+#endif
+
 // Project includes
 #include "includes/define.h"
 #include "containers/array_1d.h"
@@ -55,6 +59,9 @@ namespace Kratos {
         template <class T>
         using AtomicRef = boost::atomic_ref<T>;
     #endif //__cpp_lib_atomic_ref
+#elif defined(KRATOS_SMP_TBB)
+    template <class T>
+    using AtomicRef = oneapi::tbb::atomic_ref<T>;
 #endif // KRATOS_SMP_CXX11
 
 ///@addtogroup KratosCore
