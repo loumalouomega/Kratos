@@ -453,12 +453,14 @@ if (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "OpenMP")
 elseif (KRATOS_SHARED_MEMORY_PARALLELIZATION STREQUAL "OneTBB")
   message(STATUS "Using OneTBB for shared memory parallelization.")
   # Use FetchContent to get oneTBB
-  FetchContent_Declare(
-    oneTBB
-    URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2022.1.0.zip
-    URL_HASH SHA256=f053185da53c6eef0a40c471390c33e55e4d035a263558cf16ff9bbc9ce6a032
-  )
-  FetchContent_MakeAvailable(oneTBB)
+  if(NOT TARGET TBB::tbb)
+    FetchContent_Declare(
+      oneTBB
+      URL https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2022.1.0.zip
+      URL_HASH SHA256=f053185da53c6eef0a40c471390c33e55e4d035a263558cf16ff9bbc9ce6a032
+    )
+    FetchContent_MakeAvailable(oneTBB)
+  endif(NOT TARGET TBB::tbb)
 
   if(TARGET TBB::tbb)
     message(STATUS "oneTBB successfully fetched and configured by FetchContent.")
