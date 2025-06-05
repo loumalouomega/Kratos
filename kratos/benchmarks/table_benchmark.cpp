@@ -68,6 +68,9 @@ static void TestTableGetValuePerformance(benchmark::State& state)
 }
 
 // Register the function as benchmarks for different sizes
+BENCHMARK_TEMPLATE(TestTableGetValuePerformance, 5);
+BENCHMARK_TEMPLATE(TestTableGetValuePerformance, 10);
+BENCHMARK_TEMPLATE(TestTableGetValuePerformance, 20);
 BENCHMARK_TEMPLATE(TestTableGetValuePerformance, 200);
 BENCHMARK_TEMPLATE(TestTableGetValuePerformance, 2000);
 BENCHMARK_TEMPLATE(TestTableGetValuePerformance, 20000);
