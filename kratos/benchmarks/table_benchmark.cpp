@@ -103,6 +103,9 @@ static void TestTableGetDerivativePerformance(benchmark::State& state)
 }
 
 // Register the function as benchmarks for different sizes
+BENCHMARK_TEMPLATE(TestTableGetDerivativePerformance, 5);
+BENCHMARK_TEMPLATE(TestTableGetDerivativePerformance, 10);
+BENCHMARK_TEMPLATE(TestTableGetDerivativePerformance, 20);
 BENCHMARK_TEMPLATE(TestTableGetDerivativePerformance, 200);
 BENCHMARK_TEMPLATE(TestTableGetDerivativePerformance, 2000);
 BENCHMARK_TEMPLATE(TestTableGetDerivativePerformance, 20000);
