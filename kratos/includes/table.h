@@ -72,11 +72,11 @@ public:
     /// Pointer definition of Table
     KRATOS_CLASS_POINTER_DEFINITION(Table);
 
-    typedef std::array<TResultType, TResultsColumns>  result_row_type;
+    using result_row_type = std::array<TResultType, TResultsColumns>;
 
-    typedef std::pair<TArgumentType, result_row_type> RecordType;
+    using RecordType = std::pair<TArgumentType, result_row_type>;
 
-    typedef std::vector<RecordType> TableContainerType;
+    using TableContainerType = std::vector<RecordType>;
 
     ///@}
     ///@name Life Cycle
@@ -174,8 +174,8 @@ public:
     // inserts a row in a sorted position where Xi-1 < X < Xi+1 and fills the first column with Y
     void insert(TArgumentType const& X, TResultType const& Y)
     {
-        this->mLastAccessedIndex = 0;
-        this->mHasAccessedOnce = false;
+        mLastAccessedIndex = 0;
+        mHasAccessedOnce = false;
         result_row_type a = {{Y}};
         insert(X,a);
     }
@@ -194,8 +194,8 @@ public:
     // inserts a row in a sorted position where Xi-1 < X < Xi+1
     void insert(TArgumentType const& X, result_row_type const& Y)
     {
-        this->mLastAccessedIndex = 0;
-        this->mHasAccessedOnce = false;
+        mLastAccessedIndex = 0;
+        mHasAccessedOnce = false;
         std::size_t size = mData.size();
 
         if(size == 0)
@@ -220,8 +220,8 @@ public:
     // faster than insert.
     void PushBack(TArgumentType const& X, TResultType const& Y)
     {
-        this->mLastAccessedIndex = 0;
-        this->mHasAccessedOnce = false;
+        mLastAccessedIndex = 0;
+        mHasAccessedOnce = false;
         result_row_type a = {{Y}};
         mData.push_back(RecordType(X,a));
     }
@@ -269,11 +269,9 @@ public:
         return mData;
     }
 
-
     ///@}
     ///@name Inquiry
     ///@{
-
 
     ///@}
     ///@name Input and output
@@ -320,50 +318,39 @@ public:
     ///@name Friends
     ///@{
 
-
     ///@}
-
 protected:
     ///@name Protected static Member Variables
     ///@{
-
 
     ///@}
     ///@name Protected member Variables
     ///@{
 
-
     ///@}
     ///@name Protected Operators
     ///@{
-
 
     ///@}
     ///@name Protected Operations
     ///@{
 
-
     ///@}
     ///@name Protected  Access
     ///@{
-
 
     ///@}
     ///@name Protected Inquiry
     ///@{
 
-
     ///@}
     ///@name Protected LifeCycle
     ///@{
 
-
     ///@}
-
 private:
     ///@name Static Member Variables
     ///@{
-
 
     ///@}
     ///@name Member Variables
@@ -378,8 +365,6 @@ private:
     ///@}
     ///@name Private Operators
     ///@{
-
-
 
     ///@}
     ///@name Private Operations
@@ -419,24 +404,19 @@ private:
         }
     }
 
-
     ///@}
     ///@name Private  Access
     ///@{
-
 
     ///@}
     ///@name Private Inquiry
     ///@{
 
-
     ///@}
     ///@name Un accessible methods
     ///@{
 
-
     ///@}
-
 }; // Class Table
 
 template<>
@@ -449,17 +429,15 @@ public:
     /// Pointer definition of Table
     KRATOS_CLASS_POINTER_DEFINITION(Table);
 
-    typedef double TResultType;
-    typedef double TArgumentType;
+    using TResultType = double;
+    using TArgumentType = double;
 
-    typedef std::array<TResultType, 1>  result_row_type;
+    using result_row_type = std::array<TResultType, 1>;
+    using RecordType = std::pair<TArgumentType, result_row_type>;
+    using TableContainerType = std::vector<RecordType>;
 
-    typedef std::pair<TArgumentType, result_row_type> RecordType;
-
-    typedef std::vector<RecordType> TableContainerType;
-
-    typedef Variable<TArgumentType> XVariableType;
-    typedef Variable<TResultType> YVariableType;
+    using XVariableType = Variable<TArgumentType>;
+    using YVariableType = Variable<TResultType>;
 
     ///@}
     ///@name Life Cycle
@@ -476,7 +454,6 @@ public:
     }
 
     virtual ~Table() = default;
-
 
     ///@}
     ///@name Operators
@@ -701,7 +678,6 @@ public:
         insert(X,a);
     }
 
-
     // inserts a row in a sorted position where Xi-1 < X < Xi+1
     void insert(TArgumentType const& X, result_row_type const& Y)
     {
@@ -796,7 +772,6 @@ public:
     ///@name Access
     ///@{
 
-
     TableContainerType& Data()
     {
         return mData;
@@ -807,11 +782,9 @@ public:
         return mData;
     }
 
-
     ///@}
     ///@name Inquiry
     ///@{
-
 
     ///@}
     ///@name Input and output
@@ -860,14 +833,10 @@ public:
     ///@name Friends
     ///@{
 
-
     ///@}
-
-
 private:
     ///@name Static Member Variables
     ///@{
-
 
     ///@}
     ///@name Member Variables
@@ -876,12 +845,12 @@ private:
     TableContainerType mData;
     std::string mNameOfX;
     std::string mNameOfY;
+    mutable std::size_t mLastAccessedIndex = 0;
+    mutable bool mHasAccessedOnce = false;
 
     ///@}
     ///@name Private Operators
     ///@{
-
-
 
     ///@}
     ///@name Private Operations
@@ -919,38 +888,30 @@ private:
             for(auto j = i_row->second.begin() ; j != i_row->second.end() ; j++)
                 rSerializer.load("Column", *j);
         }
-   }
-
+    }
 
     ///@}
     ///@name Private  Access
     ///@{
 
-
     ///@}
     ///@name Private Inquiry
     ///@{
-
 
     ///@}
     ///@name Un accessible methods
     ///@{
 
-
     ///@}
-
 }; // Class Table
 
 ///@}
-
 ///@name Type Definitions
 ///@{
-
 
 ///@}
 ///@name Input and output
 ///@{
-
 
 /// input stream function
 template<class TArgumentType, class TResultType>
