@@ -94,4 +94,77 @@ KRATOS_TEST_CASE_IN_SUITE(TableDerivativeUsesExtrapolationWhenOutsideOfDomain, K
     KRATOS_EXPECT_NEAR(table.GetDerivative(5.0), 0.5, abs_tolerance); // beyond last point in table
 }
 
+KRATOS_TEST_CASE_IN_SUITE(TableCacheCorrectness, KratosCoreFastSuite)
+{
+    Table<double, double> table;
+
+    // Setup Table
+    table.PushBack(0.0, 0.0);
+    table.PushBack(1.0, 10.0);
+    table.PushBack(2.0, 15.0);
+    table.PushBack(3.0, 18.0);
+    table.PushBack(4.0, 22.0);
+
+    // Test Cache Hits (Sequential/Close Access)
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.0), 10.0); // Initial access
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.1), 10.5); // Should use cache for neighborhood: (1.1-1.0)/(2.0-1.0) * (15.0-10.0) + 10.0 = 0.1 * 5.0 + 10.0 = 10.5
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(0.9), 9.0);   // Neighborhood: (0.9-0.0)/(1.0-0.0) * (10.0-0.0) + 0.0 = 0.9 * 10.0 = 9.0.
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.0), 10.0); // Exact cache hit
+
+    // Test Cache Miss then Hit
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(3.5), 20.0); // (3.5-3.0)/(4.0-3.0) * (22.0-18.0) + 18.0 = 0.5 * 4.0 + 18.0 = 20.0
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(3.6), 20.4); // Cache hit: (3.6-3.0)/(4.0-3.0) * (22.0-18.0) + 18.0 = 0.6 * 4.0 + 18.0 = 20.4
+
+    // Test Extrapolation with Cache
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(-1.0), -10.0); // Extrapolate from (0,0) and (1,10)
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(-0.5), -5.0);  // Should use cache based on previous extrapolation
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(5.0), 26.0);   // Extrapolate from (3,18) and (4,22)
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(4.5), 24.0);   // Should use cache
+
+    // Test Cache Invalidation on `insert`
+    table.Clear();
+    table.PushBack(0.0, 0.0);
+    table.PushBack(2.0, 20.0);
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.0), 10.0); // Populate cache
+    table.insert(1.5, 15.0); // Insert, should invalidate cache
+    KRATOS_EXPECT_DOUBLE_EQ(table.Data()[1].first, 1.5); // Check insertion worked. Data should be (0,0), (1.5,15), (2,20)
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.0), (1.0-0.0)/(1.5-0.0) * (15.0-0.0) + 0.0); // Re-evaluate: (1.0/1.5)*15 = 10.0
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.6), (1.6-1.5)/(2.0-1.5) * (20.0-15.0) + 15.0); // (0.1/0.5)*5 + 15 = 1+15=16
+
+    // Test Cache Invalidation on `PushBack`
+    table.Clear();
+    table.PushBack(0.0, 0.0);
+    table.PushBack(1.0, 10.0);
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(0.5), 5.0); // Populate cache
+    table.PushBack(2.0, 20.0); // PushBack, should invalidate cache. Data: (0,0), (1,10), (2,20)
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.5), (1.5-1.0)/(2.0-1.0) * (20.0-10.0) + 10.0); // Re-evaluate: 0.5*10+10=15
+
+    // Test Cache Invalidation on `Clear`
+    table.Clear();
+    table.PushBack(0.0, 0.0);
+    table.PushBack(1.0, 10.0);
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(0.5), 5.0); // Populate cache
+    table.Clear(); // Clear, should invalidate cache
+    table.PushBack(0.0, 0.0);
+    table.PushBack(2.0, 20.0); // New data
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.0), 10.0); // Should use new data, not stale cache
+
+    // Test Single Element Table (Cache logic should effectively be bypassed or handle gracefully)
+    table.Clear();
+    table.PushBack(1.0, 100.0);
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(0.5), 100.0);
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.0), 100.0);
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(1.5), 100.0);
+
+    // Test Two Element Table (Cache)
+    table.Clear();
+    table.PushBack(0.0,0.0);
+    table.PushBack(1.0,10.0);
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(-1.0), -10.0); // Extrapolation
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(0.1), 1.0);   // Interpolation, cache
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(0.5), 5.0);   // Interpolation, cache
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(0.9), 9.0);   // Interpolation, cache
+    KRATOS_EXPECT_DOUBLE_EQ(table.GetValue(2.0), 20.0);   // Extrapolation
+}
+
 }  // namespace Kratos::Testing.

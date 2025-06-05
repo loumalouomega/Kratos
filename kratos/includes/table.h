@@ -17,6 +17,7 @@
 #include <string>
 #include <iostream>
 #include <algorithm> // Added for std::lower_bound
+#include <iterator>  // Added for std::distance
 
 // External includes
 
@@ -173,6 +174,8 @@ public:
     // inserts a row in a sorted position where Xi-1 < X < Xi+1 and fills the first column with Y
     void insert(TArgumentType const& X, TResultType const& Y)
     {
+        this->mLastAccessedIndex = 0;
+        this->mHasAccessedOnce = false;
         result_row_type a = {{Y}};
         insert(X,a);
     }
@@ -191,6 +194,8 @@ public:
     // inserts a row in a sorted position where Xi-1 < X < Xi+1
     void insert(TArgumentType const& X, result_row_type const& Y)
     {
+        this->mLastAccessedIndex = 0;
+        this->mHasAccessedOnce = false;
         std::size_t size = mData.size();
 
         if(size == 0)
@@ -215,6 +220,8 @@ public:
     // faster than insert.
     void PushBack(TArgumentType const& X, TResultType const& Y)
     {
+        this->mLastAccessedIndex = 0;
+        this->mHasAccessedOnce = false;
         result_row_type a = {{Y}};
         mData.push_back(RecordType(X,a));
     }
@@ -365,6 +372,8 @@ private:
     TableContainerType mData;
     std::string mNameOfX;
     std::string mNameOfY;
+    mutable std::size_t mLastAccessedIndex = 0;
+    mutable bool mHasAccessedOnce = false;
 
     ///@}
     ///@name Private Operators
@@ -506,31 +515,102 @@ public:
         KRATOS_ERROR_IF(size == 0) << "Get value from empty table" << std::endl;
 
         if (size == 1) // constant table. Returning the only value we have.
+        {
+            mLastAccessedIndex = 0;
+            mHasAccessedOnce = true;
             return mData.begin()->second[0];
+        }
 
         TResultType result;
 
-        // Use std::lower_bound to find the iterator to the first element whose argument is not less than X.
+        // Cache Check Logic
+        if (mHasAccessedOnce && size > 1) {
+            TArgumentType cached_x = mData[mLastAccessedIndex].first;
+            TResultType cached_y = mData[mLastAccessedIndex].second[0];
+
+            // Exact Match
+            if (X == cached_x) {
+                return cached_y;
+            }
+
+            // Check Neighborhood
+            if (X > cached_x) {
+                if (mLastAccessedIndex + 1 < size) { // there's a next element
+                    TArgumentType next_x = mData[mLastAccessedIndex + 1].first;
+                    TResultType next_y = mData[mLastAccessedIndex + 1].second[0];
+                    if (X <= next_x) { // X is between cached and next
+                        if (X == next_x) {
+                            mLastAccessedIndex = mLastAccessedIndex + 1;
+                        }
+                        // mHasAccessedOnce is already true
+                        return Interpolate(X, cached_x, cached_y, next_x, next_y, result);
+                    }
+                }
+            } else { // X < cached_x
+                if (mLastAccessedIndex > 0) { // there's a previous element
+                    TArgumentType prev_x = mData[mLastAccessedIndex - 1].first;
+                    TResultType prev_y = mData[mLastAccessedIndex - 1].second[0];
+                    if (X >= prev_x) { // X is between previous and cached
+                        if (X == prev_x) {
+                            mLastAccessedIndex = mLastAccessedIndex - 1;
+                        }
+                        // mHasAccessedOnce is already true
+                        return Interpolate(X, prev_x, prev_y, cached_x, cached_y, result);
+                    }
+                }
+            }
+        }
+
+        // Fallback to std::lower_bound
         auto it = std::lower_bound(mData.begin(), mData.end(), X,
             [](const RecordType& record, TArgumentType val) {
                 return record.first < val;
             });
 
+        TArgumentType x1, x2;
+        TResultType y1, y2;
+
         if (it == mData.begin()) {
             // X is less than or equal to the first element's argument.
-            // Interpolate/extrapolate using mData[0] and mData[1].
-            // Note: mData[1] is safe to access because size >= 2 here (size == 1 case handled above)
-            return Interpolate(X, mData[0].first, mData[0].second[0], mData[1].first, mData[1].second[0], result);
+            x1 = mData[0].first;
+            y1 = mData[0].second[0];
+            x2 = mData[1].first; // size >= 2 here
+            y2 = mData[1].second[0];
+            if (X == x1) {
+                mLastAccessedIndex = 0;
+            } else { // X < x1 (extrapolation) or X between x1 and x2
+                 mLastAccessedIndex = 0; // Cache first element for out-of-bounds-low
+            }
         } else if (it == mData.end()) {
             // X is greater than the last element's argument.
-            // Extrapolate using the last two elements mData[size-2] and mData[size-1].
-            // Note: mData[size-2] is safe to access because size >= 2
-            return Interpolate(X, mData[size-2].first, mData[size-2].second[0], mData[size-1].first, mData[size-1].second[0], result);
+            x1 = mData[size-2].first; // size >= 2 here
+            y1 = mData[size-2].second[0];
+            x2 = mData[size-1].first;
+            y2 = mData[size-1].second[0];
+            if (X == x2) {
+                mLastAccessedIndex = size - 1;
+            } else { // X > x2 (extrapolation)
+                mLastAccessedIndex = size - 1; // Cache last element for out-of-bounds-high
+            }
         } else {
-            // X falls between (it-1)->first and it->first (general case).
-            // Interpolate using *(it-1) and *it.
-            return Interpolate(X, (it-1)->first, (it-1)->second[0], it->first, it->second[0], result);
+            // X falls between (it-1)->first and it->first, or X == it->first.
+            x1 = (it-1)->first;
+            y1 = (it-1)->second[0];
+            x2 = it->first;
+            y2 = it->second[0];
+            if (X == x2) {
+                mLastAccessedIndex = std::distance(mData.begin(), it);
+            } else if (X == x1) { // Should technically be caught by the previous check if it == mData.begin() or by cache
+                mLastAccessedIndex = std::distance(mData.begin(), it-1);
+            }
+            else { // X is between (it-1)->first and it->first
+                // Cache the index of the element just_below or equal to X
+                mLastAccessedIndex = std::distance(mData.begin(), it-1);
+            }
         }
+
+        mHasAccessedOnce = true;
+        return Interpolate(X, x1, y1, x2, y2, result);
     }
 
     // Get the nesrest value for the given argument
@@ -708,6 +788,8 @@ public:
     void Clear()
     {
         mData.clear();
+        mLastAccessedIndex = 0;
+        mHasAccessedOnce = false;
     }
     
     ///@}
