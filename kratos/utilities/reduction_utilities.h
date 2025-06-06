@@ -87,6 +87,10 @@ public:
 
     TReturnType mValue = Internals::NullInitialized<TReturnType>::Get(); // deliberately making the member value public, to allow one to change it as needed
 
+    void SetValue(const TReturnType& value) {
+        mValue = value;
+    }
+
     /// access to reduced value
     TReturnType GetValue() const
     {
@@ -122,6 +126,10 @@ public:
     typedef TReturnType return_type;
 
     TReturnType mValue = Internals::NullInitialized<TReturnType>::Get(); // deliberately making the member value public, to allow one to change it as needed
+
+    void SetValue(const TReturnType& value) {
+        mValue = value;
+    }
 
     /// access to reduced value
     TReturnType GetValue() const
@@ -160,6 +168,10 @@ public:
     typedef TReturnType return_type;
 
     TReturnType mValue = std::numeric_limits<TReturnType>::lowest(); // deliberately making the member value public, to allow one to change it as needed
+
+    void SetValue(const TReturnType& value) {
+        mValue = value;
+    }
 
     /// access to reduced value
     TReturnType GetValue() const
@@ -200,6 +212,10 @@ public:
 
     TReturnType mValue = 0; // deliberately making the member value public, to allow one to change it as needed
 
+    void SetValue(const TReturnType& value) {
+        mValue = value;
+    }
+
     /// access to reduced value
     TReturnType GetValue() const
     {
@@ -238,6 +254,10 @@ public:
     typedef TReturnType return_type;
 
     TReturnType mValue = std::numeric_limits<TReturnType>::max(); // deliberately making the member value public, to allow one to change it as needed
+
+    void SetValue(const TReturnType& value) {
+        mValue = value;
+    }
 
     /// access to reduced value
     TReturnType GetValue() const
@@ -279,6 +299,10 @@ public:
     typedef TReturnType return_type;
 
     TReturnType mValue = std::numeric_limits<TReturnType>::max(); // deliberately making the member value public, to allow one to change it as needed
+
+    void SetValue(const TReturnType& value) {
+        mValue = value;
+    }
 
     /// access to reduced value
     TReturnType GetValue() const
@@ -324,6 +348,10 @@ public:
     using return_type = TReturnType; ///< Alias for the type of the container used for reduction.
 
     TReturnType mValue = TReturnType(); ///< Public member variable for the accumulation storage, modifiable as needed.
+
+    void SetValue(const TReturnType& value) {
+        mValue = value;
+    }
 
     /**
      * @brief Accessor for the reduced value.
@@ -388,6 +416,10 @@ public:
     using return_type = MapType;
 
     return_type mValue;
+
+    void SetValue(const return_type& value) {
+        mValue = value;
+    }
 
     /// access to reduced value
     return_type GetValue() const
