@@ -23,7 +23,7 @@
 #include "includes/define.h"
 #include "factories/linear_solver_factory.h"
 #include "linear_solvers/linear_solver.h"
-#include "utilities/openmp_utils.h"
+#include "utilities/parallel_utilities.h"
 
 namespace Kratos
 {
@@ -359,129 +359,158 @@ private:
     ///@{
     static void SymmetricScaling( SparseMatrixType& A, const VectorType& aux)
     {
-      //typedef  unsigned int size_type;
+        //typedef  unsigned int size_type;
         //typedef  double value_type;
 
-        //create partition
-        OpenMPUtils::PartitionVector partition;
-        int number_of_threads = ParallelUtilities::GetNumThreads();
-        OpenMPUtils::DivideInPartitions(A.size1(),number_of_threads,  partition);
-        //parallel loop
+        IndexPartition<std::size_t>(A.size1()).for_each([&](std::size_t Index){
+            // Get the row iterator, index2 iterator and value iterator for the current row (Index)
+            auto row_begin_it = A.index1_data().begin() + Index;
+            auto index2_begin_it = A.index2_data().begin() + (*row_begin_it);
+            auto value_begin_it = A.value_data().begin() + (*row_begin_it);
+            int number_of_entries_in_row = *(row_begin_it+1) - *row_begin_it;
 
-        #pragma omp parallel
-        {
-            int thread_id = OpenMPUtils::ThisThread();
-            int number_of_rows = partition[thread_id+1] - partition[thread_id];
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator row_iter_begin = A.index1_data().begin()+partition[thread_id];
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator index_2_begin = A.index2_data().begin()+*row_iter_begin;
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::iterator value_begin = A.value_data().begin()+*row_iter_begin;
-
-            perform_matrix_scaling(    number_of_rows,
-                                       row_iter_begin,
-                                       index_2_begin,
-                                       value_begin,
-                                       partition[thread_id],
-                                       aux
-                                  );
-        }
+            // Call perform_matrix_scaling_row for the current row
+            perform_matrix_scaling_row(
+                Index, // Current row index
+                number_of_entries_in_row,
+                row_begin_it, // Iterator to the beginning of the current row's data in index1_data
+                index2_begin_it, // Iterator to the beginning of the current row's data in index2_data
+                value_begin_it, // Iterator to the beginning of the current row's data in value_data
+                aux
+            );
+        });
     }
 
     /**
      * calculates partial product resetting to Zero the output before
      */
-    static void perform_matrix_scaling(
-        int number_of_rows,
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator row_begin,
+    // static void perform_matrix_scaling(
+    //     int number_of_rows,
+    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator row_begin,
+    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator index2_begin,
+    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::iterator value_begin,
+    //     unsigned int output_begin_index,
+    //     const VectorType& weights
+    // )
+    // {
+    //     int row_size;
+    //     typename SparseMatrixType::index_array_type::const_iterator row_it = row_begin;
+    //     int kkk = output_begin_index;
+    //     for(int k = 0; k < number_of_rows; k++)
+    //     {
+    //         row_size= *(row_it+1)-*row_it;
+    //         row_it++;
+    //         const typename TSparseSpaceType::DataType row_weight = weights[kkk++];
+
+    //         for(int i = 0; i<row_size; i++)
+    //         {
+    //             const typename TSparseSpaceType::DataType col_weight = weights[*index2_begin];
+    //             typename TSparseSpaceType::DataType t = (*value_begin);
+    //             t /= (row_weight*col_weight);
+    //             (*value_begin) = t; //check if this is correcct!!
+    //             value_begin++;
+    //             index2_begin++;
+    //         }
+
+    //     }
+    // }
+
+    static void perform_matrix_scaling_row(
+        std::size_t kkk, // Current row index
+        int number_of_entries_in_row,
+        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator row_it, // Should be index1_data().begin() + kkk
         typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator index2_begin,
         typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::iterator value_begin,
-        unsigned int output_begin_index,
         const VectorType& weights
     )
     {
-        int row_size;
-        typename SparseMatrixType::index_array_type::const_iterator row_it = row_begin;
-        int kkk = output_begin_index;
-        for(int k = 0; k < number_of_rows; k++)
+        const typename TSparseSpaceType::DataType row_weight = weights[kkk];
+
+        for(int i = 0; i < number_of_entries_in_row; i++)
         {
-            row_size= *(row_it+1)-*row_it;
-            row_it++;
-            const typename TSparseSpaceType::DataType row_weight = weights[kkk++];
-
-            for(int i = 0; i<row_size; i++)
-            {
-                const typename TSparseSpaceType::DataType col_weight = weights[*index2_begin];
-                typename TSparseSpaceType::DataType t = (*value_begin);
-                t /= (row_weight*col_weight);
-                (*value_begin) = t; //check if this is correcct!!
-                value_begin++;
-                index2_begin++;
-            }
-
+            const typename TSparseSpaceType::DataType col_weight = weights[*index2_begin];
+            typename TSparseSpaceType::DataType t = (*value_begin);
+            t /= (row_weight*col_weight);
+            (*value_begin) = t;
+            value_begin++;
+            index2_begin++;
         }
     }
 
-
     static void GetScalingWeights( const SparseMatrixType& A, VectorType& aux)
     {
-      //typedef  unsigned int size_type;
-      //typedef  double value_type;
+        //typedef  unsigned int size_type;
+        //typedef  double value_type;
 
-        //create partition
-        OpenMPUtils::PartitionVector partition;
-        int number_of_threads = ParallelUtilities::GetNumThreads();
-        OpenMPUtils::DivideInPartitions(A.size1(),number_of_threads,  partition);
-        //parallel loop
+        IndexPartition<std::size_t>(A.size1()).for_each([&A, &aux](std::size_t Index){
+            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_begin_it = A.index1_data().begin() + Index;
+            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index2_begin_it = A.index2_data().begin() + (*row_begin_it); // Not strictly needed for GS2weights_row, but kept for consistency
+            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator value_begin_it = A.value_data().begin() + (*row_begin_it);
+            int number_of_entries_in_row = *(row_begin_it+1) - *row_begin_it;
 
-        #pragma omp parallel
-        {
-            int thread_id = OpenMPUtils::ThisThread();
-            int number_of_rows = partition[thread_id+1] - partition[thread_id];
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_iter_begin = A.index1_data().begin()+partition[thread_id];
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index_2_begin = A.index2_data().begin()+*row_iter_begin;
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator value_begin = A.value_data().begin()+*row_iter_begin;
-
-            GS2weights(    number_of_rows,
-                           row_iter_begin,
-                           index_2_begin,
-                           value_begin,
-                           partition[thread_id],
-                           aux
-                      );
-        }
+            GS2weights_row(
+                Index, // Current row index
+                number_of_entries_in_row,
+                row_begin_it,
+                index2_begin_it, // Not used in current GS2weights_row implementation
+                value_begin_it,
+                aux
+            );
+        });
     }
 
     /**
      * calculates partial product resetting to Zero the output before
      */
-    static void GS2weights(
-        int number_of_rows,
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_begin,
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index2_begin,
+    // static void GS2weights(
+    //     int number_of_rows,
+    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_begin,
+    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index2_begin,
+    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator value_begin,
+    //     unsigned int output_begin_index,
+    //     VectorType& weights
+    // )
+    // {
+    //     int row_size;
+    //     typename SparseMatrixType::index_array_type::const_iterator row_it = row_begin;
+    //     int kkk = output_begin_index;
+    //     for(int k = 0; k < number_of_rows; k++)
+    //     {
+    //         row_size= *(row_it+1)-*row_it;
+    //         row_it++;
+    //         double t = 0.0;
+
+    //         for(int i = 0; i<row_size; i++)
+    //         {
+    //             double tmp = std::abs(*value_begin);
+    //             t += tmp*tmp;
+    //             value_begin++;
+    //         }
+    //         t = sqrt(t);
+    //         weights[kkk++] = t;
+    //     }
+    // }
+
+    static void GS2weights_row(
+        std::size_t kkk, // Current row index
+        int number_of_entries_in_row,
+        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_it,
+        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index2_begin, // Not used in original GS2weights, but kept for consistency if needed later
         typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator value_begin,
-        unsigned int output_begin_index,
         VectorType& weights
     )
     {
-        int row_size;
-        typename SparseMatrixType::index_array_type::const_iterator row_it = row_begin;
-        int kkk = output_begin_index;
-        for(int k = 0; k < number_of_rows; k++)
+        double t = 0.0;
+
+        for(int i = 0; i < number_of_entries_in_row; i++)
         {
-            row_size= *(row_it+1)-*row_it;
-            row_it++;
-            double t = 0.0;
-
-            for(int i = 0; i<row_size; i++)
-            {
-                double tmp = std::abs(*value_begin);
-                t += tmp*tmp;
-                value_begin++;
-            }
-            t = sqrt(t);
-            weights[kkk++] = t;
+            double tmp = std::abs(*value_begin);
+            t += tmp*tmp;
+            value_begin++;
         }
+        t = std::sqrt(t); // Corrected from sqrt(t) to std::sqrt(t)
+        weights[kkk] = t;
     }
-
 
     ///@}
     ///@name Private Operations
