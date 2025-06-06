@@ -204,8 +204,13 @@ inline void AtomicMult(TDataType& target, const TDataType& value)
     // which is more complex than what was here before with OMP.
     // However, for floating point types, omp atomic also does not guarantee RMW atomicity.
     // This approach is equivalent to what omp atomic does for floats.
-    TDataType current_val = AtomicRef<TDataType>{target}.load(std::memory_order_relaxed);
-    AtomicRef<TDataType>{target}.store(current_val * value, std::memory_order_relaxed);
+    #if defined(__cpp_lib_atomic_ref) // C++20
+        TDataType current_val = AtomicRef<TDataType>{target}.load(std::memory_order_relaxed);
+        AtomicRef<TDataType>{target}.store(current_val * value, std::memory_order_relaxed);
+    #else // Fallback to boost::atomic_ref
+        TDataType current_val = AtomicRef<TDataType>{target}.load(boost::memory_order_relaxed);
+        AtomicRef<TDataType>{target}.store(current_val * value, boost::memory_order_relaxed);
+    #endif
 #else // KRATOS_PARALLEL_FRAMEWORK_NONE
     target *= value;
 #endif
