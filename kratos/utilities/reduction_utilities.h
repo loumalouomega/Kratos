@@ -434,6 +434,11 @@ struct CombinedReduction {
         return return_value;
     }
 
+    /// Set the values of the child reducers
+    void SetValue(const return_type& values_tuple) {
+        set_value_impl<0>(values_tuple);
+    }
+
     template <int I, class T>
     typename std::enable_if<(I < sizeof...(Reducer)), void>::type
     fill_value(T& v) {
@@ -463,6 +468,21 @@ struct CombinedReduction {
     }
 
     private:
+
+        // Recursive helper for SetValue
+        template <int I>
+        typename std::enable_if<(I < sizeof...(Reducer)), void>::type
+        set_value_impl(const return_type& values_tuple) {
+            std::get<I>(mChild).mValue = std::get<I>(values_tuple);
+            set_value_impl<I + 1>(values_tuple);
+        }
+
+        // Base case for SetValue recursion
+        template <int I>
+        typename std::enable_if<(I == sizeof...(Reducer)), void>::type
+        set_value_impl(const return_type& values_tuple) {
+            // End of recursion
+        }
 
         template <int I, class T>
         typename std::enable_if<(I < sizeof...(Reducer)), void>::type

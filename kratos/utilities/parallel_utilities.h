@@ -275,7 +275,7 @@ public:
             initial_reducer_for_identity.GetValue(), // Correct identity VALUE
             [&](const tbb::blocked_range<TIterator>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
                 TReducer local_body_reducer;
-                local_body_reducer.mChild = current_value_in_thread; // Set current state
+                local_body_reducer.SetValue(current_value_in_thread); // Set current state
                 for (auto it = r.begin(); it != r.end(); ++it) {
                     // The function f(*it) returns TDataType, which LocalReduce expects.
                     local_body_reducer.LocalReduce(f(*it));
@@ -284,14 +284,14 @@ public:
             },
             [](ValueType v1, ValueType v2) -> ValueType { // Joiner works with ValueType
                 TReducer temp_reducer1, temp_reducer2;
-                temp_reducer1.mChild = v1;
-                temp_reducer2.mChild = v2;
+                temp_reducer1.SetValue(v1);
+                temp_reducer2.SetValue(v2);
                 temp_reducer1.join(temp_reducer2); // Use the reducer's own join logic
                 return temp_reducer1.GetValue();
             }
         );
         TReducer final_reducer;
-        final_reducer.mChild = result_value;
+        final_reducer.SetValue(result_value);
         return final_reducer.GetValue();
 #else // Serial execution
         TReducer global_reducer;
@@ -386,7 +386,7 @@ public:
             [&](const tbb::blocked_range<TIterator>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
                 TThreadLocalStorage& local_tls = tls_combinable.local();
                 TReducer local_body_reducer;
-                local_body_reducer.mChild = current_value_in_thread; // Set current state
+                local_body_reducer.SetValue(current_value_in_thread); // Set current state
                 for (auto it = r.begin(); it != r.end(); ++it) {
                     local_body_reducer.LocalReduce(f(*it, local_tls));
                 }
@@ -394,14 +394,14 @@ public:
             },
             [](ValueType v1, ValueType v2) -> ValueType { // Joiner works with ValueType
                 TReducer temp_reducer1, temp_reducer2;
-                temp_reducer1.mChild = v1;
-                temp_reducer2.mChild = v2;
+                temp_reducer1.SetValue(v1);
+                temp_reducer2.SetValue(v2);
                 temp_reducer1.join(temp_reducer2); // Use the reducer's own join logic
                 return temp_reducer1.GetValue();
             }
         );
         TReducer final_reducer;
-        final_reducer.mChild = result_value;
+        final_reducer.SetValue(result_value);
         return final_reducer.GetValue();
 #else // Serial execution
         TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
@@ -703,7 +703,7 @@ public:
             initial_reducer_for_identity.GetValue(), // Correct identity VALUE
             [&](const tbb::blocked_range<TIndexType>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
                 TReducer local_body_reducer;
-                local_body_reducer.mChild = current_value_in_thread; // Set current state
+                local_body_reducer.SetValue(current_value_in_thread); // Set current state
                 for (TIndexType k = r.begin(); k < r.end(); ++k) {
                     local_body_reducer.LocalReduce(f(k));
                 }
@@ -711,14 +711,14 @@ public:
             },
             [](ValueType v1, ValueType v2) -> ValueType { // Joiner works with ValueType
                 TReducer temp_reducer1, temp_reducer2;
-                temp_reducer1.mChild = v1;
-                temp_reducer2.mChild = v2;
+                temp_reducer1.SetValue(v1);
+                temp_reducer2.SetValue(v2);
                 temp_reducer1.join(temp_reducer2); // Use the reducer's own join logic
                 return temp_reducer1.GetValue();
             }
         );
         TReducer final_reducer;
-        final_reducer.mChild = result_value;
+        final_reducer.SetValue(result_value);
         return final_reducer.GetValue();
 #else // Serial execution
         TReducer global_reducer;
@@ -815,7 +815,7 @@ public:
             [&](const tbb::blocked_range<TIndexType>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
                 TThreadLocalStorage& local_tls = tls_combinable.local();
                 TReducer local_body_reducer;
-                local_body_reducer.mChild = current_value_in_thread; // Set current state
+                local_body_reducer.SetValue(current_value_in_thread); // Set current state
                 for (TIndexType k = r.begin(); k < r.end(); ++k) {
                     local_body_reducer.LocalReduce(f(k, local_tls));
                 }
@@ -823,14 +823,14 @@ public:
             },
             [](ValueType v1, ValueType v2) -> ValueType { // Joiner works with ValueType
                 TReducer temp_reducer1, temp_reducer2;
-                temp_reducer1.mChild = v1;
-                temp_reducer2.mChild = v2;
+                temp_reducer1.SetValue(v1);
+                temp_reducer2.SetValue(v2);
                 temp_reducer1.join(temp_reducer2); // Use the reducer's own join logic
                 return temp_reducer1.GetValue();
             }
         );
         TReducer final_reducer;
-        final_reducer.mChild = result_value;
+        final_reducer.SetValue(result_value);
         return final_reducer.GetValue();
 #else // Serial execution
         TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
