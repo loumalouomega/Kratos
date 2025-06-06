@@ -38,12 +38,8 @@
 #include <omp.h>
 #endif
 
-#if !defined(__cpp_lib_atomic_ref) && defined(KRATOS_SMP_CXX11)
+#if !defined(__cpp_lib_atomic_ref) and (defined(KRATOS_SMP_CXX11) or defined(KRATOS_SMP_TBB))
 #include <boost/atomic/atomic_ref.hpp>
-#endif
-
-#if defined(KRATOS_SMP_TBB)
-#include <oneapi/tbb/atomic.h>
 #endif
 
 // Project includes
@@ -52,7 +48,7 @@
 
 namespace Kratos {
 
-#if defined(KRATOS_SMP_CXX11)
+#if defined(KRATOS_SMP_CXX11) or defined(KRATOS_SMP_TBB)
     #if defined(__cpp_lib_atomic_ref) // C++20
         template <class T>
         using AtomicRef = std::atomic_ref<T>;
@@ -60,10 +56,7 @@ namespace Kratos {
         template <class T>
         using AtomicRef = boost::atomic_ref<T>;
     #endif //__cpp_lib_atomic_ref
-#elif defined(KRATOS_SMP_TBB)
-    template <class T>
-    using AtomicRef = oneapi::tbb::atomic_ref<T>;
-#endif // KRATOS_SMP_CXX11
+#endif
 
 ///@addtogroup KratosCore
 /**
