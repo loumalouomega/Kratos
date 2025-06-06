@@ -4,14 +4,13 @@
 //   _|\_\_|  \__,_|\__|\___/ ____/
 //                   Multi-Physics
 //
-//  License:		 BSD License
-//					 Kratos default license: kratos/license.txt
+//  License:         BSD License
+//                   Kratos default license: kratos/license.txt
 //
 //  Main authors:    Riccardo Rossi
 //
 
-#if !defined(KRATOS_SCALING_SOLVER_H_INCLUDED )
-#define  KRATOS_SCALING_SOLVER_H_INCLUDED
+#pragma once
 
 // System includes
 #include <cmath>
@@ -20,14 +19,12 @@
 // External includes
 
 // Project includes
-#include "includes/define.h"
 #include "factories/linear_solver_factory.h"
 #include "linear_solvers/linear_solver.h"
 #include "utilities/parallel_utilities.h"
 
 namespace Kratos
 {
-
 ///@name Kratos Globals
 ///@{
 
@@ -70,22 +67,34 @@ public:
     KRATOS_CLASS_POINTER_DEFINITION(ScalingSolver);
 
     /// Definition of the base type
-    typedef LinearSolver<TSparseSpaceType, TDenseSpaceType, TReordererType> BaseType;
+    using BaseType = LinearSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>;
 
     /// The definition of the spaces (sparse matrix)
-    typedef typename TSparseSpaceType::MatrixType SparseMatrixType;
+    using SparseMatrixType = typename TSparseSpaceType::MatrixType;
 
     /// The definition of the spaces (vector)
-    typedef typename TSparseSpaceType::VectorType VectorType;
+    using VectorType = typename TSparseSpaceType::VectorType;
 
     /// The definition of the spaces (dense matrix)
-    typedef typename TDenseSpaceType::MatrixType DenseMatrixType;
+    using DenseMatrixType = typename TDenseSpaceType::MatrixType;
 
     /// The definition of the linear solver factory type
-    typedef LinearSolverFactory<TSparseSpaceType,TDenseSpaceType> LinearSolverFactoryType;
+    using LinearSolverFactoryType = LinearSolverFactory<TSparseSpaceType, TDenseSpaceType>;
 
     /// The index type definition to be consistent
-    typedef typename TSparseSpaceType::IndexType IndexType;
+    using IndexType = typename TSparseSpaceType::IndexType;
+
+    /// Definition of the index iterator type
+    using IndexIteratorType = typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator;
+
+    /// Definition of the const index iterator type
+    using ConstIndexIteratorType = typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator;
+
+    /// Definition of the value iterator type
+    using ValueIteratorType = typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::iterator;
+
+    /// Definition of the const value iterator type
+    using ConstValueIteratorType = typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator;
 
     ///@}
     ///@name Life Cycle
@@ -150,6 +159,7 @@ public:
     ///@}
     ///@name Operations
     ///@{
+
     /** Some solvers may require a minimum degree of knowledge of the structure of the matrix. To make an example
     * when solving a mixed u-p problem, it is important to identify the row associated to v and p.
     * another example is the automatic prescription of rotation null-space for smoothed-aggregation solvers
@@ -233,15 +243,12 @@ public:
             });
 
             SymmetricScaling(rA,scaling_vector);
-
-
         }
 
         //scale RHS
         IndexPartition<std::size_t>(scaling_vector.size()).for_each([&](std::size_t Index){
             rB[Index] /= scaling_vector[Index];
         });
-
 
         //solve the problem
         bool is_solved = mpLinearSolver->Solve(rA,rX,rB);
@@ -257,8 +264,6 @@ public:
         return is_solved;
     }
 
-
-
     ///@}
     ///@name Access
     ///@{
@@ -268,11 +273,9 @@ public:
         return mpLinearSolver->GetIterationsNumber();
     }
 
-
     ///@}
     ///@name Inquiry
     ///@{
-
 
     ///@}
     ///@name Input and output
@@ -298,70 +301,56 @@ public:
         BaseType::PrintData(rOStream);
     }
 
-
     ///@}
     ///@name Friends
     ///@{
 
-
     ///@}
-
 protected:
     ///@name Protected static Member Variables
     ///@{
-
 
     ///@}
     ///@name Protected member Variables
     ///@{
 
-
     ///@}
     ///@name Protected Operators
     ///@{
-
 
     ///@}
     ///@name Protected Operations
     ///@{
 
-
     ///@}
     ///@name Protected  Access
     ///@{
-
 
     ///@}
     ///@name Protected Inquiry
     ///@{
 
-
     ///@}
     ///@name Protected LifeCycle
     ///@{
 
-
     ///@}
-
 private:
     ///@name Static Member Variables
     ///@{
 
-
     ///@}
     ///@name Member Variables
     ///@{
-    typename LinearSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>::Pointer mpLinearSolver;
-    bool mSymmetricScaling;
+
+    typename LinearSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>::Pointer mpLinearSolver; /// Pointer to the internal linear solver
+    bool mSymmetricScaling; /// Flag to indicate if the scaling is symmetric or not
 
     ///@}
     ///@name Private Operators
     ///@{
     static void SymmetricScaling( SparseMatrixType& A, const VectorType& aux)
     {
-        //typedef  unsigned int size_type;
-        //typedef  double value_type;
-
         IndexPartition<std::size_t>(A.size1()).for_each([&](std::size_t Index){
             // Get the row iterator, index2 iterator and value iterator for the current row (Index)
             auto row_begin_it = A.index1_data().begin() + Index;
@@ -381,46 +370,12 @@ private:
         });
     }
 
-    /**
-     * calculates partial product resetting to Zero the output before
-     */
-    // static void perform_matrix_scaling(
-    //     int number_of_rows,
-    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator row_begin,
-    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator index2_begin,
-    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::iterator value_begin,
-    //     unsigned int output_begin_index,
-    //     const VectorType& weights
-    // )
-    // {
-    //     int row_size;
-    //     typename SparseMatrixType::index_array_type::const_iterator row_it = row_begin;
-    //     int kkk = output_begin_index;
-    //     for(int k = 0; k < number_of_rows; k++)
-    //     {
-    //         row_size= *(row_it+1)-*row_it;
-    //         row_it++;
-    //         const typename TSparseSpaceType::DataType row_weight = weights[kkk++];
-
-    //         for(int i = 0; i<row_size; i++)
-    //         {
-    //             const typename TSparseSpaceType::DataType col_weight = weights[*index2_begin];
-    //             typename TSparseSpaceType::DataType t = (*value_begin);
-    //             t /= (row_weight*col_weight);
-    //             (*value_begin) = t; //check if this is correcct!!
-    //             value_begin++;
-    //             index2_begin++;
-    //         }
-
-    //     }
-    // }
-
     static void perform_matrix_scaling_row(
         std::size_t kkk, // Current row index
         int number_of_entries_in_row,
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator row_it, // Should be index1_data().begin() + kkk
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::iterator index2_begin,
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::iterator value_begin,
+        IndexIteratorType row_it, // Should be index1_data().begin() + kkk
+        IndexIteratorType index2_begin,
+        ValueIteratorType value_begin,
         const VectorType& weights
     )
     {
@@ -439,13 +394,10 @@ private:
 
     static void GetScalingWeights( const SparseMatrixType& A, VectorType& aux)
     {
-        //typedef  unsigned int size_type;
-        //typedef  double value_type;
-
         IndexPartition<std::size_t>(A.size1()).for_each([&A, &aux](std::size_t Index){
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_begin_it = A.index1_data().begin() + Index;
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index2_begin_it = A.index2_data().begin() + (*row_begin_it); // Not strictly needed for GS2weights_row, but kept for consistency
-            typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator value_begin_it = A.value_data().begin() + (*row_begin_it);
+            ConstIndexIteratorType row_begin_it = A.index1_data().begin() + Index;
+            ConstIndexIteratorType index2_begin_it = A.index2_data().begin() + (*row_begin_it); // Not strictly needed for GS2weights_row, but kept for consistency
+            ConstValueIteratorType value_begin_it = A.value_data().begin() + (*row_begin_it);
             int number_of_entries_in_row = *(row_begin_it+1) - *row_begin_it;
 
             GS2weights_row(
@@ -459,44 +411,12 @@ private:
         });
     }
 
-    /**
-     * calculates partial product resetting to Zero the output before
-     */
-    // static void GS2weights(
-    //     int number_of_rows,
-    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_begin,
-    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index2_begin,
-    //     typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator value_begin,
-    //     unsigned int output_begin_index,
-    //     VectorType& weights
-    // )
-    // {
-    //     int row_size;
-    //     typename SparseMatrixType::index_array_type::const_iterator row_it = row_begin;
-    //     int kkk = output_begin_index;
-    //     for(int k = 0; k < number_of_rows; k++)
-    //     {
-    //         row_size= *(row_it+1)-*row_it;
-    //         row_it++;
-    //         double t = 0.0;
-
-    //         for(int i = 0; i<row_size; i++)
-    //         {
-    //             double tmp = std::abs(*value_begin);
-    //             t += tmp*tmp;
-    //             value_begin++;
-    //         }
-    //         t = sqrt(t);
-    //         weights[kkk++] = t;
-    //     }
-    // }
-
     static void GS2weights_row(
         std::size_t kkk, // Current row index
         int number_of_entries_in_row,
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator row_it,
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::index_array_type::const_iterator index2_begin, // Not used in original GS2weights, but kept for consistency if needed later
-        typename boost::numeric::ublas::compressed_matrix<typename TSparseSpaceType::DataType>::value_array_type::const_iterator value_begin,
+        ConstIndexIteratorType row_it,
+        ConstIndexIteratorType index2_begin, // Not used in original GS2weights, but kept for consistency if needed later
+        ConstValueIteratorType value_begin,
         VectorType& weights
     )
     {
@@ -516,36 +436,28 @@ private:
     ///@name Private Operations
     ///@{
 
-
     ///@}
     ///@name Private  Access
     ///@{
-
 
     ///@}
     ///@name Private Inquiry
     ///@{
 
-
     ///@}
     ///@name Un accessible methods
     ///@{
 
-
     ///@}
-
 }; // Class ScalingSolver
 
 ///@}
-
 ///@name Type Definitions
 ///@{
-
 
 ///@}
 ///@name Input and output
 ///@{
-
 
 /// input stream function
 template<class TSparseSpaceType, class TDenseSpaceType,
@@ -574,9 +486,6 @@ inline std::ostream& operator << (std::ostream& OStream,
 }
 ///@}
 
-
 }  // namespace Kratos.
-
-#endif // KRATOS_SCALING_SOLVER_H_INCLUDED  defined
 
 
