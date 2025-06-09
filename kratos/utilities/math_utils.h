@@ -330,14 +330,7 @@ public:
         MatrixType A, // Note: A is copied
         VectorType& rX,
         const VectorType& rB
-        )
-    {
-        SizeType size = A.size1();
-        boost::numeric::ublas::permutation_matrix<SizeType> pm(size);
-        boost::numeric::ublas::lu_factorize(A,pm);
-        rX = rB; //do an assign
-        boost::numeric::ublas::lu_substitute(A,pm,rX);
-    }
+        );
 
     /**
      * @brief It inverts matrices of order 2, 3 and 4
