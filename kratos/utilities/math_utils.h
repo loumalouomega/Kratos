@@ -373,7 +373,7 @@ public:
             }
 
             Matrix A(rInputMatrix);
-            typedef boost::numeric::ublas::permutation_matrix<SizeType> pmatrix;
+            using pmatrix = boost::numeric::ublas::permutation_matrix<SizeType>;
             pmatrix pm(A.size1());
             const int singular = boost::numeric::ublas::lu_factorize(A,pm);
             rInvertedMatrix.assign( boost::numeric::ublas::identity_matrix<double>(A.size1()));
@@ -394,7 +394,7 @@ public:
             Matrix A(rInputMatrix);
             Matrix invA(rInvertedMatrix);
 
-            typedef boost::numeric::ublas::permutation_matrix<SizeType> pmatrix;
+            using pmatrix = boost::numeric::ublas::permutation_matrix<SizeType>;
             pmatrix pm(size1);
             const int singular = boost::numeric::ublas::lu_factorize(A,pm);
             invA.assign( boost::numeric::ublas::identity_matrix<double>(size1));
@@ -624,7 +624,7 @@ public:
             default:
                 double det = 1.0;
                 using namespace boost::numeric::ublas;
-                typedef boost::numeric::ublas::permutation_matrix<SizeType> pmatrix;
+                using pmatrix = boost::numeric::ublas::permutation_matrix<SizeType>;
                 Matrix Aux(rA);
                 pmatrix pm(Aux.size1());
                 bool singular = boost::numeric::ublas::lu_factorize(Aux,pm);

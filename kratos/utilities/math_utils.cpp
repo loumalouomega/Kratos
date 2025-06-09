@@ -33,7 +33,7 @@ void MathUtils<TDataType>::Solve(
 {
     const SizeType size1 = A.size1();
     rX = rB;
-    typedef permutation_matrix<SizeType> pmatrix;
+    using pmatrix = boost::numeric::ublas::permutation_matrix<SizeType>;
     pmatrix pm(size1);
     int singular = lu_factorize(A,pm);
     KRATOS_DEBUG_ERROR_IF(singular == 1) << "Matrix is singular: " << A << std::endl;
