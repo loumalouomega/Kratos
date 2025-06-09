@@ -273,9 +273,8 @@ public:
         ValueType result_value = tbb::parallel_reduce(
             tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
             initial_reducer_for_identity.GetValue(), // Correct identity VALUE
-            [&](const tbb::blocked_range<TIterator>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
-                TReducer local_body_reducer;
-                local_body_reducer.SetValue(current_value_in_thread); // Set current state
+            [&](const tbb::blocked_range<TIterator>& r, ValueType /* current_value_in_thread */) -> ValueType { // Body works with ValueType
+                TReducer local_body_reducer; // Relies on TReducer's default constructor for identity
                 for (auto it = r.begin(); it != r.end(); ++it) {
                     // The function f(*it) returns TDataType, which LocalReduce expects.
                     local_body_reducer.LocalReduce(f(*it));
@@ -379,10 +378,9 @@ public:
         ValueType result_value = tbb::parallel_reduce(
             tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
             initial_reducer_for_identity.GetValue(), // Correct identity VALUE
-            [&](const tbb::blocked_range<TIterator>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
+            [&](const tbb::blocked_range<TIterator>& r, ValueType /* current_value_in_thread */) -> ValueType { // Body works with ValueType
                 TThreadLocalStorage& local_tls = tls_combinable.local();
-                TReducer local_body_reducer;
-                local_body_reducer.SetValue(current_value_in_thread); // Set current state
+                TReducer local_body_reducer; // Relies on TReducer's default constructor for identity
                 for (auto it = r.begin(); it != r.end(); ++it) {
                     local_body_reducer.LocalReduce(f(*it, local_tls));
                 }
