@@ -152,10 +152,10 @@ template class KratosComponents<Variable<ConstitutiveLaw::Pointer>>;
 template class KratosComponents<MasterSlaveConstraint>;
 template class KratosComponents<Modeler>;
 
-using RealSparseSpace = UblasSpace<double, ::boost::numeric::ublas::compressed_matrix<double>, ::boost::numeric::ublas::vector<double>>;
-using SinglePrecisionRealSparseSpace = UblasSpace<float, ::boost::numeric::ublas::compressed_matrix<float>, ::boost::numeric::ublas::vector<float>>;
+using RealSparseSpace = UblasSpace<double, boost::numeric::ublas::compressed_matrix<double>, boost::numeric::ublas::vector<double>>;
+using SinglePrecisionRealSparseSpace = UblasSpace<float, boost::numeric::ublas::compressed_matrix<float>, boost::numeric::ublas::vector<float>>;
 using RealDenseSpace = UblasSpace<double, DenseMatrix<double>, DenseVector<double>>;
-using ComplexSparseSpace = UblasSpace<std::complex<double>, ::boost::numeric::ublas::compressed_matrix<std::complex<double>>, ::boost::numeric::ublas::vector<std::complex<double>>>;
+using ComplexSparseSpace = UblasSpace<std::complex<double>, boost::numeric::ublas::compressed_matrix<std::complex<double>>, boost::numeric::ublas::vector<std::complex<double>>>;
 using ComplexDenseSpace = UblasSpace<std::complex<double>, DenseMatrix<std::complex<double>>, DenseVector<std::complex<double>>>;
 
 template class KratosComponents<LinearSolverFactory<RealSparseSpace, RealDenseSpace>>;
