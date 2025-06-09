@@ -281,13 +281,9 @@ public:
                 }
                 return local_body_reducer.GetValue(); // Return the new accumulated value
             },
-            [](ValueType val1, ValueType val2) -> ValueType {
-                return val1 + val2;
-            }
+            [](typename TReducer::return_type val1, typename TReducer::return_type val2) -> typename TReducer::return_type { TReducer reducer1(val1); TReducer reducer2(val2); reducer1.join(reducer2); return reducer1.GetValue(); }
         );
-        TReducer final_reducer;
-        final_reducer.SetValue(result_value);
-        return final_reducer.GetValue();
+        return result_value;
 #else // Serial execution
         TReducer global_reducer;
         for (auto it = mBlockPartition[0]; it != mBlockPartition[mNchunks]; ++it) {
