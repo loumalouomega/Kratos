@@ -89,6 +89,9 @@ namespace Kratos
     using MatrixRange = boost::numeric::ublas::matrix_range<Matrix>;
     using MatrixSlice = boost::numeric::ublas::matrix_slice<Matrix>;
 
+    template <typename TType>
+    using CustomScalarMatrix = boost::numeric::ublas::scalar_matrix<TType>;
+
     template <typename TExpressionType>
     using VectorExpression = boost::numeric::ublas::vector_expression<TExpressionType>;
 
