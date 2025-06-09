@@ -87,10 +87,6 @@ public:
 
     TReturnType mValue = Internals::NullInitialized<TReturnType>::Get(); // deliberately making the member value public, to allow one to change it as needed
 
-    void SetValue(const TReturnType& value) {
-        mValue = value;
-    }
-
     /// access to reduced value
     TReturnType GetValue() const
     {
@@ -107,12 +103,6 @@ public:
     {
         AtomicAdd(mValue, rOther.mValue);
     }
-
-    /// Lock-free join operation for TBB
-    void join(const SumReduction<TDataType, TReturnType>& rOther)
-    {
-        mValue += rOther.mValue;
-    }
 };
 
 //***********************************************************************************
@@ -126,10 +116,6 @@ public:
     typedef TReturnType return_type;
 
     TReturnType mValue = Internals::NullInitialized<TReturnType>::Get(); // deliberately making the member value public, to allow one to change it as needed
-
-    void SetValue(const TReturnType& value) {
-        mValue = value;
-    }
 
     /// access to reduced value
     TReturnType GetValue() const
@@ -147,14 +133,6 @@ public:
     {
         AtomicAdd(mValue, rOther.mValue);
     }
-
-    /// Lock-free join operation for TBB
-    void join(const SubReduction<TDataType, TReturnType>& rOther)
-    {
-        // When joining two partial results of subtractions, we still sum them.
-        // E.g., thread1: (a-b-c), thread2: (d-e-f). Joined: (a-b-c) + (d-e-f)
-        mValue += rOther.mValue;
-    }
 };
 
 //***********************************************************************************
@@ -168,10 +146,6 @@ public:
     typedef TReturnType return_type;
 
     TReturnType mValue = std::numeric_limits<TReturnType>::lowest(); // deliberately making the member value public, to allow one to change it as needed
-
-    void SetValue(const TReturnType& value) {
-        mValue = value;
-    }
 
     /// access to reduced value
     TReturnType GetValue() const
@@ -187,16 +161,8 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const MaxReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
+        KRATOS_CRITICAL_SECTION
         LocalReduce(rOther.mValue);
-    }
-
-    /// Lock-free join operation for TBB
-    void join(const MaxReduction<TDataType, TReturnType>& rOther)
-    {
-        if (rOther.mValue > mValue) { // or std::max, but this is explicit
-            mValue = rOther.mValue;
-        }
     }
 };
 
@@ -212,10 +178,6 @@ public:
 
     TReturnType mValue = 0; // deliberately making the member value public, to allow one to change it as needed
 
-    void SetValue(const TReturnType& value) {
-        mValue = value;
-    }
-
     /// access to reduced value
     TReturnType GetValue() const
     {
@@ -230,16 +192,8 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const AbsMaxReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
+        KRATOS_CRITICAL_SECTION
         LocalReduce(rOther.mValue);
-    }
-
-    /// Lock-free join operation for TBB
-    void join(const AbsMaxReduction<TDataType, TReturnType>& rOther)
-    {
-        if (std::abs(rOther.mValue) > std::abs(mValue)) {
-            mValue = rOther.mValue;
-        }
     }
 };
 
@@ -255,10 +209,6 @@ public:
 
     TReturnType mValue = std::numeric_limits<TReturnType>::max(); // deliberately making the member value public, to allow one to change it as needed
 
-    void SetValue(const TReturnType& value) {
-        mValue = value;
-    }
-
     /// access to reduced value
     TReturnType GetValue() const
     {
@@ -273,16 +223,8 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const MinReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
+        KRATOS_CRITICAL_SECTION
         LocalReduce(rOther.mValue);
-    }
-
-    /// Lock-free join operation for TBB
-    void join(const MinReduction<TDataType, TReturnType>& rOther)
-    {
-        if (rOther.mValue < mValue) { // or std::min, but this is explicit
-            mValue = rOther.mValue;
-        }
     }
 };
 
@@ -300,10 +242,6 @@ public:
 
     TReturnType mValue = std::numeric_limits<TReturnType>::max(); // deliberately making the member value public, to allow one to change it as needed
 
-    void SetValue(const TReturnType& value) {
-        mValue = value;
-    }
-
     /// access to reduced value
     TReturnType GetValue() const
     {
@@ -318,16 +256,8 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const AbsMinReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
+        KRATOS_CRITICAL_SECTION
         LocalReduce(rOther.mValue);
-    }
-
-    /// Lock-free join operation for TBB
-    void join(const AbsMinReduction<TDataType, TReturnType>& rOther)
-    {
-        if (std::abs(rOther.mValue) < std::abs(mValue)) {
-            mValue = rOther.mValue;
-        }
     }
 };
 
@@ -348,10 +278,6 @@ public:
     using return_type = TReturnType; ///< Alias for the type of the container used for reduction.
 
     TReturnType mValue = TReturnType(); ///< Public member variable for the accumulation storage, modifiable as needed.
-
-    void SetValue(const TReturnType& value) {
-        mValue = value;
-    }
 
     /**
      * @brief Accessor for the reduced value.
@@ -376,14 +302,8 @@ public:
      */
     void ThreadSafeReduce(const AccumReduction<TDataType, TReturnType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
+        KRATOS_CRITICAL_SECTION
         std::copy(rOther.mValue.begin(), rOther.mValue.end(), std::inserter(mValue, mValue.end()));
-    }
-
-    /// Lock-free join operation for TBB
-    void join(const AccumReduction<TDataType, TReturnType>& rOther)
-    {
-        mValue.insert(mValue.end(), rOther.mValue.begin(), rOther.mValue.end());
     }
 };
 
@@ -417,10 +337,6 @@ public:
 
     return_type mValue;
 
-    void SetValue(const return_type& value) {
-        mValue = value;
-    }
-
     /// access to reduced value
     return_type GetValue() const
     {
@@ -435,18 +351,8 @@ public:
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(MapReduction<MapType>& rOther)
     {
-        KRATOS_CRITICAL_SECTION // Retain for OpenMP/other custom parallel loops
-        // mValue.merge(rOther.mValue); // C++17, ensure Kratos compatibility or use insert
-        for(const auto& item : rOther.mValue) {
-            mValue.insert(item); // General solution
-        }
-    }
-
-    /// Lock-free join operation for TBB
-    void join(const MapReduction<MapType>& rOther)
-    {
-        // mValue.merge(rOther.mValue); // C++17
-        mValue.insert(rOther.mValue.begin(), rOther.mValue.end()); // General solution
+        KRATOS_CRITICAL_SECTION
+        mValue.merge(rOther.mValue);
     }
 };
 
@@ -464,11 +370,6 @@ struct CombinedReduction {
         return_type return_value;
         fill_value<0>(return_value);
         return return_value;
-    }
-
-    /// Set the values of the child reducers
-    void SetValue(const return_type& values_tuple) {
-        set_value_impl<0>(values_tuple);
     }
 
     template <int I, class T>
@@ -491,30 +392,10 @@ struct CombinedReduction {
 
     /// THREADSAFE (needs some sort of lock guard) reduction, to be used to sync threads
     void ThreadSafeReduce(const CombinedReduction &other) {
-        reduce_global<0>(other); // Retain for OpenMP/other custom parallel loops
-    }
-
-    /// Lock-free join operation for TBB
-    void join(const CombinedReduction &other) {
-        join_detail<0>(other);
+        reduce_global<0>(other);
     }
 
     private:
-
-        // Recursive helper for SetValue
-        template <int I>
-        typename std::enable_if<(I < sizeof...(Reducer)), void>::type
-        set_value_impl(const return_type& values_tuple) {
-            std::get<I>(mChild).mValue = std::get<I>(values_tuple);
-            set_value_impl<I + 1>(values_tuple);
-        }
-
-        // Base case for SetValue recursion
-        template <int I>
-        typename std::enable_if<(I == sizeof...(Reducer)), void>::type
-        set_value_impl(const return_type& values_tuple) {
-            // End of recursion
-        }
 
         template <int I, class T>
         typename std::enable_if<(I < sizeof...(Reducer)), void>::type
@@ -540,16 +421,6 @@ struct CombinedReduction {
         typename std::enable_if<(I == sizeof...(Reducer)), void>::type
         reduce_global(const CombinedReduction &other) {
             // Exit static recursion
-        }
-
-        // For TBB join
-        template <int Index = 0>
-        typename std::enable_if<(Index < sizeof...(Reducer)), void>::type
-        join_detail(const CombinedReduction &other) {
-            std::get<Index>(mChild).join(std::get<Index>(other.mChild));
-            if constexpr (Index + 1 < sizeof...(Reducer)) {
-                 join_detail<Index + 1>(other);
-            }
         }
 };
 
