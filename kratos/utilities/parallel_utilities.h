@@ -267,23 +267,21 @@ public:
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
         return global_reducer.GetValue();
 #elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
-        using ValueType = typename TReducer::return_type;
-        TReducer initial_reducer_for_identity; // To get identity value correctly initialized by TReducer
-
-        ValueType result_value = tbb::parallel_reduce(
+        TReducer result_reducer = tbb::parallel_reduce(
             tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
-            initial_reducer_for_identity.GetValue(), // Correct identity VALUE
-            [&](const tbb::blocked_range<TIterator>& r, ValueType /* current_value_in_thread */) -> ValueType { // Body works with ValueType
-                TReducer local_body_reducer; // Relies on TReducer's default constructor for identity
+            TReducer(), // Identity: default-constructed TReducer
+            [&](const tbb::blocked_range<TIterator>& r, TReducer current_reducer_state) -> TReducer {
                 for (auto it = r.begin(); it != r.end(); ++it) {
-                    // The function f(*it) returns TDataType, which LocalReduce expects.
-                    local_body_reducer.LocalReduce(f(*it));
+                    current_reducer_state.LocalReduce(f(*it));
                 }
-                return local_body_reducer.GetValue(); // Return the new accumulated value
+                return current_reducer_state;
             },
-            [](typename TReducer::return_type val1, typename TReducer::return_type val2) -> typename TReducer::return_type { TReducer reducer1(val1); TReducer reducer2(val2); reducer1.join(reducer2); return reducer1.GetValue(); }
+            [](TReducer r1, TReducer r2) -> TReducer {
+                r1.ThreadSafeReduce(r2);
+                return r1;
+            }
         );
-        return result_value;
+        return result_reducer.GetValue();
 #else // Serial execution
         TReducer global_reducer;
         for (auto it = mBlockPartition[0]; it != mBlockPartition[mNchunks]; ++it) {
@@ -368,23 +366,23 @@ public:
         return global_reducer.GetValue();
 #elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
         tbb::combinable<TThreadLocalStorage> tls_combinable(rThreadLocalStoragePrototype);
-        using ValueType = typename TReducer::return_type;
-        TReducer initial_reducer_for_identity;
 
-        ValueType result_value = tbb::parallel_reduce(
+        TReducer result_reducer = tbb::parallel_reduce(
             tbb::blocked_range<TIterator>(mBlockPartition[0], mBlockPartition[mNchunks]),
-            initial_reducer_for_identity.GetValue(), // Correct identity VALUE
-            [&](const tbb::blocked_range<TIterator>& r, ValueType /* current_value_in_thread */) -> ValueType { // Body works with ValueType
+            TReducer(), // Identity: default-constructed TReducer
+            [&](const tbb::blocked_range<TIterator>& r, TReducer current_reducer_state) -> TReducer {
                 TThreadLocalStorage& local_tls = tls_combinable.local();
-                TReducer local_body_reducer; // Relies on TReducer's default constructor for identity
                 for (auto it = r.begin(); it != r.end(); ++it) {
-                    local_body_reducer.LocalReduce(f(*it, local_tls));
+                    current_reducer_state.LocalReduce(f(*it, local_tls));
                 }
-                return local_body_reducer.GetValue(); // Return the new accumulated value
+                return current_reducer_state;
             },
-            [](typename TReducer::return_type val1, typename TReducer::return_type val2) -> typename TReducer::return_type { TReducer r1(val1); TReducer r2(val2); r1.join(r2); return r1.GetValue(); }
+            [](TReducer r1, TReducer r2) -> TReducer {
+                r1.ThreadSafeReduce(r2);
+                return r1;
+            }
         );
-        return result_value;
+        return result_reducer.GetValue();
 #else // Serial execution
         TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
         TReducer global_reducer;
@@ -677,27 +675,21 @@ public:
         KRATOS_CHECK_AND_THROW_THREAD_EXCEPTION
         return global_reducer.GetValue();
 #elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
-        using ValueType = typename TReducer::return_type;
-        TReducer initial_reducer_for_identity;
-
-        ValueType result_value = tbb::parallel_reduce(
+        TReducer result_reducer = tbb::parallel_reduce(
             tbb::blocked_range<TIndexType>(mBlockPartition[0], mBlockPartition[mNchunks]),
-            initial_reducer_for_identity.GetValue(), // Correct identity VALUE
-            [&](const tbb::blocked_range<TIndexType>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
-                TReducer local_body_reducer(current_value_in_thread); // Initialize with current_value_in_thread
+            TReducer(), // Identity: default-constructed TReducer
+            [&](const tbb::blocked_range<TIndexType>& r, TReducer current_reducer_state) -> TReducer {
                 for (TIndexType k = r.begin(); k < r.end(); ++k) {
-                    local_body_reducer.LocalReduce(f(k));
+                    current_reducer_state.LocalReduce(f(k));
                 }
-                return local_body_reducer.GetValue(); // Return the new accumulated value
+                return current_reducer_state;
             },
-            [](typename TReducer::return_type val1, typename TReducer::return_type val2) -> typename TReducer::return_type {
-                TReducer reducer1(val1);
-                TReducer reducer2(val2);
-                reducer1.join(reducer2);
-                return reducer1.GetValue();
+            [](TReducer r1, TReducer r2) -> TReducer {
+                r1.ThreadSafeReduce(r2);
+                return r1;
             }
         );
-        return result_value;
+        return result_reducer.GetValue();
 #else // Serial execution
         TReducer global_reducer;
         for (TIndexType k = mBlockPartition[0]; k < mBlockPartition[mNchunks]; ++k) {
@@ -784,28 +776,23 @@ public:
         return global_reducer.GetValue();
 #elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
         tbb::combinable<TThreadLocalStorage> tls_combinable(rThreadLocalStoragePrototype);
-        using ValueType = typename TReducer::return_type;
-        TReducer initial_reducer_for_identity;
 
-        ValueType result_value = tbb::parallel_reduce(
+        TReducer result_reducer = tbb::parallel_reduce(
             tbb::blocked_range<TIndexType>(mBlockPartition[0], mBlockPartition[mNchunks]),
-            initial_reducer_for_identity.GetValue(), // Correct identity VALUE
-            [&](const tbb::blocked_range<TIndexType>& r, ValueType current_value_in_thread) -> ValueType { // Body works with ValueType
+            TReducer(), // Identity: default-constructed TReducer
+            [&](const tbb::blocked_range<TIndexType>& r, TReducer current_reducer_state) -> TReducer {
                 TThreadLocalStorage& local_tls = tls_combinable.local();
-                TReducer local_body_reducer(current_value_in_thread); // Initialize with current_value_in_thread
                 for (TIndexType k = r.begin(); k < r.end(); ++k) {
-                    local_body_reducer.LocalReduce(f(k, local_tls));
+                    current_reducer_state.LocalReduce(f(k, local_tls));
                 }
-                return local_body_reducer.GetValue(); // Return the new accumulated value
+                return current_reducer_state;
             },
-            [](typename TReducer::return_type val1, typename TReducer::return_type val2) -> typename TReducer::return_type {
-                TReducer reducer1(val1);
-                TReducer reducer2(val2);
-                reducer1.join(reducer2);
-                return reducer1.GetValue();
+            [](TReducer r1, TReducer r2) -> TReducer {
+                r1.ThreadSafeReduce(r2);
+                return r1;
             }
         );
-        return result_value;
+        return result_reducer.GetValue();
 #else // Serial execution
         TThreadLocalStorage thread_local_storage(rThreadLocalStoragePrototype);
         TReducer global_reducer;
