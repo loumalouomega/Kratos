@@ -845,3 +845,30 @@ namespace Kratos
 
 #define KRATOS_SERIALIZE_LOAD_BASE_CLASS(Serializer, BaseType) \
     Serializer.load_base("BaseClass",*static_cast<BaseType *>(this));
+
+// Shared Memory Parallelism (SMP) framework selection
+// These macros determine which parallel loop constructs are used (e.g., in parallel_utilities.h).
+// The CMake build system is responsible for defining at most one of KRATOS_SMP_TBB or KRATOS_SMP_OPENMP.
+// KRATOS_SMP_CXX11 is a fallback for basic C++11 thread support (atomics, locks) but not typically for parallel loops if TBB/OpenMP are available.
+
+#if defined(KRATOS_SMP_TBB) && defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please ensure your CMake configuration selects only one."
+#endif
+
+#if defined(KRATOS_SMP_TBB)
+    #define KRATOS_PARALLEL_FRAMEWORK_TBB
+    // KRATOS_SMP_CXX11 might still be defined for std::atomic, std::mutex etc.
+    // TBB is compatible with these. If KRATOS_SMP_CXX11 was for a competing
+    // loop parallelization, this setup assumes TBB takes precedence.
+#elif defined(KRATOS_SMP_OPENMP)
+    #define KRATOS_PARALLEL_FRAMEWORK_OPENMP
+    // KRATOS_SMP_CXX11 might be defined for other C++11 features.
+    // OpenMP is the chosen parallel loop framework here.
+#elif defined(KRATOS_SMP_CXX11)
+    // This case implies no TBB and no OpenMP for parallel loops.
+    // Parallel loops might not be supported or would use a different C++11 based mechanism if available.
+    // For Kratos, this usually means atomics/locks are available but not necessarily parallel_for.
+    #define KRATOS_PARALLEL_FRAMEWORK_CXX11
+#else // Neither TBB, OpenMP, nor CXX11 SMP flags are defined (e.g., KRATOS_SMP_NONE)
+    #define KRATOS_PARALLEL_FRAMEWORK_NONE
+#endif
