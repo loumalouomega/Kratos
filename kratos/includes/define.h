@@ -16,7 +16,6 @@
 #include <stdexcept>
 #include <sstream>
 
-
 /* External includes */
 
 /* Project includes */
