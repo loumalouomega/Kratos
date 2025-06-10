@@ -41,7 +41,7 @@ namespace Kratos
 		/**
 		Creates a Zero Quaternion.
 		*/
-		Quaternion() : mQuaternionValues(boost::numeric::ublas::zero_vector<T>(4)) {
+		Quaternion() : mQuaternionValues(zero_vector<T>(4)) {
 		}
 
 		/**
