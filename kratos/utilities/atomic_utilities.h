@@ -10,7 +10,23 @@
 //  Main authors:    Riccardo Rossi
 //                   Denis Demidov
 //                   Philipp Bucher (https://github.com/philbucher)
+//                   Vicente Mataix Ferrandiz
 //
+
+// -- BEGIN WORKAROUND for define.h access issues --
+#if defined(KRATOS_SMP_TBB)
+  #if defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
+  #endif
+  #define KRATOS_PARALLEL_FRAMEWORK_TBB
+#elif defined(KRATOS_SMP_OPENMP)
+  #define KRATOS_PARALLEL_FRAMEWORK_OPENMP
+#elif defined(KRATOS_SMP_CXX11)
+  #define KRATOS_PARALLEL_FRAMEWORK_CXX11
+#else
+  #define KRATOS_PARALLEL_FRAMEWORK_NONE
+#endif
+// -- END WORKAROUND --
 
 #pragma once
 
@@ -22,7 +38,7 @@
 #include <omp.h>
 #endif
 
-#if !defined(__cpp_lib_atomic_ref) && defined(KRATOS_SMP_CXX11)
+#if !defined(__cpp_lib_atomic_ref) and (defined(KRATOS_SMP_CXX11) or defined(KRATOS_SMP_TBB))
 #include <boost/atomic/atomic_ref.hpp>
 #endif
 
@@ -32,7 +48,7 @@
 
 namespace Kratos {
 
-#if defined(KRATOS_SMP_CXX11)
+#if defined(KRATOS_SMP_CXX11) or defined(KRATOS_SMP_TBB)
     #if defined(__cpp_lib_atomic_ref) // C++20
         template <class T>
         using AtomicRef = std::atomic_ref<T>;
@@ -40,7 +56,7 @@ namespace Kratos {
         template <class T>
         using AtomicRef = boost::atomic_ref<T>;
     #endif //__cpp_lib_atomic_ref
-#endif // KRATOS_SMP_CXX11
+#endif
 
 ///@addtogroup KratosCore
 /**
@@ -54,12 +70,12 @@ namespace Kratos {
 template<class TDataType>
 inline void AtomicAdd(TDataType& target, const TDataType& value)
 {
-#ifdef KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
     #pragma omp atomic
     target += value;
-#elif defined(KRATOS_SMP_CXX11)
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_CXX11) || defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
     AtomicRef<TDataType>{target} += value;
-#else
+#else // KRATOS_PARALLEL_FRAMEWORK_NONE
     target += value;
 #endif
 }
@@ -117,12 +133,12 @@ inline void AtomicAddMatrix(TMatrixType1& target, const TMatrixType2& value)
 template<class TDataType>
 inline void AtomicSub(TDataType& target, const TDataType& value)
 {
-#ifdef KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
     #pragma omp atomic
     target -= value;
-#elif defined(KRATOS_SMP_CXX11)
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_CXX11) || defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
     AtomicRef<TDataType>{target} -= value;
-#else
+#else // KRATOS_PARALLEL_FRAMEWORK_NONE
     target -= value;
 #endif
 }
@@ -178,13 +194,24 @@ inline void AtomicSubMatrix(TMatrixType1& target, const TMatrixType2& value)
 template<class TDataType>
 inline void AtomicMult(TDataType& target, const TDataType& value)
 {
-#ifdef KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
     #pragma omp atomic
     target *= value;
-#elif defined(KRATOS_SMP_CXX11)
-    AtomicRef<TDataType> at_ref{target};
-    at_ref = at_ref*value;
-#else
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_CXX11) || defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+    // Direct multiplication and assignment is not an atomic operation for atomic_ref
+    // Load, multiply, and then store ensures atomicity for the read and write,
+    // though the entire operation (read-modify-write) is not atomic without a CAS loop,
+    // which is more complex than what was here before with OMP.
+    // However, for floating point types, omp atomic also does not guarantee RMW atomicity.
+    // This approach is equivalent to what omp atomic does for floats.
+    #if defined(__cpp_lib_atomic_ref) // C++20
+        TDataType current_val = AtomicRef<TDataType>{target}.load(std::memory_order_relaxed);
+        AtomicRef<TDataType>{target}.store(current_val * value, std::memory_order_relaxed);
+    #else // Fallback to boost::atomic_ref
+        TDataType current_val = AtomicRef<TDataType>{target}.load(boost::memory_order_relaxed);
+        AtomicRef<TDataType>{target}.store(current_val * value, boost::memory_order_relaxed);
+    #endif
+#else // KRATOS_PARALLEL_FRAMEWORK_NONE
     target *= value;
 #endif
 }

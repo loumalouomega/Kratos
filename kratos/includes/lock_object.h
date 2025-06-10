@@ -13,12 +13,29 @@
 
 #pragma once
 
+// -- BEGIN WORKAROUND for define.h access issues --
+#if defined(KRATOS_SMP_TBB)
+  #if defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
+  #endif
+  #define KRATOS_PARALLEL_FRAMEWORK_TBB
+#elif defined(KRATOS_SMP_OPENMP)
+  #define KRATOS_PARALLEL_FRAMEWORK_OPENMP
+#elif defined(KRATOS_SMP_CXX11)
+  #define KRATOS_PARALLEL_FRAMEWORK_CXX11
+#else
+  #define KRATOS_PARALLEL_FRAMEWORK_NONE
+#endif
+// -- END WORKAROUND --
+
 // System includes
-#include <mutex>
+#include <mutex> // For KRATOS_PARALLEL_FRAMEWORK_CXX11 and std::lock_guard
 
 // External includes
-#ifdef KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
 #include <omp.h>
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+#include <tbb/mutex.h>
 #endif
 
 // Project includes
@@ -47,9 +64,10 @@ public:
     /// Default constructor.
     LockObject() noexcept
     {
-#ifdef KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         omp_init_lock(&mLock);
 #endif
+        // For tbb::mutex and std::mutex, default constructor is sufficient.
     }
 
     /// Copy constructor.
@@ -58,9 +76,10 @@ public:
     /// Destructor.
     ~LockObject() noexcept
     {
-#ifdef KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         omp_destroy_lock(&mLock);
 #endif
+        // For tbb::mutex and std::mutex, destructor is sufficient.
     }
 
     ///@}
@@ -76,10 +95,14 @@ public:
 
     inline void lock() const
     {
-#ifdef KRATOS_SMP_CXX11
+#if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
         mLock.lock();
-#elif KRATOS_SMP_OPENMP
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         omp_set_lock(&mLock);
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_CXX11)
+        mLock.lock();
+#else // KRATOS_PARALLEL_FRAMEWORK_NONE
+        // No operation for non-parallel version
 #endif
     }
 
@@ -91,10 +114,14 @@ public:
 
     inline void unlock() const
     {
-#ifdef KRATOS_SMP_CXX11
+#if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
         mLock.unlock();
-#elif KRATOS_SMP_OPENMP
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         omp_unset_lock(&mLock);
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_CXX11)
+        mLock.unlock();
+#else // KRATOS_PARALLEL_FRAMEWORK_NONE
+        // No operation for non-parallel version
 #endif
     }
 
@@ -106,12 +133,15 @@ public:
 
     inline bool try_lock() const
     {
-#ifdef KRATOS_SMP_CXX11
+#if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
         return mLock.try_lock();
-#elif KRATOS_SMP_OPENMP
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
         return omp_test_lock(&mLock);
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_CXX11)
+        return mLock.try_lock();
+#else // KRATOS_PARALLEL_FRAMEWORK_NONE
+        return true; // Non-parallel version always succeeds
 #endif
-        return true;
     }
 
     ///@}
@@ -120,10 +150,18 @@ private:
     ///@name Member Variables
     ///@{
 
-#ifdef KRATOS_SMP_CXX11
-        mutable std::mutex mLock;
-#elif KRATOS_SMP_OPENMP
+#if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        mutable tbb::mutex mLock;
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
 	    mutable omp_lock_t mLock;
+#elif defined(KRATOS_PARALLEL_FRAMEWORK_CXX11)
+        mutable std::mutex mLock;
+#else // KRATOS_PARALLEL_FRAMEWORK_NONE
+        // For a truly non-parallel version, no lock member is needed.
+        // However, to allow seamless compilation, a dummy or std::mutex might be used
+        // if LockObject is instantiated in non-parallel contexts but expected to compile.
+        // For simplicity, if no framework is active, no lock member is declared.
+        // Operations will be no-ops or error if called unexpectedly.
 #endif
 
     ///@}
