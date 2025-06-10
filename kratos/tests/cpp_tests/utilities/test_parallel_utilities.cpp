@@ -11,6 +11,21 @@
 //                   Philipp Bucher (https://github.com/philbucher)
 //
 
+// -- BEGIN WORKAROUND for define.h access issues --
+#if defined(KRATOS_SMP_TBB)
+  #if defined(KRATOS_SMP_OPENMP)
+    #error "KRATOS_SMP_TBB and KRATOS_SMP_OPENMP cannot be defined simultaneously. Please choose only one."
+  #endif
+  #define KRATOS_PARALLEL_FRAMEWORK_TBB
+#elif defined(KRATOS_SMP_OPENMP)
+  #define KRATOS_PARALLEL_FRAMEWORK_OPENMP
+#elif defined(KRATOS_SMP_CXX11)
+  #define KRATOS_PARALLEL_FRAMEWORK_CXX11
+#else
+  #define KRATOS_PARALLEL_FRAMEWORK_NONE
+#endif
+// -- END WORKAROUND --
+
 // System includes
 #include <utility>
 #include <numeric>
@@ -497,41 +512,51 @@ KRATOS_TEST_CASE_IN_SUITE(ParUtilsBlockPartitionExceptions, KratosCoreFastSuite)
     // basic version
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
         block_for_each(data_vector, [](double& item){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
-        });
-        ,
-        "caught exception: Error: Inside parallel region"
+            KRATOS_ERROR << "KratosErrorInBlockForEach"; // Specific message for this test
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInBlockForEach" // TBB propagates the original error directly
+        #else // OpenMP and potentially others that use the Kratos exception macros
+        "caught exception: Error: KratosErrorInBlockForEach"
+        #endif
     );
 
     // version with reductions
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
-        // deliberately ignoring [[nodiscard]] as it is not relevant for this test
         std::ignore = block_for_each<SumReduction<double>>(data_vector, [](double& item){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
+            KRATOS_ERROR << "KratosErrorInBlockForEachWithReduction";
             return 0.0;
-        });
-        ,
-        "caught exception: Error: Inside parallel region"
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInBlockForEachWithReduction"
+        #else
+        "caught exception: Error: KratosErrorInBlockForEachWithReduction"
+        #endif
     );
 
     // version with TLS
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
         block_for_each(data_vector, std::vector<double>(), [](double& item, std::vector<double>& rTLS){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
-        });
-        ,
-        "caught exception: Error: Inside parallel region"
+            KRATOS_ERROR << "KratosErrorInBlockForEachTLS";
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInBlockForEachTLS"
+        #else
+        "caught exception: Error: KratosErrorInBlockForEachTLS"
+        #endif
     );
 
     // version with reduction and TLS
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
-        // deliberately ignoring [[nodiscard]] as it is not relevant for this test
         std::ignore = block_for_each<SumReduction<double>>(data_vector, std::vector<double>(), [](double& item, std::vector<double>& rTLS){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
+            KRATOS_ERROR << "KratosErrorInBlockForEachTLSReduction";
             return 0.0;
-        });
-        ,
-        "caught exception: Error: Inside parallel region"
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInBlockForEachTLSReduction"
+        #else
+        "caught exception: Error: KratosErrorInBlockForEachTLSReduction"
+        #endif
     );
 }
 
@@ -544,54 +569,65 @@ KRATOS_TEST_CASE_IN_SUITE(ParUtilsIndexPartitionExceptions, KratosCoreFastSuite)
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
         IndexPartition<unsigned int>(data_vector.size()).for_each(
         [&](unsigned int i){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
-            }
-        );
-        ,
-        "caught exception: Error: Inside parallel region"
+            if (i == data_vector.size() / 2) KRATOS_ERROR << "KratosErrorInIndexForEach"; // Throw from one thread
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInIndexForEach"
+        #else
+        "caught exception: Error: KratosErrorInIndexForEach"
+        #endif
     );
 
     // version with reductions
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
-        // deliberately ignoring [[nodiscard]] as it is not relevant for this test
         std::ignore = IndexPartition<unsigned int>(data_vector.size()).for_each<SumReduction<double>>(
         [&](unsigned int i){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
+            if (i == data_vector.size() / 2) KRATOS_ERROR << "KratosErrorInIndexForEachWithReduction";
             return 0.0;
-            }
-        );
-        ,
-        "caught exception: Error: Inside parallel region"
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInIndexForEachWithReduction"
+        #else
+        "caught exception: Error: KratosErrorInIndexForEachWithReduction"
+        #endif
     );
 
     // version with TLS
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
         IndexPartition<unsigned int>(data_vector.size()).for_each(std::vector<double>(),
         [&](unsigned int i, std::vector<double>& rTLS){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
-            }
-        );
-        ,
-        "caught exception: Error: Inside parallel region"
+            if (i == data_vector.size() / 2) KRATOS_ERROR << "KratosErrorInIndexForEachTLS";
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInIndexForEachTLS"
+        #else
+        "caught exception: Error: KratosErrorInIndexForEachTLS"
+        #endif
     );
 
     // version with reduction and TLS
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(
-        // deliberately ignoring [[nodiscard]] as it is not relevant for this test
         std::ignore = IndexPartition<unsigned int>(data_vector.size()).for_each<SumReduction<double>>(std::vector<double>(),
         [&](unsigned int i, std::vector<double>& rTLS){
-            KRATOS_ERROR << "Inside parallel region" << std::endl;
+            if (i == data_vector.size() / 2) KRATOS_ERROR << "KratosErrorInIndexForEachTLSReduction";
             return 0.0;
-            }
-        );
-        ,
-        "caught exception: Error: Inside parallel region"
+        }),
+        #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        "KratosErrorInIndexForEachTLSReduction"
+        #else
+        "caught exception: Error: KratosErrorInIndexForEachTLSReduction"
+        #endif
     );
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OmpVsPureC11, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(ParallelFrameworksComparison, KratosCoreFastSuite) // Renamed
 {
-    int nsize = 1e7;
+    // Reduce size for CI, but keep it large enough for meaningful comparison
+    #ifdef KRATOS_CI_BUILD
+        int nsize = 1e6;
+    #else
+        int nsize = 1e7;
+    #endif
     std::vector<double> data_vector(nsize), output(nsize);
     for(int i=0; i<nsize; ++i)
         data_vector[i] = i;
@@ -607,14 +643,22 @@ KRATOS_TEST_CASE_IN_SUITE(OmpVsPureC11, KratosCoreFastSuite)
         "test error on thread 0"
         );
 
-    //benchmark openmp vs pure c++11 impementation in a simple loop
-    const auto timer_omp = BuiltinTimer();
+    //benchmark OpenMP/TBB vs pure c++11 implementation in a simple loop
+    // The active parallel framework (OpenMP or TBB) is determined at compile time by KRATOS_PARALLEL_FRAMEWORK_XXX
+    const auto timer_framework = BuiltinTimer();
     IndexPartition<unsigned int>(nsize).for_each(
             [&](unsigned int i){
                     output[i] = std::pow(data_vector[i],0.01);
                 }
             );
-    std::cout << "OMP time = " << timer_omp.ElapsedSeconds() << std::endl;
+    #if defined(KRATOS_PARALLEL_FRAMEWORK_TBB)
+        std::cout << "TBB time = " << timer_framework.ElapsedSeconds() << std::endl;
+    #elif defined(KRATOS_PARALLEL_FRAMEWORK_OPENMP)
+        std::cout << "OMP time = " << timer_framework.ElapsedSeconds() << std::endl;
+    #else
+        std::cout << "Serial/CXX11 time (for IndexPartition.for_each) = " << timer_framework.ElapsedSeconds() << std::endl;
+    #endif
+
 
     const auto timer_pure = BuiltinTimer();
     IndexPartition<unsigned int>(nsize).for_pure_c11(
@@ -622,7 +666,7 @@ KRATOS_TEST_CASE_IN_SUITE(OmpVsPureC11, KratosCoreFastSuite)
                     output[i] = std::pow(data_vector[i],0.01);
                 }
             );
-    std::cout << "Pure c++11 time = " << timer_pure.ElapsedSeconds() << std::endl;
+    std::cout << "Pure c++11 (std::async) time = " << timer_pure.ElapsedSeconds() << std::endl;
 }
 
 
