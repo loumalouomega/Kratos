@@ -292,7 +292,7 @@ public:
         return std::sqrt(aux_sum);
     }
 
-    static TDataType TwoNorm(const boost::numeric::ublas::compressed_matrix<TDataType> & rA) // Frobenious norm
+    static TDataType TwoNorm(const compressed_matrix<TDataType> & rA) // Frobenious norm
     {
         TDataType aux_sum = TDataType();
 
@@ -324,12 +324,12 @@ public:
         return aux_sum;
     }
 
-    static TDataType JacobiNorm(const boost::numeric::ublas::compressed_matrix<TDataType>& rA)
+    static TDataType JacobiNorm(const compressed_matrix<TDataType>& rA)
     {
         TDataType aux_sum = TDataType();
 
-        typedef typename boost::numeric::ublas::compressed_matrix<TDataType>::const_iterator1 t_it_1;
-        typedef typename boost::numeric::ublas::compressed_matrix<TDataType>::const_iterator2 t_it_2;
+        typedef typename compressed_matrix<TDataType>::const_iterator1 t_it_1;
+        typedef typename compressed_matrix<TDataType>::const_iterator2 t_it_2;
 
         for (t_it_1 it_1 = rA.begin1(); it_1 != rA.end1(); ++it_1) {
             for (t_it_2 it_2 = it_1.begin(); it_2 != it_1.end(); ++it_2) {
@@ -346,7 +346,7 @@ public:
         axpy_prod(rA, rX, rY, true);
     }
 
-    static void Mult(const boost::numeric::ublas::compressed_matrix<TDataType>& rA, const VectorType& rX, VectorType& rY)
+    static void Mult(const compressed_matrix<TDataType>& rA, const VectorType& rX, VectorType& rY)
     {
 #ifndef _OPENMP
         axpy_prod(rA, rX, rY, true);
@@ -602,7 +602,7 @@ public:
 #endif
     }
 
-    inline static void ResizeData(boost::numeric::ublas::compressed_matrix<TDataType>& rA, SizeType m)
+    inline static void ResizeData(compressed_matrix<TDataType>& rA, SizeType m)
     {
         rA.value_data().resize(m);
 #ifndef _OPENMP
@@ -642,7 +642,7 @@ public:
 #endif
     }
 
-    inline static void SetToZero(boost::numeric::ublas::compressed_matrix<TDataType>& rA)
+    inline static void SetToZero(compressed_matrix<TDataType>& rA)
     {
 #ifndef _OPENMP
         std::fill(rA.value_data().begin(), rA.value_data().end(), TDataType());
@@ -1023,9 +1023,9 @@ private:
         {
             int thread_id = omp_get_thread_num();
             int number_of_rows = partition[thread_id + 1] - partition[thread_id];
-            typename boost::numeric::ublas::compressed_matrix<TDataType>::index_array_type::const_iterator row_iter_begin = A.index1_data().begin() + partition[thread_id];
-            typename boost::numeric::ublas::compressed_matrix<TDataType>::index_array_type::const_iterator index_2_begin = A.index2_data().begin()+*row_iter_begin;
-            typename boost::numeric::ublas::compressed_matrix<TDataType>::value_array_type::const_iterator value_begin = A.value_data().begin()+*row_iter_begin;
+            typename compressed_matrix<TDataType>::index_array_type::const_iterator row_iter_begin = A.index1_data().begin() + partition[thread_id];
+            typename compressed_matrix<TDataType>::index_array_type::const_iterator index_2_begin = A.index2_data().begin()+*row_iter_begin;
+            typename compressed_matrix<TDataType>::value_array_type::const_iterator value_begin = A.value_data().begin()+*row_iter_begin;
             //                  typename VectorType::iterator output_vec_begin = out.begin()+partition[thread_id];
 
 
@@ -1056,9 +1056,9 @@ private:
      */
     static void partial_product_no_add(
         int number_of_rows,
-        typename boost::numeric::ublas::compressed_matrix<TDataType>::index_array_type::const_iterator row_begin,
-        typename boost::numeric::ublas::compressed_matrix<TDataType>::index_array_type::const_iterator index2_begin,
-        typename boost::numeric::ublas::compressed_matrix<TDataType>::value_array_type::const_iterator value_begin,
+        typename compressed_matrix<TDataType>::index_array_type::const_iterator row_begin,
+        typename compressed_matrix<TDataType>::index_array_type::const_iterator index2_begin,
+        typename compressed_matrix<TDataType>::value_array_type::const_iterator value_begin,
         const VectorType& input_vec,
         unsigned int output_begin_index,
         VectorType& output_vec
