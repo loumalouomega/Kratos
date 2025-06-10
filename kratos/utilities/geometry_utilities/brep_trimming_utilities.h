@@ -115,7 +115,7 @@ namespace Kratos
                 return;
             }
 
-            boost::numeric::ublas::matrix<DPState> dpstates(n, n);
+            matrix<DPState> dpstates(n, n);
 
             //init states and visibility
             for (IndexType i = 0; i < (n - 1); i++) {
