@@ -1,634 +1,210 @@
-// KRATOS  ___|  |                   |                   |
-//       \___ \  __|  __| |   |  __| __| |   |  __| _` | |
-//             | |   |    |   | (    |   |   | |   (   | |
-//       _____/ \__|_|   \__,_|\___|\__|\__,_|_|  \__,_|_| MECHANICS
-//
-//  License:         BSD License
-//                   license: StructuralMechanicsApplication/license.txt
-//
-//  Main authors:    Vicente Mataix Ferrandiz
-//
-
-// System includes
-
-// External includes
-
-// Project includes
 #include "updated_lagrangian.h"
 #include "utilities/math_utils.h"
+#include "custom_utilities/constitutive_law_utilities.h"
 #include "structural_mechanics_application_variables.h"
-#include "custom_utilities/structural_mechanics_math_utilities.hpp"
+#include "utilities/atomic_utilities.h"
 
-namespace Kratos
-{
 
-//******************************CONSTRUCTOR*******************************************
-/***********************************************************************************/
+namespace Kratos {
+UpdatedLagrangian::UpdatedLagrangian(IndexType NewId, GeometryType::Pointer pGeometry) : Element(NewId, pGeometry) { mThisIntegrationMethod = GetGeometry().GetDefaultIntegrationMethod(); }
+UpdatedLagrangian::UpdatedLagrangian(IndexType NewId, GeometryType::Pointer pGeometry, PropertiesType::Pointer pProperties) : Element(NewId, pGeometry, pProperties) { mThisIntegrationMethod = GetGeometry().GetDefaultIntegrationMethod(); }
+UpdatedLagrangian::~UpdatedLagrangian() {}
 
-UpdatedLagrangian::UpdatedLagrangian( IndexType NewId, GeometryType::Pointer pGeometry )
-        : BaseSolidElement( NewId, pGeometry )
-{
-    // NOTE: DO NOT ADD DOFS HERE!!!
+Element::Pointer UpdatedLagrangian::Create(IndexType NewId, NodesArrayType const& ThisNodes, PropertiesType::Pointer pProperties) const {
+    return Kratos::make_intrusive<UpdatedLagrangian>(NewId, GetGeometry().Create(ThisNodes), pProperties);
+}
+Element::Pointer UpdatedLagrangian::Create(IndexType NewId, GeometryType::Pointer pGeom, PropertiesType::Pointer pProperties) const {
+    return Kratos::make_intrusive<UpdatedLagrangian>(NewId, pGeom, pProperties);
 }
 
-/***********************************************************************************/
-/***********************************************************************************/
-
-UpdatedLagrangian::UpdatedLagrangian( IndexType NewId, GeometryType::Pointer pGeometry, PropertiesType::Pointer pProperties )
-        : BaseSolidElement( NewId, pGeometry, pProperties )
-{
-    // NOTE: DO NOT ADD DOFS HERE!!!
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-Element::Pointer UpdatedLagrangian::Create( IndexType NewId, NodesArrayType const& ThisNodes, PropertiesType::Pointer pProperties ) const
-{
-    return Kratos::make_intrusive<UpdatedLagrangian>( NewId, GetGeometry().Create( ThisNodes ), pProperties );
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-Element::Pointer UpdatedLagrangian::Create( IndexType NewId, GeometryType::Pointer pGeom, PropertiesType::Pointer pProperties ) const
-{
-    return Kratos::make_intrusive<UpdatedLagrangian>( NewId, pGeom, pProperties );
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-UpdatedLagrangian::~UpdatedLagrangian()
-{
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::Initialize(const ProcessInfo& rCurrentProcessInfo)
-{
-    BaseSolidElement::Initialize(rCurrentProcessInfo);
-
-    // Initialization should not be done again in a restart!
-    if (!rCurrentProcessInfo[IS_RESTARTED]) {
-        const GeometryType::IntegrationPointsArrayType& integration_points = GetGeometry().IntegrationPoints(this->GetIntegrationMethod());
-
-        const SizeType integration_points_number = integration_points.size();
-
-        if ( mDetF0.size() !=  integration_points_number)
-            mDetF0.resize( integration_points_number );
-        if ( mF0.size() !=  integration_points_number)
-            mF0.resize( integration_points_number );
-
-        const SizeType dimension = GetGeometry().WorkingSpaceDimension();
-
-        for (IndexType point_number = 0; point_number < integration_points.size(); ++point_number) {
-            mDetF0[point_number] = 1.0;
-            mF0[point_number] = IdentityMatrix(dimension);
-        }
-
-        mF0Computed = false;
-    }
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::InitializeSolutionStep(const ProcessInfo& rCurrentProcessInfo)
-{
-    BaseSolidElement::InitializeSolutionStep(rCurrentProcessInfo);
-
-    mF0Computed = false;
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::FinalizeSolutionStep(const ProcessInfo& rCurrentProcessInfo )
-{
-    // Create and initialize element variables:
-    const auto& r_geometry = GetGeometry();
-    const SizeType number_of_nodes = r_geometry.size();
-    const SizeType dimension = r_geometry.WorkingSpaceDimension();
-    const SizeType strain_size = mConstitutiveLawVector[0]->GetStrainSize();
-    // Reading integration points
-    const GeometryType::IntegrationPointsArrayType& integration_points = r_geometry.IntegrationPoints(mThisIntegrationMethod);
-
-    KinematicVariables this_kinematic_variables(strain_size, dimension, number_of_nodes);
-    ConstitutiveVariables this_constitutive_variables(strain_size);
-
-    // Create constitutive law parameters:
-    ConstitutiveLaw::Parameters Values(r_geometry,GetProperties(),rCurrentProcessInfo);
-
-    // Set constitutive law flags:
-    Flags& ConstitutiveLawOptions=Values.GetOptions();
-    ConstitutiveLawOptions.Set(ConstitutiveLaw::USE_ELEMENT_PROVIDED_STRAIN, UseElementProvidedStrain());
-    ConstitutiveLawOptions.Set(ConstitutiveLaw::COMPUTE_STRESS, true);
-    ConstitutiveLawOptions.Set(ConstitutiveLaw::COMPUTE_CONSTITUTIVE_TENSOR, false);
-
-    Values.SetStrainVector(this_constitutive_variables.StrainVector);
-
-    // Reading integration points
-    for ( IndexType point_number = 0; point_number < mConstitutiveLawVector.size(); ++point_number ) {
-        // Compute element kinematics B, F, DN_DX ...
-        this->CalculateKinematicVariables(this_kinematic_variables, point_number, this->GetIntegrationMethod());
-
-        // Setting the variables for the CL
-        SetConstitutiveVariables(this_kinematic_variables, this_constitutive_variables, Values, point_number, integration_points);
-
-        // Call the constitutive law to update material variables
-        mConstitutiveLawVector[point_number]->FinalizeMaterialResponse(Values, GetStressMeasure());
-
-        // Update the element internal variables
-        this->UpdateHistoricalDatabase(this_kinematic_variables, point_number);
-    }
-
-    mF0Computed = true;
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-Element::Pointer UpdatedLagrangian::Clone (
-    IndexType NewId,
-    NodesArrayType const& rThisNodes
-    ) const
-{
+Element::Pointer UpdatedLagrangian::Clone(IndexType NewId, NodesArrayType const& rThisNodes) const {
     KRATOS_TRY
-
-    UpdatedLagrangian::Pointer p_new_elem = Kratos::make_intrusive<UpdatedLagrangian>(NewId, GetGeometry().Create(rThisNodes), pGetProperties());
+    auto p_new_elem = Kratos::make_intrusive<UpdatedLagrangian>(NewId, GetGeometry().Create(rThisNodes), pGetProperties());
     p_new_elem->SetData(this->GetData());
     p_new_elem->Set(Flags(*this));
-
-    // Currently selected integration methods
-    p_new_elem->SetIntegrationMethod(BaseType::mThisIntegrationMethod);
-
-    // The vector containing the constitutive laws
-    p_new_elem->SetConstitutiveLawVector(BaseType::mConstitutiveLawVector);
-
-    // Cloning updated lagrangian database
-    p_new_elem->CloneUpdatedLagrangianDatabase(mF0Computed, mDetF0, mF0);
-
+    p_new_elem->mThisIntegrationMethod = this->mThisIntegrationMethod;
+    p_new_elem->mConstitutiveLawVector.resize(this->mConstitutiveLawVector.size());
+    for(size_t i=0; i<this->mConstitutiveLawVector.size(); ++i) {
+        if(this->mConstitutiveLawVector[i] != nullptr)
+            p_new_elem->mConstitutiveLawVector[i] = this->mConstitutiveLawVector[i]->Clone();
+    }
+    // Copy any UL-specific history data if needed
     return p_new_elem;
-
     KRATOS_CATCH("");
 }
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-ConstitutiveLaw::StressMeasure UpdatedLagrangian::GetStressMeasure() const
-{
-    return ConstitutiveLaw::StressMeasure_Cauchy;
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::UpdateHistoricalDatabase(
-    KinematicVariables& rThisKinematicVariables,
-    const SizeType PointNumber
-    )
-{
-    mDetF0[PointNumber] = rThisKinematicVariables.detF;
-    noalias(mF0[PointNumber]) = rThisKinematicVariables.F;
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::CalculateAll(
-    MatrixType& rLeftHandSideMatrix,
-    VectorType& rRightHandSideVector,
-    const ProcessInfo& rCurrentProcessInfo,
-    const bool CalculateStiffnessMatrixFlag,
-    const bool CalculateResidualVectorFlag
-    )
-{
-    KRATOS_TRY;
-
-    const SizeType number_of_nodes = GetGeometry().size();
-    const SizeType dimension = GetGeometry().WorkingSpaceDimension();
-    const SizeType strain_size = GetProperties().GetValue( CONSTITUTIVE_LAW )->GetStrainSize();
-    const bool is_rotated = IsElementRotated();
-
-    KinematicVariables this_kinematic_variables(strain_size, dimension, number_of_nodes);
-    ConstitutiveVariables this_constitutive_variables(strain_size);
-
-    // Resizing as needed the LHS
-    const SizeType mat_size = number_of_nodes * dimension;
-
-    if ( CalculateStiffnessMatrixFlag ) { // Calculation of the matrix is required
-        if ( rLeftHandSideMatrix.size1() != mat_size )
-            rLeftHandSideMatrix.resize( mat_size, mat_size, false );
-
-        noalias( rLeftHandSideMatrix ) = ZeroMatrix( mat_size, mat_size ); //resetting LHS
-    }
-
-    // Resizing as needed the RHS
-    if ( CalculateResidualVectorFlag ) { // Calculation of the matrix is required
-        if ( rRightHandSideVector.size() != mat_size )
-            rRightHandSideVector.resize( mat_size, false );
-
-        noalias(rRightHandSideVector) = ZeroVector( mat_size ); //resetting RHS
-    }
-
-    // Reading integration points
-    const GeometryType::IntegrationPointsArrayType& integration_points = GetGeometry().IntegrationPoints(this->GetIntegrationMethod());
-
-    ConstitutiveLaw::Parameters Values(GetGeometry(),GetProperties(),rCurrentProcessInfo);
-
-    // Set constitutive law flags:
-    Flags& ConstitutiveLawOptions=Values.GetOptions();
-    ConstitutiveLawOptions.Set(ConstitutiveLaw::USE_ELEMENT_PROVIDED_STRAIN, UseElementProvidedStrain());
-    ConstitutiveLawOptions.Set(ConstitutiveLaw::COMPUTE_STRESS, true);
-    if ( CalculateStiffnessMatrixFlag ) {
-        ConstitutiveLawOptions.Set(ConstitutiveLaw::COMPUTE_CONSTITUTIVE_TENSOR, true);
-    } else {
-        ConstitutiveLawOptions.Set(ConstitutiveLaw::COMPUTE_CONSTITUTIVE_TENSOR, false);
-    }
-
-    // If strain has to be computed inside of the constitutive law with PK2
-    Values.SetStrainVector(this_constitutive_variables.StrainVector); //this is the input  parameter
-
-    // Some declarations
-    array_1d<double, 3> body_force;
-    double int_to_reference_weight;
-
-    // Computing in all integrations points
-    for ( IndexType point_number = 0; point_number < integration_points.size(); ++point_number ) {
-        // Contribution to external forces
-        noalias(body_force) = this->GetBodyForce(integration_points, point_number);
-
-        // Compute element kinematics B, F, DN_DX ...
-        this->CalculateKinematicVariables(this_kinematic_variables, point_number, this->GetIntegrationMethod());
-
-        // Compute material response
-        this->CalculateConstitutiveVariables(this_kinematic_variables, this_constitutive_variables, Values, point_number, integration_points, this->GetStressMeasure(), is_rotated);
-
-        // Calculating weights for integration on the reference configuration
-        int_to_reference_weight = this->GetIntegrationWeight(integration_points, point_number, this_kinematic_variables.detJ0);
-
-        if ( dimension == 2 && GetProperties().Has( THICKNESS ))
-            int_to_reference_weight *= this->GetProperties()[THICKNESS];
-
-        if ( CalculateStiffnessMatrixFlag ) { // Calculation of the matrix is required
-            // Contributions to stiffness matrix calculated on the reference config
-            /* Material stiffness matrix */
-            this->CalculateAndAddKm( rLeftHandSideMatrix, this_kinematic_variables.B, this_constitutive_variables.D, int_to_reference_weight );
-
-            /* Geometric stiffness matrix */
-            this->CalculateAndAddKg( rLeftHandSideMatrix, this_kinematic_variables.DN_DX, this_constitutive_variables.StressVector, int_to_reference_weight );
-        }
-
-        if ( CalculateResidualVectorFlag ) { // Calculation of the matrix is required
-            this->CalculateAndAddResidualVector(rRightHandSideVector, this_kinematic_variables, rCurrentProcessInfo, body_force, this_constitutive_variables.StressVector, int_to_reference_weight);
-        }
-    }
-
-    KRATOS_CATCH( "" )
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::CalculateKinematicVariables(
-    KinematicVariables& rThisKinematicVariables,
-    const SizeType PointNumber,
-    const GeometryType::IntegrationMethod& rIntegrationMethod
-    )
-{
-    // Shape functions
-    rThisKinematicVariables.N = row(GetGeometry().ShapeFunctionsValues(rIntegrationMethod), PointNumber);
-
-    rThisKinematicVariables.detJ0 = this->CalculateDerivativesOnReferenceConfiguration(rThisKinematicVariables.J0, rThisKinematicVariables.InvJ0, rThisKinematicVariables.DN_DX, PointNumber, rIntegrationMethod);
-
-    // Calculating jacobian
-    Matrix J, inv_J;
-    rThisKinematicVariables.detJ0 = this->CalculateDerivativesOnCurrentConfiguration(J, inv_J, rThisKinematicVariables.DN_DX, PointNumber, rIntegrationMethod);
-
-    KRATOS_ERROR_IF(rThisKinematicVariables.detJ0 < 0.0) << "WARNING:: ELEMENT ID: " << this->Id() << " INVERTED. DETJ0: " << rThisKinematicVariables.detJ0 << std::endl;
-
-    // Deformation gradient
-    const SizeType strain_size = (rThisKinematicVariables.B).size1();
-    Matrix DF = prod( J, rThisKinematicVariables.InvJ0 );
-
-    // Axisymmetric case
-    if (strain_size == 4) {
-        BoundedMatrix<double, 2, 2> DF2x2 = DF;
-        DF.resize(3, 3, false);
-        for (unsigned i = 0; i < 2; ++i) {
-            for (unsigned j = 0; j < 2; ++j)
-                DF(i, j) = DF2x2(i, j);
-            DF(i, 2) = DF(2, i) = 0.0;
-        }
-        const double current_radius = StructuralMechanicsMathUtilities::CalculateRadius(rThisKinematicVariables.N, GetGeometry(), Current);
-        const double initial_radius = StructuralMechanicsMathUtilities::CalculateRadius(rThisKinematicVariables.N, GetGeometry(), Initial);
-        DF(2, 2) = current_radius/initial_radius;
-    }
-
-    const double detDF = MathUtils<double>::Det(DF);
-    rThisKinematicVariables.detF = detDF * this->ReferenceConfigurationDeformationGradientDeterminant(PointNumber);
-    noalias(rThisKinematicVariables.F) = prod(DF, this->ReferenceConfigurationDeformationGradient(PointNumber));
-
-    // Calculating operator B
-    this->CalculateB( rThisKinematicVariables.B, rThisKinematicVariables.DN_DX, strain_size, PointNumber );
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-double UpdatedLagrangian::CalculateDerivativesOnReferenceConfiguration(
-    Matrix& J0,
-    Matrix& InvJ0,
-    Matrix& DN_DX,
-    const IndexType PointNumber,
-    IntegrationMethod ThisIntegrationMethod
-    ) const
-{
-    J0.clear();
-
-    double detJ0;
-
-    Matrix delta_displacement;
-    delta_displacement = this->CalculateDeltaDisplacement(delta_displacement);
-
-    J0 = this->GetGeometry().Jacobian( J0, PointNumber, ThisIntegrationMethod, delta_displacement);
-
-    const Matrix& DN_De = this->GetGeometry().ShapeFunctionsLocalGradients(ThisIntegrationMethod)[PointNumber];
-
-    MathUtils<double>::InvertMatrix( J0, InvJ0, detJ0 );
-
-    noalias( DN_DX ) = prod( DN_De, InvJ0);
-
-    return detJ0;
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::CalculateB(
-    Matrix& rB,
-    const Matrix& rDN_DX,
-    const SizeType StrainSize,
-    const IndexType PointNumber
-    )
-{
+void UpdatedLagrangian::Initialize(const ProcessInfo& rCurrentProcessInfo) {
     KRATOS_TRY
-
-    const SizeType number_of_nodes = GetGeometry().PointsNumber();
-    const SizeType dimension = GetGeometry().WorkingSpaceDimension();
-
-    // For axisymmetric case
-    Vector N;
-    double Radius = 0.0;
-
-    if ( StrainSize == 4 ) {
-        N = row(GetGeometry().ShapeFunctionsValues(), PointNumber);
-        Radius = StructuralMechanicsMathUtilities::CalculateRadius(N, GetGeometry());
-    }
-
-    for ( IndexType i = 0; i < number_of_nodes; i++ ) {
-        const SizeType index = dimension * i;
-
-        if ( StrainSize == 3 ) {
-            rB( 0, index + 0 ) = rDN_DX( i, 0 );
-            rB( 1, index + 1 ) = rDN_DX( i, 1 );
-            rB( 2, index + 0 ) = rDN_DX( i, 1 );
-            rB( 2, index + 1 ) = rDN_DX( i, 0 );
-        } else if ( StrainSize == 4 ) {
-            rB( 0, index + 0 ) = rDN_DX( i, 0 );
-            rB( 1, index + 1 ) = rDN_DX( i, 1 );
-            rB( 2, index + 0 ) = N[i]/Radius;
-            rB( 3, index + 0 ) = rDN_DX( i, 1 );
-            rB( 3, index + 1 ) = rDN_DX( i, 0 );
+    if (!rCurrentProcessInfo[IS_RESTARTED]) {
+        if( GetProperties().Has(INTEGRATION_ORDER) ) {
+            const SizeType integration_order = GetProperties()[INTEGRATION_ORDER];
+            switch ( integration_order ) {
+                case 1: mThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_1; break;
+                case 2: mThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_2; break;
+                case 3: mThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_3; break;
+                case 4: mThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_4; break;
+                case 5: mThisIntegrationMethod = GeometryData::IntegrationMethod::GI_GAUSS_5; break;
+                default:
+                    KRATOS_WARNING("UpdatedLagrangian") << "Integration order " << integration_order << " for element " << Id() << " not available, using default." << std::endl;
+                    mThisIntegrationMethod = GetGeometry().GetDefaultIntegrationMethod();
+            }
         } else {
-            rB( 0, index + 0 ) = rDN_DX( i, 0 );
-            rB( 1, index + 1 ) = rDN_DX( i, 1 );
-            rB( 2, index + 2 ) = rDN_DX( i, 2 );
-
-            rB( 3, index + 0 ) = rDN_DX( i, 1 );
-            rB( 3, index + 1 ) = rDN_DX( i, 0 );
-
-            rB( 4, index + 1 ) = rDN_DX( i, 2 );
-            rB( 4, index + 2 ) = rDN_DX( i, 1 );
-
-            rB( 5, index + 0 ) = rDN_DX( i, 2 );
-            rB( 5, index + 2 ) = rDN_DX( i, 0 );
+            mThisIntegrationMethod = GetGeometry().GetDefaultIntegrationMethod();
         }
+        const auto& integration_points = GetGeometry().IntegrationPoints(mThisIntegrationMethod);
+        if ( mConstitutiveLawVector.size() != integration_points.size() ) {
+            mConstitutiveLawVector.resize(integration_points.size());
+        }
+        const auto& N_values = GetGeometry().ShapeFunctionsValues(mThisIntegrationMethod);
+        for ( IndexType i = 0; i < mConstitutiveLawVector.size(); ++i ) {
+            SolidElementUtilities::InitializeConstitutiveLaw(mConstitutiveLawVector[i], GetProperties(), GetGeometry(), row(N_values, i));
+        }
+        // Initialize UL specific history data if needed (e.g. F0_history)
     }
-
     KRATOS_CATCH( "" )
 }
 
-/***********************************************************************************/
-/***********************************************************************************/
+ConstitutiveLaw::StressMeasure UpdatedLagrangian::GetStressMeasure() const { return ConstitutiveLaw::StressMeasure_Cauchy; }
+bool UpdatedLagrangian::UseElementProvidedStrain() const { return true; } // Strain rate D is provided
 
-double UpdatedLagrangian::ReferenceConfigurationDeformationGradientDeterminant(const IndexType PointNumber) const
-{
-    if (!mF0Computed)
-        return mDetF0[PointNumber];
+void UpdatedLagrangian::CalculateLocalSystem(MatrixType& rLeftHandSideMatrix, VectorType& rRightHandSideVector, const ProcessInfo& rCurrentProcessInfo) {
+    KRATOS_TRY
+    auto& r_geom = GetGeometry();
+    const SizeType num_nodes = r_geom.size();
+    const SizeType dim = r_geom.WorkingSpaceDimension();
+    KRATOS_ERROR_IF(mConstitutiveLawVector.empty() || !mConstitutiveLawVector[0]) << "CL not init! Elm ID: " << Id() << std::endl;
+    const SizeType strain_size = mConstitutiveLawVector[0]->GetStrainSize();
 
-    return 1.0;
-}
+    SolidElementUtilities::LocalKinematicVariables kin_vars(strain_size, dim, num_nodes);
+    SolidElementUtilities::LocalConstitutiveVariables const_vars(strain_size);
 
-/***********************************************************************************/
-/***********************************************************************************/
+    // Get current nodal velocities for strain rate calculation
+    GetFirstDerivativesVector(kin_vars.Displacements); // Store velocities in kin_vars.Displacements
 
-Matrix UpdatedLagrangian::ReferenceConfigurationDeformationGradient(const IndexType PointNumber) const
-{
-    if (!mF0Computed)
-        return mF0[PointNumber];
+    const SizeType mat_size = num_nodes * dim;
+    if (rLeftHandSideMatrix.size1() != mat_size) rLeftHandSideMatrix.resize(mat_size, mat_size, false);
+    noalias(rLeftHandSideMatrix) = ZeroMatrix(mat_size, mat_size);
+    if (rRightHandSideVector.size() != mat_size) rRightHandSideVector.resize(mat_size, false);
+    noalias(rRightHandSideVector) = ZeroVector(mat_size);
 
-    const SizeType dimension = this->GetGeometry().WorkingSpaceDimension();
+    const auto& integration_points = r_geom.IntegrationPoints(mThisIntegrationMethod);
+    ConstitutiveLaw::Parameters cl_params(r_geom, GetProperties(), rCurrentProcessInfo);
+    Flags& cl_options = cl_params.GetOptions();
+    cl_options.Set(ConstitutiveLaw::USE_ELEMENT_PROVIDED_STRAIN, UseElementProvidedStrain()); // True for UL (strain rate)
+    cl_options.Set(ConstitutiveLaw::COMPUTE_STRESS, true);
+    cl_options.Set(ConstitutiveLaw::COMPUTE_CONSTITUTIVE_TENSOR, true); // Tangent for LHS
 
-    return IdentityMatrix(dimension);
-}
+    cl_params.SetStrainVector(const_vars.StrainVector); // CL reads strain rate (D) from here
+    cl_params.SetStressVector(const_vars.StressVector); // CL writes Cauchy stress sigma_n+1 here
+    cl_params.SetConstitutiveMatrix(const_vars.D);      // CL writes C_tangent here
 
-/***********************************************************************************/
-/***********************************************************************************/
+    const Matrix& N_container = r_geom.ShapeFunctionsValues(mThisIntegrationMethod);
 
-void UpdatedLagrangian::CalculateOnIntegrationPoints(
-    const Variable<bool>& rVariable,
-    std::vector<bool>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    const bool f_computed = mF0Computed;
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = false;
-    BaseSolidElement::CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = f_computed;
-}
+    for (IndexType i = 0; i < integration_points.size(); ++i) {
+        SolidElementUtilities::CalculateKinematicVariablesUpdatedLagrangian(
+            kin_vars, i, mThisIntegrationMethod, r_geom, rCurrentProcessInfo, true);
+        // kin_vars.DN_DX is dN/dx (current config), kin_vars.B is for strain rate D, kin_vars.F is df (or L*dt)
 
-/***********************************************************************************/
-/***********************************************************************************/
+        // Strain rate D = B_UL * v_nodes
+        noalias(const_vars.StrainVector) = prod(kin_vars.B, kin_vars.Displacements); // Displacements here are velocities
+        cl_params.SetStrainVector(const_vars.StrainVector); // Set strain rate for CL
 
-void UpdatedLagrangian::CalculateOnIntegrationPoints(
-    const Variable<int>& rVariable,
-    std::vector<int>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    const bool f_computed = mF0Computed;
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = false;
-    BaseSolidElement::CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = f_computed;
-}
+        cl_params.SetShapeFunctionsValues(kin_vars.N);
+        cl_params.SetDeformationGradientF(kin_vars.F); // Set incremental deformation gradient df (or L*dt)
+        cl_params.SetDeterminantF(kin_vars.detF);      // Set det(df)
 
-/***********************************************************************************/
-/***********************************************************************************/
+        // TODO: Handle F0 history for CLs that need F_total = df * F_n
+        // cl_params.SetDeformationGradientF(mF0_history[i]); // Pass F_n if CL uses it
+        // Then after CL call: mF0_history[i] = prod(kin_vars.F, mF0_history[i]); // Update F_n+1 = df * F_n
 
-void UpdatedLagrangian::CalculateOnIntegrationPoints(
-    const Variable<double>& rVariable,
-    std::vector<double>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    if (rVariable == REFERENCE_DEFORMATION_GRADIENT_DETERMINANT) {
-        if (rValues.size() != mConstitutiveLawVector.size())
-            rValues.resize(mConstitutiveLawVector.size());
+        bool is_rotated = SolidElementUtilities::IsElementRotated(*this, mConstitutiveLawVector[i]);
+        // For UL, rotation is typically handled by objective stress rates within CL.
+        // If CL expects pre-rotated inputs (strain rate D), then rotation utilities would be used here.
+        // Assuming CL handles objectivity.
 
-        for ( IndexType point_number = 0; point_number < mConstitutiveLawVector.size(); ++point_number )
-            rValues[point_number] = mDetF0[point_number];
-    } else {
-        const bool f_computed = mF0Computed;
-        if (rCurrentProcessInfo[STEP] > 1) mF0Computed = false;
-        BaseSolidElement::CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-        if (rCurrentProcessInfo[STEP] > 1) mF0Computed = f_computed;
+        mConstitutiveLawVector[i]->CalculateMaterialResponse(cl_params, GetStressMeasure());
+        // const_vars.StressVector (Cauchy sigma_n+1) and const_vars.D (tangent C) are now populated
+
+        double integration_weight = SolidElementUtilities::GetIntegrationWeight(integration_points, i, kin_vars.detJ0, dim, GetProperties()); // detJ0 here is detJ_current
+
+        // LHS: Material part (B_UL^T * C_tangent * B_UL * w)
+        SolidElementUtilities::CalculateMaterialStiffnessMatrix(rLeftHandSideMatrix, kin_vars.B, const_vars.D, integration_weight);
+
+        // LHS: Geometric part (Kg_UL * w) using current Cauchy stress sigma_n+1
+        Matrix Kg_gauss(mat_size, mat_size);
+        // DN_DX for Kg is dN/dx (current config), Stress is Cauchy sigma_n+1
+        StructuralMechanicsElementUtilities::CalculateKgMatrix(Kg_gauss, kin_vars.DN_DX, const_vars.StressVector, integration_weight, dim, num_nodes);
+        rLeftHandSideMatrix += Kg_gauss;
+
+        // RHS
+        array_1d<double, 3> body_force = SolidElementUtilities::GetBodyForce(*this, integration_points, i);
+        SolidElementUtilities::AddBodyForceContribution(kin_vars.N, rCurrentProcessInfo, body_force, rRightHandSideVector, integration_weight, dim, num_nodes);
+        SolidElementUtilities::CalculateAndAddInternalForces(rRightHandSideVector, kin_vars.B, const_vars.StressVector, integration_weight);
     }
+    KRATOS_CATCH("")
 }
 
-/***********************************************************************************/
-/***********************************************************************************/
+// Implement other stubs: LHS, RHS, Mass, Damping, EqID, Dofs, GetValues, Check, Specs, COIP, Info, save/load
+// These will be very similar to TotalLagrangian/SmallDisplacement, adapted for UL where necessary.
+void UpdatedLagrangian::ResetConstitutiveLaw() { /* Similar to TotalLagrangian */ }
+void UpdatedLagrangian::InitializeSolutionStep( const ProcessInfo& rCurrentProcessInfo ) { /* Similar to TotalLagrangian, manage F0_history if needed */ }
+void UpdatedLagrangian::FinalizeSolutionStep( const ProcessInfo& rCurrentProcessInfo ) { /* Similar to TotalLagrangian, manage F0_history if needed */ }
+void UpdatedLagrangian::InitializeNonLinearIteration( const ProcessInfo& rCurrentProcessInfo ) { /* Usually empty */ }
+void UpdatedLagrangian::FinalizeNonLinearIteration( const ProcessInfo& rCurrentProcessInfo ) { /* Usually empty */ }
 
-void UpdatedLagrangian::CalculateOnIntegrationPoints(
-    const Variable<array_1d<double, 3>>& rVariable,
-    std::vector<array_1d<double, 3>>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    const bool f_computed = mF0Computed;
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = false;
-    BaseSolidElement::CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = f_computed;
+void UpdatedLagrangian::CalculateLeftHandSide(MatrixType& rLeftHandSideMatrix, const ProcessInfo& rCurrentProcessInfo) { VectorType temp_rhs; CalculateLocalSystem(rLeftHandSideMatrix, temp_rhs, rCurrentProcessInfo); }
+void UpdatedLagrangian::CalculateRightHandSide(VectorType& rRightHandSideVector, const ProcessInfo& rCurrentProcessInfo) { MatrixType temp_lhs; CalculateLocalSystem(temp_lhs, rRightHandSideVector, rCurrentProcessInfo); }
+void UpdatedLagrangian::CalculateMassMatrix(MatrixType& rMassMatrix, const ProcessInfo& rCurrentProcessInfo) { /* Adapt from TotalLagrangian, use current volume for consistent mass */ }
+void UpdatedLagrangian::CalculateDampingMatrix(MatrixType& rDampingMatrix, const ProcessInfo& rCurrentProcessInfo) { /* Adapt from TotalLagrangian */ }
+
+void UpdatedLagrangian::EquationIdVector(EquationIdVectorType& rResult, const ProcessInfo& rCurrentProcessInfo) const { /* Same as TotalLagrangian/SmallDisplacement */ }
+void UpdatedLagrangian::GetDofList(DofsVectorType& rElementalDofList, const ProcessInfo& rCurrentProcessInfo) const { /* Same as TotalLagrangian/SmallDisplacement */ }
+void UpdatedLagrangian::GetValuesVector(Vector& rValues, int Step) const { /* Same as TotalLagrangian/SmallDisplacement */ }
+void UpdatedLagrangian::GetFirstDerivativesVector(Vector& rValues, int Step) const { /* Same as TotalLagrangian/SmallDisplacement */ }
+void UpdatedLagrangian::GetSecondDerivativesVector(Vector& rValues, int Step) const { /* Same as TotalLagrangian/SmallDisplacement */ }
+
+void UpdatedLagrangian::AddExplicitContribution(const VectorType& rRHSVector, const Variable<VectorType>& rRHSVariable, const Variable<double>& rDestinationVariable, const ProcessInfo& rCurrentProcessInfo) { /* Same as TotalLagrangian/SmallDisplacement */ }
+void UpdatedLagrangian::AddExplicitContribution(const VectorType& rRHSVector, const Variable<VectorType>& rRHSVariable, const Variable<array_1d<double,3>>& rDestinationVariable, const ProcessInfo& rCurrentProcessInfo) { /* Same as TotalLagrangian/SmallDisplacement */ }
+
+int UpdatedLagrangian::Check(const ProcessInfo& rCurrentProcessInfo) const {
+    KRATOS_TRY
+    int check = Element::Check(rCurrentProcessInfo);
+    check = SolidElementUtilities::SolidElementCheck(*this, rCurrentProcessInfo, mConstitutiveLawVector);
+    // Add UL specific checks if any (e.g., det(df) > 0 if df is computed and used)
+    return check;
+    KRATOS_CATCH("")
+}
+const Parameters UpdatedLagrangian::GetSpecifications() const {
+    Parameters specs = SolidElementUtilities::GetDefaultSolidSpecifications(GetGeometry().WorkingSpaceDimension());
+    specs["framework"].SetString("updated_lagrangian"); // Or Eulerian if CL handles rates in spatial frame
+    return specs;
 }
 
-/***********************************************************************************/
-/***********************************************************************************/
+void UpdatedLagrangian::CalculateOnIntegrationPoints(const Variable<double>& rVariable, std::vector<double>& rOutput, const ProcessInfo& rCurrentProcessInfo) { /* Adapt from TotalLagrangian, use UL kinematics */ }
+void UpdatedLagrangian::CalculateOnIntegrationPoints(const Variable<Vector>& rVariable, std::vector<Vector>& rOutput, const ProcessInfo& rCurrentProcessInfo) { /* Adapt from TotalLagrangian, use UL kinematics */ }
+void UpdatedLagrangian::CalculateOnIntegrationPoints(const Variable<Matrix>& rVariable, std::vector<Matrix>& rOutput, const ProcessInfo& rCurrentProcessInfo) { /* Adapt from TotalLagrangian, use UL kinematics */ }
+void UpdatedLagrangian::CalculateOnIntegrationPoints(const Variable<array_1d<double,3>>& rVariable, std::vector<array_1d<double,3>>& rOutput, const ProcessInfo& rCurrentProcessInfo) { /* Adapt from TotalLagrangian */ }
 
-void UpdatedLagrangian::CalculateOnIntegrationPoints(
-    const Variable<array_1d<double, 6>>& rVariable,
-    std::vector<array_1d<double, 6>>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    const bool f_computed = mF0Computed;
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = false;
-    BaseSolidElement::CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = f_computed;
+void UpdatedLagrangian::SetValuesOnIntegrationPoints(const Variable<double>& rVariable, const std::vector<double>& rValues, const ProcessInfo& rCurrentProcessInfo) { /* Same as TotalLagrangian */ }
+// ... other SetValuesOnIntegrationPoints ... (copy from TotalLagrangian and change class name in KRATOS_WARNING)
+
+std::string UpdatedLagrangian::Info() const { return "Updated Lagrangian Element #" + std::to_string(Id()); }
+void UpdatedLagrangian::PrintInfo(std::ostream& rOStream) const { rOStream << Info(); }
+void UpdatedLagrangian::PrintData(std::ostream& rOStream) const { pGetGeometry()->PrintData(rOStream); }
+
+void UpdatedLagrangian::save(Serializer& rSerializer) const {
+    KRATOS_SERIALIZE_SAVE_BASE_CLASS(rSerializer, Element);
+    int IntMethod = int(mThisIntegrationMethod);
+    rSerializer.save("IntegrationMethod", IntMethod);
+    rSerializer.save("ConstitutiveLawVector", mConstitutiveLawVector);
+    // KRATOS_SERIALIZE_SAVE("F0_history", mF0_history); // If F0 history is used
+}
+void UpdatedLagrangian::load(Serializer& rSerializer) {
+    KRATOS_SERIALIZE_LOAD_BASE_CLASS(rSerializer, Element);
+    int IntMethod;
+    rSerializer.load("IntegrationMethod", IntMethod);
+    mThisIntegrationMethod = IntegrationMethod(IntMethod);
+    rSerializer.load("ConstitutiveLawVector", mConstitutiveLawVector);
+    // KRATOS_SERIALIZE_LOAD("F0_history", mF0_history); // If F0 history is used
 }
 
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::CalculateOnIntegrationPoints(
-    const Variable<Vector>& rVariable,
-    std::vector<Vector>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    const bool f_computed = mF0Computed;
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = false;
-    BaseSolidElement::CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-    if (rCurrentProcessInfo[STEP] > 1) mF0Computed = f_computed;
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::CalculateOnIntegrationPoints(
-    const Variable<Matrix>& rVariable,
-    std::vector<Matrix>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    if (rVariable == REFERENCE_DEFORMATION_GRADIENT) {
-        if (rValues.size() != mConstitutiveLawVector.size())
-            rValues.resize(mConstitutiveLawVector.size());
-
-        for ( IndexType point_number = 0; point_number < mConstitutiveLawVector.size(); ++point_number )
-            rValues[point_number] = mF0[point_number];
-    } else {
-        const bool f_computed = mF0Computed;
-        if (rCurrentProcessInfo[STEP] > 1) mF0Computed = false;
-        BaseSolidElement::CalculateOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-        if (rCurrentProcessInfo[STEP] > 1) mF0Computed = f_computed;
-    }
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::SetValuesOnIntegrationPoints(
-    const Variable<double>& rVariable,
-    const std::vector<double>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    if (rVariable == REFERENCE_DEFORMATION_GRADIENT_DETERMINANT) {
-        KRATOS_ERROR_IF(rValues.size() != mConstitutiveLawVector.size()) << "Can not set REFERENCE_DEFORMATION_GRADIENT_DETERMINANT, expected size: " << mConstitutiveLawVector.size() << " current size: " << rValues.size() << std::endl;
-
-        for ( IndexType point_number = 0; point_number < mConstitutiveLawVector.size(); ++point_number ) {
-            mDetF0[point_number] = rValues[point_number];
-        }
-    } else {
-        BaseSolidElement::SetValuesOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-    }
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::SetValuesOnIntegrationPoints(
-    const Variable<Matrix>& rVariable,
-    const std::vector<Matrix>& rValues,
-    const ProcessInfo& rCurrentProcessInfo
-    )
-{
-    if (rVariable == REFERENCE_DEFORMATION_GRADIENT) {
-        KRATOS_ERROR_IF(rValues.size() != mConstitutiveLawVector.size()) << "Can not set REFERENCE_DEFORMATION_GRADIENT, expected size: " << mConstitutiveLawVector.size() << " current size: " << rValues.size() << std::endl;
-
-        for ( IndexType point_number = 0; point_number < mConstitutiveLawVector.size(); ++point_number )
-            mF0[point_number] = rValues[point_number];
-    } else {
-        BaseSolidElement::SetValuesOnIntegrationPoints(rVariable, rValues, rCurrentProcessInfo);
-    }
-}
-
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::save( Serializer& rSerializer ) const
-{
-    KRATOS_SERIALIZE_SAVE_BASE_CLASS( rSerializer, BaseSolidElement );
-    rSerializer.save("mF0Computed", mF0Computed);
-    rSerializer.save("mDetF0", mDetF0);
-    rSerializer.save("mF0", mF0);
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-void UpdatedLagrangian::load( Serializer& rSerializer )
-{
-    KRATOS_SERIALIZE_LOAD_BASE_CLASS( rSerializer, BaseSolidElement );
-    rSerializer.load("mF0Computed", mF0Computed);
-    rSerializer.load("mDetF0", mDetF0);
-    rSerializer.load("mF0", mF0);
-}
-
-} // Namespace Kratos
-
-
+} // namespace Kratos

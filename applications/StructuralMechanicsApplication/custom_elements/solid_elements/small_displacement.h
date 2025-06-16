@@ -1,330 +1,116 @@
-// KRATOS  ___|  |                   |                   |
-//       \___ \  __|  __| |   |  __| __| |   |  __| _` | |
-//             | |   |    |   | (    |   |   | |   (   | |
-//       _____/ \__|_|   \__,_|\___|\__|\__,_|_|  \__,_|_| MECHANICS
-//
-//  License:         BSD License
-//                   license: StructuralMechanicsApplication/license.txt
-//
-//  Main authors:    Riccardo Rossi
-//                   Vicente Mataix Ferrandiz
-//
-
 #pragma once
 
-// System includes
-
-// External includes
-
-// Project includes
 #include "includes/define.h"
-#include "base_solid_element.h"
+#include "includes/element.h" // Inherit from Element
 #include "includes/variables.h"
+#include "includes/constitutive_law.h" // For mConstitutiveLawVector
+#include "custom_utilities/solid_elements_utilities.h" // Include the new utilities
 
 namespace Kratos
 {
-///@name Kratos Globals
-///@{
-///@}
-///@name Type Definitions
-///@{
-///@}
-///@name  Enum's
-///@{
-
-///@}
-///@name  Functions
-///@{
-
-///@}
-///@name Kratos Classes
-///@{
-
-/**
- * @class SmallDisplacement
- * @ingroup StructuralMechanicsApplication
- * @brief Small displacement element for 2D and 3D geometries.
- * @details Implements a small displacement definition for structural analysis. This works for arbitrary geometries in 2D and 3D
- * @author Riccardo Rossi
- * @author Vicente Mataix Ferrandiz
- */
 
 class KRATOS_API(STRUCTURAL_MECHANICS_APPLICATION) SmallDisplacement
-    : public BaseSolidElement
+    : public Element // Changed inheritance
 {
 public:
-    ///@name Type Definitions
-    ///@{
-    ///Reference type definition for constitutive laws
-    typedef ConstitutiveLaw ConstitutiveLawType;
-    ///Pointer type for constitutive laws
-    typedef ConstitutiveLawType::Pointer ConstitutiveLawPointerType;
-    ///Type definition for integration methods
-    typedef GeometryData::IntegrationMethod IntegrationMethod;
-
-    /// The base element type
-    typedef BaseSolidElement BaseType;
-
-    /// The definition of the index type
-    typedef std::size_t IndexType;
-
-    /// The definition of the sizetype
-    typedef std::size_t SizeType;
-
-    /// Counted pointer of SmallDisplacement
     KRATOS_CLASS_INTRUSIVE_POINTER_DEFINITION(SmallDisplacement);
 
-    ///@}
-    ///@name Life Cycle
-    ///@{
+    typedef Element BaseType; // BaseType is now Element
+    typedef BaseType::IndexType IndexType;
+    typedef BaseType::SizeType SizeType;
+    typedef BaseType::MatrixType MatrixType;
+    typedef BaseType::VectorType VectorType;
+    typedef BaseType::EquationIdVectorType EquationIdVectorType;
+    typedef BaseType::DofsVectorType DofsVectorType;
+    typedef BaseType::IntegrationMethod IntegrationMethod; // Keep this typedef
+    typedef ConstitutiveLaw ConstitutiveLawType;
+    typedef ConstitutiveLawType::Pointer ConstitutiveLawPointerType;
 
-    /// Default constructor.
+
     SmallDisplacement(IndexType NewId, GeometryType::Pointer pGeometry);
     SmallDisplacement(IndexType NewId, GeometryType::Pointer pGeometry, PropertiesType::Pointer pProperties);
-
-    // Copy constructor
-    SmallDisplacement(SmallDisplacement const& rOther)
-        :BaseType(rOther)
-    {};
-
-    /// Destructor.
     ~SmallDisplacement() override;
 
-    ///@}
-    ///@name Operators
-    ///@{
-    ///@}
-    ///@name Operations
-    ///@{
+    Element::Pointer Create(IndexType NewId, NodesArrayType const& ThisNodes, PropertiesType::Pointer pProperties) const override;
+    Element::Pointer Create(IndexType NewId, GeometryType::Pointer pGeom, PropertiesType::Pointer pProperties) const override;
+    Element::Pointer Clone(IndexType NewId, NodesArrayType const& rThisNodes) const override;
 
-    /**
-     * @brief Creates a new element
-     * @param NewId The Id of the new created element
-     * @param pGeom The pointer to the geometry of the element
-     * @param pProperties The pointer to property
-     * @return The pointer to the created element
-     */
-    Element::Pointer Create(
-        IndexType NewId,
-        GeometryType::Pointer pGeom,
-        PropertiesType::Pointer pProperties
-        ) const override;
+    void Initialize(const ProcessInfo& rCurrentProcessInfo) override;
+    void ResetConstitutiveLaw() override;
+    void InitializeSolutionStep(const ProcessInfo& rCurrentProcessInfo) override;
+    void FinalizeSolutionStep(const ProcessInfo& rCurrentProcessInfo) override;
+    void InitializeNonLinearIteration(const ProcessInfo& rCurrentProcessInfo) override;
+    void FinalizeNonLinearIteration(const ProcessInfo& rCurrentProcessInfo) override;
 
-    /**
-     * @brief Creates a new element
-     * @param NewId The Id of the new created element
-     * @param ThisNodes The array containing nodes
-     * @param pProperties The pointer to property
-     * @return The pointer to the created element
-     */
-    Element::Pointer Create(
-        IndexType NewId,
-        NodesArrayType const& ThisNodes,
-        PropertiesType::Pointer pProperties
-        ) const override;
+    void CalculateLocalSystem(MatrixType& rLeftHandSideMatrix, VectorType& rRightHandSideVector, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateLeftHandSide(MatrixType& rLeftHandSideMatrix, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateRightHandSide(VectorType& rRightHandSideVector, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateMassMatrix(MatrixType& rMassMatrix, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateDampingMatrix(MatrixType& rDampingMatrix, const ProcessInfo& rCurrentProcessInfo) override;
 
-    /**
-     * @brief It creates a new element pointer and clones the previous element data
-     * @param NewId the ID of the new element
-     * @param ThisNodes the nodes of the new element
-     * @param pProperties the properties assigned to the new element
-     * @return a Pointer to the new element
-     */
-    Element::Pointer Clone (
-        IndexType NewId,
-        NodesArrayType const& rThisNodes
-        ) const override;
+    void EquationIdVector(EquationIdVectorType& rResult, const ProcessInfo& rCurrentProcessInfo) const override;
+    void GetDofList(DofsVectorType& rElementalDofList, const ProcessInfo& rCurrentProcessInfo) const override;
 
-    ///@}
-    ///@name Access
-    ///@{
+    void GetValuesVector(Vector& rValues, int Step = 0) const override;
+    void GetFirstDerivativesVector(Vector& rValues, int Step = 0) const override;
+    void GetSecondDerivativesVector(Vector& rValues, int Step = 0) const override;
 
-    ///@}
-    ///@name Inquiry
-    ///@{
-    ///@}
-    ///@name Input and output
-    ///@{
+    void AddExplicitContribution(const VectorType& rRHSVector, const Variable<VectorType>& rRHSVariable, const Variable<double>& rDestinationVariable, const ProcessInfo& rCurrentProcessInfo) override;
+    void AddExplicitContribution(const VectorType& rRHSVector, const Variable<VectorType>& rRHSVariable, const Variable<array_1d<double,3>>& rDestinationVariable, const ProcessInfo& rCurrentProcessInfo) override;
 
-    /// Turn back information as a string.
-    std::string Info() const override
-    {
-        std::stringstream buffer;
-        buffer << "Small Displacement Solid Element #" << Id() << "\nConstitutive law: " << BaseType::mConstitutiveLawVector[0]->Info();
-        return buffer.str();
-    }
+    int Check(const ProcessInfo& rCurrentProcessInfo) const override;
 
-    /// Print information about this object.
-    void PrintInfo(std::ostream& rOStream) const override
-    {
-        rOStream << "Small Displacement Solid Element #" << Id() << "\nConstitutive law: " << BaseType::mConstitutiveLawVector[0]->Info();
-    }
+    // CalculateOnIntegrationPoints (abbreviated for brevity in this draft - will need full list)
+    void CalculateOnIntegrationPoints(const Variable<double>& rVariable, std::vector<double>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateOnIntegrationPoints(const Variable<Vector>& rVariable, std::vector<Vector>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateOnIntegrationPoints(const Variable<Matrix>& rVariable, std::vector<Matrix>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateOnIntegrationPoints(const Variable<array_1d<double,3>>& rVariable, std::vector<array_1d<double,3>>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
+    // ... other CalculateOnIntegrationPoints and SetValuesOnIntegrationPoints if needed
+    void SetValuesOnIntegrationPoints(const Variable<double>& rVariable, const std::vector<double>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<Vector>& rVariable, const std::vector<Vector>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<Matrix>& rVariable, const std::vector<Matrix>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<array_1d<double,3>>& rVariable, const std::vector<array_1d<double,3>>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<ConstitutiveLaw::Pointer>& rVariable, const std::vector<ConstitutiveLaw::Pointer>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<bool>& rVariable, const std::vector<bool>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<int>& rVariable, const std::vector<int>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<array_1d<double,6>>& rVariable, const std::vector<array_1d<double,6>>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
 
-    /// Print object's data.
-    void PrintData(std::ostream& rOStream) const override
-    {
-        pGetGeometry()->PrintData(rOStream);
-    }
 
-    ///@}
-    ///@name Friends
-    ///@{
-    ///@}
+    std::string Info() const override;
+    void PrintInfo(std::ostream& rOStream) const override;
+    void PrintData(std::ostream& rOStream) const override;
+    const Parameters GetSpecifications() const override;
 
 protected:
-    ///@name Protected static Member Variables
-    ///@{
-    ///@}
-    ///@name Protected member Variables
-    ///@{
+    // SmallDisplacement() : Element() {} // Protected default constructor for serialization if needed by KRATOS_SERIALIZE_LOAD_BASE_CLASS
 
-    ///@}
-    ///@name Protected Operators
-    ///@{
+    // Members copied from BaseSolidElement
+    IntegrationMethod mThisIntegrationMethod;
+    std::vector<ConstitutiveLaw::Pointer> mConstitutiveLawVector;
 
-    SmallDisplacement() : BaseSolidElement()
-    {
-    }
+    // Methods that were virtual in BaseSolidElement, now need to be implemented or are specific
+    virtual bool UseElementProvidedStrain() const;
+    // This was virtual in BaseSolidElement, SmallDisplacement overrides it.
+    // If it's always true for SmallDisplacement, it can be hardcoded or made non-virtual.
 
-     /**
-     * @brief This method returns if the element provides the strain
-     */
-    bool UseElementProvidedStrain() const override;
+    // The following are no longer needed as protected virtuals; their logic is in CalculateAll or utilities
+    // void CalculateAll(...) // This is now the public CalculateLocalSystem etc.
+    // void CalculateKinematicVariables(...) // Logic moved
+    // void SetConstitutiveVariables(...) // Logic moved
+    // void CalculateB(...) // Logic moved
+    // void ComputeEquivalentF(...) // Logic moved
 
-    /**
-     * @brief This functions calculates both the RHS and the LHS
-     * @param rLeftHandSideMatrix The LHS
-     * @param rRightHandSideVector The RHS
-     * @param rCurrentProcessInfo The current process info instance
-     * @param CalculateStiffnessMatrixFlag The flag to set if compute the LHS
-     * @param CalculateResidualVectorFlag The flag to set if compute the RHS
-     */
-    void CalculateAll(
-        MatrixType& rLeftHandSideMatrix,
-        VectorType& rRightHandSideVector,
-        const ProcessInfo& rCurrentProcessInfo,
-        const bool CalculateStiffnessMatrixFlag,
-        const bool CalculateResidualVectorFlag
-        ) override;
+    // Copied from BaseSolidElement for direct use, or to be replaced by utility calls
+    ConstitutiveLaw::StressMeasure GetStressMeasure() const;
 
-    /**
-     * @brief This functions updates the kinematics variables
-     * @param rThisKinematicVariables The kinematic variables to be calculated
-     * @param PointNumber The integration point considered
-     */
-    void CalculateKinematicVariables(
-        KinematicVariables& rThisKinematicVariables,
-        const IndexType PointNumber,
-        const GeometryType::IntegrationMethod& rIntegrationMethod
-        ) override;
-
-    /**
-     * @brief This functions updates the data structure passed to the CL
-     * @param rThisKinematicVariables The kinematic variables to be calculated
-     * @param rThisConstitutiveVariables The constitutive variables
-     * @param rValues The CL parameters
-     * @param PointNumber The integration point considered
-     * @param IntegrationPoints The list of integration points
-     */
-    void SetConstitutiveVariables(
-        KinematicVariables& rThisKinematicVariables,
-        ConstitutiveVariables& rThisConstitutiveVariables,
-        ConstitutiveLaw::Parameters& rValues,
-        const IndexType PointNumber,
-        const GeometryType::IntegrationPointsArrayType& IntegrationPoints
-        ) override;
-
-    /**
-     * Calculation of the Deformation Matrix B
-     * @param rB The deformation matrix
-     * @param rDN_DX The derivatives of the shape functions
-     * @param IntegrationPoints The array containing the integration points
-     * @param PointNumber The integration point considered
-     */
-    virtual void CalculateB(
-        Matrix& rB,
-        const Matrix& rDN_DX,
-        const GeometryType::IntegrationPointsArrayType& IntegrationPoints,
-        const IndexType PointNumber
-        ) const;
-
-    /**
-     * @brief Calculation of the equivalent deformation gradient
-     * @param rF The deformation gradient F
-     * @param StrainVector The strain tensor (Voigt notation)
-     */
-    virtual void ComputeEquivalentF(
-        Matrix& rF,
-        const Vector& StrainVector
-        ) const;
-
-    ///@}
-    ///@name Protected Operations
-    ///@{
-    ///@}
-    ///@name Protected  Access
-    ///@{
-    ///@}
-    ///@name Protected Inquiry
-    ///@{
-    ///@}
-    ///@name Protected LifeCycle
-    ///@{
-    ///@}
 
 private:
-    ///@name Static Member Variables
-    ///@{
-
-    ///@}
-    ///@name Member Variables
-    ///@{
-
-
-    ///@}
-    ///@name Private Operators
-    ///@{
-
-    ///@}
-    ///@name Private Operations
-    ///@{
-
-
-    ///@}
-    ///@name Private  Access
-    ///@{
-    ///@}
-
-    ///@}
-    ///@name Serialization
-    ///@{
     friend class Serializer;
-
-    // A private default constructor necessary for serialization
-
     void save(Serializer& rSerializer) const override;
-
     void load(Serializer& rSerializer) override;
 
-    ///@name Private Inquiry
-    ///@{
-    ///@}
-    ///@name Un accessible methods
-    ///@{
-    /// Assignment operator.
-    //SmallDisplacement& operator=(const SmallDisplacement& rOther);
-    /// Copy constructor.
-    //SmallDisplacement(const SmallDisplacement& rOther);
-    ///@}
+    SmallDisplacement() : Element() {} // Private default constructor for serialization
 
 }; // Class SmallDisplacement
 
-///@}
-///@name Type Definitions
-///@{
-///@}
-///@name Input and output
-///@{
-///@}
-
-} // namespace Kratos.
+} // namespace Kratos

@@ -1,344 +1,103 @@
-// KRATOS  ___|  |                   |                   |
-//       \___ \  __|  __| |   |  __| __| |   |  __| _` | |
-//             | |   |    |   | (    |   |   | |   (   | |
-//       _____/ \__|_|   \__,_|\___|\__|\__,_|_|  \__,_|_| MECHANICS
-//
-//  License:         BSD License
-//                   license: StructuralMechanicsApplication/license.txt
-//
-//  Main authors:    Riccardo Rossi
-//                   Vicente Mataix Ferrandiz
-//
-
 #pragma once
 
-// System includes
-
-// External include
-
-// Project includes
 #include "includes/define.h"
-#include "base_solid_element.h"
+#include "includes/element.h"
 #include "includes/variables.h"
+#include "includes/constitutive_law.h"
+#include "custom_utilities/solid_elements_utilities.h"
 
 namespace Kratos
 {
-///@name Kratos Globals
-///@{
-///@}
-///@name Type Definitions
-///@{
-///@}
-///@name  Enum's
-///@{
 
-///@}
-///@name  Functions
-///@{
-
-///@}
-///@name Kratos Classes
-///@{
-
-/**
- * @class TotalLagrangian
- * @ingroup StructuralMechanicsApplication
- * @brief Total Lagrangian element for 2D and 3D geometries.
- * @details Implements a total Lagrangian definition for structural analysis. This works for arbitrary geometries in 2D and 3D
- * @author Riccardo Rossi
- * @author Vicente Mataix Ferrandiz
- */
 class KRATOS_API(STRUCTURAL_MECHANICS_APPLICATION) TotalLagrangian
-    : public BaseSolidElement
+    : public Element
 {
 public:
-    ///@name Type Definitions
-    ///@{
-
-    ///Reference type definition for constitutive laws
-    typedef ConstitutiveLaw ConstitutiveLawType;
-
-    ///Pointer type for constitutive laws
-    typedef ConstitutiveLawType::Pointer ConstitutiveLawPointerType;
-
-    ///Type definition for integration methods
-    typedef GeometryData::IntegrationMethod IntegrationMethod;
-
-    /// The base element type
-    typedef BaseSolidElement BaseType;
-
-    /// The definition of the index type
-    typedef std::size_t IndexType;
-
-    /// The definition of the sizetype
-    typedef std::size_t SizeType;
-
-    /// Counted pointer of TotalLagrangian
     KRATOS_CLASS_INTRUSIVE_POINTER_DEFINITION(TotalLagrangian);
 
-    ///@}
-    ///@name Life Cycle
-    ///@{
+    typedef Element BaseType;
+    typedef BaseType::IndexType IndexType;
+    typedef BaseType::SizeType SizeType;
+    typedef BaseType::MatrixType MatrixType;
+    typedef BaseType::VectorType VectorType;
+    typedef BaseType::EquationIdVectorType EquationIdVectorType;
+    typedef BaseType::DofsVectorType DofsVectorType;
+    typedef GeometryData::IntegrationMethod IntegrationMethod;
+    typedef ConstitutiveLaw ConstitutiveLawType;
+    typedef ConstitutiveLawType::Pointer ConstitutiveLawPointerType;
 
-    /// Default constructor.
     TotalLagrangian(IndexType NewId, GeometryType::Pointer pGeometry);
     TotalLagrangian(IndexType NewId, GeometryType::Pointer pGeometry, PropertiesType::Pointer pProperties);
-
-    // Copy constructor
-    TotalLagrangian(TotalLagrangian const& rOther)
-        :BaseType(rOther)
-    {};
-
-    /// Destructor.
     ~TotalLagrangian() override;
 
-    ///@}
-    ///@name Operators
-    ///@{
-    ///@}
-    ///@name Operations
-    ///@{
+    Element::Pointer Create(IndexType NewId, NodesArrayType const& ThisNodes, PropertiesType::Pointer pProperties) const override;
+    Element::Pointer Create(IndexType NewId, GeometryType::Pointer pGeom, PropertiesType::Pointer pProperties) const override;
+    Element::Pointer Clone(IndexType NewId, NodesArrayType const& rThisNodes) const override;
 
-    /**
-     * @brief Creates a new element
-     * @param NewId The Id of the new created element
-     * @param pGeom The pointer to the geometry of the element
-     * @param pProperties The pointer to property
-     * @return The pointer to the created element
-     */
-    Element::Pointer Create(
-        IndexType NewId,
-        GeometryType::Pointer pGeom,
-        PropertiesType::Pointer pProperties
-        ) const override;
+    void Initialize(const ProcessInfo& rCurrentProcessInfo) override;
+    void ResetConstitutiveLaw() override;
+    void InitializeSolutionStep(const ProcessInfo& rCurrentProcessInfo) override;
+    void FinalizeSolutionStep(const ProcessInfo& rCurrentProcessInfo) override;
+    void InitializeNonLinearIteration(const ProcessInfo& rCurrentProcessInfo) override;
+    void FinalizeNonLinearIteration(const ProcessInfo& rCurrentProcessInfo) override;
 
-    /**
-     * @brief Creates a new element
-     * @param NewId The Id of the new created element
-     * @param ThisNodes The array containing nodes
-     * @param pProperties The pointer to property
-     * @return The pointer to the created element
-     */
-    Element::Pointer Create(
-        IndexType NewId,
-        NodesArrayType const& ThisNodes,
-        PropertiesType::Pointer pProperties
-        ) const override;
 
-    /**
-     * @brief It creates a new element pointer and clones the previous element data
-     * @param NewId the ID of the new element
-     * @param ThisNodes the nodes of the new element
-     * @param pProperties the properties assigned to the new element
-     * @return a Pointer to the new element
-     */
-    Element::Pointer Clone (
-        IndexType NewId,
-        NodesArrayType const& rThisNodes
-        ) const override;
+    void CalculateLocalSystem(MatrixType& rLeftHandSideMatrix, VectorType& rRightHandSideVector, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateLeftHandSide(MatrixType& rLeftHandSideMatrix, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateRightHandSide(VectorType& rRightHandSideVector, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateMassMatrix(MatrixType& rMassMatrix, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateDampingMatrix(MatrixType& rDampingMatrix, const ProcessInfo& rCurrentProcessInfo) override;
 
-    //std::string Info() const;
+    void EquationIdVector(EquationIdVectorType& rResult, const ProcessInfo& rCurrentProcessInfo) const override;
+    void GetDofList(DofsVectorType& rElementalDofList, const ProcessInfo& rCurrentProcessInfo) const override;
 
-    void CalculateSensitivityMatrix(const Variable<array_1d<double, 3>>& rDesignVariable,
-                                    Matrix& rOutput,
-                                    const ProcessInfo& rCurrentProcessInfo) override;
+    void GetValuesVector(Vector& rValues, int Step = 0) const override;
+    void GetFirstDerivativesVector(Vector& rValues, int Step = 0) const override;
+    void GetSecondDerivativesVector(Vector& rValues, int Step = 0) const override;
 
-    ///@}
-    ///@name Access
-    ///@{
+    void AddExplicitContribution(const VectorType& rRHSVector, const Variable<VectorType>& rRHSVariable, const Variable<double>& rDestinationVariable, const ProcessInfo& rCurrentProcessInfo) override;
+    void AddExplicitContribution(const VectorType& rRHSVector, const Variable<VectorType>& rRHSVariable, const Variable<array_1d<double,3>>& rDestinationVariable, const ProcessInfo& rCurrentProcessInfo) override;
 
-    ///@}
-    ///@name Inquiry
-    ///@{
-    ///@}
-    ///@name Input and output
-    ///@{
 
-    /// Turn back information as a string.
-    std::string Info() const override
-    {
-        std::stringstream buffer;
-        buffer << "Updated Lagrangian Solid Element #" << Id() << "\nConstitutive law: " << BaseType::mConstitutiveLawVector[0]->Info();
-        return buffer.str();
-    }
+    int Check(const ProcessInfo& rCurrentProcessInfo) const override;
+    const Parameters GetSpecifications() const override;
 
-    /// Print information about this object.
-    void PrintInfo(std::ostream& rOStream) const override
-    {
-        rOStream << "Updated Lagrangian Solid Element #" << Id() << "\nConstitutive law: " << BaseType::mConstitutiveLawVector[0]->Info();
-    }
+    // CalculateOnIntegrationPoints (declare necessary overloads)
+    void CalculateOnIntegrationPoints(const Variable<double>& rVariable, std::vector<double>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateOnIntegrationPoints(const Variable<Vector>& rVariable, std::vector<Vector>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateOnIntegrationPoints(const Variable<Matrix>& rVariable, std::vector<Matrix>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
+    void CalculateOnIntegrationPoints(const Variable<array_1d<double,3>>& rVariable, std::vector<array_1d<double,3>>& rOutput, const ProcessInfo& rCurrentProcessInfo) override;
 
-    /// Print object's data.
-    void PrintData(std::ostream& rOStream) const override
-    {
-        pGetGeometry()->PrintData(rOStream);
-    }
+    void SetValuesOnIntegrationPoints(const Variable<double>& rVariable, const std::vector<double>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<Vector>& rVariable, const std::vector<Vector>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<Matrix>& rVariable, const std::vector<Matrix>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<array_1d<double,3>>& rVariable, const std::vector<array_1d<double,3>>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<ConstitutiveLaw::Pointer>& rVariable, const std::vector<ConstitutiveLaw::Pointer>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<bool>& rVariable, const std::vector<bool>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<int>& rVariable, const std::vector<int>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
+    void SetValuesOnIntegrationPoints(const Variable<array_1d<double,6>>& rVariable, const std::vector<array_1d<double,6>>& rValues, const ProcessInfo& rCurrentProcessInfo) override;
 
-    ///@}
-    ///@name Friends
-    ///@{
-    ///@}
+
+    std::string Info() const override;
+    void PrintInfo(std::ostream& rOStream) const override;
+    void PrintData(std::ostream& rOStream) const override;
 
 protected:
-    ///@name Protected static Member Variables
-    ///@{
-    ///@}
-    ///@name Protected member Variables
-    ///@{
+    // TotalLagrangian() : Element() {} // For serialization if needed by KRATOS_SERIALIZE_LOAD_BASE_CLASS
 
-    ///@}
-    ///@name Protected Operators
-    ///@{
+    IntegrationMethod mThisIntegrationMethod;
+    std::vector<ConstitutiveLaw::Pointer> mConstitutiveLawVector;
 
-    TotalLagrangian() : BaseSolidElement()
-    {
-    }
-
-    /**
-     * @brief This functions calculates both the RHS and the LHS
-     * @param rLeftHandSideMatrix The LHS
-     * @param rRightHandSideVector The RHS
-     * @param rCurrentProcessInfo The current process info instance
-     * @param CalculateStiffnessMatrixFlag The flag to set if compute the LHS
-     * @param CalculateResidualVectorFlag The flag to set if compute the RHS
-     */
-    void CalculateAll(
-        MatrixType& rLeftHandSideMatrix,
-        VectorType& rRightHandSideVector,
-        const ProcessInfo& rCurrentProcessInfo,
-        const bool CalculateStiffnessMatrixFlag,
-        const bool CalculateResidualVectorFlag
-        ) override;
-
-    /**
-     * @brief This functions updates the kinematics variables
-     * @param rThisKinematicVariables The kinematic variables to be calculated
-     * @param PointNumber The integration point considered
-     * @param rIntegrationMethod The integration method considered
-     */
-    void CalculateKinematicVariables(
-        KinematicVariables& rThisKinematicVariables,
-        const IndexType PointNumber,
-        const GeometryType::IntegrationMethod& rIntegrationMethod
-        ) override;
-
-    /**
-     * @brief This method returns the size of the strain vector
-     */
-    std::size_t GetStrainSize() const;
-
-    ///@}
-    ///@name Protected Operations
-    ///@{
-    ///@}
-    ///@name Protected  Access
-    ///@{
-    ///@}
-    ///@name Protected Inquiry
-    ///@{
-    ///@}
-    ///@name Protected LifeCycle
-    ///@{
-    ///@}
+    // TL specific methods or overrides from BaseSolidElement logic
+    virtual ConstitutiveLaw::StressMeasure GetStressMeasure() const;
+    virtual bool UseElementProvidedStrain() const;
+    // This is typically false for Total Lagrangian as strain is derived from F by CL
 
 private:
-    ///@name Static Member Variables
-    ///@{
-
-    ///@}
-    ///@name Member Variables
-    ///@{
-
-    ///@}
-    ///@name Private Operators
-    ///@{
-
-    ///@}
-    ///@name Private Operations
-    ///@{
-
-    /**
-     * @brief This method computes the deformation matrix B
-     * @param rB The deformation matrix
-     * @param rF The deformation gradient
-     * @param rDN_DX The gradient derivative of the shape function
-     */
-    void CalculateB(Matrix& rB, Matrix const& rF, const Matrix& rDN_DX);
-
-    void Calculate2DB(Matrix& rB, const Matrix& rF, const Matrix& rDN_DX);
-
-    void Calculate3DB(Matrix& rB, const Matrix& rF, const Matrix& rDN_DX);
-
-    void CalculateAxisymmetricB(Matrix& rB, const Matrix& rF, const Matrix& rDN_DX, const Vector& rN);
-
-    void CalculateAxisymmetricF(Matrix const& rJ, Matrix const& rInvJ0, Vector const& rN, Matrix& rF);
-
-    void CalculateStress(Vector& rStrain,
-                         std::size_t IntegrationPoint,
-                         Vector& rStress,
-                         ProcessInfo const& rCurrentProcessInfo);
-
-    void CalculateStress(Matrix const& rF,
-                         std::size_t IntegrationPoint,
-                         Vector& rStress,
-                         ProcessInfo const& rCurrentProcessInfo);
-
-    void CalculateStrain(Matrix const& rF,
-                         std::size_t IntegrationPoint,
-                         Vector& rStrain,
-                         ProcessInfo const& rCurrentProcessInfo);
-
-    void CalculateShapeSensitivity(ShapeParameter Deriv,
-                                   Matrix& rDN_DX0,
-                                   Matrix& rDN_DX0_Deriv,
-                                   Matrix& rF_Deriv,
-                                   double& rDetJ0_Deriv,
-                                   std::size_t IntegrationPointIndex);
-
-    void CalculateBSensitivity(Matrix const& rDN_DX,
-                               Matrix const& rF,
-                               Matrix const& rDN_DX_Deriv,
-                               Matrix const& rF_Deriv,
-                               Matrix& rB_Deriv);
-
-
-    bool IsAxissymmetric() const;
-
-    ///@}
-    ///@name Private  Access
-    ///@{
-    ///@}
-
-    ///@}
-    ///@name Serialization
-    ///@{
     friend class Serializer;
-
-    // A private default constructor necessary for serialization
-
     void save(Serializer& rSerializer) const override;
-
     void load(Serializer& rSerializer) override;
+    TotalLagrangian() : Element() {} // Private for serialization
+};
 
-    ///@name Private Inquiry
-    ///@{
-    ///@}
-    ///@name Un accessible methods
-    ///@{
-    /// Assignment operator.
-    //TotalLagrangian& operator=(const TotalLagrangian& rOther);
-    /// Copy constructor.
-    //TotalLagrangian(const TotalLagrangian& rOther);
-    ///@}
-
-}; // Class TotalLagrangian
-
-///@}
-///@name Type Definitions
-///@{
-///@}
-///@name Input and output
-///@{
-///@}
-
-} // namespace Kratos.
+} // namespace Kratos
