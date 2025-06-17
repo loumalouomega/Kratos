@@ -96,6 +96,7 @@ option(KRATOS_USE_PCH "KRATOS_USE_PCH defines if pch will be used during the com
 
 # Future libraries deactivated by default
 option(KRATOS_FUTURE_MDSPAN "KRATOS_FUTURE_MDSPAN enables the MDSPAN Kokkos implementation. This will become the STL standard in C++23. Introducing as future proof. Default setting is OFF" OFF)
+option(KRATOS_FUTURE_STDBLAS "KRATOS_FUTURE_STDBLAS enables the stdBLAS Kokkos implementation. This is the reference implementation for the P1673 proposal for a C++ standard BLAS library. Introducing as future proof. Default setting is OFF" OFF)
 
 # If not defined mute the very verbose installation messages
 if(NOT DEFINED CMAKE_INSTALL_MESSAGE)
@@ -396,6 +397,33 @@ if(KRATOS_FUTURE_MDSPAN MATCHES ON)
 
   # Fetch mdspan
   FetchContent_MakeAvailable(mdspan)
+
+  # restore the current directory's old `COMPILE_OPTIONS`
+  set_directory_properties(PROPERTIES COMPILE_OPTIONS "${kratos_root_compile_options}")
+endif()
+
+# Future stdBLAS
+if(KRATOS_FUTURE_STDBLAS MATCHES ON)
+  # Add the definitions if required
+  ADD_DEFINITIONS(-DKRATOS_FUTURE_STDBLAS)
+
+  # Retrieve a copy of the current directory's `COMPILE_OPTIONS`
+  get_directory_property(kratos_root_compile_options COMPILE_OPTIONS)
+
+  # The following line to disable warnings might not be necessary,
+  # but is kept to maintain the original block's structure.
+  add_compile_options(-w)
+
+  FetchContent_Declare(
+    stdBLAS
+    # Using a direct URL to a tagged archive to match the original style
+    URL https://github.com/kokkos/stdBLAS/archive/refs/tags/v1.0.1.zip
+  )
+
+  # The header-only stdBLAS library does not require linking options
+
+  # Fetch stdBLAS
+  FetchContent_MakeAvailable(stdBLAS)
 
   # restore the current directory's old `COMPILE_OPTIONS`
   set_directory_properties(PROPERTIES COMPILE_OPTIONS "${kratos_root_compile_options}")
