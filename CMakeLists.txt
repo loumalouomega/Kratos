@@ -321,33 +321,6 @@ if(KRATOS_COLORED_OUTPUT MATCHES ON)
   add_definitions(-DKRATOS_COLORED_OUTPUT)
 endif(KRATOS_COLORED_OUTPUT MATCHES ON)
 
-# Future mdspan 
-if(KRATOS_FUTURE_MDSPAN MATCHES ON)
-  # Add the definitions if required
-  ADD_DEFINITIONS(-DKRATOS_FUTURE_MDSPAN)
-
-  # Retrieve a copy of the current directory's `COMPILE_OPTIONS`
-  get_directory_property(kratos_root_compile_options COMPILE_OPTIONS)
-
-  # The following line to disable warnings might not be necessary,
-  # but is kept to maintain the original block's structure.
-  add_compile_options(-w)
-
-  FetchContent_Declare(
-    mdspan
-    # Using a direct URL to a tagged archive to match the original style
-    URL https://github.com/kokkos/mdspan/archive/refs/tags/v0.7.0.zip
-  )
-
-  # The header-only mdspan library does not require linking options
-
-  # Fetch mdspan
-  FetchContent_MakeAvailable(mdspan)
-
-  # restore the current directory's old `COMPILE_OPTIONS`
-  set_directory_properties(PROPERTIES COMPILE_OPTIONS "${kratos_root_compile_options}")
-endif()
-
 # Testing
 if(KRATOS_BUILD_TESTING MATCHES ON)
   # Add the definitions if required
@@ -400,6 +373,33 @@ if(KRATOS_BUILD_BENCHMARK MATCHES ON)
   # Restore the current directory's old `COMPILE_OPTIONS`
   set_directory_properties(PROPERTIES COMPILE_OPTIONS "${kratos_root_compile_options}")
 endif(KRATOS_BUILD_BENCHMARK MATCHES ON)
+
+# Future mdspan 
+if(KRATOS_FUTURE_MDSPAN MATCHES ON)
+  # Add the definitions if required
+  ADD_DEFINITIONS(-DKRATOS_FUTURE_MDSPAN)
+
+  # Retrieve a copy of the current directory's `COMPILE_OPTIONS`
+  get_directory_property(kratos_root_compile_options COMPILE_OPTIONS)
+
+  # The following line to disable warnings might not be necessary,
+  # but is kept to maintain the original block's structure.
+  add_compile_options(-w)
+
+  FetchContent_Declare(
+    mdspan
+    # Using a direct URL to a tagged archive to match the original style
+    URL https://github.com/kokkos/mdspan/archive/refs/tags/v0.7.0.zip
+  )
+
+  # The header-only mdspan library does not require linking options
+
+  # Fetch mdspan
+  FetchContent_MakeAvailable(mdspan)
+
+  # restore the current directory's old `COMPILE_OPTIONS`
+  set_directory_properties(PROPERTIES COMPILE_OPTIONS "${kratos_root_compile_options}")
+endif()
 
 ################### PYBIND11
 
