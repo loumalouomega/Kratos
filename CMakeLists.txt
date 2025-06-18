@@ -396,7 +396,6 @@ if(KRATOS_FUTURE_MDSPAN MATCHES ON)
 
   FetchContent_Declare(
     mdspan
-    # Using a direct URL to a tagged archive to match the original style
     URL https://github.com/kokkos/mdspan/archive/refs/tags/mdspan-0.6.0.zip
   )
 
@@ -423,8 +422,8 @@ if(KRATOS_FUTURE_STDBLAS MATCHES ON)
 
   FetchContent_Declare(
     stdBLAS
-    # Using a direct URL to a tagged archive to match the original style
-    URL https://github.com/kokkos/stdBLAS/archive/refs/tags/v1.0.1.zip
+    # Using main as no Release yet
+    URL https://github.com/kokkos/stdBLAS/archive/refs/heads/main.zip
   )
 
   # The header-only stdBLAS library does not require linking options
