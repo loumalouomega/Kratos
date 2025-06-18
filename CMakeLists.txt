@@ -98,6 +98,13 @@ option(KRATOS_USE_PCH "KRATOS_USE_PCH defines if pch will be used during the com
 option(KRATOS_FUTURE_MDSPAN "KRATOS_FUTURE_MDSPAN enables the MDSPAN Kokkos implementation. This will become the STL standard in C++23. Introducing as future proof. Default setting is OFF" OFF)
 option(KRATOS_FUTURE_STDBLAS "KRATOS_FUTURE_STDBLAS enables the stdBLAS Kokkos implementation. This is the reference implementation for the P1673 proposal for a C++ standard BLAS library. Introducing as future proof. Default setting is OFF" OFF)
 
+# Enforce dependency: KRATOS_FUTURE_STDBLAS requires KRATOS_FUTURE_MDSPAN.
+if(KRATOS_FUTURE_STDBLAS AND NOT KRATOS_FUTURE_MDSPAN)
+    message(STATUS "Enabling KRATOS_FUTURE_MDSPAN because it is a required dependency for KRATOS_FUTURE_STDBLAS.")
+    # Force the option ON and update the cache so the user sees the change in the UI.
+    set(KRATOS_FUTURE_MDSPAN ON CACHE BOOL "Required by KRATOS_FUTURE_STDBLAS" FORCE)
+endif()
+
 # If not defined mute the very verbose installation messages
 if(NOT DEFINED CMAKE_INSTALL_MESSAGE)
   message("-- No CMAKE_INSTALL_MESSAGE is defined. Setting to NEVER")
