@@ -25,32 +25,32 @@ namespace Kratos::Testing
 KRATOS_TEST_CASE_IN_SUITE(MdspanConstruction, KratosCoreFastSuite)
 {
     // 1D mdspan
-    Extents<int, 5> extents1d;
+    Future::extents<int, 5> extents1d;
     std::array<int, 5> data1d = {1, 2, 3, 4, 5};
-    Kratos::mdspan<int, Extents<int, 5>> mds1d(data1d.data(), extents1d);
+    Future::mdspan<int, Future::extents<int, 5>> mds1d(data1d.data(), extents1d);
     KRATOS_EXPECT_EQ(mds1d.rank(), 1);
     KRATOS_EXPECT_EQ(mds1d.extent(0), 5);
 
     // 2D mdspan with double
-    Extents<int, 2, 3> extents2d_double;
+    Future::extents<int, 2, 3> extents2d_double;
     std::array<double, 6> data2d_double = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
-    Kratos::mdspan<double, Extents<int, 2, 3>> mds2d_double(data2d_double.data(), extents2d_double);
+    Future::mdspan<double, Future::extents<int, 2, 3>> mds2d_double(data2d_double.data(), extents2d_double);
     KRATOS_EXPECT_EQ(mds2d_double.rank(), 2);
     KRATOS_EXPECT_EQ(mds2d_double.extent(0), 2);
     KRATOS_EXPECT_EQ(mds2d_double.extent(1), 3);
 
     // 2D mdspan with float
-    Extents<int, 3, 2> extents2d_float;
+    Future::extents<int, 3, 2> extents2d_float;
     std::array<float, 6> data2d_float = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
-    Kratos::mdspan<float, Extents<int, 3, 2>> mds2d_float(data2d_float.data(), extents2d_float);
+    Future::mdspan<float, Future::extents<int, 3, 2>> mds2d_float(data2d_float.data(), extents2d_float);
     KRATOS_EXPECT_EQ(mds2d_float.rank(), 2);
     KRATOS_EXPECT_EQ(mds2d_float.extent(0), 3);
     KRATOS_EXPECT_EQ(mds2d_float.extent(1), 2);
 
     // 3D mdspan
-    Extents<int, 2, 3, 4> extents3d;
+    Future::extents<int, 2, 3, 4> extents3d;
     std::array<double, 24> data3d; // Initialize if needed, not strictly necessary for this construction test part
-    Kratos::mdspan<double, Extents<int, 2, 3, 4>> mds3d(data3d.data(), extents3d);
+    Future::mdspan<double, Future::extents<int, 2, 3, 4>> mds3d(data3d.data(), extents3d);
     KRATOS_EXPECT_EQ(mds3d.rank(), 3);
     KRATOS_EXPECT_EQ(mds3d.extent(0), 2);
     KRATOS_EXPECT_EQ(mds3d.extent(1), 3);
@@ -60,36 +60,36 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanConstruction, KratosCoreFastSuite)
 KRATOS_TEST_CASE_IN_SUITE(MdspanDataAccess, KratosCoreFastSuite)
 {
     // 1D mdspan - int
-    Extents<int, 5> extents1d_int;
+    Future::extents<int, 5> extents1d_int;
     std::array<int, 5> data1d_int = {1, 2, 3, 4, 5};
-    Kratos::mdspan<int, Extents<int, 5>> mds1d_int(data1d_int.data(), extents1d_int);
+    Future::mdspan<int, Future::extents<int, 5>> mds1d_int(data1d_int.data(), extents1d_int);
     KRATOS_EXPECT_EQ(mds1d_int(0), 1);
     KRATOS_EXPECT_EQ(mds1d_int(4), 5);
     mds1d_int(2) = 10;
     KRATOS_EXPECT_EQ(mds1d_int(2), 10);
 
     // 2D mdspan - double
-    Extents<int, 2, 3> extents2d_double;
+    Future::extents<int, 2, 3> extents2d_double;
     std::array<double, 6> data2d_double = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
-    Kratos::mdspan<double, Extents<int, 2, 3>> mds2d_double(data2d_double.data(), extents2d_double);
+    Future::mdspan<double, Future::extents<int, 2, 3>> mds2d_double(data2d_double.data(), extents2d_double);
     KRATOS_EXPECT_DOUBLE_EQ(mds2d_double(0, 0), 1.0);
     KRATOS_EXPECT_DOUBLE_EQ(mds2d_double(1, 2), 6.0);
     mds2d_double(0, 1) = 7.5;
     KRATOS_EXPECT_DOUBLE_EQ(mds2d_double(0, 1), 7.5);
 
     // 2D mdspan - float
-    Extents<int, 3, 2> extents2d_float;
+    Future::extents<int, 3, 2> extents2d_float;
     std::array<float, 6> data2d_float = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
-    Kratos::mdspan<float, Extents<int, 3, 2>> mds2d_float(data2d_float.data(), extents2d_float);
+    Future::mdspan<float, Future::extents<int, 3, 2>> mds2d_float(data2d_float.data(), extents2d_float);
     KRATOS_EXPECT_FLOAT_EQ(mds2d_float(0, 0), 1.0f);
     KRATOS_EXPECT_FLOAT_EQ(mds2d_float(2, 1), 6.0f);
     mds2d_float(1, 0) = 8.5f;
     KRATOS_EXPECT_FLOAT_EQ(mds2d_float(1, 0), 8.5f);
 
     // 3D mdspan - double
-    Extents<int, 2, 2, 2> extents3d_double;
+    Future::extents<int, 2, 2, 2> extents3d_double;
     std::array<double, 8> data3d_double = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
-    Kratos::mdspan<double, Extents<int, 2, 2, 2>> mds3d_double(data3d_double.data(), extents3d_double);
+    Future::mdspan<double, Future::extents<int, 2, 2, 2>> mds3d_double(data3d_double.data(), extents3d_double);
     KRATOS_EXPECT_DOUBLE_EQ(mds3d_double(0, 0, 0), 1.0);
     KRATOS_EXPECT_DOUBLE_EQ(mds3d_double(1, 1, 1), 8.0);
     mds3d_double(0, 1, 0) = 9.5;
@@ -99,10 +99,10 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanDataAccess, KratosCoreFastSuite)
 KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutLeftAndRightMapping, KratosCoreFastSuite)
 {
     // Layout Left
-    Extents<int, 2, 3> extents_left;
+    Future::extents<int, 2, 3> extents_left;
     std::array<double, 6> data_left = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0}; // Column-major
-    layout_left::mapping<Extents<int, 2, 3>> mapping_left(extents_left);
-    Kratos::mdspan<double, Extents<int, 2, 3>, layout_left> mds_left(data_left.data(), mapping_left);
+    layout_left::mapping<Future::extents<int, 2, 3>> mapping_left(extents_left);
+    Future::mdspan<double, Future::extents<int, 2, 3>, layout_left> mds_left(data_left.data(), mapping_left);
 
     KRATOS_EXPECT_DOUBLE_EQ(mds_left(0, 0), 1.0);
     KRATOS_EXPECT_DOUBLE_EQ(mds_left(1, 0), 2.0);
@@ -112,10 +112,10 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutLeftAndRightMapping, KratosCoreFastSuite)
     KRATOS_EXPECT_DOUBLE_EQ(mds_left(1, 2), 6.0);
 
     // Layout Right
-    Extents<int, 2, 3> extents_right;
+    Future::extents<int, 2, 3> extents_right;
     std::array<double, 6> data_right = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0}; // Row-major
-    layout_right::mapping<Extents<int, 2, 3>> mapping_right(extents_right);
-    Kratos::mdspan<double, Extents<int, 2, 3>, layout_right> mds_right(data_right.data(), mapping_right);
+    layout_right::mapping<Future::extents<int, 2, 3>> mapping_right(extents_right);
+    Future::mdspan<double, Future::extents<int, 2, 3>, layout_right> mds_right(data_right.data(), mapping_right);
 
     KRATOS_EXPECT_DOUBLE_EQ(mds_right(0, 0), 1.0);
     KRATOS_EXPECT_DOUBLE_EQ(mds_right(0, 1), 2.0);
@@ -127,14 +127,14 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutLeftAndRightMapping, KratosCoreFastSuite)
 
 KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutStride, KratosCoreFastSuite)
 {
-    Extents<int, 2, 3> extents;
+    Future::extents<int, 2, 3> extents;
     std::array<double, 12> data = { // Data array is larger to accommodate custom strides
         1.0, 0.0, 2.0, 0.0, 3.0, 0.0, // Row 0 with stride
         4.0, 0.0, 5.0, 0.0, 6.0, 0.0  // Row 1 with stride
     };
     std::array<int, 2> strides = {6, 2}; // Stride for first dim, stride for second dim
-    layout_stride::mapping<Extents<int, 2, 3>> mapping(extents, strides);
-    Kratos::mdspan<double, Extents<int, 2, 3>, layout_stride> mds(data.data(), mapping);
+    layout_stride::mapping<Future::extents<int, 2, 3>> mapping(extents, strides);
+    Future::mdspan<double, Future::extents<int, 2, 3>, layout_stride> mds(data.data(), mapping);
 
     KRATOS_EXPECT_DOUBLE_EQ(mds(0, 0), 1.0);
     KRATOS_EXPECT_DOUBLE_EQ(mds(0, 1), 2.0);
@@ -154,13 +154,13 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutStride, KratosCoreFastSuite)
 
 KRATOS_TEST_CASE_IN_SUITE(MdspanViewSlice, KratosCoreFastSuite)
 {
-    Extents<int, 3, 4> extents;
+    Future::extents<int, 3, 4> extents;
     std::array<double, 12> data = {
         1.0, 2.0, 3.0, 4.0,
         5.0, 6.0, 7.0, 8.0,
         9.0, 10.0, 11.0, 12.0
     };
-    Kratos::mdspan<double, Extents<int, 3, 4>> mds(data.data(), extents);
+    Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
 
     // Create a slice: view of the second row (index 1)
     auto slice = mdspan_view(mds, 1, std::full_extent);
@@ -187,13 +187,13 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanViewSlice, KratosCoreFastSuite)
 
 KRATOS_TEST_CASE_IN_SUITE(MdspanViewSubmdspan, KratosCoreFastSuite)
 {
-    Extents<int, 3, 4> extents;
+    Future::extents<int, 3, 4> extents;
     std::array<double, 12> data = {
         1.0,  2.0,  3.0,  4.0,
         5.0,  6.0,  7.0,  8.0,
         9.0, 10.0, 11.0, 12.0
     };
-    Kratos::mdspan<double, Extents<int, 3, 4>> mds(data.data(), extents);
+    Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
 
     // Create a submdspan: e.g., a 2x2 sub-array starting from mds(1,1)
     // This would be rows 1-2 and columns 1-2 of the original mdspan
@@ -297,37 +297,37 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanStreamOperator, KratosCoreFastSuite)
     std::ostringstream oss;
 
     // 1D mdspan
-    Extents<int, 5> extents1d;
+    Future::extents<int, 5> extents1d;
     std::array<int, 5> data1d = {1, 2, 3, 4, 5};
-    Kratos::mdspan<int, Extents<int, 5>> mds1d(data1d.data(), extents1d);
+    Future::mdspan<int, Future::extents<int, 5>> mds1d(data1d.data(), extents1d);
     oss << mds1d;
     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (5)");
     oss.str(""); // Clear the stream
     oss.clear();
 
     // 2D mdspan with layout_right (default for this constructor)
-    Extents<int, 2, 3> extents2d;
+    Future::extents<int, 2, 3> extents2d;
     std::array<double, 6> data2d = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
-    Kratos::mdspan<double, Extents<int, 2, 3>> mds2d(data2d.data(), extents2d);
+    Future::mdspan<double, Future::extents<int, 2, 3>> mds2d(data2d.data(), extents2d);
     oss << mds2d;
     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (2, 3)");
     oss.str("");
     oss.clear();
 
     // 2D mdspan with layout_left
-    Extents<int, 3, 2> extents2d_ll; // Different extents to ensure differentiation
+    Future::extents<int, 3, 2> extents2d_ll; // Different extents to ensure differentiation
     std::array<float, 6> data2d_ll = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
-    layout_left::mapping<Extents<int, 3, 2>> mapping2d_ll(extents2d_ll);
-    Kratos::mdspan<float, Extents<int, 3, 2>, layout_left> mds2d_ll(data2d_ll.data(), mapping2d_ll);
+    layout_left::mapping<Future::extents<int, 3, 2>> mapping2d_ll(extents2d_ll);
+    Future::mdspan<float, Future::extents<int, 3, 2>, layout_left> mds2d_ll(data2d_ll.data(), mapping2d_ll);
     oss << mds2d_ll;
     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (3, 2)");
     oss.str("");
     oss.clear();
 
     // 3D mdspan
-    Extents<int, 2, 3, 4> extents3d;
+    Future::extents<int, 2, 3, 4> extents3d;
     std::array<double, 24> data3d; // Data initialization not needed for this test
-    Kratos::mdspan<double, Extents<int, 2, 3, 4>> mds3d(data3d.data(), extents3d);
+    Future::mdspan<double, Future::extents<int, 2, 3, 4>> mds3d(data3d.data(), extents3d);
     oss << mds3d;
     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (2, 3, 4)");
     oss.str("");
