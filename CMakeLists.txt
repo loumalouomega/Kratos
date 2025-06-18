@@ -397,7 +397,7 @@ if(KRATOS_FUTURE_MDSPAN MATCHES ON)
   FetchContent_Declare(
     mdspan
     # Using a direct URL to a tagged archive to match the original style
-    URL https://github.com/kokkos/mdspan/archive/refs/tags/v0.7.0.zip
+    URL https://github.com/kokkos/mdspan/archive/refs/tags/mdspan-0.6.0.zip
   )
 
   # The header-only mdspan library does not require linking options
