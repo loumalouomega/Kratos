@@ -10,6 +10,8 @@
 //  Main authors:    Vicente Mataix Ferrandiz
 //
 
+#ifdef KRATOS_FUTURE_MDSPAN
+
 // System includes
 #include <limits>
 
@@ -349,3 +351,5 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanStreamOperator, KratosCoreFastSuite)
 }
 
 } // namespace Kratos::Testing
+
+#endif // KRATOS_FUTURE_MDSPAN
