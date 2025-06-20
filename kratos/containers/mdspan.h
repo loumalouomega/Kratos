@@ -16,7 +16,7 @@
 #include <iostream>
 
 // External includes
-#include <experimental/mdspan>
+#include <mdspan>
 
 // Project includes
 
