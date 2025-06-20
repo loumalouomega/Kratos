@@ -387,7 +387,7 @@ if(KRATOS_FUTURE_MDSPAN MATCHES ON)
   # Add the definitions if required
   ADD_DEFINITIONS(-DKRATOS_FUTURE_MDSPAN)
   message(STATUS "Preparing to use MDSPAN as a future proof library for C++23")
-  include_directories( ${KRATOS_SOURCE_DIR}/external_libraries/mdpan )
+  include_directories( ${KRATOS_SOURCE_DIR}/external_libraries/mdspan)
 endif()
 
 # Future stdBLAS
