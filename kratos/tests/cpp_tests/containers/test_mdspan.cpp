@@ -213,35 +213,35 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanViewSubmdspan, KratosCoreFastSuite)
     KRATOS_EXPECT_DOUBLE_EQ(sub2(1), 2.0);
 }
 
-// KRATOS_TEST_CASE_IN_SUITE(Mdspan1DViewAlias, KratosCoreFastSuite)
-// {
-//     // Test with int
-//     std::array<int, 5> data_int = {1, 2, 3, 4, 5};
-//     Future::mdspan_1d_view<int> view_int(data_int.data(), data_int.size());
+KRATOS_TEST_CASE_IN_SUITE(Mdspan1DViewAlias, KratosCoreFastSuite)
+{
+    // Test with int
+    std::array<int, 5> data_int = {1, 2, 3, 4, 5};
+    Future::mdspan_1d_view<int> view_int(data_int.data(), data_int.size());
 
-//     KRATOS_EXPECT_EQ(view_int.rank(), 1);
-//     KRATOS_EXPECT_EQ(view_int.extent(0), 5);
-//     KRATOS_EXPECT_EQ(view_int(0), 1);
-//     KRATOS_EXPECT_EQ(view_int(2), 3);
-//     KRATOS_EXPECT_EQ(view_int(4), 5);
+    KRATOS_EXPECT_EQ(view_int.rank(), 1);
+    KRATOS_EXPECT_EQ(view_int.extent(0), 5);
+    KRATOS_EXPECT_EQ(view_int(0), 1);
+    KRATOS_EXPECT_EQ(view_int(2), 3);
+    KRATOS_EXPECT_EQ(view_int(4), 5);
 
-//     view_int(1) = 20;
-//     KRATOS_EXPECT_EQ(data_int[1], 20);
-//     KRATOS_EXPECT_EQ(view_int(1), 20);
+    view_int(1) = 20;
+    KRATOS_EXPECT_EQ(data_int[1], 20);
+    KRATOS_EXPECT_EQ(view_int(1), 20);
 
-//     // Test with double
-//     std::array<double, 3> data_double = {1.1, 2.2, 3.3};
-//     Future::mdspan_1d_view<double> view_double(data_double.data(), data_double.size());
+    // Test with double
+    std::array<double, 3> data_double = {1.1, 2.2, 3.3};
+    Future::mdspan_1d_view<double> view_double(data_double.data(), data_double.size());
 
-//     KRATOS_EXPECT_EQ(view_double.rank(), 1);
-//     KRATOS_EXPECT_EQ(view_double.extent(0), 3);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double(0), 1.1);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double(1), 2.2);
+    KRATOS_EXPECT_EQ(view_double.rank(), 1);
+    KRATOS_EXPECT_EQ(view_double.extent(0), 3);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double(0), 1.1);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double(1), 2.2);
 
-//     view_double(2) = 33.3;
-//     KRATOS_EXPECT_DOUBLE_EQ(data_double[2], 33.3);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double(2), 33.3);
-// }
+    view_double(2) = 33.3;
+    KRATOS_EXPECT_DOUBLE_EQ(data_double[2], 33.3);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double(2), 33.3);
+}
 
 // KRATOS_TEST_CASE_IN_SUITE(Mdspan2DViewAlias, KratosCoreFastSuite)
 // {
