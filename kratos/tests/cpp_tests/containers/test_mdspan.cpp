@@ -243,47 +243,38 @@ KRATOS_TEST_CASE_IN_SUITE(Mdspan1DViewAlias, KratosCoreFastSuite)
     KRATOS_EXPECT_DOUBLE_EQ(view_double(2), 33.3);
 }
 
-// KRATOS_TEST_CASE_IN_SUITE(Mdspan2DViewAlias, KratosCoreFastSuite)
-// {
-//     // Test with int, layout_right (default)
-//     std::array<int, 6> data_int_lr = {1, 2, 3, 4, 5, 6}; // 2x3 row-major
-//     Future::mdspan_2d_view<int, Future::layout_right> view_int_lr(data_int_lr.data(), 2, 3);
+KRATOS_TEST_CASE_IN_SUITE(Mdspan2DViewAlias, KratosCoreFastSuite)
+{
+    // Test with int, layout_right (default)
+    std::array<int, 6> data_int_lr = {1, 2, 3, 4, 5, 6}; // 2x3 row-major
+    Future::mdspan_2d_view<int> view_int_lr(data_int_lr.data(), 2, 3);
 
-//     KRATOS_EXPECT_EQ(view_int_lr.rank(), 2);
-//     KRATOS_EXPECT_EQ(view_int_lr.extent(0), 2);
-//     KRATOS_EXPECT_EQ(view_int_lr.extent(1), 3);
-//     KRATOS_EXPECT_EQ(view_int_lr(0,0), 1);
-//     KRATOS_EXPECT_EQ(view_int_lr(0,2), 3);
-//     KRATOS_EXPECT_EQ(view_int_lr(1,0), 4);
-//     KRATOS_EXPECT_EQ(view_int_lr(1,2), 6);
-//     view_int_lr(0,1) = 20;
-//     KRATOS_EXPECT_EQ(data_int_lr[1], 20);
-//     KRATOS_EXPECT_EQ(view_int_lr(0,1), 20);
+    KRATOS_EXPECT_EQ(view_int_lr.rank(), 2);
+    KRATOS_EXPECT_EQ(view_int_lr.extent(0), 2);
+    KRATOS_EXPECT_EQ(view_int_lr.extent(1), 3);
+    KRATOS_EXPECT_EQ(view_int_lr(0,0), 1);
+    KRATOS_EXPECT_EQ(view_int_lr(0,2), 3);
+    KRATOS_EXPECT_EQ(view_int_lr(1,0), 4);
+    KRATOS_EXPECT_EQ(view_int_lr(1,2), 6);
+    view_int_lr(0,1) = 20;
+    KRATOS_EXPECT_EQ(data_int_lr[1], 20);
+    KRATOS_EXPECT_EQ(view_int_lr(0,1), 20);
 
-//     // Test with double, layout_left
-//     std::array<double, 6> data_double_ll = {1.1, 4.4, 2.2, 5.5, 3.3, 6.6}; // 2x3 column-major
-//     Future::mdspan_2d_view<double, Future::layout_left> view_double_ll(data_double_ll.data(), 2, 3);
+    // Test with double, layout_left
+    std::array<double, 6> data_double_ll = {1.1, 4.4, 2.2, 5.5, 3.3, 6.6}; // 2x3 column-major
+    Future::mdspan_2d_view<double> view_double_ll(data_double_ll.data(), 2, 3);
 
-//     KRATOS_EXPECT_EQ(view_double_ll.rank(), 2);
-//     KRATOS_EXPECT_EQ(view_double_ll.extent(0), 2);
-//     KRATOS_EXPECT_EQ(view_double_ll.extent(1), 3);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,0), 1.1);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(1,0), 4.4);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,2), 3.3);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(1,2), 6.6);
-//     view_double_ll(0,1) = 22.2; // data_double_ll[2] for layout_left
-//     KRATOS_EXPECT_DOUBLE_EQ(data_double_ll[2], 22.2);
-//     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,1), 22.2);
-
-//     // Test with default layout (layout_right) by not specifying it
-//     std::array<float, 4> data_float_def = {1.0f, 2.0f, 3.0f, 4.0f}; // 2x2 row-major
-//     mdspan_2d_view<float> view_float_def(data_float_def.data(), 2, 2);
-//     KRATOS_EXPECT_EQ(view_float_def.rank(), 2);
-//     KRATOS_EXPECT_EQ(view_float_def.extent(0), 2);
-//     KRATOS_EXPECT_EQ(view_float_def.extent(1), 2);
-//     KRATOS_EXPECT_FLOAT_EQ(view_float_def(0,0), 1.0f);
-//     KRATOS_EXPECT_FLOAT_EQ(view_float_def(1,1), 4.0f);
-// }
+    KRATOS_EXPECT_EQ(view_double_ll.rank(), 2);
+    KRATOS_EXPECT_EQ(view_double_ll.extent(0), 2);
+    KRATOS_EXPECT_EQ(view_double_ll.extent(1), 3);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,0), 1.1);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(1,0), 4.4);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,2), 3.3);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(1,2), 6.6);
+    view_double_ll(0,1) = 22.2; // data_double_ll[2] for layout_left
+    KRATOS_EXPECT_DOUBLE_EQ(data_double_ll[2], 22.2);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,1), 22.2);
+}
 
 // KRATOS_TEST_CASE_IN_SUITE(MdspanStreamOperator, KratosCoreFastSuite)
 // {
