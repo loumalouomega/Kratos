@@ -79,11 +79,11 @@ template <typename IndexType, std::size_t Rank>
 using dextents = MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<IndexType, Rank>;
 
 /**
- * @brief Alias for a full extent in an `mdspan`, allowing for dynamic sizing.
+ * @brief A constant representing the full extent in an `mdspan`, allowing for dynamic sizing.
  * @details This is used to specify that a dimension should take the full size of the underlying data.
  * @see https://en.cppreference.com/w/cpp/container/mdspan/full_extent
  */
-using full_extent = MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent;
+inline constexpr auto full_extent = MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent;
 
 ///@}
 ///@name Common mdspan Type Aliases
