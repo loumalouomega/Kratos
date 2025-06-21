@@ -118,32 +118,32 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutLeftAndRightMapping, KratosCoreFastSuite)
     KRATOS_EXPECT_DOUBLE_EQ(mds_right(1, 2), 6.0);
 }
 
-// KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutStride, KratosCoreFastSuite)
-// {
-//     Future::extents<int, 2, 3> extents;
-//     std::array<double, 12> data = { // Data array is larger to accommodate custom strides
-//         1.0, 0.0, 2.0, 0.0, 3.0, 0.0, // Row 0 with stride
-//         4.0, 0.0, 5.0, 0.0, 6.0, 0.0  // Row 1 with stride
-//     };
-//     std::array<int, 2> strides = {6, 2}; // Stride for first dim, stride for second dim
-//     layout_stride::mapping<Future::extents<int, 2, 3>> mapping(extents, strides);
-//     Future::mdspan<double, Future::extents<int, 2, 3>, layout_stride> mds(data.data(), mapping);
+KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutStride, KratosCoreFastSuite)
+{
+    Future::extents<int, 2, 3> extents;
+    std::array<double, 12> data = { // Data array is larger to accommodate custom strides
+        1.0, 0.0, 2.0, 0.0, 3.0, 0.0, // Row 0 with stride
+        4.0, 0.0, 5.0, 0.0, 6.0, 0.0  // Row 1 with stride
+    };
+    std::array<int, 2> strides = {6, 2}; // Stride for first dim, stride for second dim
+    Future::layout_stride::mapping<Future::extents<int, 2, 3>> mapping(extents, strides);
+    Future::mdspan<double, Future::extents<int, 2, 3>, Future::layout_stride> mds(data.data(), mapping);
 
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(0, 0), 1.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(0, 1), 2.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(0, 2), 3.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(1, 0), 4.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(1, 1), 5.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(1, 2), 6.0);
+    KRATOS_EXPECT_DOUBLE_EQ(mds(0, 0), 1.0);
+    KRATOS_EXPECT_DOUBLE_EQ(mds(0, 1), 2.0);
+    KRATOS_EXPECT_DOUBLE_EQ(mds(0, 2), 3.0);
+    KRATOS_EXPECT_DOUBLE_EQ(mds(1, 0), 4.0);
+    KRATOS_EXPECT_DOUBLE_EQ(mds(1, 1), 5.0);
+    KRATOS_EXPECT_DOUBLE_EQ(mds(1, 2), 6.0);
 
-//     // Test with non-contiguous elements in the original data due to stride
-//     KRATOS_EXPECT_DOUBLE_EQ(data[mapping(0,0)], 1.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(data[mapping(0,1)], 2.0); // data[2]
-//     KRATOS_EXPECT_DOUBLE_EQ(data[mapping(0,2)], 3.0); // data[4]
-//     KRATOS_EXPECT_DOUBLE_EQ(data[mapping(1,0)], 4.0); // data[6]
-//     KRATOS_EXPECT_DOUBLE_EQ(data[mapping(1,1)], 5.0); // data[8]
-//     KRATOS_EXPECT_DOUBLE_EQ(data[mapping(1,2)], 6.0); // data[10]
-// }
+    // Test with non-contiguous elements in the original data due to stride
+    KRATOS_EXPECT_DOUBLE_EQ(data[mapping(0,0)], 1.0);
+    KRATOS_EXPECT_DOUBLE_EQ(data[mapping(0,1)], 2.0); // data[2]
+    KRATOS_EXPECT_DOUBLE_EQ(data[mapping(0,2)], 3.0); // data[4]
+    KRATOS_EXPECT_DOUBLE_EQ(data[mapping(1,0)], 4.0); // data[6]
+    KRATOS_EXPECT_DOUBLE_EQ(data[mapping(1,1)], 5.0); // data[8]
+    KRATOS_EXPECT_DOUBLE_EQ(data[mapping(1,2)], 6.0); // data[10]
+}
 
 // KRATOS_TEST_CASE_IN_SUITE(MdspanViewSlice, KratosCoreFastSuite)
 // {
