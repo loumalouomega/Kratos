@@ -113,6 +113,17 @@ using mdspan = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
 >;
 
 /**
+ * @brief Function template for creating a view of a subset of an mdspan.
+ * @details This provides access to the submdspan utility from the implementation namespace.
+ * @see https://en.cppreference.com/w/cpp/container/mdspan/submdspan
+ */
+template <class... SliceSpecifiers, class ElementType, class Extents, class Layout, class Accessor>
+auto submdspan(const mdspan<ElementType, Extents, Layout, Accessor>& source, SliceSpecifiers... slices)
+{
+    return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(source, slices...);
+}
+
+/**
  * @brief A non-owning `mdspan` view with dynamic extents for a specified rank.
  * @tparam T The type of elements in the view.
  * @tparam Rank The number of dimensions (rank).

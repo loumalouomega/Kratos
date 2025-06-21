@@ -145,73 +145,73 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutStride, KratosCoreFastSuite)
     KRATOS_EXPECT_DOUBLE_EQ(data[mapping(1,2)], 6.0); // data[10]
 }
 
-// KRATOS_TEST_CASE_IN_SUITE(MdspanViewSlice, KratosCoreFastSuite)
-// {
-//     Future::extents<int, 3, 4> extents;
-//     std::array<double, 12> data = {
-//         1.0, 2.0, 3.0, 4.0,
-//         5.0, 6.0, 7.0, 8.0,
-//         9.0, 10.0, 11.0, 12.0
-//     };
-//     Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
+KRATOS_TEST_CASE_IN_SUITE(MdspanViewSlice, KratosCoreFastSuite)
+{
+    // Future::extents<int, 3, 4> extents;
+    // std::array<double, 12> data = {
+    //     1.0, 2.0, 3.0, 4.0,
+    //     5.0, 6.0, 7.0, 8.0,
+    //     9.0, 10.0, 11.0, 12.0
+    // };
+    // Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
 
-//     // Create a slice: view of the second row (index 1)
-//     auto slice = Future::mdspan_view(mds, 1, std::full_extent);
+    // // Create a slice: view of the second row (index 1)
+    // auto slice = Future::mdspan_view(mds, 1, Future::full_extent); // Alias template deduction only available with ‘-std=c++20’ or ‘-std=gnu++20’
 
-//     KRATOS_EXPECT_EQ(slice.rank(), 1);
-//     KRATOS_EXPECT_EQ(slice.extent(0), 4);
-//     KRATOS_EXPECT_DOUBLE_EQ(slice(0), 5.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(slice(1), 6.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(slice(2), 7.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(slice(3), 8.0);
+    // KRATOS_EXPECT_EQ(slice.rank(), 1);
+    // KRATOS_EXPECT_EQ(slice.extent(0), 4);
+    // KRATOS_EXPECT_DOUBLE_EQ(slice(0), 5.0);
+    // KRATOS_EXPECT_DOUBLE_EQ(slice(1), 6.0);
+    // KRATOS_EXPECT_DOUBLE_EQ(slice(2), 7.0);
+    // KRATOS_EXPECT_DOUBLE_EQ(slice(3), 8.0);
 
-//     // Modify data through slice
-//     slice(1) = 60.0;
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(1,1), 60.0);
+    // // Modify data through slice
+    // slice(1) = 60.0;
+    // KRATOS_EXPECT_DOUBLE_EQ(mds(1,1), 60.0);
 
-//     // Create a slice: view of the second column (index 1)
-//     auto col_slice = mdspan_view(mds, std::full_extent, 1);
-//     KRATOS_EXPECT_EQ(col_slice.rank(), 1);
-//     KRATOS_EXPECT_EQ(col_slice.extent(0), 3);
-//     KRATOS_EXPECT_DOUBLE_EQ(col_slice(0), 2.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(col_slice(1), 60.0); // Modified value
-//     KRATOS_EXPECT_DOUBLE_EQ(col_slice(2), 10.0);
-// }
+    // // Create a slice: view of the second column (index 1)
+    // auto col_slice = Future::mdspan_view(mds, Future::full_extent, 1); // Alias template deduction only available with ‘-std=c++20’ or ‘-std=gnu++20’
+    // KRATOS_EXPECT_EQ(col_slice.rank(), 1);
+    // KRATOS_EXPECT_EQ(col_slice.extent(0), 3);
+    // KRATOS_EXPECT_DOUBLE_EQ(col_slice(0), 2.0);
+    // KRATOS_EXPECT_DOUBLE_EQ(col_slice(1), 60.0); // Modified value
+    // KRATOS_EXPECT_DOUBLE_EQ(col_slice(2), 10.0);
+}
 
-// KRATOS_TEST_CASE_IN_SUITE(MdspanViewSubmdspan, KratosCoreFastSuite)
-// {
-//     Future::extents<int, 3, 4> extents;
-//     std::array<double, 12> data = {
-//         1.0,  2.0,  3.0,  4.0,
-//         5.0,  6.0,  7.0,  8.0,
-//         9.0, 10.0, 11.0, 12.0
-//     };
-//     Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
+KRATOS_TEST_CASE_IN_SUITE(MdspanViewSubmdspan, KratosCoreFastSuite)
+{
+    Future::extents<int, 3, 4> extents;
+    std::array<double, 12> data = {
+        1.0,  2.0,  3.0,  4.0,
+        5.0,  6.0,  7.0,  8.0,
+        9.0, 10.0, 11.0, 12.0
+    };
+    Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
 
-//     // Create a submdspan: e.g., a 2x2 sub-array starting from mds(1,1)
-//     // This would be rows 1-2 and columns 1-2 of the original mdspan
-//     auto sub = Future::submdspan(mds, std::pair<int, int>{1, 3}, std::pair<int, int>{1, 3});
+    // Create a submdspan: e.g., a 2x2 sub-array starting from mds(1,1)
+    // This would be rows 1-2 and columns 1-2 of the original mdspan
+    auto sub = Future::submdspan(mds, std::pair<int, int>{1, 3}, std::pair<int, int>{1, 3});
 
-//     KRATOS_EXPECT_EQ(sub.rank(), 2);
-//     KRATOS_EXPECT_EQ(sub.extent(0), 2); // 3-1
-//     KRATOS_EXPECT_EQ(sub.extent(1), 2); // 3-1
+    KRATOS_EXPECT_EQ(sub.rank(), 2);
+    KRATOS_EXPECT_EQ(sub.extent(0), 2); // 3-1
+    KRATOS_EXPECT_EQ(sub.extent(1), 2); // 3-1
 
-//     KRATOS_EXPECT_DOUBLE_EQ(sub(0,0), 6.0); // Corresponds to mds(1,1)
-//     KRATOS_EXPECT_DOUBLE_EQ(sub(0,1), 7.0); // Corresponds to mds(1,2)
-//     KRATOS_EXPECT_DOUBLE_EQ(sub(1,0), 10.0); // Corresponds to mds(2,1)
-//     KRATOS_EXPECT_DOUBLE_EQ(sub(1,1), 11.0); // Corresponds to mds(2,2)
+    KRATOS_EXPECT_DOUBLE_EQ(sub(0,0), 6.0); // Corresponds to mds(1,1)
+    KRATOS_EXPECT_DOUBLE_EQ(sub(0,1), 7.0); // Corresponds to mds(1,2)
+    KRATOS_EXPECT_DOUBLE_EQ(sub(1,0), 10.0); // Corresponds to mds(2,1)
+    KRATOS_EXPECT_DOUBLE_EQ(sub(1,1), 11.0); // Corresponds to mds(2,2)
 
-//     // Modify data through submdspan
-//     sub(0,0) = 600.0;
-//     KRATOS_EXPECT_DOUBLE_EQ(mds(1,1), 600.0);
+    // Modify data through submdspan
+    sub(0,0) = 600.0;
+    KRATOS_EXPECT_DOUBLE_EQ(mds(1,1), 600.0);
 
-//     // Another submdspan example: first row, first two elements
-//     auto sub2 = submdspan(mds, 0, std::pair<int,int>{0,2});
-//     KRATOS_EXPECT_EQ(sub2.rank(), 1);
-//     KRATOS_EXPECT_EQ(sub2.extent(0), 2);
-//     KRATOS_EXPECT_DOUBLE_EQ(sub2(0), 1.0);
-//     KRATOS_EXPECT_DOUBLE_EQ(sub2(1), 2.0);
-// }
+    // Another submdspan example: first row, first two elements
+    auto sub2 = submdspan(mds, 0, std::pair<int,int>{0,2});
+    KRATOS_EXPECT_EQ(sub2.rank(), 1);
+    KRATOS_EXPECT_EQ(sub2.extent(0), 2);
+    KRATOS_EXPECT_DOUBLE_EQ(sub2(0), 1.0);
+    KRATOS_EXPECT_DOUBLE_EQ(sub2(1), 2.0);
+}
 
 // KRATOS_TEST_CASE_IN_SUITE(Mdspan1DViewAlias, KratosCoreFastSuite)
 // {
