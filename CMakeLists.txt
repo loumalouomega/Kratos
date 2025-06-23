@@ -96,14 +96,6 @@ option(KRATOS_USE_PCH "KRATOS_USE_PCH defines if pch will be used during the com
 
 # Future libraries deactivated by default
 option(KRATOS_FUTURE_MDSPAN "KRATOS_FUTURE_MDSPAN enables the MDSPAN Kokkos implementation. This will become the STL standard in C++23. Introducing as future proof. Default setting is OFF" OFF)
-option(KRATOS_FUTURE_STDBLAS "KRATOS_FUTURE_STDBLAS enables the stdBLAS Kokkos implementation. This is the reference implementation for the P1673 proposal for a C++ standard BLAS library. Introducing as future proof. Default setting is OFF" OFF)
-
-# Enforce dependency: KRATOS_FUTURE_STDBLAS requires KRATOS_FUTURE_MDSPAN.
-if(KRATOS_FUTURE_STDBLAS AND NOT KRATOS_FUTURE_MDSPAN)
-    message(STATUS "Enabling KRATOS_FUTURE_MDSPAN because it is a required dependency for KRATOS_FUTURE_STDBLAS.")
-    # Force the option ON and update the cache so the user sees the change in the UI.
-    set(KRATOS_FUTURE_MDSPAN ON CACHE BOOL "Required by KRATOS_FUTURE_STDBLAS" FORCE)
-endif()
 
 # If not defined mute the very verbose installation messages
 if(NOT DEFINED CMAKE_INSTALL_MESSAGE)
@@ -388,33 +380,6 @@ if(KRATOS_FUTURE_MDSPAN MATCHES ON)
   ADD_DEFINITIONS(-DKRATOS_FUTURE_MDSPAN)
   message(STATUS "Preparing to use MDSPAN as a future proof library for C++23")
   include_directories( ${KRATOS_SOURCE_DIR}/external_libraries/mdspan)
-endif()
-
-# Future stdBLAS
-if(KRATOS_FUTURE_STDBLAS MATCHES ON)
-  # Add the definitions if required
-  ADD_DEFINITIONS(-DKRATOS_FUTURE_STDBLAS)
-
-  # Retrieve a copy of the current directory's `COMPILE_OPTIONS`
-  get_directory_property(kratos_root_compile_options COMPILE_OPTIONS)
-
-  # The following line to disable warnings might not be necessary,
-  # but is kept to maintain the original block's structure.
-  add_compile_options(-w)
-
-  FetchContent_Declare(
-    stdBLAS
-    # Using main as no Release yet
-    URL https://github.com/kokkos/stdBLAS/archive/refs/heads/main.zip
-  )
-
-  # The header-only stdBLAS library does not require linking options
-
-  # Fetch stdBLAS
-  FetchContent_MakeAvailable(stdBLAS)
-
-  # restore the current directory's old `COMPILE_OPTIONS`
-  set_directory_properties(PROPERTIES COMPILE_OPTIONS "${kratos_root_compile_options}")
 endif()
 
 ################### PYBIND11
