@@ -105,6 +105,14 @@ namespace EntitiesUtilities
 
         /**
          * @brief Get the prototype entity.
+         * @param rGeometry The reference to the geometry.
+         * @return true there is a prototype for the provided entity.
+         * @return false there is no prototype for the provided entity.
+         */
+        bool HasPrototypeEntity(const GeometryType& rGeometry) const;
+
+        /**
+         * @brief Get the prototype entity.
          * @param pGeometry The pointer to the geometry.
          * @return const TEntity& The prototype entity.
          */
@@ -257,10 +265,7 @@ namespace EntitiesUtilities
         block_for_each(
             r_entities_array,
             [&r_current_process_info](TEntityType& rEntity) {
-                // If the entity is active
-                if (rEntity.IsActive()) {
-                    rEntity.Initialize(r_current_process_info);
-                }
+                rEntity.Initialize(r_current_process_info);
             }
         );
 
