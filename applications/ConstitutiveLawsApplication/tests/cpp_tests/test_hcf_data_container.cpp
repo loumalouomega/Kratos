@@ -15,10 +15,12 @@
 // External includes
 
 // Project includes
-#include "testing/testing.h"
 #include "custom_utilities/constitutive_law_utilities.h"
 #include "custom_constitutive/auxiliary_files/hcf_data_container.h"
 #include "constitutive_laws_application_variables.h"
+
+// Application includes
+#include "tests/cpp_tests/constitutive_laws_fast_suite.h"
 
 namespace Kratos::Testing
 {
@@ -54,17 +56,18 @@ KRATOS_TEST_CASE_IN_SUITE(HCFDataContainerFatigueTest, KratosConstitutiveLawsFas
     HCFVariables.GlobalNumberOfCycles = 12;
     HCFVariables.LocalNumberOfCycles = 12;
     HCFVariables.ReversionFactor = -1.00005;
+    HCFVariables.UltimateStress = 806.715E+06;
 
     mFatigueData.CalculateFatigueParameters(material_properties, HCFVariables);
 
-    KRATOS_CHECK_NEAR(HCFVariables.Alphat, 0.0309, 1.0e-6);
-    KRATOS_CHECK_NEAR(HCFVariables.Sth, 2.6071e+08, 1.0e+04);
-    KRATOS_CHECK_NEAR(HCFVariables.CyclesToFailure, 22406, 1.0);
-    KRATOS_CHECK_NEAR(HCFVariables.B0, 0.000231689, 1.0e-9);
+    KRATOS_EXPECT_NEAR(HCFVariables.Alphat, 0.0309, 1.0e-6);
+    KRATOS_EXPECT_NEAR(HCFVariables.Sth, 2.6071e+08, 1.0e+04);
+    KRATOS_EXPECT_NEAR(HCFVariables.CyclesToFailure, 22406, 1.0);
+    KRATOS_EXPECT_NEAR(HCFVariables.B0, 0.000231689, 1.0e-9);
 
     mFatigueData.CalculateFatigueReductionFactorAndWohlerStress(material_properties, HCFVariables);
 
-    KRATOS_CHECK_NEAR(HCFVariables.FatigueReductionFactor, 0.999655, 1.0e-6);
-    KRATOS_CHECK_NEAR(HCFVariables.WohlerStress, 0.975555, 1.0e-6);
+    KRATOS_EXPECT_NEAR(HCFVariables.FatigueReductionFactor, 0.999655, 1.0e-6);
+    KRATOS_EXPECT_NEAR(HCFVariables.WohlerStress, 0.975555, 1.0e-6);
 }
 } // namespace Kratos::Testing
