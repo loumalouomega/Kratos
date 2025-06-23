@@ -280,62 +280,6 @@ KRATOS_TEST_CASE_IN_SUITE(Mdspan2DViewAlias, KratosCoreFastSuite)
     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,1), 22.2);
 }
 
-// KRATOS_TEST_CASE_IN_SUITE(MdspanStreamOperator, KratosCoreFastSuite)
-// {
-//     std::ostringstream oss;
-
-//     // 1D mdspan
-//     Future::extents<int, 5> extents1d;
-//     std::array<int, 5> data1d = {1, 2, 3, 4, 5};
-//     Future::mdspan<int, Future::extents<int, 5>> mds1d(data1d.data(), extents1d);
-//     oss << mds1d;
-//     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (5)");
-//     oss.str(""); // Clear the stream
-//     oss.clear();
-
-//     // 2D mdspan with layout_right (default for this constructor)
-//     Future::extents<int, 2, 3> extents2d;
-//     std::array<double, 6> data2d = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
-//     Future::mdspan<double, Future::extents<int, 2, 3>> mds2d(data2d.data(), extents2d);
-//     oss << mds2d;
-//     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (2, 3)");
-//     oss.str("");
-//     oss.clear();
-
-//     // 2D mdspan with layout_left
-//     Future::extents<int, 3, 2> extents2d_ll; // Different extents to ensure differentiation
-//     std::array<float, 6> data2d_ll = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
-//     Future::layout_left::mapping<Future::extents<int, 3, 2>> mapping2d_ll(extents2d_ll);
-//     Future::mdspan<float, Future::extents<int, 3, 2>, layout_left> mds2d_ll(data2d_ll.data(), mapping2d_ll);
-//     oss << mds2d_ll;
-//     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (3, 2)");
-//     oss.str("");
-//     oss.clear();
-
-//     // 3D mdspan
-//     Future::extents<int, 2, 3, 4> extents3d;
-//     std::array<double, 24> data3d; // Data initialization not needed for this test
-//     Future::mdspan<double, Future::extents<int, 2, 3, 4>> mds3d(data3d.data(), extents3d);
-//     oss << mds3d;
-//     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (2, 3, 4)");
-//     oss.str("");
-//     oss.clear();
-
-//     // mdspan_1d_view alias
-//     Future::mdspan_1d_view<int> view1d(data1d.data(), data1d.size());
-//     oss << view1d;
-//     KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (5)");
-//     oss.str("");
-//     oss.clear();
-
-//     // // mdspan_2d_view alias with layout_right
-//     // Future::mdspan_2d_view<double, Future::layout_right> view2d_lr(data2d.data(), 2, 3);
-//     // oss << view2d_lr;
-//     // KRATOS_EXPECT_STREQ(oss.str().c_str(), "mdspan with extents: (2, 3)");
-//     // oss.str("");
-//     // oss.clear();
-// }
-
 } // namespace Kratos::Testing
 
 #endif // KRATOS_FUTURE_MDSPAN

@@ -64,19 +64,19 @@ using default_accessor = MDSPAN_IMPL_STANDARD_NAMESPACE::default_accessor<T>;
 
 /**
  * @brief Alias for compile-time extents of an `mdspan`.
- * @tparam IndexType The type used for indexing.
- * @tparam Extents A parameter pack of compile-time dimension extents.
+ * @tparam TIndexType The type used for indexing.
+ * @tparam TExtents A parameter pack of compile-time dimension extents.
  */
-template <typename IndexType, std::size_t... Extents>
-using extents = MDSPAN_IMPL_STANDARD_NAMESPACE::extents<IndexType, Extents...>;
+template <typename TIndexType, std::size_t... TExtents>
+using extents = MDSPAN_IMPL_STANDARD_NAMESPACE::extents<TIndexType, TExtents...>;
 
 /**
  * @brief Alias for run-time (dynamic) extents of an `mdspan`.
- * @tparam IndexType The type used for indexing.
- * @tparam Rank The number of dimensions (rank) of the `mdspan`.
+ * @tparam TIndexType The type used for indexing.
+ * @tparam TRank The number of dimensions (rank) of the `mdspan`.
  */
-template <typename IndexType, std::size_t Rank>
-using dextents = MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<IndexType, Rank>;
+template <typename TIndexType, std::size_t TRank>
+using dextents = MDSPAN_IMPL_STANDARD_NAMESPACE::dextents<TIndexType, TRank>;
 
 /**
  * @brief A constant representing the full extent in an `mdspan`, allowing for dynamic sizing.
@@ -94,22 +94,22 @@ inline constexpr auto full_extent = MDSPAN_IMPL_STANDARD_NAMESPACE::full_extent;
  * @details This is the primary alias for `std::mdspan`, configured with custom
  * layout and accessor policies. It serves as a versatile, non-owning handle
  * to multi-dimensional data.
- * @tparam ElementType The type of elements in the view.
- * @tparam Extents An `extents` object specifying the dimensions.
- * @tparam LayoutPolicy The memory layout policy (e.g., `layout_right`).
- * @tparam AccessorPolicy The policy for accessing elements.
+ * @tparam TElementType The type of elements in the view.
+ * @tparam TExtents An `extents` object specifying the dimensions.
+ * @tparam TLayoutPolicy The memory layout policy (e.g., `layout_right`).
+ * @tparam TAccessorPolicy The policy for accessing elements.
  */
 template <
-    typename ElementType,
-    typename Extents,
-    typename LayoutPolicy = layout_right,
-    typename AccessorPolicy = default_accessor<ElementType>
+    typename TElementType,
+    typename TExtents,
+    typename TLayoutPolicy = layout_right,
+    typename TAccessorPolicy = default_accessor<TElementType>
 >
 using mdspan = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
-    ElementType,
-    Extents,
-    LayoutPolicy,
-    AccessorPolicy
+    TElementType,
+    TExtents,
+    TLayoutPolicy,
+    TAccessorPolicy
 >;
 
 /**
@@ -117,8 +117,8 @@ using mdspan = MDSPAN_IMPL_STANDARD_NAMESPACE::mdspan<
  * @details This provides access to the submdspan utility from the implementation namespace.
  * @see https://en.cppreference.com/w/cpp/container/mdspan/submdspan
  */
-template <class... SliceSpecifiers, class ElementType, class Extents, class Layout, class Accessor>
-auto submdspan(const mdspan<ElementType, Extents, Layout, Accessor>& source, SliceSpecifiers... slices)
+template <class... TSliceSpecifiers, class TElementType, class TExtents, class TLayout, class TAccessor>
+auto submdspan(const mdspan<TElementType, TExtents, TLayout, TAccessor>& source, TSliceSpecifiers... slices)
 {
     return MDSPAN_IMPL_STANDARD_NAMESPACE::submdspan(source, slices...);
 }
@@ -126,11 +126,11 @@ auto submdspan(const mdspan<ElementType, Extents, Layout, Accessor>& source, Sli
 /**
  * @brief A non-owning `mdspan` view with dynamic extents for a specified rank.
  * @tparam T The type of elements in the view.
- * @tparam Rank The number of dimensions (rank).
- * @tparam Layout The memory layout policy (default is row-major).
+ * @tparam TRank The number of dimensions (rank).
+ * @tparam TLayout The memory layout policy (default is row-major).
  */
-template <typename T, std::size_t Rank, typename Layout = layout_right>
-using mdspan_view = mdspan<T, dextents<std::size_t, Rank>, Layout>;
+template <typename T, std::size_t TRank, typename TLayout = layout_right>
+using mdspan_view = mdspan<T, dextents<std::size_t, TRank>, TLayout>;
 
 /**
  * @brief A non-owning 1D view, conceptually equivalent to `std::span`.
@@ -145,29 +145,6 @@ using mdspan_1d_view = mdspan_view<T, 1>;
  */
 template <typename T>
 using mdspan_2d_view = mdspan_view<T, 2>;
-
-///@}
-///@name Stream Operators
-///@{
-
-/**
- * @brief Prints a summary of an `mdspan` to an output stream.
- * @details This operator provides a concise representation of an `mdspan`, including
- * its rank and the extent of each dimension. This is useful for debugging.
- * @param rOStream The output stream.
- * @param rData The `mdspan` to print.
- * @return The output stream.
- */
-template <typename ElementType, typename Extents, typename LayoutPolicy, typename AccessorPolicy>
-std::ostream& operator<<(std::ostream& rOStream, const mdspan<ElementType, Extents, LayoutPolicy, AccessorPolicy>& rData)
-{
-    rOStream << "mdspan(rank=" << rData.rank() << ", extents=[";
-    for (std::size_t i = 0; i < rData.rank(); ++i) {
-        rOStream << rData.extent(i) << (i == rData.rank() - 1 ? "" : ", ");
-    }
-    rOStream << "])";
-    return rOStream;
-}
 
 /// @}
 
