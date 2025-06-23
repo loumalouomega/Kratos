@@ -21,7 +21,7 @@
 #include "containers/mdspan.h"
 #include "testing/testing.h"
 
-namespace Kratos::Testing 
+namespace Kratos::Testing
 {
 
 KRATOS_TEST_CASE_IN_SUITE(MdspanConstruction, KratosCoreFastSuite)
@@ -147,35 +147,39 @@ KRATOS_TEST_CASE_IN_SUITE(MdspanLayoutStride, KratosCoreFastSuite)
 
 KRATOS_TEST_CASE_IN_SUITE(MdspanViewSlice, KratosCoreFastSuite)
 {
-    // Future::extents<int, 3, 4> extents;
-    // std::array<double, 12> data = {
-    //     1.0, 2.0, 3.0, 4.0,
-    //     5.0, 6.0, 7.0, 8.0,
-    //     9.0, 10.0, 11.0, 12.0
-    // };
-    // Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
+    Future::extents<int, 3, 4> extents;
+    std::array<double, 12> data = {
+        1.0, 2.0, 3.0, 4.0,
+        5.0, 6.0, 7.0, 8.0,
+        9.0, 10.0, 11.0, 12.0
+    };
+    Future::mdspan<double, Future::extents<int, 3, 4>> mds(data.data(), extents);
 
-    // // Create a slice: view of the second row (index 1)
+    // Create a slice: view of the second row (index 1)
     // auto slice = Future::mdspan_view(mds, 1, Future::full_extent); // Alias template deduction only available with ‘-std=c++20’ or ‘-std=gnu++20’
+    // In C++17, we explicitly state the resulting type instead of using 'auto'.
+    Future::mdspan<double, Future::extents<int, 4>> slice = Future::submdspan(mds, 1, Future::full_extent);
 
-    // KRATOS_EXPECT_EQ(slice.rank(), 1);
-    // KRATOS_EXPECT_EQ(slice.extent(0), 4);
-    // KRATOS_EXPECT_DOUBLE_EQ(slice(0), 5.0);
-    // KRATOS_EXPECT_DOUBLE_EQ(slice(1), 6.0);
-    // KRATOS_EXPECT_DOUBLE_EQ(slice(2), 7.0);
-    // KRATOS_EXPECT_DOUBLE_EQ(slice(3), 8.0);
+    KRATOS_EXPECT_EQ(slice.rank(), 1);
+    KRATOS_EXPECT_EQ(slice.extent(0), 4);
+    KRATOS_EXPECT_DOUBLE_EQ(slice(0), 5.0);
+    KRATOS_EXPECT_DOUBLE_EQ(slice(1), 6.0);
+    KRATOS_EXPECT_DOUBLE_EQ(slice(2), 7.0);
+    KRATOS_EXPECT_DOUBLE_EQ(slice(3), 8.0);
 
-    // // Modify data through slice
-    // slice(1) = 60.0;
-    // KRATOS_EXPECT_DOUBLE_EQ(mds(1,1), 60.0);
+    // Modify data through slice
+    slice(1) = 60.0;
+    KRATOS_EXPECT_DOUBLE_EQ(mds(1,1), 60.0);
 
-    // // Create a slice: view of the second column (index 1)
+    // Create a slice: view of the second column (index 1)
     // auto col_slice = Future::mdspan_view(mds, Future::full_extent, 1); // Alias template deduction only available with ‘-std=c++20’ or ‘-std=gnu++20’
-    // KRATOS_EXPECT_EQ(col_slice.rank(), 1);
-    // KRATOS_EXPECT_EQ(col_slice.extent(0), 3);
-    // KRATOS_EXPECT_DOUBLE_EQ(col_slice(0), 2.0);
-    // KRATOS_EXPECT_DOUBLE_EQ(col_slice(1), 60.0); // Modified value
-    // KRATOS_EXPECT_DOUBLE_EQ(col_slice(2), 10.0);
+    // In C++17, we explicitly state the resulting type instead of using 'auto'.
+    Future::mdspan<double, Future::extents<int, 3>> col_slice = Future::submdspan(mds, Future::full_extent, 1);
+    KRATOS_EXPECT_EQ(col_slice.rank(), 1);
+    KRATOS_EXPECT_EQ(col_slice.extent(0), 3);
+    KRATOS_EXPECT_DOUBLE_EQ(col_slice(0), 2.0);
+    KRATOS_EXPECT_DOUBLE_EQ(col_slice(1), 60.0); // Modified value
+    KRATOS_EXPECT_DOUBLE_EQ(col_slice(2), 10.0);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(MdspanViewSubmdspan, KratosCoreFastSuite)
