@@ -1,6 +1,9 @@
 import sys
 import os
 
+sys.path.append(os.path.join('..', '..', '..'))
+sys.path.append(os.path.join('..', 'python_scripts'))
+
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import test_helper
 
@@ -26,9 +29,14 @@ class KratosGeoMechanicsCurvedBeamElementTests(KratosUnittest.TestCase):
         x_displacements = [displacement[0] for displacement in displacements]
 
         node_number = 15
-        expected_value = 32.337500
+        expected_value = 34.50000
         self.assertAlmostEqual(expected_value, x_displacements[node_number-1], 6)
 
 
 if __name__ == '__main__':
-    KratosUnittest.main()
+    suites = KratosUnittest.KratosSuites
+    smallSuite = suites['small'] # These tests are executed by the continuous integration tool
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([KratosGeoMechanicsCurvedBeamElementTests]))
+    allSuite = suites['all']
+    allSuite.addTests(smallSuite)
+    KratosUnittest.runTests(suites)

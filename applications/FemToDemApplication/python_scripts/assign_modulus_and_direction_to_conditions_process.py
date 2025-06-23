@@ -1,10 +1,9 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 #import kratos core and applications
 import KratosMultiphysics
 import KratosMultiphysics.FemToDemApplication as KratosFemDem
 
-## This proces sets the value of a vector variable using a modulus and direction
-## In this case, the fixicity is given set by deffault to false.
+## This process sets the value of a vector variable using a modulus and direction
+## In this case, the fixicity is given set by default to false.
 import sys
 from math import *
 

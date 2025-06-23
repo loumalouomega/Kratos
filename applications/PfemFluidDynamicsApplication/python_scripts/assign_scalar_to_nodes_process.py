@@ -1,10 +1,9 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 #import kratos core and applications
 import KratosMultiphysics
 import KratosMultiphysics.PfemFluidDynamicsApplication as PfemFluid
 
 
-## This proces sets the value of a scalar variable
+## This process sets the value of a scalar variable
 ## Note that in some cases can be a vector of scalars (used in conditions with multiple nodes)
 import sys
 from math import *

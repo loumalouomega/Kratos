@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 #import kratos core and applications
 import KratosMultiphysics
 import KratosMultiphysics.DelaunayMeshingApplication as KratosDelaunay
@@ -90,7 +89,7 @@ class Mesher(object):
             #mesher_flags = "pnBYYQ"
 
             #BOUNDARY SEARCH
-            #to get conectivities, boundaries and neighbours only
+            #to get connectivities, boundaries and neighbours only
             #mesher_flags = "ncEBQ"
 
         if( self.dimension == 3 ):

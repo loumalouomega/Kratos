@@ -1,10 +1,9 @@
-from __future__ import print_function, absolute_import, division #makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 # importing the Kratos Library
 import KratosMultiphysics
 import KratosMultiphysics.DelaunayMeshingApplication as KratosDelaunay
 import KratosMultiphysics.ContactMechanicsApplication as KratosContact
 
-import remesh_domains_process
+import KratosMultiphysics.DelaunayMeshingApplication.remesh_domains_process as RemeshDomain
 
 def Factory(settings, Model):
     if( not isinstance(settings,KratosMultiphysics.Parameters) ):
@@ -12,7 +11,7 @@ def Factory(settings, Model):
     return ContactDomainProcess(Model, settings["Parameters"])
 
 
-class ContactDomainProcess(remesh_domains_process.RemeshDomainsProcess):
+class ContactDomainProcess(RemeshDomain.RemeshDomainsProcess):
     #
     def __init__(self, Model, custom_settings):
 

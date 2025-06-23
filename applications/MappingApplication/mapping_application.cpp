@@ -35,10 +35,11 @@
 #include "custom_mappers/nearest_neighbor_mapper.h"
 #include "custom_mappers/nearest_element_mapper.h"
 #include "custom_mappers/barycentric_mapper.h"
+#include "custom_mappers/projection_3D_2D_mapper.h"
 #include "custom_mappers/coupling_geometry_mapper.h"
 
 // Macros for registering mappers
-// wil be removed once using the core factories
+// will be removed once using the core factories
 #define KRATOS_REGISTER_MAPPER(MapperType, MapperName)                                                \
     {                                                                                                 \
     Model current_model;                                                                              \
@@ -59,6 +60,11 @@
                 MapperDefinitions::SparseSpaceType,MapperDefinitions::DenseSpaceType>>>               \
         (dummy_model_part, dummy_model_part));                                                        \
     }
+
+Kratos::KratosApplication* CreateApplication()
+{
+    return new Kratos::KratosMappingApplication();
+}
 
 namespace Kratos
 {
@@ -83,6 +89,7 @@ void KratosMappingApplication::Register()
     KRATOS_REGISTER_MAPPER_WITH_BACKEND(NearestNeighborMapper, "nearest_neighbor");
     KRATOS_REGISTER_MAPPER_WITH_BACKEND(NearestElementMapper,  "nearest_element");
     KRATOS_REGISTER_MAPPER_WITH_BACKEND(BarycentricMapper,     "barycentric");
+    KRATOS_REGISTER_MAPPER_WITH_BACKEND(Projection3D2DMapper,  "projection_3D_2D");
 
     KRATOS_REGISTER_MAPPER(CouplingGeometryMapper,  "coupling_geometry");
 

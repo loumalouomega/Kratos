@@ -1,9 +1,8 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 #import kratos core and applications
 import KratosMultiphysics
 
-## This proces sets the value of a vector variable component-by-component.
-## In this case, the fixicity is given set by deffault to true.
+## This process sets the value of a vector variable component-by-component.
+## In this case, the fixicity is given set by default to true.
 import sys
 
 def Factory(custom_settings, Model):

@@ -1,16 +1,15 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 #import kratos core and applications
 import KratosMultiphysics
 import KratosMultiphysics.DelaunayMeshingApplication as KratosDelaunay
 import KratosMultiphysics.ContactMechanicsApplication as KratosContact
 
 # Import the meshing domain (the base class for the mesher derivation)
-import meshing_domain
+import KratosMultiphysics.DelaunayMeshingApplication.meshing_domain as Meshing
 
 def CreateMeshingDomain(Model, custom_settings):
     return ContactDomain(Model, custom_settings)
 
-class ContactDomain(meshing_domain.MeshingDomain):
+class ContactDomain(Meshing.MeshingDomain):
 
     ##constructor. the constructor shall only take care of storing the settings
     ##and the pointer to the main_model part.

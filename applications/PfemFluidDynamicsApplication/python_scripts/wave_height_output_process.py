@@ -106,7 +106,7 @@ class WaveHeightOutputProcess(KM.OutputProcess):
         if param.IsVector(): # There is a single coordinate
             coordinates_list.append(param.GetVector())
         else:
-            for coordinate in param: # There is a list of coordinates
+            for coordinate in param.values(): # There is a list of coordinates
                 coordinates_list.append(coordinate.GetVector())
         return coordinates_list
 
@@ -125,8 +125,6 @@ class WaveHeightOutputProcess(KM.OutputProcess):
     def _GetHeader(self, coordinates):
         header = f'# Wave height at coordinates {list(coordinates)}\n'
         header += f'# "model_part_name": {self.model_part.Name}\n'
-        header += '# "wave_calculation_settings":\n'
-        for line in self.settings["wave_calculation_settings"].PrettyPrintJsonString().splitlines():
-            header += f'# {line}\n'
+        header += f'# "wave_calculation_settings": {"# ".join(self.settings["wave_calculation_settings"].PrettyPrintJsonString().splitlines(True))}\n'
         header += '#Time\tHeight\n'
         return header

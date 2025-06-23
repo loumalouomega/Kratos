@@ -1,10 +1,9 @@
-from __future__ import print_function, absolute_import, division #makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 
 # Import kratos core and applications
 import KratosMultiphysics
 import KratosMultiphysics.SolidMechanicsApplication
 import KratosMultiphysics.PfemApplication
-import MainSolid
+import KratosMultiphysics.SolidMechanicsApplication.solid_analysis as MainSolid
 
 class PfemSolution(MainSolid.Solution):
 
@@ -18,9 +17,9 @@ class PfemSolution(MainSolid.Solution):
 
         # add fluid processes
         add_fluid_process = True
-        if self.ProjectParameters.Has("problem_data"):
-            if self.ProjectParameters["problem_data"].Has("domain_type"):
-                if(self.ProjectParameters["problem_data"]["domain_type"].GetString() != "Solid"):
+        if self._project_parameters.Has("problem_data"):
+            if self._project_parameters["problem_data"].Has("domain_type"):
+                if(self._project_parameters["problem_data"]["domain_type"].GetString() != "Solid"):
                     add_fluid_process = False
 
         if add_fluid_process is True:
@@ -77,7 +76,7 @@ class PfemSolution(MainSolid.Solution):
         }
         """)
 
-        model_part_name = self.model.GetMainModelPart().Name
+        model_part_name = self._model.GetMainModelPart().Name
         default_settings["Parameters"].AddEmptyValue("model_part_name").SetString(model_part_name)
 
         constraints_processes.Append(default_settings)
@@ -94,7 +93,7 @@ class PfemSolution(MainSolid.Solution):
         }
         """)
 
-        model_part_name = self.model.GetMainModelPart().Name
+        model_part_name = self._model.GetMainModelPart().Name
         default_settings["Parameters"].AddEmptyValue("model_part_name").SetString(model_part_name)
 
         constraints_processes.Append(default_settings)
@@ -115,14 +114,14 @@ class PfemSolution(MainSolid.Solution):
         }
         """)
 
-        if(self.ProjectParameters.Has("problem_data")):
-            if(self.ProjectParameters["problem_data"].Has("gravity_vector")):
+        if(self._project_parameters.Has("problem_data")):
+            if(self._project_parameters["problem_data"].Has("gravity_vector")):
                 import math
                 #get normalized direction
                 direction   = []
                 scalar_prod = 0
-                for i in range(self.ProjectParameters["problem_data"]["gravity_vector"].size()):
-                    direction.append( self.ProjectParameters["problem_data"]["gravity_vector"][i].GetDouble() )
+                for i in range(self._project_parameters["problem_data"]["gravity_vector"].size()):
+                    direction.append( self._project_parameters["problem_data"]["gravity_vector"][i].GetDouble() )
                     scalar_prod = scalar_prod + direction[i]*direction[i]
 
                 norm = math.sqrt(scalar_prod)
@@ -144,7 +143,7 @@ class PfemSolution(MainSolid.Solution):
                         default_settings["Parameters"]["direction"][counter].SetDouble(i)
                         counter+=1
 
-                model_part_name = self.model.GetMainModelPart().Name
+                model_part_name = self._model.GetMainModelPart().Name
                 default_settings["Parameters"].AddEmptyValue("model_part_name").SetString(model_part_name)
 
                 loads_processes.Append(default_settings)
@@ -164,7 +163,7 @@ class PfemSolution(MainSolid.Solution):
         }
         """)
 
-        model_part_name = self.model.GetMainModelPart().Name
+        model_part_name = self._model.GetMainModelPart().Name
         default_settings["Parameters"].AddEmptyValue("model_part_name").SetString(model_part_name)
 
         problem_processes.Append(default_settings)

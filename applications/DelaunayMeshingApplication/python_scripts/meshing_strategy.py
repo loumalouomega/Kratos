@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division #makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 
 #import kratos core and applications
 import KratosMultiphysics
@@ -118,7 +117,10 @@ class MeshingStrategy(object):
             print(self._class_prefix()+"  ["+self.MeshingParameters.GetSubModelPartName()+" model part ] (REMESH:",self.settings["remesh"].GetBool(),"/ REFINE:",self.settings["refine"].GetBool(),"/ TRANSFER:",self.settings["transfer"].GetBool(),")")
 
         for mesher in meshers_list:
-            meshing_module =__import__(mesher)
+            if not "KratosMultiphysics" in mesher:
+                mesher = "KratosMultiphysics.DelaunayMeshingApplication." + mesher
+            import importlib
+            meshing_module = importlib.import_module(mesher)
             new_mesher = meshing_module.CreateMesher(self.main_model_part,self.MeshingParameters)
             self.meshers.append(new_mesher)
 

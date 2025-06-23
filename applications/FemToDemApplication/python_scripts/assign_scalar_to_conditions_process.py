@@ -1,9 +1,8 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 #import kratos core and applications
 import KratosMultiphysics
 import KratosMultiphysics.FemToDemApplication as KratosFemDem
 
-## This proces sets the value of a scalar variable to conditions
+## This process sets the value of a scalar variable to conditions
 
 from KratosMultiphysics.FemToDemApplication.assign_scalar_to_nodes_process import AssignScalarToNodesProcess
 

@@ -12,8 +12,7 @@
 //  Collaborator:    Vicente Mataix Ferrandiz
 //
 
-#if !defined(KRATOS_GENERIC_SMALL_STRAIN_ISOTROPIC_DAMAGE_3D_H_INCLUDED)
-#define KRATOS_GENERIC_SMALL_STRAIN_ISOTROPIC_DAMAGE_3D_H_INCLUDED
+#pragma once
 
 // System includes
 
@@ -70,11 +69,13 @@ public:
     /// Definition of the base class
     typedef typename std::conditional<VoigtSize == 6, ElasticIsotropic3D, LinearPlaneStrain >::type BaseType;
 
+    typedef array_1d<double, VoigtSize> BoundedArrayType;
+
     /// Counted pointer of GenericYieldSurface
     KRATOS_CLASS_POINTER_DEFINITION(GenericSmallStrainIsotropicDamage);
 
     /// The node definition
-    typedef Node<3> NodeType;
+    typedef Node NodeType;
 
     /// The geometry definition
     typedef Geometry<NodeType> GeometryType;
@@ -165,21 +166,6 @@ public:
         ) override;
 
     /**
-     * @brief To be called at the end of each solution step
-     * @details (e.g. from Element::FinalizeSolutionStep)
-     * @param rMaterialProperties the Properties instance of the current element
-     * @param rElementGeometry the geometry of the current element
-     * @param rShapeFunctionsValues the shape functions values in the current integration point
-     * @param rCurrentProcessInfo the current ProcessInfo instance
-     */
-    void FinalizeSolutionStep(
-        const Properties &rMaterialProperties,
-        const GeometryType &rElementGeometry,
-        const Vector& rShapeFunctionsValues,
-        const ProcessInfo& rCurrentProcessInfo
-        ) override;
-
-    /**
      * @brief Finalize the material response in terms of 1st Piola-Kirchhoff stresses
      * @see Parameters
      */
@@ -267,17 +253,6 @@ public:
     Vector& GetValue(
         const Variable<Vector> &rThisVariable,
         Vector& rValue
-        ) override;
-
-    /**
-     * @brief Returns the value of a specified variable (matrix)
-     * @param rThisVariable the variable to be returned
-     * @param rValue a reference to the returned value
-     * @return rValue output: the value of the specified variable
-     */
-    Matrix& GetValue(
-        const Variable<Matrix>& rThisVariable,
-        Matrix& rValue
         ) override;
 
     /**
@@ -420,7 +395,6 @@ private:
     // Converged values
     double mDamage = 0.0;
     double mThreshold = 0.0;
-    double mUniaxialStress = 0.0;
 
     ///@}
     ///@name Private Operators
@@ -465,4 +439,3 @@ private:
 }; // Class GenericYieldSurface
 
 } // namespace Kratos
-#endif

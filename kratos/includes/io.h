@@ -4,27 +4,20 @@
 //   _|\_\_|  \__,_|\__|\___/ ____/
 //                   Multi-Physics
 //
-//  License:		 BSD License
-//					 Kratos default license: kratos/license.txt
+//  License:         BSD License
+//                   Kratos default license: kratos/license.txt
 //
 //  Main authors:    Pooyan Dadvand
 //
 
-#if !defined(KRATOS_IO_H_INCLUDED )
-#define  KRATOS_IO_H_INCLUDED
+#pragma once
 
 // System includes
-#include <string>
-#include <iostream>
 #include <unordered_set>
 
 // External includes
 
 // Project includes
-#include "includes/define.h"
-#include "includes/mesh.h"
-#include "includes/element.h"
-#include "includes/condition.h"
 #include "includes/model_part.h"
 
 namespace Kratos
@@ -77,47 +70,86 @@ public:
     KRATOS_DEFINE_LOCAL_FLAG( MESH_ONLY );
     KRATOS_DEFINE_LOCAL_FLAG( SCIENTIFIC_PRECISION );
 
-    typedef Node<3> NodeType;
+    /// Node type definition
+    using NodeType = Node;
 
-    typedef Geometry<NodeType> GeometryType;
+    /// Geometry type definition
+    using GeometryType = Geometry<NodeType>;
 
-    typedef Mesh<NodeType, Properties, Element, Condition> MeshType;
+    /// Mesh type definition
+    using MeshType = Mesh<NodeType, Properties, Element, Condition>;
 
-    typedef MeshType::NodesContainerType NodesContainerType;
+    /// Nodes container type within MeshType
+    using NodesContainerType = typename MeshType::NodesContainerType;
 
-    typedef MeshType::PropertiesContainerType PropertiesContainerType;
+    /// Properties container type within MeshType
+    using PropertiesContainerType = typename MeshType::PropertiesContainerType;
 
-    typedef ModelPart::GeometryContainerType GeometryContainerType;
+    /// Geometry container type within ModelPart
+    using GeometryContainerType = typename ModelPart::GeometryContainerType;
 
-    typedef MeshType::ElementsContainerType ElementsContainerType;
+    /// The geometry map type within ModelPart
+    using GeometriesMapType = typename ModelPart::GeometriesMapType;
 
-    typedef MeshType::ConditionsContainerType ConditionsContainerType;
+    /// Elements container type within MeshType
+    using ElementsContainerType = typename MeshType::ElementsContainerType;
 
-    typedef std::vector<std::vector<std::size_t> > ConnectivitiesContainerType;
+    /// Conditions container type within MeshType
+    using ConditionsContainerType = typename MeshType::ConditionsContainerType;
 
-    typedef std::vector<std::vector<std::size_t> > PartitionIndicesContainerType;
+    /// MasterSlaveConstraint container type within MeshType
+    using MasterSlaveConstraintContainerType = typename MeshType::MasterSlaveConstraintContainerType;
 
-    typedef std::vector<std::size_t> PartitionIndicesType;
+    /// Connectivities container type
+    using ConnectivitiesContainerType = std::vector<std::vector<std::size_t>>;
 
-    typedef std::size_t SizeType;
+    /// Partition indices container type
+    using PartitionIndicesContainerType = std::vector<std::vector<std::size_t>>;
 
-    typedef DenseMatrix<int> GraphType;
+    /// Partition indices type
+    using PartitionIndicesType = std::vector<std::size_t>;
+
+    /// Size type definition
+    using SizeType = std::size_t;
+
+    /// Graph type definition
+    using GraphType = DenseMatrix<int>;
+
+    // Auxiliary struct containing information about the partitioning of the entities in a ModelPart
+    struct PartitioningInfo
+    {
+        GraphType Graph;
+        PartitionIndicesType NodesPartitions;                   // Partition where the Node is local
+        PartitionIndicesType ElementsPartitions;                // Partition where the Element is local
+        PartitionIndicesType ConditionsPartitions;              // Partition where the Condition is local
+        PartitionIndicesType ConstraintsPartitions;             // Partition where the MasterSlaveConstraint is local
+        PartitionIndicesType GeometriesPartitions;              // Partition where the Geometry is local
+        PartitionIndicesContainerType NodesAllPartitions;       // Partitions, in which the Node is present (local & ghost)
+        PartitionIndicesContainerType ElementsAllPartitions;    // Partitions, in which the Element is present (local & ghost)
+        PartitionIndicesContainerType ConditionsAllPartitions;  // Partitions, in which the Condition is present (local & ghost)
+        PartitionIndicesContainerType ConstraintsAllPartitions; // Partitions, in which the MasterSlaveConstraint is present (local & ghost)
+        PartitionIndicesContainerType GeometriesAllPartitions;  // Partitions, in which the Geometry is present (local & ghost)
+    };;
 
     ///@}
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    IO() {}
+    IO() = default;
 
     /// Destructor.
-    virtual ~IO() {}
+    virtual ~IO() = default;
 
+    /// Copy constructor.
+    IO(IO const& rOther) = delete;
 
     ///@}
     ///@name Operators
     ///@{
 
+    /// Assignment operator.
+    IO& operator=(IO const& rOther) = delete;
 
     ///@}
     ///@name Operations
@@ -339,6 +371,54 @@ public:
     }
 
     /**
+     * @brief Reads the master-slave constraints from an input source.
+     * @details This method is intended to be overridden by derived classes to implement
+     * the specific logic for reading master-slave constraints into the provided
+     * container. The base class implementation throws an error, indicating that
+     * the method must be implemented in the derived class.
+     * @param rThisNodes The nodes to be used for associating the master-slave constraints.
+     * @param rConstraintContainer The container where the master-slave
+     *        constraints will be stored. This container is expected to be populated
+     *        by the derived class implementation.
+     * @throws Exception If the base class method is called directly, an error is
+     *         thrown to indicate that the method must be implemented in a derived class.
+     */
+    virtual void ReadConstraints(
+        NodesContainerType& rThisNodes,
+        MasterSlaveConstraintContainerType& rConstraintContainer
+        )
+    {
+        KRATOS_ERROR << "Calling base class method (ReadConstraints). Please check the definition of derived class" << std::endl;
+    }
+
+    /**
+     * @brief This method reads the constraints connectivities
+     * @param rConditionsConnectivities The constraints connectivities
+     * @return The number of constraints
+     */
+    virtual std::size_t ReadConstraintsConnectivities(ConnectivitiesContainerType& rConstraintsConnectivities)
+    {
+        KRATOS_ERROR << "Calling base class method (ReadConstraintsConnectivities). Please check the definition of derived class" << std::endl;
+    }
+
+    /**
+     * @brief Writes the master-slave constraints to the output.
+     * @details This method is intended to be overridden by derived classes to provide
+     * specific functionality for writing master-slave constraints. The base
+     * class implementation throws an error, indicating that the method must
+     * be implemented in the derived class.
+     * @param rConstraintContainer The container holding the master-slave
+     *        constraints to be written.
+     * @throws Exception Always throws an error if called on the base class.
+     *         Derived classes must override this method to provide the actual
+     *         implementation.
+     */
+    virtual void WriteConstraints(MasterSlaveConstraintContainerType const& rConstraintContainer)
+    {
+        KRATOS_ERROR << "Calling base class method (WriteNewConstraint). Please check the definition of derived class" << std::endl;
+    }
+
+    /**
      * @brief This method reads the initial values of the model part
      * @param rThisModelPart The model part with the initial values to be read
      */
@@ -371,9 +451,26 @@ public:
      * @brief This method writes the mesh
      * @param rThisMesh The mesh to be written
      */
+    KRATOS_DEPRECATED_MESSAGE("'WriteMesh' with a non-const Mesh as input is deprecated. Please use the version of this function that accepts a const Mesh instead.")
     virtual void WriteMesh( MeshType& rThisMesh )
     {
         KRATOS_ERROR << "Calling base class method (WriteMesh). Please check the implementation of derived classes" << std::endl;
+    }
+
+    /**
+     * @brief This method writes the mesh
+     * @param rThisMesh The mesh to be written
+     */
+    virtual void WriteMesh(const MeshType& rThisMesh )
+    {
+        // legacy for backward compatibility
+        MeshType& non_const_mesh = const_cast<MeshType&>(rThisMesh);
+        KRATOS_START_IGNORING_DEPRECATED_FUNCTION_WARNING
+        this->WriteMesh(non_const_mesh);
+        KRATOS_STOP_IGNORING_DEPRECATED_FUNCTION_WARNING
+
+        // activate this error once the legacy code is removed
+        // KRATOS_ERROR << "Calling base class method (WriteMesh). Please check the implementation of derived classes" << std::endl;
     }
 
     /**
@@ -389,18 +486,52 @@ public:
      * @brief This method writes the model part
      * @param rThisModelPart The model part to be written
      */
+    KRATOS_DEPRECATED_MESSAGE("'WriteModelPart' with a non-const ModelPart as input is deprecated. Please use the version of this function that accepts a const ModelPart instead.")
     virtual void WriteModelPart(ModelPart & rThisModelPart)
     {
         KRATOS_ERROR << "Calling base class method (WriteModelPart). Please check the definition of derived class" << std::endl;
     }
 
     /**
+     * @brief This method writes the model part
+     * @param rThisModelPart The model part to be written
+     */
+    virtual void WriteModelPart(const ModelPart& rThisModelPart)
+    {
+        // legacy for backward compatibility
+        ModelPart& non_const_model_part = const_cast<ModelPart&>(rThisModelPart);
+        KRATOS_START_IGNORING_DEPRECATED_FUNCTION_WARNING
+        this->WriteModelPart(non_const_model_part);
+        KRATOS_STOP_IGNORING_DEPRECATED_FUNCTION_WARNING
+
+        // activate this error once the legacy code is removed
+        // KRATOS_ERROR << "Calling base class method (WriteModelPart). Please check the definition of derived class" << std::endl;
+    }
+
+    /**
      * @brief This method writes the node mesh
      * @param rThisMesh The mesh to be written
      */
+    KRATOS_DEPRECATED_MESSAGE("'WriteNodeMesh' with a non-const Mesh as input is deprecated. Please use the version of this function that accepts a const Mesh instead.")
     virtual void WriteNodeMesh( MeshType& rThisMesh )
     {
         KRATOS_ERROR << "Calling base class method (WriteNodeMesh). Please check the implementation of derived classes" << std::endl;
+    }
+
+    /**
+     * @brief This method writes the node mesh
+     * @param rThisMesh The mesh to be written
+     */
+    virtual void WriteNodeMesh(const MeshType& rThisMesh )
+    {
+        // legacy for backward compatibility
+        MeshType& non_const_mesh = const_cast<MeshType&>(rThisMesh);
+        KRATOS_START_IGNORING_DEPRECATED_FUNCTION_WARNING
+        this->WriteNodeMesh(non_const_mesh);
+        KRATOS_STOP_IGNORING_DEPRECATED_FUNCTION_WARNING
+
+        // activate this error once the legacy code is removed
+        // KRATOS_ERROR << "Calling base class method (WriteNodeMesh). Please check the implementation of derived classes" << std::endl;
     }
 
     /**
@@ -423,6 +554,21 @@ public:
     /**
      * @brief This method divides a model part into partitions
      * @param NumberOfPartitions The number of partitions
+     * @param rPartitioningInfo Information about partitioning of entities
+     */
+    virtual void DivideInputToPartitions(SizeType NumberOfPartitions,
+                                         const PartitioningInfo& rPartitioningInfo)
+    {
+        KRATOS_START_IGNORING_DEPRECATED_FUNCTION_WARNING
+        DivideInputToPartitions(NumberOfPartitions, rPartitioningInfo.Graph, rPartitioningInfo.NodesPartitions, rPartitioningInfo.ElementsPartitions, rPartitioningInfo.ConditionsPartitions, rPartitioningInfo.NodesAllPartitions, rPartitioningInfo.ElementsAllPartitions, rPartitioningInfo.ConditionsAllPartitions); // for backward compatibility
+        KRATOS_STOP_IGNORING_DEPRECATED_FUNCTION_WARNING
+
+        // KRATOS_ERROR << "Calling base class method (DivideInputToPartitions). Please check the definition of derived class" << std::endl; // enable this once the old version of this function is removed
+    }
+
+    /**
+     * @brief This method divides a model part into partitions
+     * @param NumberOfPartitions The number of partitions
      * @param rDomainsColoredGraph The colors of the partition graph
      * @param rNodesPartitions The partitions indices of the nodes
      * @param rElementsPartitions The partitions indices of the elements
@@ -431,6 +577,7 @@ public:
      * @param rElementsAllPartitions The partitions of the elements
      * @param rConditionsAllPartitions The partitions of the conditions
      */
+    KRATOS_DEPRECATED_MESSAGE("'This version of \"DivideInputToPartitions\" is deprecated, please use the interface that accepts a \"PartitioningInfo\"")
     virtual void DivideInputToPartitions(SizeType NumberOfPartitions,
                                          GraphType const& rDomainsColoredGraph,
                                          PartitionIndicesType const& rNodesPartitions,
@@ -447,6 +594,23 @@ public:
      * @brief This method divides a model part into partitions
      * @param pStreams The stream pointer
      * @param NumberOfPartitions The number of partitions
+     * @param rPartitioningInfo Information about partitioning of entities
+     */
+    virtual void DivideInputToPartitions(Kratos::shared_ptr<std::iostream> * pStreams,
+                                         SizeType NumberOfPartitions,
+                                         const PartitioningInfo& rPartitioningInfo)
+    {
+        KRATOS_START_IGNORING_DEPRECATED_FUNCTION_WARNING
+        DivideInputToPartitions(pStreams, NumberOfPartitions, rPartitioningInfo.Graph, rPartitioningInfo.NodesPartitions, rPartitioningInfo.ElementsPartitions, rPartitioningInfo.ConditionsPartitions, rPartitioningInfo.NodesAllPartitions, rPartitioningInfo.ElementsAllPartitions, rPartitioningInfo.ConditionsAllPartitions); // for backward compatibility
+        KRATOS_STOP_IGNORING_DEPRECATED_FUNCTION_WARNING
+
+        // KRATOS_ERROR << "Calling base class method (DivideInputToPartitions). Please check the definition of derived class" << std::endl; // enable this once the old version of this function is removed
+    }
+
+    /**
+     * @brief This method divides a model part into partitions
+     * @param pStreams The stream pointer
+     * @param NumberOfPartitions The number of partitions
      * @param rDomainsColoredGraph The colors of the partition graph
      * @param rNodesPartitions The partitions indices of the nodes
      * @param rElementsPartitions The partitions indices of the elements
@@ -455,6 +619,7 @@ public:
      * @param rElementsAllPartitions The partitions of the elements
      * @param rConditionsAllPartitions The partitions of the conditions
      */
+    KRATOS_DEPRECATED_MESSAGE("'This version of \"DivideInputToPartitions\" is deprecated, please use the interface that accepts a \"PartitioningInfo\"")
     virtual void DivideInputToPartitions(Kratos::shared_ptr<std::iostream> * pStreams,
                                          SizeType NumberOfPartitions,
                                          GraphType const& rDomainsColoredGraph,
@@ -468,20 +633,80 @@ public:
         KRATOS_ERROR << "Calling base class method (DivideInputToPartitions). Please check the definition of derived class" << std::endl;
     }
 
+    /**
+     * @brief Virtual method to read element and condition IDs from a sub-model part.
+     * @details This method is intended to be overridden by derived classes.
+     * @param rModelPartName The name of the sub-model part to read from.
+     * @param rElementsIds Set to store element IDs.
+     * @param rConditionsIds Set to store condition IDs.
+     */
     virtual void ReadSubModelPartElementsAndConditionsIds(
         std::string const& rModelPartName,
-        std::unordered_set<SizeType> &rElementsIds,
-        std::unordered_set<SizeType> &rConditionsIds)
+        std::unordered_set<SizeType>& rElementsIds,
+        std::unordered_set<SizeType>& rConditionsIds
+        )
     {
         KRATOS_ERROR << "Calling base class method (ReadSubModelPartElementsAndConditionsIds). Please check the definition of derived class" << std::endl;
     }
 
+    /**
+     * @brief Virtual method to read element, condition, master-slave constraint, and geometry IDs from a sub-model part.
+     * @details This method is intended to be overridden by derived classes.
+     * @param rModelPartName The name of the sub-model part to read from.
+     * @param rElementsIds Set to store element IDs.
+     * @param rConditionsIds Set to store condition IDs.
+     * @param rConstraintIds Set to store master-slave constraint IDs.
+     * @param rGeometriesIds Set to store geometry IDs.
+     */
+    virtual void ReadSubModelPartEntitiesIds(
+        std::string const& rModelPartName,
+        std::unordered_set<SizeType>& rElementsIds,
+        std::unordered_set<SizeType>& rConditionsIds,
+        std::unordered_set<SizeType>& rConstraintIds,
+        std::unordered_set<SizeType>& rGeometriesIds
+        )
+    {
+        KRATOS_WARNING("IO") << " The method ReadSubModelPartEntitiesIds with Constraint and Geometries is not implemented. Only the elements and conditions are read." << std::endl;
+        return ReadSubModelPartElementsAndConditionsIds(rModelPartName, rElementsIds, rConditionsIds);
+    }
+
+    /**
+     * @brief Virtual method to read nodal graph from entities list.
+     * @details This method is intended to be overridden by derived classes.
+     * @param rAuxConnectivities Container of connectivities.
+     * @param rElementsIds Set of element IDs.
+     * @param rConditionsIds Set of condition IDs.
+     * @return The size of the nodal graph.
+     */
     virtual std::size_t ReadNodalGraphFromEntitiesList(
         ConnectivitiesContainerType& rAuxConnectivities,
-        std::unordered_set<SizeType> &rElementsIds,
-        std::unordered_set<SizeType> &rConditionsIds)
+        std::unordered_set<SizeType>& rElementsIds,
+        std::unordered_set<SizeType>& rConditionsIds
+        )
     {
         KRATOS_ERROR << "Calling base class method (ReadNodalGraphFromEntitiesList). Please check the definition of derived class" << std::endl;
+    }
+
+    /**
+     * @brief Virtual method to read nodal graph from entities list including master-slave constraints and geometries.
+     * @details This method is intended to be overridden by derived classes.
+     * @param rAuxConnectivities Container of connectivities.
+     * @param rElementsIds Set of element IDs.
+     * @param rConditionsIds Set of condition IDs.
+     * @param rConstraintIds Set of master-slave constraint IDs.
+     * @param rGeometriesIds Set of geometry IDs.
+     * @return The size of the nodal graph.
+     */
+    virtual std::size_t ReadNodalGraphFromEntitiesList(
+        ConnectivitiesContainerType& rAuxConnectivities,
+        std::unordered_set<SizeType>& rElementsIds,
+        std::unordered_set<SizeType>& rConditionsIds,
+        std::unordered_set<SizeType>& rConstraintIds,
+        std::unordered_set<SizeType>& rGeometriesIds
+        )
+    {
+        KRATOS_WARNING("IO") << " The method ReadNodalGraphFromEntitiesList with Constraint and Geometries is not implemented. Only the elements and conditions are read." << std::endl;
+        return ReadNodalGraphFromEntitiesList(rAuxConnectivities, rElementsIds, rConditionsIds);
     }
 
     ///@}
@@ -592,13 +817,6 @@ private:
     ///@name Un accessible methods
     ///@{
 
-    /// Assignment operator.
-    IO& operator=(IO const& rOther);
-
-    /// Copy constructor.
-    IO(IO const& rOther);
-
-
     ///@}
 
 }; // Class IO
@@ -631,5 +849,3 @@ inline std::ostream& operator << (std::ostream& rOStream,
 
 
 }  // namespace Kratos.
-
-#endif // KRATOS_IO_H_INCLUDED  defined

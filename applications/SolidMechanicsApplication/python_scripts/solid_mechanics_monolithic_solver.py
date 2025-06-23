@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 import sys
 import os
 #import kratos core and applications
@@ -70,7 +69,7 @@ class MonolithicSolver(object):
                 "max_iteration": 10
             },
             "linear_solver_settings":{
-                "solver_type": "ExternalSolversApplication.super_lu",
+                "solver_type": "amgcl",
                 "max_iteration": 500,
                 "tolerance": 1e-9,
                 "scaling": false,

@@ -11,26 +11,17 @@
 //                  Ruben Zorrilla
 //
 
-#if !defined(KRATOS_FSI_VARIABLES_H_INCLUDED )
-#define  KRATOS_FSI_VARIABLES_H_INCLUDED
-
-
+#pragma once
 
 // System includes
-#include <string>
-#include <iostream>
 
 // External includes
-
 
 // Project includes
 #include "includes/define.h"
 #include "containers/variable.h"
 #include "includes/kratos_components.h"
-#include "includes/ublas_interface.h"
 #include "containers/array_1d.h"
-#include "containers/global_pointers_vector.h"
-#include "containers/periodic_variables_container.h"
 
 #undef  KRATOS_EXPORT_MACRO
 #define KRATOS_EXPORT_MACRO KRATOS_API
@@ -69,5 +60,3 @@ namespace Kratos
 
 #undef  KRATOS_EXPORT_MACRO
 #define KRATOS_EXPORT_MACRO KRATOS_NO_EXPORT
-
-#endif // KRATOS_FSI_VARIABLES_H_INCLUDED  defined

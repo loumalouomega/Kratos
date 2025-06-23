@@ -14,7 +14,7 @@
 // Project includes
 #include "includes/define.h"
 #include "processes/process.h"
-#include "processes/find_global_nodal_elemental_neighbours_process.h"
+#include "processes/find_global_nodal_entity_neighbours_process.h"
 #include "includes/node.h"
 #include "includes/element.h"
 #include "includes/model_part.h"
@@ -61,7 +61,7 @@ public:
     ///@{
     typedef  ModelPart::NodesContainerType NodesContainerType;
     typedef  ModelPart::ElementsContainerType ElementsContainerType;
-    typedef Geometry<Node < 3 > > GeometryType;
+    typedef Geometry<Node > GeometryType;
 
 
     /// Pointer definition of GenericFindElementalNeighboursProcess
@@ -156,7 +156,7 @@ private:
     ///@{
 
 
-    GlobalPointer<Element> CheckForNeighbourElems (const Geometry<Node<3> >& rBoundaryGeom,
+    GlobalPointer<Element> CheckForNeighbourElems (const Geometry<Node >& rBoundaryGeom,
                                                    Element & rElement,
                                                    const int Rank);
 

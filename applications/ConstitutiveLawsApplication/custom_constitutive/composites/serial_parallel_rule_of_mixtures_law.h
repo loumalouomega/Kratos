@@ -9,13 +9,11 @@
 //                   license: structural_mechanics_application/license.txt
 //
 //  Main authors:    Alejandro Cornejo
-//                   Vicente Mataix
-//                   Fernando Rastellini
-//  Collaborator:    Lucia Barbu
+//                   Vicente Mataix Ferrandiz
+//
 //
 
-#if !defined(KRATOS_SERIAL_PARALLEL_RULE_OF_MIXTURES_H_INCLUDED)
-#define KRATOS_SERIAL_PARALLEL_RULE_OF_MIXTURES_H_INCLUDED
+#pragma once
 
 // System includes
 
@@ -48,10 +46,13 @@ namespace Kratos
 /**
  * @class SerialParallelRuleOfMixturesLaw
  * @ingroup StructuralMechanicsApplication
- * @brief This CL implements the serial-parallel rule of mixtures developed by F.Rastellini
+ * @brief This CL implements the serial-parallel rule of mixtures detailed in Cornejo et al. "Methodology for the analysis of post-tensioned structures using a constitutive serial-parallel rule of mixtures"
+ * DOI: https://doi.org/10.1016/j.compstruct.2018.05.123
+ * The SP-RoM is able to work in 2D and in 3D.
  * @details
  * @author Alejandro Cornejo
  */
+template<unsigned int TDim>
 class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
     : public ConstitutiveLaw
 {
@@ -60,10 +61,16 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
     ///@{
 
     /// The node definition
-    typedef Node<3> NodeType;
+    using NodeType = Node;
 
     /// The geometry definition
-    typedef Geometry<NodeType> GeometryType;
+    using GeometryType = Geometry<NodeType>;
+
+    using BaseType = ConstitutiveLaw;
+
+    static constexpr SizeType Dimension = TDim;
+
+    static constexpr SizeType VoigtSize = (TDim == 3) ? 6 : 3;
 
     /// Definition of the machine precision tolerance
     static constexpr double machine_tolerance = std::numeric_limits<double>::epsilon();
@@ -100,8 +107,9 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
 
     // Copy constructor
     SerialParallelRuleOfMixturesLaw(SerialParallelRuleOfMixturesLaw const& rOther)
-        : ConstitutiveLaw(rOther), mpMatrixConstitutiveLaw(rOther.mpMatrixConstitutiveLaw), mpFiberConstitutiveLaw(rOther.mpFiberConstitutiveLaw),
-        mFiberVolumetricParticipation(rOther.mFiberVolumetricParticipation), mParallelDirections(rOther.mParallelDirections)
+        : BaseType(rOther), mpMatrixConstitutiveLaw(rOther.mpMatrixConstitutiveLaw), mpFiberConstitutiveLaw(rOther.mpFiberConstitutiveLaw),
+        mFiberVolumetricParticipation(rOther.mFiberVolumetricParticipation), mParallelDirections(rOther.mParallelDirections) , 
+        mPreviousStrainVector(rOther.mPreviousStrainVector) , mPreviousSerialStrainMatrix(rOther.mPreviousSerialStrainMatrix) , mIsPrestressed(rOther.mIsPrestressed) 
     {
     }
 
@@ -132,7 +140,7 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      */
     SizeType WorkingSpaceDimension() override
     {
-        return 3;
+        return Dimension;
     };
 
     /**
@@ -140,7 +148,7 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      */
     SizeType GetStrainSize() const override
     {
-        return 6;
+        return VoigtSize;
     };
 
     /**
@@ -166,20 +174,6 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      * @see Parameters
      */
     void CalculateMaterialResponseCauchy(ConstitutiveLaw::Parameters& rValues) override;
-
-    /**
-     * to be called at the end of each solution step
-     * (e.g. from Element::FinalizeSolutionStep)
-     * @param rMaterialProperties the Properties instance of the current element
-     * @param rElementGeometry the geometry of the current element
-     * @param rShapeFunctionsValues the shape functions values in the current integration point
-     * @param the current ProcessInfo instance
-     */
-    void FinalizeSolutionStep(
-        const Properties& rMaterialProperties,
-        const GeometryType& rElementGeometry,
-        const Vector& rShapeFunctionsValues,
-        const ProcessInfo& rCurrentProcessInfo) override;
 
     /**
      * Finalize the material response in terms of 1st Piola-Kirchhoff stresses
@@ -274,7 +268,7 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      * @param rValue new value of the specified variable
      * @param rCurrentProcessInfo the process info
      */
-     void SetValue(
+    void SetValue(
         const Variable<double>& rThisVariable,
         const double& rValue,
         const ProcessInfo& rCurrentProcessInfo
@@ -470,7 +464,9 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
         const Matrix& rSerialProjector,
         const Vector& rSerialStrainMatrix,
         Vector& rStrainVectorMatrix,
-        Vector& rStrainVectorFiber);
+        Vector& rStrainVectorFiber,
+        ConstitutiveLaw::Parameters& rValues,
+        const int Iteration = 1);
 
     /**
      * This method computes the initial aproximation of the Newton-Raphson procedure
@@ -505,14 +501,14 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      */
     void IntegrateStressesOfFiberAndMatrix(
         ConstitutiveLaw::Parameters& rValues,
-        Vector rMatrixStrainVector,
-        Vector rFiberStrainVector,
+        Vector& rMatrixStrainVector,
+        Vector& rFiberStrainVector,
         Vector& rMatrixStressVector,
         Vector& rFiberStressVector,
         const ConstitutiveLaw::StressMeasure& rStressMeasure);
 
     /**
-     * This method checks wether the serial stresses are in equilibrium
+     * This method checks whether the serial stresses are in equilibrium
      * @param rStrainVector The total strain of the composite
      * @param rSerialProjector The Serial behaviour projector
      * @param rMatrixStressVector  the stress vector of the matrix
@@ -551,7 +547,8 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      * @brief This method computes the tangent tensor
      * @param rValues The constitutive law parameters and flags
      */
-    void CalculateTangentTensor(ConstitutiveLaw::Parameters& rValues,
+    void CalculateTangentTensor(
+        ConstitutiveLaw::Parameters& rValues,
         const ConstitutiveLaw::StressMeasure& rStressMeasure = ConstitutiveLaw::StressMeasure_Cauchy);
 
     /**
@@ -559,7 +556,10 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      */
     bool RequiresInitializeMaterialResponse() override
     {
-        return true;
+        if (mpMatrixConstitutiveLaw->RequiresInitializeMaterialResponse() || mpFiberConstitutiveLaw->RequiresInitializeMaterialResponse()) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -567,8 +567,25 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
      */
     bool RequiresFinalizeMaterialResponse() override
     {
-        return true;
+        if (mpMatrixConstitutiveLaw->RequiresFinalizeMaterialResponse() || mpFiberConstitutiveLaw->RequiresFinalizeMaterialResponse()) {
+            return true;
+        }
+        return false;
     }
+
+    /**
+     * @brief This function is designed to be called once to perform all the checks needed
+     * on the input provided. Checks can be "expensive" as the function is designed to catch user's errors.
+     * @param rMaterialProperties
+     * @param rElementGeometry
+     * @param rCurrentProcessInfo
+     * @return 0 if OK, 1 otherwise
+     */
+    int Check(
+        const Properties& rMaterialProperties,
+        const GeometryType& rElementGeometry,
+        const ProcessInfo& rCurrentProcessInfo
+        ) const override;
 
     ///@}
     ///@name Access
@@ -639,7 +656,7 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
     int GetNumberOfSerialComponents()
     {
         const int parallel_components = inner_prod(mParallelDirections, mParallelDirections);
-        return this->GetStrainSize() - parallel_components;
+        return GetStrainSize() - parallel_components;
     }
 
     ///@}
@@ -670,9 +687,10 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
     ConstitutiveLaw::Pointer mpMatrixConstitutiveLaw;
     ConstitutiveLaw::Pointer mpFiberConstitutiveLaw;
     double mFiberVolumetricParticipation;
-    Vector mParallelDirections = ZeroVector(6);
-    Vector mPreviousStrainVector = ZeroVector(6);
+    Vector mParallelDirections = ZeroVector(VoigtSize);
+    Vector mPreviousStrainVector = ZeroVector(VoigtSize);
     Vector mPreviousSerialStrainMatrix = ZeroVector(GetNumberOfSerialComponents());
+    bool mIsPrestressed = false;
 
     ///@}
     ///@name Private Operators
@@ -681,15 +699,6 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
     ///@}
     ///@name Private Operations
     ///@{
-
-    /**
-     * @brief This method computes the elastic tensor
-     * @param rElasticityTensor The elastic tensor
-     * @param rMaterialProperties The material properties
-     */
-    void CalculateElasticMatrix(
-        Matrix& rElasticityTensor,
-        const Properties& rMaterialProperties);
 
     ///@}
     ///@name Private  Access
@@ -709,16 +718,26 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
 
     void save(Serializer& rSerializer) const override
     {
-        KRATOS_SERIALIZE_SAVE_BASE_CLASS(rSerializer, ConstitutiveLaw)
+        KRATOS_SERIALIZE_SAVE_BASE_CLASS(rSerializer, BaseType)
         rSerializer.save("MatrixConstitutiveLaw", mpMatrixConstitutiveLaw);
         rSerializer.save("FiberConstitutiveLaw", mpFiberConstitutiveLaw);
+        rSerializer.save("FiberVolumetricParticipation", mFiberVolumetricParticipation);
+        rSerializer.save("ParallelDirections", mParallelDirections);
+        rSerializer.save("PreviousStrainVector", mPreviousStrainVector);
+        rSerializer.save("PreviousSerialStrainMatrix", mPreviousSerialStrainMatrix);
+        rSerializer.save("IsPrestressed", mIsPrestressed);
     }
 
     void load(Serializer& rSerializer) override
     {
-        KRATOS_SERIALIZE_LOAD_BASE_CLASS(rSerializer, ConstitutiveLaw)
+        KRATOS_SERIALIZE_LOAD_BASE_CLASS(rSerializer, BaseType)
         rSerializer.load("MatrixConstitutiveLaw", mpMatrixConstitutiveLaw);
         rSerializer.load("FiberConstitutiveLaw", mpFiberConstitutiveLaw);
+        rSerializer.load("FiberVolumetricParticipation", mFiberVolumetricParticipation);
+        rSerializer.load("ParallelDirections", mParallelDirections);
+        rSerializer.load("PreviousStrainVector", mPreviousStrainVector);
+        rSerializer.load("PreviousSerialStrainMatrix", mPreviousSerialStrainMatrix);
+        rSerializer.load("IsPrestressed", mIsPrestressed);
     }
 
     ///@}
@@ -726,5 +745,3 @@ class KRATOS_API(CONSTITUTIVE_LAWS_APPLICATION) SerialParallelRuleOfMixturesLaw
 }; // Class SerialParallelRuleOfMixturesLaw
 
 } // namespace Kratos
-
-#endif

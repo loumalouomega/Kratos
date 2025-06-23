@@ -4,33 +4,22 @@
 //   _|\_\_|  \__,_|\__|\___/ ____/
 //                   Multi-Physics
 //
-//  License:		 BSD License
-//					 Kratos default license: kratos/license.txt
+//  License:         BSD License
+//                   Kratos default license: kratos/license.txt
 //
 //  Main authors:    Daniel Diez
 //
 
-#if !defined(KRATOS_METIS_DIVIDE_SUBMODELPARTS_HETEROGENEOUS_H_INCLUDED )
-#define  KRATOS_METIS_DIVIDE_SUBMODELPARTS_HETEROGENEOUS_H_INCLUDED
-
+#pragma once
 
 // System includes
-#include <string>
-#include <iostream>
-#include <algorithm>
-#include <unordered_set>
 
 // External includes
 
 // Project includes
-#include "includes/kratos_flags.h"
-#include "includes/element.h"
-#include "includes/model_part.h"
-#include "geometries/geometry_data.h"
 
 // Application includes
 #include "metis_divide_heterogeneous_input_process.h"
-
 
 namespace Kratos {
 
@@ -54,7 +43,7 @@ namespace Kratos {
 ///@{
 
 /// Short class definition.
-class MetisDivideSubModelPartsHeterogeneousInputProcess : public MetisDivideHeterogeneousInputProcess {
+class KRATOS_API(METIS_APPLICATION) MetisDivideSubModelPartsHeterogeneousInputProcess : public MetisDivideHeterogeneousInputProcess {
 public:
 
   ///@name Type Definitions
@@ -64,6 +53,8 @@ public:
   ///@name Pointer Definitions
   /// Pointer definition of MetisDivideSubModelPartsHeterogeneousInputProcess
   KRATOS_CLASS_POINTER_DEFINITION(MetisDivideSubModelPartsHeterogeneousInputProcess);
+
+  using BaseType = MetisDivideHeterogeneousInputProcess;
 
   ///@}
   ///@name Life Cycle
@@ -201,5 +192,3 @@ private:
 ///@}
 
 }  // namespace Kratos.
-
-#endif //KRATOS_METIS_DIVIDE_SUBMODELPARTS_HETEROGENEOUS_H_INCLUDED  defined

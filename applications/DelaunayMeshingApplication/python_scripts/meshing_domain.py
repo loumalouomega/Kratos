@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division  # makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 #import kratos core and applications
 import KratosMultiphysics
 import KratosMultiphysics.DelaunayMeshingApplication as KratosDelaunay
@@ -105,7 +104,8 @@ class MeshingDomain(object):
         self.dimension = self.main_model_part.ProcessInfo[KratosMultiphysics.SPACE_DIMENSION]
 
         # Construct the meshing strategy
-        meshing_module = __import__(self.settings["meshing_strategy"]["python_module"].GetString())
+        import importlib
+        meshing_module = importlib.import_module(self.settings["meshing_strategy"]["python_module"].GetString())
         self.MeshingStrategy = meshing_module.CreateMeshingStrategy(self.main_model_part, self.settings["meshing_strategy"])
 
         # Set MeshingParameters

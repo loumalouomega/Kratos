@@ -2,6 +2,8 @@ import time as timer
 import os
 import sys
 import pathlib
+import math
+import numpy as np
 from KratosMultiphysics import *
 from KratosMultiphysics.DEMApplication import *
 from KratosMultiphysics.analysis_stage import AnalysisStage
@@ -9,6 +11,7 @@ from KratosMultiphysics.DEMApplication.DEM_restart_utility import DEMRestartUtil
 import KratosMultiphysics.DEMApplication.dem_default_input_parameters
 from KratosMultiphysics.DEMApplication.analytic_tools import analytic_data_procedures
 from KratosMultiphysics.DEMApplication.materials_assignation_utility import MaterialsAssignationUtility
+from KratosMultiphysics.DEMApplication.DEM_properties_measure_utility import DEMPropertiesMeasureUtility
 
 from importlib import import_module
 
@@ -88,7 +91,7 @@ class DEMAnalysisStage(AnalysisStage):
         # Creating necessary directories:
         self.problem_name = self.GetProblemTypeFileName()
 
-        [self.post_path, self.data_and_results, self.graphs_path] = self.procedures.CreateDirectories(str(self.main_path), str(self.problem_name), do_print_results=self.do_print_results_option)[:-1]
+        [self.post_path, self.graphs_path] = self.procedures.CreateDirectories(str(self.main_path), str(self.problem_name), do_print_results=self.do_print_results_option)
 
         # Prepare modelparts
         self.CreateModelParts()
@@ -97,7 +100,6 @@ class DEMAnalysisStage(AnalysisStage):
             self.SetGraphicalOutput()
         self.report = DEM_procedures.Report()
         self.parallelutils = DEM_procedures.ParallelUtils()
-        self.materialTest = DEM_procedures.MaterialTest()
         self.translational_scheme = self.SetTranslationalScheme()
         self.rotational_scheme = self.SetRotationalScheme()
 
@@ -143,7 +145,6 @@ class DEMAnalysisStage(AnalysisStage):
 
         if self.post_normal_impact_velocity_option:
             self.ParticlesAnalyzerClass = analytic_data_procedures.ParticlesAnalyzerClass(self.analytic_model_part)
-
 
     def MakeAnalyticsMeasurements(self):
         self.SurfacesAnalyzerClass.MakeAnalyticsMeasurements()
@@ -245,6 +246,7 @@ class DEMAnalysisStage(AnalysisStage):
     def Initialize(self):
         self.time = 0.0
         self.time_old_print = 0.0
+        self.time_old_update_contact_element = 0.0
 
         self.ReadModelParts()
 
@@ -257,7 +259,6 @@ class DEMAnalysisStage(AnalysisStage):
                 self.FillAnalyticSubModelParts()
 
         self.SetAnalyticWatchers()
-
 
         # Setting up the buffer size
         self.procedures.SetUpBufferSizeInAllModelParts(self.spheres_model_part, 1, self.cluster_model_part, 1, self.dem_inlet_model_part, 1, self.rigid_face_model_part, 1)
@@ -282,14 +283,11 @@ class DEMAnalysisStage(AnalysisStage):
 
         self.DEMEnergyCalculator = DEM_procedures.DEMEnergyCalculator(self.DEM_parameters, self.spheres_model_part, self.cluster_model_part, self.graphs_path, "EnergyPlot.grf")
 
-        self.materialTest.Initialize(self.DEM_parameters, self.procedures, self._GetSolver(), self.graphs_path, self.post_path, self.spheres_model_part, self.rigid_face_model_part)
+        self.DEMPropertiesMeasureUtility = DEMPropertiesMeasureUtility(self.DEM_parameters, self.spheres_model_part, self.contact_model_part, self.graphs_path)
 
         self.KratosPrintInfo("Initialization Complete")
 
         self.report.Prepare(timer, self.DEM_parameters["ControlTime"].GetDouble())
-
-        self.materialTest.PrintChart()
-        self.materialTest.PrepareDataForGraph()
 
         self.post_utils = DEM_procedures.PostUtils(self.DEM_parameters, self.spheres_model_part)
         self.report.total_steps_expected = int(self.end_time / self._GetSolver().dt)
@@ -307,6 +305,20 @@ class DEMAnalysisStage(AnalysisStage):
 
         if self.DEM_parameters["output_configuration"]["print_number_of_neighbours_histogram"].GetBool():
             self.PreUtilities.PrintNumberOfNeighboursHistogram(self.spheres_model_part, os.path.join(self.graphs_path, "number_of_neighbours_histogram.txt"))
+
+        self.BoundingBoxMinX_update = self.DEM_parameters["BoundingBoxMinX"].GetDouble()
+        self.BoundingBoxMinY_update = self.DEM_parameters["BoundingBoxMinY"].GetDouble()
+        self.BoundingBoxMinZ_update = self.DEM_parameters["BoundingBoxMinZ"].GetDouble()
+        self.BoundingBoxMaxX_update = self.DEM_parameters["BoundingBoxMaxX"].GetDouble()
+        self.BoundingBoxMaxY_update = self.DEM_parameters["BoundingBoxMaxY"].GetDouble()
+        self.BoundingBoxMaxZ_update = self.DEM_parameters["BoundingBoxMaxZ"].GetDouble()
+
+        self.bounding_box_servo_loading_option = False
+        if "BoundingBoxServoLoadingOption" in self.DEM_parameters.keys():
+            if self.DEM_parameters["BoundingBoxServoLoadingOption"].GetBool():
+                self.bounding_box_servo_loading_option = True
+        
+        self.bounding_box_move_velocity = [0.0, 0.0, 0.0]
 
     def SetMaterials(self):
 
@@ -494,9 +506,12 @@ class DEMAnalysisStage(AnalysisStage):
             self.ParticlesAnalyzerClass.SetNodalMaxImpactVelocities()
             self.ParticlesAnalyzerClass.SetNodalMaxFaceImpactVelocities()
 
-
     def IsTimeToPrintPostProcess(self):
         return self.do_print_results_option and self.DEM_parameters["OutputTimeStep"].GetDouble() - (self.time - self.time_old_print) < 1e-2 * self._GetSolver().dt
+
+    def IsTimeToUpdateContactElementForServo(self):
+        return self.bounding_box_servo_loading_option and self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingFrequency"].GetInt() * \
+                self._GetSolver().dt - (self.time - self.time_old_update_contact_element) < 1e-2 * self._GetSolver().dt
 
     def PrintResults(self):
         #### GiD IO ##########################################
@@ -523,19 +538,153 @@ class DEMAnalysisStage(AnalysisStage):
                 self.FillAnalyticSubModelPartsWithNewParticles()
         if self.DEM_parameters["ContactMeshOption"].GetBool():
             self.UpdateIsTimeToPrintInModelParts(self.IsTimeToPrintPostProcess())
+        if self.bounding_box_servo_loading_option:
+            self.UpdateIsTimeToUpdateContactElementForServo(self.IsTimeToUpdateContactElementForServo())
 
         if self.DEM_parameters["Dimension"].GetInt() == 2:
             self.spheres_model_part.ProcessInfo[IMPOSED_Z_STRAIN_OPTION] = self.DEM_parameters["ImposeZStrainIn2DOption"].GetBool()
             if not self.DEM_parameters["ImposeZStrainIn2DWithControlModule"].GetBool():
                 if self.spheres_model_part.ProcessInfo[IMPOSED_Z_STRAIN_OPTION]:
-                    t = self.time
                     self.spheres_model_part.ProcessInfo.SetValue(IMPOSED_Z_STRAIN_VALUE, eval(self.DEM_parameters["ZStrainValue"].GetString()))
+
+        bounding_box_servo_loading_option = False
+        if "BoundingBoxServoLoadingOption" in self.DEM_parameters.keys():
+            if self.DEM_parameters["BoundingBoxServoLoadingOption"].GetBool():
+                bounding_box_servo_loading_option = True
+
+        if "BoundingBoxMoveOption" in self.DEM_parameters.keys():
+            if self.DEM_parameters["BoundingBoxMoveOption"].GetBool():
+                time_step = self.spheres_model_part.ProcessInfo[TIME_STEPS]
+                if bounding_box_servo_loading_option:
+                    NStepSearch = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingFrequency"].GetInt()
+                    if (time_step + 1) % NStepSearch == 0 and (time_step > 0):
+                        measured_global_stress = self.MeasureSphereForGettingGlobalStressTensor()
+                        self.CalculateBoundingBoxMoveVelocity(measured_global_stress)
+                        self.UpdateSearchStartegyAndCPlusPlusStrategy(self.bounding_box_move_velocity)
+                        self.procedures.UpdateBoundingBox(self.spheres_model_part, self.creator_destructor, self.bounding_box_move_velocity)
+                else:
+                    NStepSearch = self.DEM_parameters["NeighbourSearchFrequency"].GetInt()
+                    if (time_step + 1) % NStepSearch == 0 and (time_step > 0):
+                        bounding_box_move_velocity = self.DEM_parameters["BoundingBoxMoveVelocity"].GetVector()
+                        self.UpdateSearchStartegyAndCPlusPlusStrategy(bounding_box_move_velocity)
+                        self.procedures.UpdateBoundingBox(self.spheres_model_part, self.creator_destructor, bounding_box_move_velocity)
+
+    def CalculateBoundingBoxMoveVelocity(self, measured_global_stress):
+
+        # note: servo_loading_type = "isotropic" or "anisotropic"
+        servo_loading_type = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingType"].GetString()
+
+        if servo_loading_type == "isotropic":
+            self.CalculateBoundingBoxMoveVelocityIsotropic(measured_global_stress)
+        elif servo_loading_type == "anisotropic":
+            self.CalculateBoundingBoxMoveVelocityAnisotropic(measured_global_stress)
+        elif servo_loading_type == "triaxail_loading":
+            self.CalculateBoundingBoxMoveVelocityTriaxailLoading(measured_global_stress)
+    
+    def CalculateBoundingBoxMoveVelocityIsotropic(self, measured_global_stress):
+
+        servo_loading_stress = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingStress"].GetVector()
+        servo_loading_factor = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingFactor"].GetDouble()
+        d50 = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["MeanParticleDiameterD50"].GetDouble()
+        Youngs_modulus = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["ParticleYoungsModulus"].GetDouble()
+
+        servo_loading_stress_mean = (servo_loading_stress[0] + servo_loading_stress[1] + servo_loading_stress[2]) / 3.0
+        measured_global_stress_mean = (measured_global_stress[0][0] + measured_global_stress[1][1] + measured_global_stress[2][2]) / 3.0
+
+        delta_time = self.spheres_model_part.ProcessInfo.GetValue(DELTA_TIME)
+        servo_loading_coefficient = servo_loading_factor * d50 / (delta_time * Youngs_modulus)
+        self.bounding_box_move_velocity[0] = (servo_loading_stress_mean - measured_global_stress_mean) * servo_loading_coefficient
+
+        bonuding_box_serva_loading_velocity_max = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingVelocityMax"].GetDouble()
+        if abs(self.bounding_box_move_velocity[0]) > bonuding_box_serva_loading_velocity_max:
+            self.bounding_box_move_velocity[0] = bonuding_box_serva_loading_velocity_max * np.sign(self.bounding_box_move_velocity[0])
+        
+        self.bounding_box_move_velocity[1] = self.bounding_box_move_velocity[0]
+        self.bounding_box_move_velocity[2] = self.bounding_box_move_velocity[0]
+
+    def CalculateBoundingBoxMoveVelocityAnisotropic(self, measured_global_stress):
+
+        servo_loading_stress = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingStress"].GetVector()
+        servo_loading_factor = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingFactor"].GetDouble()
+        d50 = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["MeanParticleDiameterD50"].GetDouble()
+        Youngs_modulus = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["ParticleYoungsModulus"].GetDouble()
+        
+        delta_time = self.spheres_model_part.ProcessInfo.GetValue(DELTA_TIME)
+        servo_loading_coefficient = servo_loading_factor * d50 / (delta_time * Youngs_modulus)
+        self.bounding_box_move_velocity[0] = (servo_loading_stress[0] - measured_global_stress[0][0]) * servo_loading_coefficient
+        self.bounding_box_move_velocity[1] = (servo_loading_stress[1] - measured_global_stress[1][1]) * servo_loading_coefficient
+        self.bounding_box_move_velocity[2] = (servo_loading_stress[2] - measured_global_stress[2][2]) * servo_loading_coefficient
+
+        bonuding_box_move_velocity_max = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingVelocityMax"].GetDouble()
+        if abs(self.bounding_box_move_velocity[0]) > bonuding_box_move_velocity_max:
+            self.bounding_box_move_velocity[0] = bonuding_box_move_velocity_max * np.sign(self.bounding_box_move_velocity[0])
+        if abs(self.bounding_box_move_velocity[1]) > bonuding_box_move_velocity_max:
+            self.bounding_box_move_velocity[1] = bonuding_box_move_velocity_max * np.sign(self.bounding_box_move_velocity[1])
+        if abs(self.bounding_box_move_velocity[2]) > bonuding_box_move_velocity_max:
+            self.bounding_box_move_velocity[2] = bonuding_box_move_velocity_max * np.sign(self.bounding_box_move_velocity[2])
+
+    def CalculateBoundingBoxMoveVelocityTriaxailLoading(self, measured_global_stress):
+
+        servo_loading_stress = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingStress"].GetVector()
+        servo_loading_factor = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingFactor"].GetDouble()
+        d50 = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["MeanParticleDiameterD50"].GetDouble()
+        Youngs_modulus = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["ParticleYoungsModulus"].GetDouble()
+        
+        delta_time = self.spheres_model_part.ProcessInfo.GetValue(DELTA_TIME)
+        servo_loading_coefficient = servo_loading_factor * d50 / (delta_time * Youngs_modulus)
+        stress_difference = [servo_loading_stress[0] - measured_global_stress[0][0], servo_loading_stress[1] - measured_global_stress[1][1], servo_loading_stress[2] - measured_global_stress[2][2]]
+        self.bounding_box_move_velocity[0] = stress_difference[0] * servo_loading_coefficient
+        self.bounding_box_move_velocity[2] = stress_difference[2] * servo_loading_coefficient
+
+        # the loading velocity is defined by the user
+        triaxial_loading_velocity = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["TriaxialLoadingVelocity"].GetDouble()
+        self.bounding_box_move_velocity[1] = triaxial_loading_velocity
+
+        bonuding_box_move_velocity_max = self.DEM_parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingVelocityMax"].GetDouble()
+        if abs(self.bounding_box_move_velocity[0]) > bonuding_box_move_velocity_max:
+            self.bounding_box_move_velocity[0] = bonuding_box_move_velocity_max * np.sign(self.bounding_box_move_velocity[0])
+        if abs(self.bounding_box_move_velocity[2]) > bonuding_box_move_velocity_max:
+            self.bounding_box_move_velocity[2] = bonuding_box_move_velocity_max * np.sign(self.bounding_box_move_velocity[2])
+
+    def UpdateSearchStartegyAndCPlusPlusStrategy(self, move_velocity):
+
+        delta_time = self.spheres_model_part.ProcessInfo.GetValue(DELTA_TIME)
+
+        # note: control_bool_vector = [MoveMinX, MoveMinY, MoveMinZ, MoveMaxX, MoveMaxY, MoveMaxZ]
+        control_bool_vector = self.DEM_parameters["BoundingBoxMoveOptionDetail"].GetVector()
+        if control_bool_vector[0]:
+            self.BoundingBoxMinX_update += delta_time * move_velocity[0]
+        if control_bool_vector[1]:
+            self.BoundingBoxMinY_update += delta_time * move_velocity[1]
+        if control_bool_vector[2]:
+            self.BoundingBoxMinZ_update += delta_time * move_velocity[2]
+        if control_bool_vector[3]:
+            self.BoundingBoxMaxX_update -= delta_time * move_velocity[0]
+        if control_bool_vector[4]:
+            self.BoundingBoxMaxY_update -= delta_time * move_velocity[1]
+        if control_bool_vector[5]:
+            self.BoundingBoxMaxZ_update -= delta_time * move_velocity[2]
+
+        self._GetSolver().search_strategy = OMP_DEMSearch(self.BoundingBoxMinX_update,
+                                                        self.BoundingBoxMinY_update,
+                                                        self.BoundingBoxMinZ_update,
+                                                        self.BoundingBoxMaxX_update,
+                                                        self.BoundingBoxMaxY_update,
+                                                        self.BoundingBoxMaxZ_update)
+        self._GetSolver().UpdateCPlusPlusStrategy()
 
     def UpdateIsTimeToPrintInModelParts(self, is_time_to_print):
         self.UpdateIsTimeToPrintInOneModelPart(self.spheres_model_part, is_time_to_print)
         self.UpdateIsTimeToPrintInOneModelPart(self.cluster_model_part, is_time_to_print)
         self.UpdateIsTimeToPrintInOneModelPart(self.dem_inlet_model_part, is_time_to_print)
         self.UpdateIsTimeToPrintInOneModelPart(self.rigid_face_model_part, is_time_to_print)
+
+    def UpdateIsTimeToUpdateContactElementForServo(self, is_time_to_update_contact_element):
+        self.spheres_model_part.ProcessInfo[IS_TIME_TO_UPDATE_CONTACT_ELEMENT] = is_time_to_update_contact_element
+        self.cluster_model_part.ProcessInfo[IS_TIME_TO_UPDATE_CONTACT_ELEMENT] = is_time_to_update_contact_element
+        self.dem_inlet_model_part.ProcessInfo[IS_TIME_TO_UPDATE_CONTACT_ELEMENT] = is_time_to_update_contact_element
+        self.rigid_face_model_part.ProcessInfo[IS_TIME_TO_UPDATE_CONTACT_ELEMENT] = is_time_to_update_contact_element
+        self.time_old_update_contact_element = self.time
 
     def UpdateIsTimeToPrintInOneModelPart(self, model_part, is_time_to_print):
         model_part.ProcessInfo[IS_TIME_TO_PRINT] = is_time_to_print
@@ -562,11 +711,9 @@ class DEMAnalysisStage(AnalysisStage):
     def OutputSolutionStep(self):
         #### PRINTING GRAPHS ####
         self.post_utils.ComputeMeanVelocitiesInTrap("Average_Velocity.txt", self.time, self.graphs_path)
-        self.materialTest.MeasureForcesAndPressure()
-        self.materialTest.PrintGraph(self.time)
-        self.materialTest.PrintCoordinationNumberGraph(self.time, self._GetSolver())
         self.DEMFEMProcedures.PrintGraph(self.time)
         self.DEMFEMProcedures.PrintBallsGraph(self.time)
+        self.DEMFEMProcedures.PrintAdditionalGraphs(self.time, self._GetSolver())
         self.DEMEnergyCalculator.CalculateEnergyAndPlot(self.time)
         self.BeforePrintingOperations(self.time)
         self.PrintResults()
@@ -595,7 +742,6 @@ class DEMAnalysisStage(AnalysisStage):
         super().Finalize()
         if self.do_print_results_option:
             self.GraphicalOutputFinalize()
-        self.materialTest.FinalizeGraphs()
         self.DEMFEMProcedures.FinalizeGraphs(self.rigid_face_model_part)
         self.DEMFEMProcedures.FinalizeBallsGraphs(self.spheres_model_part)
         self.DEMEnergyCalculator.FinalizeEnergyPlot()
@@ -634,6 +780,7 @@ class DEMAnalysisStage(AnalysisStage):
         del self.spheres_model_part
         del self.dem_inlet_model_part
         del self.mapping_model_part
+        del self.contact_model_part
 
         if self.DEM_parameters["dem_inlet_option"].GetBool():
             del self.DEM_inlet
@@ -642,7 +789,7 @@ class DEMAnalysisStage(AnalysisStage):
         self.demio = DEM_procedures.DEMIo(self.model, self.DEM_parameters, self.post_path, self.all_model_parts)
         if self.DEM_parameters["post_vtk_option"].GetBool():
             import KratosMultiphysics.DEMApplication.dem_vtk_output as dem_vtk_output
-            self.vtk_output = dem_vtk_output.VtkOutput(self.main_path, self.problem_name, self.spheres_model_part, self.rigid_face_model_part)
+            self.vtk_output = dem_vtk_output.VtkOutput(self.main_path, self.problem_name, self.spheres_model_part, self.contact_model_part, self.rigid_face_model_part, self.DEM_parameters)
 
     def GraphicalOutputInitialize(self):
         if self.do_print_results_option:
@@ -656,16 +803,19 @@ class DEMAnalysisStage(AnalysisStage):
         if self.DEM_parameters["PostEulerAngles"].GetBool():
             self.post_utils.PrintEulerAngles(self.spheres_model_part, self.cluster_model_part)
 
-        self.demio.ShowPrintingResultsOnScreen(self.all_model_parts)
-
         self.demio.PrintMultifileLists(time, self.post_path)
         self._GetSolver().PrepareElementsForPrinting()
         if self.DEM_parameters["ContactMeshOption"].GetBool():
             self._GetSolver().PrepareContactElementsForPrinting()
 
-        self.demio.PrintResults(self.all_model_parts, self.creator_destructor, self.dem_fem_search, time, self.bounding_box_time_limits)
+        if "post_gid_option" in self.DEM_parameters.keys():
+            if self.DEM_parameters["post_gid_option"].GetBool() != False:
+                self.demio.ShowPrintingResultsOnScreen(self.all_model_parts, 'GID')
+                self.demio.PrintResults(self.all_model_parts, self.creator_destructor, self.dem_fem_search, time, self.bounding_box_time_limits)
+
         if "post_vtk_option" in self.DEM_parameters.keys():
             if self.DEM_parameters["post_vtk_option"].GetBool():
+                self.demio.ShowPrintingResultsOnScreen(self.all_model_parts, 'VTK')
                 self.vtk_output.WriteResults(self.time)
 
         self.file_msh = self.demio.GetMultiFileListName(self.problem_name + "_" + "%.12g"%time + ".post.msh")
@@ -697,8 +847,6 @@ class DEMAnalysisStage(AnalysisStage):
         #### PRINTING GRAPHS ####
         os.chdir(self.graphs_path)
         self.post_utils.ComputeMeanVelocitiesInTrap("Average_Velocity.txt", self.time, self.graphs_path)
-        self.materialTest.MeasureForcesAndPressure()
-        self.materialTest.PrintGraph(self.time)
         self.DEMFEMProcedures.PrintGraph(self.time)
         self.DEMFEMProcedures.PrintBallsGraph(self.time)
         self.DEMEnergyCalculator.CalculateEnergyAndPlot(self.time)
@@ -708,6 +856,32 @@ class DEMAnalysisStage(AnalysisStage):
         if self.DEM_parameters["OutputTimeStep"].GetDouble() - time_to_print < 1e-2 * self._GetSolver().dt:
             self.PrintResultsForGid(self.time)
             self.time_old_print = self.time
+
+    def MeasureSphereForGettingPackingProperties(self, radius, center_x, center_y, center_z, type):        
+        domain_size = [0.0, 0.0, 0.0]
+        domain_size[0] = self.BoundingBoxMaxX_update - self.BoundingBoxMinX_update
+        domain_size[1] = self.BoundingBoxMaxY_update - self.BoundingBoxMinY_update
+        domain_size[2] = self.BoundingBoxMaxZ_update - self.BoundingBoxMinZ_update
+        return self.DEMPropertiesMeasureUtility.MeasureSphereForGettingPackingProperties(radius, center_x, center_y, center_z, type, domain_size)
+    
+    def MeasureSphereForGettingGlobalStressTensor(self):
+        Lx = self.BoundingBoxMaxX_update - self.BoundingBoxMinX_update
+        Ly = self.BoundingBoxMaxY_update - self.BoundingBoxMinY_update
+        Lz = self.BoundingBoxMaxZ_update - self.BoundingBoxMinZ_update
+        return self.DEMPropertiesMeasureUtility.MeasureSphereForGettingGlobalStressTensor(Lx, Ly, Lz)
+    
+    def MeasureSphereForGettingRadialDistributionFunction(self, radius, center_x, center_y, center_z, delta_r, d_mean):
+        self.DEMPropertiesMeasureUtility.MeasureSphereForGettingRadialDistributionFunction(radius, center_x, center_y, center_z, delta_r, d_mean)
+
+    def MeasureCubicForGettingPackingProperties(self, side_length, center_x, center_y, center_z, type):
+        domain_size = [0.0, 0.0, 0.0]
+        domain_size[0] = self.BoundingBoxMaxX_update - self.BoundingBoxMinX_update
+        domain_size[1] = self.BoundingBoxMaxY_update - self.BoundingBoxMinY_update
+        domain_size[2] = self.BoundingBoxMaxZ_update - self.BoundingBoxMinZ_update
+        return self.DEMPropertiesMeasureUtility.MeasureCubicForGettingPackingProperties(side_length, center_x, center_y, center_z, type, domain_size)
+
+    def MeasureTotalSpheresVolume(self):
+        return self.DEMPropertiesMeasureUtility.MeasureTotalSpheresVolume()
 
 if __name__ == "__main__":
     with open("ProjectParametersDEM.json",'r') as parameter_file:

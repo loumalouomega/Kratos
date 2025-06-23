@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division #makes KratosMultiphysics backward compatible with python 2.6 and 2.7
 import os
 # importing the Kratos Library
 import KratosMultiphysics
@@ -34,7 +33,7 @@ class RestartProcess(KratosMultiphysics.Process):
         self.settings = custom_settings
 
         # Warning: we may be changing the parameters object here:
-        self.TranslateLegacyVariablesAccordingToCurrentStandard(param)
+        self.TranslateLegacyVariablesAccordingToCurrentStandard(self.settings)
 
         self.settings.ValidateAndAssignDefaults(default_settings)
 

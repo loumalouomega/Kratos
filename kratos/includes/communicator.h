@@ -12,12 +12,7 @@
 //
 //
 
-
-
-#if !defined(KRATOS_COMMUNICATOR_H_INCLUDED )
-#define  KRATOS_COMMUNICATOR_H_INCLUDED
-
-
+#pragma once
 
 // System includes
 #include <string>
@@ -81,7 +76,7 @@ public:
 
     typedef unsigned int SizeType;
 
-    typedef Node < 3 > NodeType;
+    typedef Node NodeType;
 
     typedef Properties PropertiesType;
 
@@ -212,6 +207,8 @@ public:
 
     SizeType GlobalNumberOfConditions() const;
 
+    SizeType GlobalNumberOfMasterSlaveConstraints() const;
+
     SizeType GetNumberOfColors() const;
 
     void SetNumberOfColors(SizeType NewNumberOfColors);
@@ -225,22 +222,22 @@ public:
     /// Set the local mesh pointer to the given mesh
     void SetLocalMesh(MeshType::Pointer pGivenMesh);
 
-    /// Returns pointer to the mesh storing all local entites
+    /// Returns pointer to the mesh storing all local entities
     MeshType::Pointer pLocalMesh();
 
-    /// Returns pointer to the mesh storing all ghost entites
+    /// Returns pointer to the mesh storing all ghost entities
     MeshType::Pointer pGhostMesh();
 
-    /// Returns pointer to the mesh storing all interface entites
+    /// Returns pointer to the mesh storing all interface entities
     MeshType::Pointer pInterfaceMesh();
 
-    /// Returns a constant pointer to the mesh storing all local entites
+    /// Returns a constant pointer to the mesh storing all local entities
     const MeshType::Pointer pLocalMesh() const;
 
-    /// Returns a constant pointer to the mesh storing all ghost entites
+    /// Returns a constant pointer to the mesh storing all ghost entities
     const MeshType::Pointer pGhostMesh() const;
 
-    /// Returns a constant pointer to the mesh storing all interface entites
+    /// Returns a constant pointer to the mesh storing all interface entities
     const MeshType::Pointer pInterfaceMesh() const;
 
     MeshType::Pointer pLocalMesh(IndexType ThisIndex);
@@ -255,22 +252,22 @@ public:
 
     const MeshType::Pointer pInterfaceMesh(IndexType ThisIndex) const;
 
-    /// Returns the reference to the mesh storing all local entites
+    /// Returns the reference to the mesh storing all local entities
     MeshType& LocalMesh();
 
-    /// Returns the reference to the mesh storing all ghost entites
+    /// Returns the reference to the mesh storing all ghost entities
     MeshType& GhostMesh();
 
-    /// Returns the reference to the mesh storing all interface entites
+    /// Returns the reference to the mesh storing all interface entities
     MeshType& InterfaceMesh();
 
-    /// Returns a constant reference to the mesh storing all local entites
+    /// Returns a constant reference to the mesh storing all local entities
     MeshType const& LocalMesh() const;
 
-    /// Returns a constant reference to the mesh storing all ghost entites
+    /// Returns a constant reference to the mesh storing all ghost entities
     MeshType const& GhostMesh() const;
 
-    /// Returns a constant reference to the mesh storing all interface entites
+    /// Returns a constant reference to the mesh storing all interface entities
     MeshType const& InterfaceMesh() const;
 
     MeshType& LocalMesh(IndexType ThisIndex);
@@ -360,6 +357,18 @@ public:
     virtual bool SynchronizeNonHistoricalDataToMax(Variable<double> const& ThisVariable);
 
     /** 
+     * @brief Synchronize variable in nodal solution step data to the absolute maximum value across all processes.
+     * @param ThisVariable The variable to be synchronized.
+     */
+    virtual bool SynchronizeCurrentDataToAbsMax(Variable<double> const& ThisVariable);
+
+    /** 
+     * @brief Synchronize variable in nodal data to the absolute maximum value across all processes.
+     * @param ThisVariable The variable to be synchronized.
+     */
+    virtual bool SynchronizeNonHistoricalDataToAbsMax(Variable<double> const& ThisVariable);
+
+    /** 
      * @brief Synchronize variable in nodal solution step data to the minimum value across all processes.
      * @param ThisVariable The variable to be synchronized.
      */
@@ -370,6 +379,18 @@ public:
      * @param ThisVariable The variable to be synchronized.
      */
     virtual bool SynchronizeNonHistoricalDataToMin(Variable<double> const& ThisVariable);
+
+    /** 
+     * @brief Synchronize variable in nodal solution step data to the absolute minimum value across all processes.
+     * @param ThisVariable The variable to be synchronized.
+     */
+    virtual bool SynchronizeCurrentDataToAbsMin(Variable<double> const& ThisVariable);
+
+    /**
+     * @brief Synchronize variable in nodal data to the absolute minimum value across all processes. 
+     * @param ThisVariable The variable to be synchronized.
+     */
+    virtual bool SynchronizeNonHistoricalDataToAbsMin(Variable<double> const& ThisVariable);
 
     virtual bool SynchronizeElementalFlags();
 
@@ -584,5 +605,3 @@ inline std::ostream & operator <<(std::ostream& rOStream,
 
 
 } // namespace Kratos.
-
-#endif // KRATOS_COMMUNICATOR_H_INCLUDED  defined

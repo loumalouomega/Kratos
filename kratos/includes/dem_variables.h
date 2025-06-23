@@ -10,27 +10,11 @@
 //  Main authors:    Pooyan Dadvand
 //
 
-
-
-
-
-
-
-
-
-
-
-#if !defined(KRATOS_DEM_VARIABLES_H_INCLUDED )
-#define  KRATOS_DEM_VARIABLES_H_INCLUDED
-
-
+#pragma once
 
 // System includes
-#include <string>
-#include <iostream>
 
 // External includes
-
 
 // Project includes
 #include "includes/define.h"
@@ -38,8 +22,6 @@
 #include "includes/kratos_components.h"
 #include "includes/ublas_interface.h"
 #include "containers/array_1d.h"
-#include "containers/global_pointers_vector.h"
-#include "containers/periodic_variables_container.h"
 
 #undef  KRATOS_EXPORT_MACRO
 #define KRATOS_EXPORT_MACRO KRATOS_API
@@ -80,6 +62,7 @@ namespace Kratos
 
     // Swimming DEM Application BEGINNING
     KRATOS_DEFINE_VARIABLE( Matrix, PERMEABILITY)
+    KRATOS_DEFINE_VARIABLE( Matrix, CONSISTENT_MASS_MATRIX)
     KRATOS_DEFINE_VARIABLE( int, NUMBER_OF_INIT_BASSET_STEPS )
     KRATOS_DEFINE_VARIABLE( int, COUPLING_TYPE)
     KRATOS_DEFINE_VARIABLE( int, NON_NEWTONIAN_OPTION )
@@ -179,5 +162,3 @@ namespace Kratos
 
 #undef  KRATOS_EXPORT_MACRO
 #define KRATOS_EXPORT_MACRO KRATOS_NO_EXPORT
-
-#endif // KRATOS_DEM_VARIABLES_H_INCLUDED  defined

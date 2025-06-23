@@ -3,20 +3,16 @@
 //             | |   |    |   | (    |   |   | |   (   | |
 //       _____/ \__|_|   \__,_|\___|\__|\__,_|_|  \__,_|_| MECHANICS
 //
-//  License:		 BSD License
-//					 license: structural_mechanics_application/license.txt
+//  License:         BSD License
+//                   license: StructuralMechanicsApplication/license.txt
 //
 //  Main authors:    Anna Rehr
 //  Co-author   :    Vicente Mataix Ferrandiz
 //
 
-#if !defined(KRATOS_SPR_ERROR_PROCESS)
-#define KRATOS_SPR_ERROR_PROCESS
+#pragma once
 
 // System includes
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 
 // External includes
 
@@ -24,9 +20,6 @@
 #include "processes/process.h"
 #include "includes/kratos_parameters.h"
 #include "includes/model_part.h"
-#include "structural_mechanics_application_variables.h"
-#include "spaces/ublas_space.h"
-#include "utilities/math_utils.h"
 
 namespace Kratos
 {
@@ -55,7 +48,7 @@ namespace Kratos
 /**
  * @class SPRErrorProcess
  * @ingroup StructuralMechanicsApplication
- * @brief This class is can be used to compute the metrics of the model part with a superconvergent patch recovery (SPR) approach
+ * @brief This class can be used to compute the metrics of the model part with a superconvergent patch recovery (SPR) approach
  * @details The formulation employed in order to compute the super patch recovery is based on the work of O. C. Zienkiewicz
 J. Z. Zhu, and extended for contact mechanics. In the papers:
  * - The superconvergent patch recovery and a posteriori error estimates. Part 1: The recovery technique https://onlinelibrary.wiley.com/doi/abs/10.1002/nme.1620330702
@@ -79,7 +72,7 @@ public:
     typedef ModelPart::ConditionsContainerType                           ConditionsArrayType;
 
     /// The definition of the node type
-    typedef Node <3>                                                                NodeType;
+    typedef Node                                                                NodeType;
 
     /// Definition of the iterators
     typedef GlobalPointersVector< Element >::iterator                         WeakElementItType;
@@ -285,4 +278,3 @@ private:
 };// class SPRErrorProcess
 
 };// namespace Kratos.
-#endif /* KRATOS_SPR_ERROR_PROCESS defined */

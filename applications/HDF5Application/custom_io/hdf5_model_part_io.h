@@ -37,7 +37,7 @@ namespace HDF5
 ///@{
 
 /// A class for serial IO of a model part in HDF5.
-class ModelPartIO : public IO
+class KRATOS_API(HDF5_APPLICATION) ModelPartIO : public IO
 {
 public:
     ///@name Type Definitions
@@ -63,8 +63,6 @@ public:
     void WriteNodes(NodesContainerType const& rNodes) override;
 
     void ReadProperties(PropertiesContainerType& rThisProperties) override;
-
-    void WriteProperties(Properties const& rThisProperties) override;
 
     void WriteProperties(PropertiesContainerType const& rThisProperties) override;
 
