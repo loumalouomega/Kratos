@@ -24,6 +24,7 @@
 #include "includes/model_part_io.h"
 #include "includes/reorder_consecutive_model_part_io.h"
 #include "input_output/stl_io.h"
+#include "input_output/obj_io.h"
 #include "includes/gid_io.h"
 #include "python/add_io_to_python.h"
 #include "containers/flags.h"
@@ -38,10 +39,7 @@
 #include "includes/json_io.h"
 #endif
 
-namespace Kratos
-{
-
-namespace Python
+namespace Kratos::Python
 {
 
 void (GidIO<>::*pointer_to_io_read_single_properties)(Properties& rThisProperties ) = &IO::ReadProperties;
@@ -68,6 +66,8 @@ void  AddIOToPython(pybind11::module& m)
     .def("WriteElements",&IO::WriteElements)
     .def("ReadConditions",&IO::ReadConditions)
     .def("WriteConditions",&IO::WriteConditions)
+    .def("ReadConstraints",&IO::ReadConstraints)
+    .def("WriteConstraints",&IO::WriteConstraints)
     .def("ReadInitialValues",&ReadInitialValues1)
     .def("ReadInitialValues",&ReadInitialValues2)
     .def("ReadMesh",&IO::ReadMesh)
@@ -188,10 +188,12 @@ void  AddIOToPython(pybind11::module& m)
     py::class_<StlIO, StlIO::Pointer, IO>(m, "StlIO")
         .def(py::init<std::filesystem::path const& >())
         .def(py::init<std::filesystem::path const&, Parameters>())
-        .def("ReadModelPart", &StlIO::ReadModelPart)
-        .def("WriteModelPart", &StlIO::WriteModelPart)
         ;
 
+    py::class_<ObjIO, ObjIO::Pointer, IO>(m, "ObjIO")
+        .def(py::init<std::filesystem::path const& >())
+        .def(py::init<std::filesystem::path const&, Parameters>())
+        ;
 
     // Import of CAD models to the model part
     py::class_<CadJsonInput<>, CadJsonInput<>::Pointer>(m, "CadJsonInput")
@@ -242,8 +244,6 @@ void  AddIOToPython(pybind11::module& m)
     vtu_output.attr("CONDITIONS") = VtuOutput::CONDITIONS;
     vtu_output.attr("ELEMENTS") = VtuOutput::ELEMENTS;
 }
-}  // namespace Python.
-
-} // Namespace Kratos
+}  // namespace Kratos::Python.
 
 
