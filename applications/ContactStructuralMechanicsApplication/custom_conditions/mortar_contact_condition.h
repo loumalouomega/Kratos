@@ -263,7 +263,7 @@ public:
         ) override;
 
     /**
-     * @brief Creates a new element pointer from an arry of nodes
+     * @brief Creates a new element pointer from an array of nodes
      * @param NewId the ID of the new element
      * @param rThisNodes the nodes of the new element
      * @param pProperties the properties assigned to the new element
@@ -305,7 +305,7 @@ public:
 
     /**
      * @brief This is called during the assembling process in order to calculate the condition contribution in explicit calculation.
-     * @details NodalData is modified Inside the function, so the the "AddEXplicit" FUNCTIONS THE ONLY FUNCTIONS IN WHICH A CONDITION IS ALLOWED TO WRITE ON ITS NODES. The caller is expected to ensure thread safety hence SET/UNSETLOCK MUST BE PERFORMED IN THE STRATEGY BEFORE CALLING THIS FUNCTION
+     * @details NodalData is modified Inside the function, so the "AddEXplicit" FUNCTIONS THE ONLY FUNCTIONS IN WHICH A CONDITION IS ALLOWED TO WRITE ON ITS NODES. The caller is expected to ensure thread safety hence SET/UNSETLOCK MUST BE PERFORMED IN THE STRATEGY BEFORE CALLING THIS FUNCTION
      * @param rCurrentProcessInfo the current process info instance
      */
     void AddExplicitContribution(const ProcessInfo& rCurrentProcessInfo) override;
@@ -341,7 +341,7 @@ public:
         ) override;
 
     /******************************************************************/
-    /********** AUXILLIARY METHODS FOR GENERAL CALCULATIONS ***********/
+    /********** AUXILIARY METHODS FOR GENERAL CALCULATIONS ************/
     /******************************************************************/
 
     /**
@@ -546,7 +546,7 @@ protected:
         );
 
     /******************************************************************/
-    /********** AUXILLIARY METHODS FOR GENERAL CALCULATIONS ***********/
+    /********** AUXILIARY METHODS FOR GENERAL CALCULATIONS ************/
     /******************************************************************/
 
     /**

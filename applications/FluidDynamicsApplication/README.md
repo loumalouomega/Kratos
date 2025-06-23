@@ -19,6 +19,7 @@ _Wind flow over Barcelona scalability test. More info [here](https://github.com/
 #### Features
 The simulation of viscous incompressible flows is the main capability of this application.
 The application includes a variety of stabilized 2D/3D **Navier-Stokes** and **Stokes** solvers.
+Limited support to 2D axisymmetric problems is also included.
 Among the wide variety of stabilization techniques present in the literature, in this application the **Variational MultiScale (VMS)** (both with quasi-static and dynamic subscales), **Orthogonal SubScales (OSS)** and **Finite Increment Calculus (FIC)** methods are implemented.
 All the incompressible flow elements of the application support both **Newtonian** and **non-Newtonian** (Bingham, Herschel-Bulkley) constitutive models.
 
@@ -34,7 +35,7 @@ The application also includes two different solution strategies. First one is th
 #### Features
 Similar to the described above incompressible solver, the application also includes a **VMS stabilized weakly compressible Navier-Stokes** formulation.
 This solver modifies the mass conservation equation to add a slight compressibility which relates the pressure to the volume variation thanks to the inclusion of a pressure-density equation of state.
-The energy equation remains uncoupled so thermal effects are assummed to be negligible.
+The energy equation remains uncoupled so thermal effects are assumed to be negligible.
 
 ### 4. Compressible flows
 #### Features

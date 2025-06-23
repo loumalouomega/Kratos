@@ -236,7 +236,7 @@ public:
         ) override;
 
     /**
-     * @brief Creates a new element pointer from an arry of nodes
+     * @brief Creates a new element pointer from an array of nodes
      * @param NewId the ID of the new element
      * @param rThisNodes the nodes of the new element
      * @param pProperties the properties assigned to the new element
@@ -277,7 +277,7 @@ public:
         ) const override;
 
     /******************************************************************/
-    /********** AUXILLIARY METHODS FOR GENERAL CALCULATIONS ***********/
+    /********** AUXILIARY METHODS FOR GENERAL CALCULATIONS ************/
     /******************************************************************/
 
     /**
@@ -388,7 +388,7 @@ protected:
     ///@{
 
     /**
-     * This data will be used to compute teh derivatives
+     * This data will be used to compute the derivatives
      */
     struct DofData
     {
@@ -624,7 +624,7 @@ protected:
         );
 
     /***********************************************************************************/
-    /**************** AUXILLIARY METHODS FOR CONDITION LHS CONTRIBUTION ****************/
+    /**************** AUXILIARY METHODS FOR CONDITION LHS CONTRIBUTION *****************/
     /***********************************************************************************/
 
     /**
@@ -640,7 +640,7 @@ protected:
         );
 
     /******************************************************************/
-    /********** AUXILLIARY METHODS FOR GENERAL CALCULATIONS ***********/
+    /********** AUXILIARY METHODS FOR GENERAL CALCULATIONS ************/
     /******************************************************************/
 
     /**
