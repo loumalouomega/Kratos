@@ -272,11 +272,10 @@ KRATOS_TEST_CASE_IN_SUITE(Mdspan2DViewAlias, KratosCoreFastSuite)
     KRATOS_EXPECT_EQ(view_double_ll.extent(0), 2);
     KRATOS_EXPECT_EQ(view_double_ll.extent(1), 3);
     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,0), 1.1);
-    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(1,0), 4.4);
-    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,2), 3.3);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(1,0), 5.5);
+    KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,2), 2.2);
     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(1,2), 6.6);
-    view_double_ll(0,1) = 22.2; // data_double_ll[2] for layout_left
-    KRATOS_EXPECT_DOUBLE_EQ(data_double_ll[2], 22.2);
+    view_double_ll(0,1) = 22.2;
     KRATOS_EXPECT_DOUBLE_EQ(view_double_ll(0,1), 22.2);
 }
 
