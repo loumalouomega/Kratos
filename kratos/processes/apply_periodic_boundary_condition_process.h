@@ -34,6 +34,22 @@ class KRATOS_API(KRATOS_CORE) ApplyPeriodicConditionProcess : public Process
     /// Pointer definition of ApplyPeriodicConditionProcess
     KRATOS_CLASS_POINTER_DEFINITION(ApplyPeriodicConditionProcess);
 
+    ///@}
+    ///@name Operations
+    ///@{
+
+    /**
+     * @brief This method creates an pointer of the process
+     * @details We consider as input a Model and a set of Parameters for the sake of generality
+     * @warning Must be overrided in each process implementation
+     * @param rModel The model to be consider
+     * @param ThisParameters The configuration parameters
+     */
+    Process::Pointer Create(
+        Model& rModel,
+        Parameters ThisParameters
+        ) override;
+
     typedef Node                                         NodeType;
     typedef Variable<double>                                VariableType;
     typedef NodeType::IndexType                             IndexType;

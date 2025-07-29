@@ -196,6 +196,17 @@ const Parameters ApplyConstantVectorValueProcess::GetDefaultParameters() const
     })");
 }
 
+/***********************************************************************************/
+/***********************************************************************************/
+
+Process::Pointer ApplyConstantVectorValueProcess::Create(
+    Model& rModel,
+    Parameters ThisParameters
+    )
+{
+    return Kratos::make_shared<ApplyConstantVectorValueProcess>(rModel, ThisParameters);
+}
+
 }  // namespace Kratos.
 
 

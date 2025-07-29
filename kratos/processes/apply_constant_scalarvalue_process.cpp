@@ -247,4 +247,15 @@ const Parameters ApplyConstantScalarValueProcess::GetDefaultParameters() const
     }  )" );
 }
 
+/***********************************************************************************/
+/***********************************************************************************/
+
+Process::Pointer ApplyConstantScalarValueProcess::Create(
+    Model& rModel,
+    Parameters ThisParameters
+    )
+{
+    return Kratos::make_shared<ApplyConstantScalarValueProcess>(rModel, ThisParameters);
+}
+
 }

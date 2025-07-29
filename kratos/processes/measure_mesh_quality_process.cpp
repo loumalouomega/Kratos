@@ -97,3 +97,4 @@ namespace Kratos
 	}
 
 }  // namespace Kratos.
+Process::Pointer MeasureMeshqualityprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<MeasureMeshqualityprocess>(rModel, ThisParameters);}

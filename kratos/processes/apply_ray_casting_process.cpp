@@ -560,6 +560,17 @@ namespace Kratos
         mExtraRayOffset = 2.0 * mRelativeTolerance * mCharacteristicLength;
     }
 
+    template<std::size_t TDim>
+    Process::Pointer ApplyRayCastingProcess<TDim>::Create(
+        Model& rModel,
+        Parameters ThisParameters)
+    {
+        return Kratos::make_shared<ApplyRayCastingProcess<TDim>>(
+            rModel.GetModelPart(ThisParameters["volume_model_part"].GetString()),
+            rModel.GetModelPart(ThisParameters["skin_model_part"].GetString()),
+            ThisParameters);
+    }
+
     template class Kratos::ApplyRayCastingProcess<2>;
     template class Kratos::ApplyRayCastingProcess<3>;
 

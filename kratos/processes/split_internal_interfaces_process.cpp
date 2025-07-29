@@ -187,4 +187,4 @@ void SplitInternalInterfacesProcess::SplitBoundary(
     KRATOS_CATCH("");
 }
 
-}
+}Process::Pointer Splitinternalinterfacesprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Splitinternalinterfacesprocess>(rModel, ThisParameters);}

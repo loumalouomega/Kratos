@@ -91,6 +91,16 @@ public:
 
     /**
      * @brief Default constructor
+     * @param rModel The model to be set
+     * @param rParameters The configuration parameters
+     */
+    AssignScalarInputToEntitiesProcess(
+        Model& rModel,
+        Parameters rParameters
+        );
+
+    /**
+     * @brief Default constructor
      * @param rModelPart The model part to be set
      * @param rParameters The configuration parameters
      */

@@ -621,6 +621,14 @@ PointerVectorSet<Element, IndexedObject>& AssignScalarFieldToEntitiesProcess<Ele
 /***********************************************************************************/
 /***********************************************************************************/
 
+template<class TEntity, bool THistorical>
+Process::Pointer AssignScalarFieldToEntitiesProcess<TEntity, THistorical>::Create(
+    Model& rModel,
+    Parameters ThisParameters)
+{
+    return Kratos::make_shared<AssignScalarFieldToEntitiesProcess<TEntity, THistorical>>(rModel, ThisParameters);
+}
+
 template class AssignScalarFieldToEntitiesProcess<Node, AssignScalarFieldToEntitiesProcessSettings::SaveAsNonHistoricalVariable>;
 template class AssignScalarFieldToEntitiesProcess<Node, AssignScalarFieldToEntitiesProcessSettings::SaveAsHistoricalVariable>;
 template class AssignScalarFieldToEntitiesProcess<Condition>;

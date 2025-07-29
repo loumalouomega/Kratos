@@ -468,3 +468,4 @@ template void TimeAveragingProcess::CalculateTimeIntegratedNonHistoricalQuantity
     const double) const;
 
 } // namespace Kratos.
+Process::Pointer Timeaveragingprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Timeaveragingprocess>(rModel, ThisParameters);}

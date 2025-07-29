@@ -579,3 +579,4 @@ template class SkinDetectionProcess<3>;
 // class SkinDetectionProcess
 
 } // namespace Kratos
+Process::Pointer Skindetectionprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Skindetectionprocess>(rModel, ThisParameters);}

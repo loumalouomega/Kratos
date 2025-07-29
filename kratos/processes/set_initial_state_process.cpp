@@ -175,3 +175,4 @@ namespace Kratos
     template class SetInitialStateProcess<3>;
 
 }  // namespace Kratos.
+Process::Pointer Setinitialstateprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Setinitialstateprocess>(rModel, ThisParameters);}

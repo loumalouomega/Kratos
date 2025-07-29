@@ -1222,4 +1222,4 @@ template class SimpleMortarMapperProcess<3, 4, Variable<array_1d<double, 3>>>;
 template class SimpleMortarMapperProcess<3, 3, Variable<array_1d<double, 3>>, 4>;
 template class SimpleMortarMapperProcess<3, 4, Variable<array_1d<double, 3>>, 3>;
 
-}  // namespace Kratos.
+}  // namespace Kratos.Process::Pointer Simplemortarmapperprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Simplemortarmapperprocess>(rModel, ThisParameters);}

@@ -159,3 +159,4 @@ template class SubModelPartSkinDetectionProcess<2>;
 template class SubModelPartSkinDetectionProcess<3>;
 
 }  // namespace Kratos.
+Process::Pointer SubmodelpartSkindetectionprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<SubmodelpartSkindetectionprocess>(rModel, ThisParameters);}

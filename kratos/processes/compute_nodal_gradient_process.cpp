@@ -413,3 +413,4 @@ template class ComputeNodalGradientProcess<ComputeNodalGradientProcessSettings::
 template class ComputeNodalGradientProcess<ComputeNodalGradientProcessSettings::SaveAsNonHistoricalVariable>;
 
 } /* namespace Kratos.*/
+Process::Pointer Computenodalgradientprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Computenodalgradientprocess>(rModel, ThisParameters);}

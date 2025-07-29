@@ -465,3 +465,4 @@ const Parameters FindIntersectedGeometricalObjectsWithOBBProcess::GetDefaultPara
 }
 
 }  // namespace Kratos.
+Process::Pointer FindintersectEdgeometricalobjectswithobbprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<FindintersectEdgeometricalobjectswithobbprocess>(rModel, ThisParameters);}

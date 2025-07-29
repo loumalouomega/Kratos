@@ -995,6 +995,20 @@ namespace Kratos
         KRATOS_CATCH(" ");
     }
 
+    template<std::size_t TDim>
+    Process::Pointer CalculateDiscontinuousDistanceToSkinProcess<TDim>::Create(
+        Model& rModel,
+        Parameters ThisParameters
+        )
+    {
+        const std::string& r_volume_part_name = ThisParameters["volume_model_part_name"].GetString();
+        const std::string& r_skin_part_name = ThisParameters["skin_model_part_name"].GetString();
+        return Kratos::make_shared<CalculateDiscontinuousDistanceToSkinProcess<TDim>>(
+            rModel.GetModelPart(r_volume_part_name),
+            rModel.GetModelPart(r_skin_part_name),
+            ThisParameters);
+    }
+
     template class Kratos::CalculateDiscontinuousDistanceToSkinProcess<2>;
     template class Kratos::CalculateDiscontinuousDistanceToSkinProcess<3>;
 

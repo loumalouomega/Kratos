@@ -100,3 +100,4 @@ template class FindNodalHProcess<true>;
 template class FindNodalHProcess<false>;
 
 } // namespace Kratos
+Process::Pointer Findnodalhprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Findnodalhprocess>(rModel, ThisParameters);}

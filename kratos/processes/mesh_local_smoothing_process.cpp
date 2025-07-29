@@ -221,3 +221,4 @@ namespace Kratos
 	}
 
 }  // namespace Kratos.
+Process::Pointer Meshlocalsmoothingprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Meshlocalsmoothingprocess>(rModel, ThisParameters);}

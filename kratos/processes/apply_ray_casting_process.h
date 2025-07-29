@@ -144,6 +144,11 @@ public:
     ///@name Operations
     ///@{
 
+    Process::Pointer Create(
+        Model& rModel,
+        Parameters ThisParameters
+        ) override;
+
     const Parameters GetDefaultParameters() const override;
 
     /**

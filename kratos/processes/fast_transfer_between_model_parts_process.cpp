@@ -460,3 +460,4 @@ void FastTransferBetweenModelPartsProcess::ReplicateWithFlags()
 }
 
 }
+Process::Pointer Fasttransferbetweenmodelpartsprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Fasttransferbetweenmodelpartsprocess>(rModel, ThisParameters);}
