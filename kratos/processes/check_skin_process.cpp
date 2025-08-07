@@ -67,4 +67,3 @@ void CheckSkinProcess::Execute()
 }
 
 } // namespace Kratos
-Process::Pointer CheckSkinprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<CheckSkinprocess>(rModel, ThisParameters);}

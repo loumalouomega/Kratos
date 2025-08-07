@@ -45,6 +45,14 @@ namespace Kratos
     }
 
     template<std::size_t TDim>
+    Process::Pointer ApplyRayCastingInterfaceRecognitionProcess<TDim>::Create(
+        Model& rModel,
+        Parameters ThisParameters)
+    {
+        return Kratos::make_shared<ApplyRayCastingInterfaceRecognitionProcess<TDim>>(rModel, ThisParameters);
+    }
+
+    template<std::size_t TDim>
     const Parameters ApplyRayCastingInterfaceRecognitionProcess<TDim>::GetDefaultParameters() const
     {
         Parameters default_settings(R"({
@@ -68,14 +76,6 @@ namespace Kratos
                 r_node_distance = -r_node_distance;
             }
         };
-    }
-
-    template<std::size_t TDim>
-    Process::Pointer ApplyRayCastingInterfaceRecognitionProcess<TDim>::Create(
-        Model& rModel,
-        Parameters ThisParameters)
-    {
-        return Kratos::make_shared<ApplyRayCastingInterfaceRecognitionProcess<TDim>>(rModel, ThisParameters);
     }
 
     template class Kratos::ApplyRayCastingInterfaceRecognitionProcess<2>;

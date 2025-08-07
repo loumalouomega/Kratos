@@ -252,4 +252,3 @@ template class FindGlobalNodalEntityNeighboursProcess<ModelPart::ConditionsConta
 template class FindGlobalNodalEntityNeighboursProcess<ModelPart::ElementsContainerType>;
 
 }  // namespace Kratos.
-Process::Pointer FindglobalnodalEntityneighboursprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<FindglobalnodalEntityneighboursprocess>(rModel, ThisParameters);}

@@ -67,6 +67,13 @@ ApplyPeriodicConditionProcess::~ApplyPeriodicConditionProcess()
 {
 }
 
+Process::Pointer ApplyPeriodicConditionProcess::Create(Model &rModel, Parameters ThisParameters)
+{
+    const std::string master_model_part_name = ThisParameters["master_model_part_name"].GetString();
+    const std::string slave_model_part_name = ThisParameters["slave_model_part_name"].GetString();
+    return Kratos::make_unique<ApplyPeriodicConditionProcess>(rModel.GetModelPart(master_model_part_name), rModel.GetModelPart(slave_model_part_name), ThisParameters);
+}
+
 /**
     * @brief  Function to remove the common nodes of slave and master modelparts from the slave modelpart
     */
@@ -291,13 +298,6 @@ void ApplyPeriodicConditionProcess::TransformNode(const array_1d<double, 3 >& rC
     }
 
     rTransformedCoordinates(0) = transformed_node[0]; rTransformedCoordinates(1) = transformed_node[1]; rTransformedCoordinates(2) = transformed_node[2];
-}
-
-Process::Pointer ApplyPeriodicConditionProcess::Create(Model &rModel, Parameters ThisParameters)
-{
-    const std::string master_model_part_name = ThisParameters["master_model_part_name"].GetString();
-    const std::string slave_model_part_name = ThisParameters["slave_model_part_name"].GetString();
-    return Kratos::make_unique<ApplyPeriodicConditionProcess>(rModel.GetModelPart(master_model_part_name), rModel.GetModelPart(slave_model_part_name), ThisParameters);
 }
 
 }  // namespace Kratos.

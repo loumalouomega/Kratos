@@ -69,6 +69,18 @@ AssignScalarVariableToEntitiesProcess<TEntity, THistorical>::AssignScalarVariabl
 /***********************************************************************************/
 
 template<class TEntity, bool THistorical>
+Process::Pointer AssignScalarVariableToEntitiesProcess<TEntity, THistorical>::Create(
+    Model& rModel,
+    Parameters ThisParameters
+    )
+{
+    return Kratos::make_shared<AssignScalarVariableToEntitiesProcess<TEntity, THistorical>>(rModel, ThisParameters);
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+template<class TEntity, bool THistorical>
 void AssignScalarVariableToEntitiesProcess<TEntity, THistorical>::Execute()
 {
     KRATOS_TRY;
@@ -240,15 +252,6 @@ template void AssignScalarVariableToEntitiesProcess<MasterSlaveConstraint>::Inte
 
 /***********************************************************************************/
 /***********************************************************************************/
-
-template<class TEntity, bool THistorical>
-Process::Pointer AssignScalarVariableToEntitiesProcess<TEntity, THistorical>::Create(
-    Model& rModel,
-    Parameters ThisParameters
-    )
-{
-    return Kratos::make_shared<AssignScalarVariableToEntitiesProcess<TEntity, THistorical>>(rModel, ThisParameters);
-}
 
 template class AssignScalarVariableToEntitiesProcess<Node, AssignScalarVariableToEntitiesProcessSettings::SaveAsNonHistoricalVariable>;
 template class AssignScalarVariableToEntitiesProcess<Node, AssignScalarVariableToEntitiesProcessSettings::SaveAsHistoricalVariable>;

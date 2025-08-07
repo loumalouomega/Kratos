@@ -191,4 +191,3 @@ template class CalculateNodalAreaProcess<false>;
 }  // namespace Kratos.
 
 
-Process::Pointer Calculatenodalareaprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Calculatenodalareaprocess>(rModel, ThisParameters);}

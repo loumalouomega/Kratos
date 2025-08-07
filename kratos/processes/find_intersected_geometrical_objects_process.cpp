@@ -390,4 +390,3 @@ const Parameters FindIntersectedGeometricalObjectsProcess::GetDefaultParameters(
 }
 
 }  // namespace Kratos.
-Process::Pointer FindintersectEdgeometricalobjectsprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<FindintersectEdgeometricalobjectsprocess>(rModel, ThisParameters);}

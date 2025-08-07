@@ -172,4 +172,3 @@ template class EntitiesEraseProcess<Element>;
 template class EntitiesEraseProcess<Condition>;
 template class EntitiesEraseProcess<MasterSlaveConstraint>;
 }
-Process::Pointer Entityeraseprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Entityeraseprocess>(rModel, ThisParameters);}

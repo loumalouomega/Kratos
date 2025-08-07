@@ -194,4 +194,4 @@ const Parameters FindConditionsNeighboursProcess::GetDefaultParameters() const
     return default_parameters;
 }
 
-}  // namespace Kratos.Process::Pointer Findconditionsneighboursprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Findconditionsneighboursprocess>(rModel, ThisParameters);}
+}  // namespace Kratos.

@@ -340,4 +340,3 @@ template class ComputeNodalNormalDivergenceProcess<ComputeNodalDivergenceProcess
 template class ComputeNodalNormalDivergenceProcess<ComputeNodalDivergenceProcessSettings::SaveAsNonHistoricalVariable>;
 
 } /* namespace Kratos.*/
-Process::Pointer Computenodalnormaldivergenceprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Computenodalnormaldivergenceprocess>(rModel, ThisParameters);}

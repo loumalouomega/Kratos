@@ -132,6 +132,17 @@ ApplyConstantVectorValueProcess::ApplyConstantVectorValueProcess(
 /***********************************************************************************/
 /***********************************************************************************/
 
+Process::Pointer ApplyConstantVectorValueProcess::Create(
+    Model& rModel,
+    Parameters ThisParameters
+    )
+{
+    return Kratos::make_shared<ApplyConstantVectorValueProcess>(rModel, ThisParameters);
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 void ApplyConstantVectorValueProcess::ExecuteInitialize()
 {
     // Compute the Value to be applied
@@ -194,17 +205,6 @@ const Parameters ApplyConstantVectorValueProcess::GetDefaultParameters() const
         "modulus"         : 1.0,
         "direction"       : [1.0, 0.0, 0.0]
     })");
-}
-
-/***********************************************************************************/
-/***********************************************************************************/
-
-Process::Pointer ApplyConstantVectorValueProcess::Create(
-    Model& rModel,
-    Parameters ThisParameters
-    )
-{
-    return Kratos::make_shared<ApplyConstantVectorValueProcess>(rModel, ThisParameters);
 }
 
 }  // namespace Kratos.

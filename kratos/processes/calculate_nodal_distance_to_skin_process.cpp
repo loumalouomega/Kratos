@@ -196,4 +196,4 @@ void CalculateNodalDistanceToSkinProcess::PrintData(std::ostream& rOStream) cons
     rOStream << "Volume model part:\n" << mrVolumeModelPart << "\nSkin model part:\n" << mrSkinModelPart << "\nHistorical variable: " << std::boolalpha << mHistoricalValue << "\nSave distance in skin: " << std::boolalpha << mSaveDistanceInSkin << "\nDistance variable: " << mpDistanceVariable->Name() << std::endl;
 }
 
-} // namespace Kratos.Process::Pointer CalculatenodaldistancetoSkinprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<CalculatenodaldistancetoSkinprocess>(rModel, ThisParameters);}
+} // namespace Kratos.
