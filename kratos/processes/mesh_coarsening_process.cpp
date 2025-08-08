@@ -84,4 +84,3 @@ namespace Kratos
 }  // namespace Kratos.
 
 
-Process::Pointer Meshcoarseningprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Meshcoarseningprocess>(rModel, ThisParameters);}

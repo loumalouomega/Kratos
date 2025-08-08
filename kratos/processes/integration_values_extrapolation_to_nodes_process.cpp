@@ -426,4 +426,3 @@ void IntegrationValuesExtrapolationToNodesProcess::InitializeVariables()
 }
 
 }  // namespace Kratos.
-Process::Pointer Integrationvaluesextrapolationtonodesprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Integrationvaluesextrapolationtonodesprocess>(rModel, ThisParameters);}

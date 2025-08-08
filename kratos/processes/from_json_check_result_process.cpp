@@ -984,4 +984,3 @@ const ResultDatabase& FromJSONCheckResultProcess::GetGPDatabase()
 }
 
 } // namespace Kratos
-Process::Pointer FromjsonCheckresultprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<FromjsonCheckresultprocess>(rModel, ThisParameters);}

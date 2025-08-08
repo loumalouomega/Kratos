@@ -120,4 +120,3 @@ std::vector<bool> GenericFindElementalNeighboursProcess::HasNeighboursInFaces(co
 
 
 } /* namespace Kratos.*/
-Process::Pointer GenericFindelementsneighboursprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<GenericFindelementsneighboursprocess>(rModel, ThisParameters);}

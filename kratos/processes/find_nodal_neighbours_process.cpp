@@ -67,4 +67,3 @@ void FindNodalNeighboursProcess::ClearNeighbours()
 }  // namespace Kratos.
 
 
-Process::Pointer Findnodalneighboursprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Findnodalneighboursprocess>(rModel, ThisParameters);}
