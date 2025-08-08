@@ -83,4 +83,3 @@ namespace Kratos
 	}
 
 }  // namespace Kratos.
-Process::Pointer TetrahedraMeshworstelementsmoothingprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<TetrahedraMeshworstelementsmoothingprocess>(rModel, ThisParameters);}

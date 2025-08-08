@@ -86,4 +86,3 @@ void TetrahedraMeshEdgeSwappingProcess::PrintData(std::ostream& rOStream) const 
 }
 
 }  // namespace Kratos.
-Process::Pointer TetrahedraMeshEdgeswappingprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<TetrahedraMeshEdgeswappingprocess>(rModel, ThisParameters);}

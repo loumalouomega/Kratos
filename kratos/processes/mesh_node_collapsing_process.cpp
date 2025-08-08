@@ -142,4 +142,3 @@ namespace Kratos
 }  // namespace Kratos.
 
 
-Process::Pointer Meshnodecollapsingprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Meshnodecollapsingprocess>(rModel, ThisParameters);}

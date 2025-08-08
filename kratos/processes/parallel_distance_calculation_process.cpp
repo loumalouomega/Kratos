@@ -507,4 +507,4 @@ void ParallelDistanceCalculationProcess<TDim>::AssignDistanceSign()
 template class ParallelDistanceCalculationProcess<2>;
 template class ParallelDistanceCalculationProcess<3>;
 
-}  // namespace Kratos.Process::Pointer Paralleldistancecalculationprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<Paralleldistancecalculationprocess>(rModel, ThisParameters);}
+}  // namespace Kratos.

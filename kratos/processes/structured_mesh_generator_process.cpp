@@ -419,4 +419,3 @@ bool StructuredMeshGeneratorProcess::CheckDomainGeometryConnectivityForHexahedra
 }
 
 }  // namespace Kratos.
-Process::Pointer StructuredMeshgeneratorprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<StructuredMeshgeneratorprocess>(rModel, ThisParameters);}

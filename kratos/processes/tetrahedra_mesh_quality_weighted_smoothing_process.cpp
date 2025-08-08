@@ -62,4 +62,3 @@ namespace Kratos
 
 
 }  // namespace Kratos.
-Process::Pointer TetrahedraMeshqualityweightedsmoothingprocess::Create(    Model& rModel,    Parameters ThisParameters    ){    return Kratos::make_shared<TetrahedraMeshqualityweightedsmoothingprocess>(rModel, ThisParameters);}
