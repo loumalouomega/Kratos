@@ -789,10 +789,10 @@ public:
     inline static void SetToZero(MatrixType& rA)
     {
         // Set all values in the matrix to zero.
-        rA.setAllToScalar(0.0);
+        if (!rA.isFillActive()) rA.resumeFill(); rA.setAllToScalar(0.0);
 
         // Finalize the fill of the matrix if needed.
-        if (rA.isFillActive()) rA.fillComplete();
+        rA.fillComplete();
     }
 
     /**
