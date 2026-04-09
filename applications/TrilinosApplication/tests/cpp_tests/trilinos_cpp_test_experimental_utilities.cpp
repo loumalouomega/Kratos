@@ -99,10 +99,14 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
         // Non-diagonal values
         if (AddNoDiagonalValues) {
             if (myGlobalElements[i] == 0) {
+                nonDiagonalIndices[0] = 1;
                 A->replaceGlobalValues(myGlobalElements[i], Teuchos::ArrayView<const GO>(&nonDiagonalIndices[0], 1), Teuchos::ArrayView<const double>(&nonDiagonalValues[0], 1));
             } else if (myGlobalElements[i] == NumGlobalElements - 1) {
+                nonDiagonalIndices[0] = NumGlobalElements - 2;
                 A->replaceGlobalValues(myGlobalElements[i], Teuchos::ArrayView<const GO>(&nonDiagonalIndices[0], 1), Teuchos::ArrayView<const double>(&nonDiagonalValues[0], 1));
             } else {
+                nonDiagonalIndices[0] = myGlobalElements[i] - 1;
+                nonDiagonalIndices[1] = myGlobalElements[i] + 1;
                 A->replaceGlobalValues(myGlobalElements[i], Teuchos::ArrayView<const GO>(nonDiagonalIndices.data(), 2), Teuchos::ArrayView<const double>(nonDiagonalValues.data(), 2));
             }
         }
