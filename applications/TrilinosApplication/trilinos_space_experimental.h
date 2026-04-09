@@ -116,10 +116,6 @@ public:
     using GraphType = Tpetra::FECrsGraph<LO, GO, NT>;
     using GraphPointerType = Teuchos::RCP<const GraphType>;
 
-    /// Define the standard CrsMatrix type
-    using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
-    using CrsMatrixPointerType = Teuchos::RCP<CrsMatrixType>;
-
     // Define TPetra communicator
     using CommunicatorType = Teuchos::MpiComm<int>;
     using CommunicatorPointerType = Teuchos::RCP<const CommunicatorType>;
