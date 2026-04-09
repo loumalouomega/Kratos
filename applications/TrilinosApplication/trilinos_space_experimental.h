@@ -792,7 +792,7 @@ public:
         rA.setAllToScalar(0.0);
 
         // Finalize the fill of the matrix if needed.
-        rA.fillComplete();
+        if (rA.isFillActive()) rA.fillComplete();
     }
 
     /**
@@ -1158,7 +1158,7 @@ public:
         }
 
         // Finalizing graph construction
-        graph->fillComplete();
+        if (graph->isFillActive()) graph->fillComplete();
         KRATOS_ERROR_IF(!graph->isFillComplete()) << "Tpetra graph fillComplete failed" << std::endl;
 
         return graph;
@@ -1222,7 +1222,7 @@ public:
         }
 
         // Complete fill of the matrix
-        rA.fillComplete();
+        if (rA.isFillActive()) rA.fillComplete();
     }
 
     /**

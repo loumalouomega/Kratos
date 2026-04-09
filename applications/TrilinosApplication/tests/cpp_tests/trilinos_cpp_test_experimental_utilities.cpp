@@ -83,7 +83,7 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
     }
 
     // End graph assembly
-    graph->fillComplete();
+    if (graph->isFillActive()) graph->fillComplete();
 
     // Create a Tpetra::FECrsMatrix using the graph
     MatrixPointerType A = Teuchos::rcp(new TrilinosSparseMatrixType(graph));
@@ -116,7 +116,7 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
     A->endAssembly();
 
     // Complete the fill process, optimizing data for matrix-vector products
-    A->fillComplete();
+    if (A->isFillActive()) A->fillComplete();
 
     return A;
 }
@@ -478,7 +478,7 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
 
     // Finish up, transforming the matrix entries into local numbering,
     // to optimize data transfer during matrix-vector products
-    A->fillComplete();
+    if (A->isFillActive()) A->fillComplete();
 
     return A;
 }
