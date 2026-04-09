@@ -188,6 +188,9 @@ public:
         const int global_elems = 0;
         MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
         GraphPointerType graph = Teuchos::rcp(new GraphType(map, map, 0));
+        if (graph->isFillActive()) {
+            graph->fillComplete();
+        }
         return Teuchos::rcp(new MatrixType(graph));
     }
 
@@ -407,7 +410,9 @@ public:
         //KRATOS_ERROR_IF(KeepAllHardZeros) << "KeepAllHardZeros is not implemented in Trilinos TPetra" << std::endl;
 
         // Ensure rC is ready to receive the result
+        if (!rC.isFillActive()) {
         rC.resumeFill();
+        }
 
         // Perform the matrix multiplication
         Tpetra::MatrixMatrix::Multiply(rA, false, rB, false, rC, CallFillCompleteOnResult);
@@ -457,7 +462,9 @@ public:
         //KRATOS_ERROR_IF(KeepAllHardZeros) << "KeepAllHardZeros is not implemented in Trilinos TPetra" << std::endl;
 
         // Ensure rC is ready to receive the result
+        if (!rC.isFillActive()) {
         rC.resumeFill();
+        }
 
         // Perform the matrix multiplication
         Tpetra::MatrixMatrix::Multiply(rA, TransposeFlag.first, rB, TransposeFlag.second, rC, CallFillCompleteOnResult);
@@ -793,7 +800,10 @@ public:
     inline static void SetToZero(MatrixType& rA)
     {
         // Set all values in the matrix to zero.
-        if (!rA.isFillActive()) rA.resumeFill(); rA.setAllToScalar(0.0);
+        if (!rA.isFillActive()) {
+            rA.resumeFill();
+        }
+        rA.setAllToScalar(0.0);
 
         // Finalize the fill of the matrix if needed.
         rA.fillComplete();
@@ -1226,6 +1236,9 @@ public:
         }
 
         // Complete fill of the matrix
+        if (p_fe_A) {
+            p_fe_A->endAssembly();
+        }
         if (rA.isFillActive()) rA.fillComplete();
     }
 

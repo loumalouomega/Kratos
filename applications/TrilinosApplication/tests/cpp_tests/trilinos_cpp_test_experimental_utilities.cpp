@@ -461,6 +461,9 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
         }
     }
 
+    // Finish up the graph
+    if (graph->isFillActive()) graph->fillComplete();
+
     // Create the matrix and set values
     MatrixPointerType A = Teuchos::rcp(new TrilinosSparseMatrixType(graph));
     // Set the matrix values
