@@ -166,7 +166,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixVector, KratosTrilinosAp
     TrilinosSparseSpaceType::CommunicatorPointerType tpetra_comm = Teuchos::rcp(new TrilinosSparseSpaceType::CommunicatorType(raw_mpi_comm));
 
     // Create a map
-    const int global_elems = 0;
+    const int global_elems = size;
     TrilinosSparseSpaceType::MapPointerType map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(global_elems, 0, tpetra_comm));
 
     // Create an Tpetra_Vector
@@ -197,7 +197,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixMatrix, KratosTrilinosAp
     TrilinosSparseSpaceType::CommunicatorPointerType tpetra_comm = Teuchos::rcp(new TrilinosSparseSpaceType::CommunicatorType(raw_mpi_comm));
 
     // Create a map
-    const int global_elems = 0;
+    const int global_elems = size;
     TrilinosSparseSpaceType::MapPointerType map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(global_elems, 0, tpetra_comm));
 
     // Create an Tpetra_Matrix
@@ -229,7 +229,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalTransposeMultMatrixVector, KratosT
     TrilinosSparseSpaceType::CommunicatorPointerType tpetra_comm = Teuchos::rcp(new TrilinosSparseSpaceType::CommunicatorType(raw_mpi_comm));
 
     // Create a map
-    const int global_elems = 0;
+    const int global_elems = size;
     TrilinosSparseSpaceType::MapPointerType map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(global_elems, 0, tpetra_comm));
 
     // Create an Tpetra_Vector
@@ -260,7 +260,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalTransposeMultMatrixMatrix, KratosT
     TrilinosSparseSpaceType::CommunicatorPointerType tpetra_comm = Teuchos::rcp(new TrilinosSparseSpaceType::CommunicatorType(raw_mpi_comm));
 
     // Create a map
-    const int global_elems = 0;
+    const int global_elems = size;
     TrilinosSparseSpaceType::MapPointerType map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(global_elems, 0, tpetra_comm));
 
     // Create an Tpetra_Matrix
@@ -292,7 +292,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBtDBProductOperation, KratosTrilin
     TrilinosSparseSpaceType::CommunicatorPointerType tpetra_comm = Teuchos::rcp(new TrilinosSparseSpaceType::CommunicatorType(raw_mpi_comm));
 
     // Create a map
-    const int global_elems = 0;
+    const int global_elems = size;
     TrilinosSparseSpaceType::MapPointerType map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(global_elems, 0, tpetra_comm));
 
     // Create an Tpetra_Matrix
@@ -332,7 +332,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBDBtProductOperation, KratosTrilin
     TrilinosSparseSpaceType::CommunicatorPointerType tpetra_comm = Teuchos::rcp(new TrilinosSparseSpaceType::CommunicatorType(raw_mpi_comm));
 
     // Create a map
-    const int global_elems = 0;
+    const int global_elems = size;
     TrilinosSparseSpaceType::MapPointerType map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(global_elems, 0, tpetra_comm));
 
     // Create an Tpetra_Matrix
