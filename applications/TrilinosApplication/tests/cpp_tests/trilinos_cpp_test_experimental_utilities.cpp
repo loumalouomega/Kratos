@@ -25,7 +25,8 @@ namespace Kratos
 TrilinosCPPTestExperimentalUtilities::TrilinosLocalMatrixType TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalMatrix(
     const int NumGlobalElements,
     const double Offset,
-    const bool AddNoDiagonalValues
+    const bool AddNoDiagonalValues,
+    const int InitialCapacity
     )
 {
     return TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(NumGlobalElements, Offset, AddNoDiagonalValues);
@@ -38,7 +39,8 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
     const DataCommunicator& rDataCommunicator,
     const int NumGlobalElements,
     const double Offset,
-    const bool AddNoDiagonalValues
+    const bool AddNoDiagonalValues,
+    const int InitialCapacity
     )
 {
     // Generate Tpetra communicator
@@ -223,7 +225,7 @@ void TrilinosCPPTestExperimentalUtilities::CheckSparseVector(
 /***********************************************************************************/
 
 void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
-    const TrilinosSparseMatrixType& rA,
+    const TrilinosBaseMatrixType& rA,
     const TrilinosLocalMatrixType& rB,
     const double NegligibleValueThreshold
     )
@@ -252,7 +254,7 @@ void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
 /***********************************************************************************/
 
 void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
-    const TrilinosSparseMatrixType& rA,
+    const TrilinosBaseMatrixType& rA,
     const std::vector<int>& rRowIndexes,
     const std::vector<int>& rColumnIndexes,
     const TrilinosLocalMatrixType& rB,
@@ -274,7 +276,7 @@ void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
 /***********************************************************************************/
 
 void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(
-    const TrilinosSparseMatrixType& rA,
+    const TrilinosBaseMatrixType& rA,
     const std::vector<int>& rRowIndexes,
     const std::vector<int>& rColumnIndexes,
     const std::vector<double>& rValues,

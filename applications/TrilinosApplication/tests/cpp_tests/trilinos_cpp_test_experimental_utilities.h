@@ -50,6 +50,7 @@ public:
 
     /// Trilinos definitions
     using TrilinosSparseMatrixType = TrilinosSparseSpaceType::MatrixType;
+    using TrilinosBaseMatrixType = TrilinosSparseSpaceType::BaseMatrixType;
     using TrilinosVectorType = TrilinosSparseSpaceType::VectorType;
 
     using TrilinosLocalMatrixType = TrilinosLocalSpaceType::MatrixType;
@@ -96,7 +97,8 @@ public:
     static TrilinosLocalMatrixType GenerateDummyLocalMatrix(
         const int NumGlobalElements = 12,
         const double Offset = 0.0,
-        const bool AddNoDiagonalValues = false
+        const bool AddNoDiagonalValues = false,
+        const int InitialCapacity = 0
         );
 
     /**
@@ -110,7 +112,8 @@ public:
         const DataCommunicator& rDataCommunicator,
         const int NumGlobalElements = 12,
         const double Offset = 0.0,
-        const bool AddNoDiagonalValues = false
+        const bool AddNoDiagonalValues = false,
+        const int InitialCapacity = 0
         );
 
     /**
@@ -169,7 +172,7 @@ public:
     * @param NegligibleValueThreshold The tolerance considered
     */
     static void CheckSparseMatrixFromLocalMatrix(
-        const TrilinosSparseMatrixType& rA,
+        const TrilinosBaseMatrixType& rA,
         const TrilinosLocalMatrixType& rB,
         const double NegligibleValueThreshold = 1e-8
         );
@@ -183,7 +186,7 @@ public:
     * @param NegligibleValueThreshold The tolerance considered
     */
     static void CheckSparseMatrixFromLocalMatrix(
-        const TrilinosSparseMatrixType& rA,
+        const TrilinosBaseMatrixType& rA,
         const std::vector<int>& rRowIndexes,
         const std::vector<int>& rColumnIndexes,
         const TrilinosLocalMatrixType& rB,
@@ -199,7 +202,7 @@ public:
     * @param NegligibleValueThreshold The tolerance considered
     */
     static void CheckSparseMatrix(
-        const TrilinosSparseMatrixType& rA,
+        const TrilinosBaseMatrixType& rA,
         const std::vector<int>& rRowIndexes,
         const std::vector<int>& rColumnIndexes,
         const std::vector<double>& rValues,

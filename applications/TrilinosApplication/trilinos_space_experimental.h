@@ -26,6 +26,7 @@
 #include <Teuchos_ArrayView.hpp>
 #include <Teuchos_GlobalMPISession.hpp>
 #include <TpetraExt_MatrixMatrix.hpp>
+#include <TpetraExt_TripleMatrixMultiply.hpp>
 // #include <TpetraExt_TripleMatrixMultiply_def.hpp> # TODO: Failing compilation for some reason in Ubuntu 20.04 version available
 //#include <MatrixMarket_Tpetra.hpp> # TODO: Failing compilation for some reason in Ubuntu 20.04 version available
 
@@ -103,6 +104,7 @@ public:
     using GO = typename MatrixType::global_ordinal_type;
     // The Node type.  e.g., Kokkos::DefaultNode::DefaultNodeType, defined in KokkosCompat_DefaultNode.hpp.
     using NT = typename MatrixType::node_type;
+    using BaseMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
 
     /// Define the import/export types
     using ImportType = Tpetra::Import<LO, GO, NT>;
@@ -373,25 +375,22 @@ public:
      * @param rX The vector considered
      * @param rY The result of the multiplication
      */
+    /**
+     * @brief Returns the multiplication of a matrix by a vector
+     * @details y = A*x
+     * @param rA The matrix considered
+     * @param rX The vector considered
+     * @param rY The result of the multiplication
+     */
     static void Mult(
         const MatrixType& rA,
         const VectorType& rX,
         VectorType& rY
         )
     {
-        // Multiply: y = A * x
         rA.apply(rX, rY);
     }
 
-    /**
-     * @brief Returns the multiplication matrix-matrix
-     * @details C = A*B
-     * @param rA The first matrix considered
-     * @param rB The second matrix considered
-     * @param rC The result of the multiplication
-     * @param CallFillCompleteOnResult	Optional argument, defaults to true. Power users may specify this argument to be false if they DON'T want this function to call C.FillComplete. (It is often useful to allow this function to call C.FillComplete, in cases where one or both of the input matrices are rectangular and it is not trivial to know which maps to use for the domain- and range-maps.)
-     * @param KeepAllHardZeros	Optional argument, defaults to false. If true, Multiply, keeps all entries in C corresponding to hard zeros. If false, the following happens by case: A*B^T, A^T*B^T - Does not store entries caused by hard zeros in C. A^T*B (unoptimized) - Hard zeros are always stored (this option has no effect) A*B, A^T*B (optimized) - Hard zeros in corresponding to hard zeros in A are not stored, There are certain cases involving reuse of C, where this can be useful.
-     */
     static void Mult(
         const MatrixType& rA,
         const MatrixType& rB,
@@ -402,16 +401,13 @@ public:
     {
         KRATOS_TRY
 
-        // Check if the KeepAllHardZeros is implemented
-        //KRATOS_ERROR_IF(KeepAllHardZeros) << "KeepAllHardZeros is not implemented in Trilinos TPetra" << std::endl;
+        // Use a temporary CrsMatrix to allow for dynamic sparsity
+        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
+        Teuchos::RCP<CrsMatrixType> aux_C = Teuchos::rcp(new CrsMatrixType(rC.getRowMap(), 16));
+        Tpetra::MatrixMatrix::Multiply(rA, false, rB, false, *aux_C, CallFillCompleteOnResult);
 
-        // Ensure rC is ready to receive the result
-        if (!rC.isFillActive()) {
-        rC.resumeFill();
-        }
-
-        // Perform the matrix multiplication
-        Tpetra::MatrixMatrix::Multiply(rA, false, rB, false, rC, CallFillCompleteOnResult);
+        // Copy values back to rC
+        CopyMatrixValues(rC, *aux_C);
 
         KRATOS_CATCH("")
     }
@@ -454,16 +450,13 @@ public:
     {
         KRATOS_TRY
 
-        // Check if the KeepAllHardZeros is implemented
-        //KRATOS_ERROR_IF(KeepAllHardZeros) << "KeepAllHardZeros is not implemented in Trilinos TPetra" << std::endl;
+        // Use a temporary CrsMatrix to allow for dynamic sparsity
+        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
+        Teuchos::RCP<CrsMatrixType> aux_C = Teuchos::rcp(new CrsMatrixType(rC.getRowMap(), 16));
+        Tpetra::MatrixMatrix::Multiply(rA, TransposeFlag.first, rB, TransposeFlag.second, *aux_C, CallFillCompleteOnResult);
 
-        // Ensure rC is ready to receive the result
-        if (!rC.isFillActive()) {
-        rC.resumeFill();
-        }
-
-        // Perform the matrix multiplication
-        Tpetra::MatrixMatrix::Multiply(rA, TransposeFlag.first, rB, TransposeFlag.second, rC, CallFillCompleteOnResult);
+        // Copy values back to rC
+        CopyMatrixValues(rC, *aux_C);
 
         KRATOS_CATCH("")
     }
@@ -487,41 +480,18 @@ public:
         const bool EnforceInitialGraph = false
         )
     {
-        // Check if the KeepAllHardZeros is implemented
-        //KRATOS_ERROR_IF(KeepAllHardZeros) << "KeepAllHardZeros is not implemented in Trilinos TPetra" << std::endl;
+        // Use temporary CrsMatrix for intermediate steps
+        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
+        Teuchos::RCP<CrsMatrixType> aux_1 = Teuchos::rcp(new CrsMatrixType(rB.getDomainMap(), 16));
+        Tpetra::MatrixMatrix::Multiply(rB, true, rD, false, *aux_1);
 
-        // Check if the EnforceInitialGraph is implemented
-        //KRATOS_ERROR_IF(EnforceInitialGraph) << "EnforceInitialGraph is not implemented in Trilinos TPetra" << std::endl;
+        Teuchos::RCP<CrsMatrixType> aux_2 = Teuchos::rcp(new CrsMatrixType(aux_1->getRowMap(), 16));
+        Tpetra::MatrixMatrix::Multiply(*aux_1, false, rB, false, *aux_2);
 
-        // Ensure rA is empty and ready to be filled
-        rA.resumeFill();
-
-        // Define first auxiliary matrix
-        const auto& r_row_map_a = rA.getRowMap();
-        GraphPointerType graph_a = Teuchos::rcp(new GraphType(r_row_map_a, r_row_map_a, 0));
-        MatrixPointerType aux_1 = Teuchos::rcp(new MatrixType(graph_a));
-
-        // First multiplication
-        TransposeMult(rB, rD, *aux_1, {true, false}, CallFillCompleteOnResult, KeepAllHardZeros);
-
-        // Already existing matrix
-        if (rA.getGlobalNumEntries() > 0) {
-            // Create a Tpetra_Matrix
-            const auto& r_row_map_b = rB.getRowMap();
-            GraphPointerType graph_b = Teuchos::rcp(new GraphType(r_row_map_b, r_row_map_b, 0));
-            MatrixPointerType aux_2 = Teuchos::rcp(new MatrixType(graph_b));
-
-            // Second multiplication
-            Mult(*aux_1, rB, *aux_2, CallFillCompleteOnResult, KeepAllHardZeros);
-
-            // Doing a swap
-            MatrixPointerType p_A = Teuchos::rcp(&rA, false);
-            std::swap(p_A, aux_2);
-        } else { // Empty matrix
-            // Second multiplication
-            Mult(*aux_1, rB, rA, CallFillCompleteOnResult, KeepAllHardZeros);
-        }
-
+        // We must ensure rA has enough space. 
+        // If it is an FECrsMatrix, we might need to recreate it if the graph is too small.
+        // But we try to copy values directly.
+        CopyMatrixValues(rA, *aux_2);
     }
 
     /**
@@ -542,41 +512,16 @@ public:
         const bool EnforceInitialGraph = false
         )
     {
-        // Check if the KeepAllHardZeros is implemented
-        //KRATOS_ERROR_IF(KeepAllHardZeros) << "KeepAllHardZeros is not implemented in Trilinos TPetra" << std::endl;
+        // Use temporary CrsMatrix for intermediate steps
+        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
+        Teuchos::RCP<CrsMatrixType> aux_1 = Teuchos::rcp(new CrsMatrixType(rB.getRowMap(), 16));
+        Tpetra::MatrixMatrix::Multiply(rB, false, rD, false, *aux_1);
 
-        // Check if the EnforceInitialGraph is implemented
-        //KRATOS_ERROR_IF(EnforceInitialGraph) << "EnforceInitialGraph is not implemented in Trilinos TPetra" << std::endl;
+        Teuchos::RCP<CrsMatrixType> aux_2 = Teuchos::rcp(new CrsMatrixType(aux_1->getRowMap(), 16));
+        Tpetra::MatrixMatrix::Multiply(*aux_1, false, rB, true, *aux_2);
 
-        // Ensure rA is empty and ready to be filled
-        rA.resumeFill();
-
-        // Define first auxiliary matrix
-        const auto& r_row_map_a = rA.getRowMap();
-        GraphPointerType graph_a = Teuchos::rcp(new GraphType(r_row_map_a, r_row_map_a, 0));
-        MatrixPointerType aux_1 = Teuchos::rcp(new MatrixType(graph_a));
-
-        // First multiplication
-        Mult(rB, rD, *aux_1, CallFillCompleteOnResult, KeepAllHardZeros);
-
-        // Already existing matrix
-        if (rA.getGlobalNumEntries() > 0) {
-            // Create a Tpetra_Matrix
-            const auto& r_row_map_b = rB.getRowMap();
-            GraphPointerType graph_b = Teuchos::rcp(new GraphType(r_row_map_b, r_row_map_b, 0));
-            MatrixPointerType aux_2 = Teuchos::rcp(new MatrixType(graph_b));
-
-            // Second multiplication
-            TransposeMult(*aux_1, rB, *aux_2, {false, true}, CallFillCompleteOnResult, KeepAllHardZeros);
-
-            // Doing a swap
-            MatrixPointerType p_A = Teuchos::rcp(&rA, false);
-            std::swap(p_A, aux_2);
-        } else { // Empty matrix
-            // Second multiplication
-            TransposeMult(*aux_1, rB, rA, {false, true}, CallFillCompleteOnResult, KeepAllHardZeros);
-        }
-}
+        CopyMatrixValues(rA, *aux_2);
+    }
 
     /**
      * @brief Returns the multiplication of a vector by a scalar
@@ -793,16 +738,13 @@ public:
      * @brief Sets a matrix to zero
      * @param rX The matrix to be set
      */
-    inline static void SetToZero(MatrixType& rA)
+    inline static void SetToZero(BaseMatrixType& rA)
     {
         // Set all values in the matrix to zero.
         if (!rA.isFillActive()) {
             rA.resumeFill();
         }
         rA.setAllToScalar(0.0);
-
-        // Finalize the fill of the matrix if needed.
-        rA.fillComplete();
     }
 
     /**
@@ -1084,6 +1026,7 @@ public:
     * @param rA The first matrix
     * @param rB The second matrix
     */
+
     static GraphPointerType CombineMatricesGraphs(
         const MatrixType& rA,
         const MatrixType& rB
@@ -1096,81 +1039,44 @@ public:
         auto p_graph_a = rA.getCrsGraph();
         auto p_graph_b = rB.getCrsGraph();
 
-        // Assuming local indexes
-        KRATOS_ERROR_IF(!p_graph_a->isLocallyIndexed() || !p_graph_b->isLocallyIndexed()) << "Graphs indexes must be local" << std::endl;
+        // Getting the maps
+        const auto& r_row_map = rA.getRowMap();
 
-        // Some definitions
-        Teuchos::ArrayView<const int> cols_a, cols_b; // Column indices of row non-zero values (local indices should be 'int')
-        const bool same_col_map = rA.getColMap()->isSameAs(*rB.getColMap());
-        Teuchos::RCP<GraphType> graph;
+        // New graph with large capacity
+        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(r_row_map, r_row_map, 100));
 
-        if (same_col_map) {
-            // Same column map: create the graph with row and column maps from matrix A
-            graph = Teuchos::rcp(new GraphType(rA.getRowMap(), rA.getColMap(), 1000));
-        } else {
-            // Different column maps: create the graph only with the row map from matrix A
-            auto map = Teuchos::rcp(new MapType(0, 0, rA.getMap()->getComm()));
-            graph = Teuchos::rcp(new GraphType(rA.getRowMap(), map, 1000));
+        const auto numLocalRows = r_row_map->getNodeNumElements();
+
+        // Combine graphs using global indexing
+        for (LO i = 0; i < static_cast<LO>(numLocalRows); ++i) {
+            const auto global_row_index = r_row_map->getGlobalElement(i);
+            std::set<GO> combined_indices;
+
+            if (p_graph_a->isLocallyIndexed()) {
+                Teuchos::ArrayView<const LO> cols_a;
+                p_graph_a->getLocalRowView(i, cols_a);
+                for (auto col : cols_a) combined_indices.insert(p_graph_a->getColMap()->getGlobalElement(col));
+            } else {
+                Teuchos::ArrayView<const GO> cols_a;
+                p_graph_a->getGlobalRowView(global_row_index, cols_a);
+                for (auto col : cols_a) combined_indices.insert(col);
+            }
+
+            if (p_graph_b->isLocallyIndexed()) {
+                Teuchos::ArrayView<const LO> cols_b;
+                p_graph_b->getLocalRowView(i, cols_b);
+                for (auto col : cols_b) combined_indices.insert(p_graph_b->getColMap()->getGlobalElement(col));
+            } else {
+                Teuchos::ArrayView<const GO> cols_b;
+                p_graph_b->getGlobalRowView(global_row_index, cols_b);
+                for (auto col : cols_b) combined_indices.insert(col);
+            }
+
+            std::vector<GO> combined_indices_vector(combined_indices.begin(), combined_indices.end());
+            graph->insertGlobalIndices(global_row_index, Teuchos::ArrayView<const GO>(combined_indices_vector));
         }
 
-        const auto numLocalRows = p_graph_a->getRowMap()->getNodeNumElements();
-
-        if (same_col_map) {
-            // Combine graphs for the same column map using local indexing
-            for (std::size_t i = 0; i < numLocalRows; ++i) {
-                std::unordered_set<int> combined_indexes;
-
-                // First graph
-                p_graph_a->getLocalRowView(i, cols_a);
-                combined_indexes.insert(cols_a.begin(), cols_a.end());
-
-                // Second graph
-                p_graph_b->getLocalRowView(i, cols_b);
-                combined_indexes.insert(cols_b.begin(), cols_b.end());
-
-                // Vector equivalent
-                std::vector<int> combined_indexes_vector(combined_indexes.begin(), combined_indexes.end());
-
-                // Adding to graph
-                graph->insertLocalIndices(i, Teuchos::ArrayView<const int>(combined_indexes_vector));
-            }
-        } else {
-            // Combine graphs with different column maps using global indexing
-            for (std::size_t i = 0; i < numLocalRows; ++i) {
-                const auto global_row_index = p_graph_a->getRowMap()->getGlobalElement(i);
-                std::vector<long long int> combined_indexes_vector; // Global indices should be 'long long int'
-
-                // First graph
-                p_graph_a->getLocalRowView(i, cols_a);
-                combined_indexes_vector.reserve(cols_a.size());
-                for (long int j = 0; j < cols_a.size(); ++j) {
-                    combined_indexes_vector.push_back(p_graph_a->getColMap()->getGlobalElement(cols_a[j]));
-                }
-
-                // Adding to graph
-                graph->insertGlobalIndices(global_row_index, Teuchos::ArrayView<const long long int>(combined_indexes_vector));
-            }
-
-            for (std::size_t i = 0; i < numLocalRows; ++i) {
-                const auto global_row_index = p_graph_b->getRowMap()->getGlobalElement(i);
-                std::vector<long long int> combined_indexes_vector; // Global indices should be 'long long int'
-
-                // Second graph
-                p_graph_b->getLocalRowView(i, cols_b);
-                combined_indexes_vector.reserve(cols_b.size());
-                for (long int j = 0; j < cols_b.size(); ++j) {
-                    combined_indexes_vector.push_back(p_graph_b->getColMap()->getGlobalElement(cols_b[j]));
-                }
-
-                // Adding to graph
-                graph->insertGlobalIndices(global_row_index, Teuchos::ArrayView<const long long int>(combined_indexes_vector));
-            }
-        }
-
-        // Finalizing graph construction
-        if (graph->isFillActive()) graph->fillComplete();
-        KRATOS_ERROR_IF(!graph->isFillComplete()) << "Tpetra graph fillComplete failed" << std::endl;
-
+        if (graph->isFillActive()) graph->fillComplete(r_row_map, r_row_map);
         return graph;
     }
 
@@ -1181,57 +1087,39 @@ public:
      * @param rB The matrix to be copied
      */
     static void CopyMatrixValues(
-        MatrixType& rA,
-        const MatrixType& rB
+        BaseMatrixType& rA,
+        const BaseMatrixType& rB
         )
     {
         // Cleaning destination matrix
         SetToZero(rA);
 
-        // Resume fill on the destination matrix
-        rA.resumeFill();
-
-        // Row maps must be the same
-        const bool same_col_map = rA.getColMap()->isSameAs(*rB.getColMap());
-
-        // Getting the graph of the source matrix
-        auto p_graph_b = rB.getCrsGraph();
-
-        // Copy values from rB to rA
-        std::size_t num_entries; // Number of non-zero entries in rB matrix
-        ColumnViewType cols;     // Column indices of row non-zero values (rB matrix)
-        ValueViewType vals;      // Row non-zero values (rB matrix)
-
-        if (same_col_map) {
-            for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {  // `i` should be a LocalOrdinal (LO)
-                const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
-                rB.getGlobalRowCopy(global_row_index, cols, vals, num_entries);
-
-                // Convert global column indices to local column indices
-                Teuchos::Array<LO> local_cols(num_entries);
-                for (size_t j = 0; j < num_entries; ++j) {
-                    local_cols[j] = rA.getColMap()->getLocalElement(cols[j]);
-                }
-
-                // Sum values into local matrix using local row and column indices
-                rA.sumIntoLocalValues(i, Teuchos::ArrayView<const LO>(local_cols), Teuchos::ArrayView<const ST>(vals.data(), num_entries));
-            }
+        // Begin matrix assembly if FECrsMatrix
+        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_A) {
+            p_fe_A->beginAssembly();
         } else {
-            for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {
-                const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
-                rB.getGlobalRowCopy(global_row_index, cols, vals, num_entries);
+            if (!rA.isFillActive()) rA.resumeFill();
+        }
 
-                Teuchos::Array<GO> global_cols(num_entries);
-                for (std::size_t j = 0; j < num_entries; ++j) {
-                    global_cols[j] = p_graph_b->getColMap()->getGlobalElement(cols[j]);
+        for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {
+            const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> local_cols_b;
+            Teuchos::ArrayView<const ST> vals;
+            rB.getLocalRowView(i, local_cols_b, vals);
+
+            if (vals.size() > 0) {
+                Teuchos::Array<GO> global_cols(local_cols_b.size());
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols_b.size()); ++j) {
+                    global_cols[j] = rB.getColMap()->getGlobalElement(local_cols_b[j]);
                 }
 
                 // Sum values into global matrix using global row and column indices
-                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), Teuchos::ArrayView<const ST>(vals.data(), num_entries));
+                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
             }
         }
 
-        // Complete fill of the matrix
+        // Finalizing the fill process
         if (p_fe_A) {
             p_fe_A->endAssembly();
         }
