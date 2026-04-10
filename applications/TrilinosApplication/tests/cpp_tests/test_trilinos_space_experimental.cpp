@@ -734,4 +734,10 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixMatrix, KratosTrilinosAp
     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(mult, multiply_reference);
 }
 
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalIsDistributedSpace, KratosTrilinosApplicationMPITestSuite)
+{
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsDistributedSpace());
+}
+
 } // namespace Kratos::Testing
