@@ -15,8 +15,8 @@
 // External includes
 
 // Project includes
-#include "tests/cpp_tests/trilinos_fast_suite.h"
 #include "trilinos_space_experimental.h"
+#include "tests/cpp_tests/trilinos_fast_suite.h"
 #include "containers/model.h"
 #include "mpi/includes/mpi_data_communicator.h"
 #include "trilinos_cpp_test_experimental_utilities.h"
@@ -593,6 +593,87 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalGetScaleNorm, KratosTrilinosApplic
     KRATOS_EXPECT_DOUBLE_EQ(norm, 6.5);
     norm = TrilinosSparseSpaceType::GetMinDiagonal(*matrix12x12);
     KRATOS_EXPECT_DOUBLE_EQ(norm, 1.0);
+}
+
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalScaleAndAddMatrix, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy matrix
+    const int size = 12;
+    auto matrix_1 = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 10.0, true, 100);
+    auto matrix_2 = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 20.0, true, 100);
+
+    // Solution
+    TrilinosSparseSpaceType::ScaleAndAdd(2.0, *matrix_1, 3.0, *matrix_2);
+
+    // Check
+    auto local_matrix_1 = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
+    auto local_matrix_2 = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalMatrix(size, 20.0, true);
+    auto local_reference = 2.0 * local_matrix_1 + 3.0 * local_matrix_2;
+
+    TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*matrix_2, local_reference);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMatrixMarket, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy matrix
+    const int size = 12;
+    auto matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 10.0, true, 100);
+
+    // Write to file
+    const std::string file_name = "test_matrix.mm";
+    TrilinosSparseSpaceType::WriteMatrixMarketMatrix(file_name.c_str(), *matrix, false);
+
+    // Read from file
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    Teuchos::MpiComm<int> tpetra_comm(raw_mpi_comm);
+    auto read_matrix = TrilinosSparseSpaceType::ReadMatrixMarket(file_name, tpetra_comm);
+
+    // Check
+    auto local_matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
+    TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*read_matrix, local_matrix);
+
+    // Clean up
+    if (r_comm.Rank() == 0) {
+        std::remove(file_name.c_str());
+    }
+}
+
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMatrixMarketVector, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy vector
+    const int size = 12;
+    auto vector = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseVector(r_comm, size);
+
+    // Write to file
+    const std::string file_name = "test_vector.mm";
+    TrilinosSparseSpaceType::WriteMatrixMarketVector(file_name.c_str(), *vector);
+
+    // Tpetra communicator
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    TrilinosSparseSpaceType::CommunicatorPointerType tpetra_comm = Teuchos::rcp(new TrilinosSparseSpaceType::CommunicatorType(raw_mpi_comm));
+
+    // Read from file
+    auto read_vector = TrilinosSparseSpaceType::ReadMatrixMarketVector(file_name, tpetra_comm, size);
+
+    // Check
+    auto local_vector = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalVector(size);
+    TrilinosCPPTestExperimentalUtilities::CheckSparseVectorFromLocalVector(*read_vector, local_vector);
+
+    // Clean up
+    if (r_comm.Rank() == 0) {
+        std::remove(file_name.c_str());
+    }
 }
 
 } // namespace Kratos::Testing
