@@ -27,15 +27,16 @@
 #include <Teuchos_GlobalMPISession.hpp>
 #include <TpetraExt_MatrixMatrix.hpp>
 #include <TpetraExt_TripleMatrixMultiply.hpp>
-// #include <TpetraExt_TripleMatrixMultiply_def.hpp> # TODO: Failing compilation for some reason in Ubuntu 20.04 version available
-//#include <MatrixMarket_Tpetra.hpp> # TODO: Failing compilation for some reason in Ubuntu 20.04 version available
+
+#include <MatrixMarket_Tpetra.hpp>
+
 
 // Project includes
 #include "includes/ublas_interface.h"
 #include "spaces/ublas_space.h"
 #include "includes/data_communicator.h"
 #include "mpi/includes/mpi_data_communicator.h"
-//#include "custom_utilities/trilinos_dof_updater.h"
+
 
 namespace Kratos
 {
@@ -135,8 +136,8 @@ public:
     using ValueViewType = typename MatrixType::nonconst_values_host_view_type;
 
     /// Some other definitions
-    // using DofUpdaterType = TrilinosDofUpdater<ClassType>;
-    // using DofUpdaterPointerType = typename DofUpdater<ClassType>::UniquePointer;
+    using DofUpdaterType = DofUpdater<ClassType>;
+    using DofUpdaterPointerType = typename DofUpdater<ClassType>::UniquePointer;
 
     ///@}
     ///@name Life Cycle
@@ -164,7 +165,7 @@ public:
      * @brief This method creates an empty pointer to a matrix
      * @return The pointer to the matrix
      */
-    static MatrixPointerType CreateEmptyMatrixPointer()
+    inline static MatrixPointerType CreateEmptyMatrixPointer()
     {
         return MatrixPointerType(nullptr);
     }
@@ -173,7 +174,7 @@ public:
      * @brief This method creates an empty pointer to a vector
      * @return The pointer to the vector
      */
-    static VectorPointerType CreateEmptyVectorPointer()
+    inline static VectorPointerType CreateEmptyVectorPointer()
     {
         return VectorPointerType(nullptr);
     }
@@ -183,7 +184,7 @@ public:
      * @param rComm The Tpetra communicator
      * @return The pointer to the matrix
      */
-    static MatrixPointerType CreateEmptyMatrixPointer(CommunicatorPointerType pComm)
+    inline static MatrixPointerType CreateEmptyMatrixPointer(CommunicatorPointerType pComm)
     {
         const int global_elems = 0;
         MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
@@ -199,7 +200,7 @@ public:
      * @param pComm The Tpetra communicator
      * @return The pointer to the vector
      */
-    static VectorPointerType CreateEmptyVectorPointer(CommunicatorPointerType pComm)
+    inline static VectorPointerType CreateEmptyVectorPointer(CommunicatorPointerType pComm)
     {
         const int global_elems = 0;
         MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
@@ -211,7 +212,7 @@ public:
      * @param rV The vector considered
      * @return The size of the vector
      */
-    static IndexType Size(const VectorType& rV)
+    inline static IndexType Size(const VectorType& rV)
     {
         const int size = rV.getGlobalLength();
         return size;
@@ -222,7 +223,7 @@ public:
      * @param rM The matrix considered
      * @return The number of rows of rM
      */
-    static IndexType Size1(MatrixType const& rM)
+    inline static IndexType Size1(MatrixType const& rM)
     {
         const int size1 = rM.getGlobalNumRows();
         return size1;
@@ -233,7 +234,7 @@ public:
      * @param rM The matrix considered
      * @return The number of columns of rM
      */
-    static IndexType Size2(MatrixType const& rM)
+    inline static IndexType Size2(MatrixType const& rM)
     {
         const int size1 = rM.getGlobalNumCols();
         return size1;
@@ -247,7 +248,7 @@ public:
      * @param rX The column considered
      * @todo Implement this method
      */
-    static void GetColumn(
+    inline static void GetColumn(
         const unsigned int j,
         const MatrixType& rM,
         VectorType& rX
@@ -262,7 +263,7 @@ public:
      * @param rX The matrix considered
      * @param rY The copy of the matrix rX
      */
-    static void Copy(
+    inline static void Copy(
         const MatrixType& rX,
         MatrixType& rY
         )
@@ -276,7 +277,7 @@ public:
      * @param rX The vector considered
      * @param rY The copy of the vector rX
      */
-    static void Copy(
+    inline static void Copy(
         const VectorType& rX,
         VectorType& rY
         )
@@ -290,7 +291,7 @@ public:
      * @param rX The first vector considered
      * @param rY The second vector considered
      */
-    static double Dot(
+    inline static double Dot(
         const VectorType& rX,
         const VectorType& rY
         )
@@ -303,7 +304,7 @@ public:
      * @param rX The vector considered
      * @return The maximum value of the vector rX
      */
-    static double Max(const VectorType& rX)
+    inline static double Max(const VectorType& rX)
     {
         // Access the local data
         auto localVec = rX.getLocalViewHost(Tpetra::Access::ReadOnly);
@@ -327,7 +328,7 @@ public:
      * @param rX The vector considered
      * @return The minimum value of the vector rX
      */
-    static double Min(const VectorType& rX)
+    inline static double Min(const VectorType& rX)
     {
         // Access the local data
         auto localVec = rX.getLocalViewHost(Tpetra::Access::ReadOnly);
@@ -352,7 +353,7 @@ public:
      * @param rX The vector considered
      * @return The norm of the vector rX
      */
-    static double TwoNorm(const VectorType& rX)
+    inline static double TwoNorm(const VectorType& rX)
     {
         // Use the built-in norm2() method to compute the Euclidean norm (2-norm)
         return rX.norm2();
@@ -364,7 +365,7 @@ public:
      * @param rA The matrix considered
      * @return The Frobenius norm of the matrix rA
      */
-    static double TwoNorm(const MatrixType& rA)
+    inline static double TwoNorm(const MatrixType& rA)
     {
         // Use the built-in getFrobeniusNorm() method to compute the Frobenius norm
         return rA.getFrobeniusNorm();
@@ -384,7 +385,7 @@ public:
      * @param rX The vector considered
      * @param rY The result of the multiplication
      */
-    static void Mult(
+    inline static void Mult(
         const MatrixType& rA,
         const VectorType& rX,
         VectorType& rY
@@ -393,7 +394,16 @@ public:
         rA.apply(rX, rY);
     }
 
-    static void Mult(
+    /**
+     * @brief Returns the multiplication matrix-matrix
+     * @details C = A*B
+     * @param rA The first matrix considered
+     * @param rB The second matrix considered
+     * @param rC The result of the multiplication
+     * @param CallFillCompleteOnResult Whether to call fillComplete on the result matrix
+     * @param KeepAllHardZeros If true, keeps all hard zeros in the result matrix
+     */
+    inline static void Mult(
         const MatrixType& rA,
         const MatrixType& rB,
         MatrixType& rC,
@@ -438,7 +448,7 @@ public:
      * @param rX The vector considered
      * @param rY The result of the multiplication
      */
-    static void TransposeMult(
+    inline static void TransposeMult(
         const MatrixType& rA,
         const VectorType& rX,
         VectorType& rY
@@ -458,7 +468,7 @@ public:
      * @param CallFillCompleteOnResult	Optional argument, defaults to true. Power users may specify this argument to be false if they DON'T want this function to call C.FillComplete. (It is often useful to allow this function to call C.FillComplete, in cases where one or both of the input matrices are rectangular and it is not trivial to know which maps to use for the domain- and range-maps.)
      * @param KeepAllHardZeros	Optional argument, defaults to false. If true, Multiply, keeps all entries in C corresponding to hard zeros. If false, the following happens by case: A*B^T, A^T*B^T - Does not store entries caused by hard zeros in C. A^T*B (unoptimized) - Hard zeros are always stored (this option has no effect) A*B, A^T*B (optimized) - Hard zeros in corresponding to hard zeros in A are not stored, There are certain cases involving reuse of C, where this can be useful.
      */
-    static void TransposeMult(
+    inline static void TransposeMult(
         const MatrixType& rA,
         const MatrixType& rB,
         MatrixType& rC,
@@ -507,7 +517,7 @@ public:
      * @param EnforceInitialGraph If the initial graph is enforced, or a new one is generated
      * @todo TpetraExt_TripleMatrixMultiply_def is failing compilation in the version of Trilinos available in Ubuntu 20.04. We cannot use TripleMatrixMultiply::MultiplyRAP
      */
-    static void BtDBProductOperation(
+    inline static void BtDBProductOperation(
         MatrixType& rA,
         const MatrixType& rD,
         const MatrixType& rB,
@@ -556,7 +566,7 @@ public:
      * @param KeepAllHardZeros	Optional argument, defaults to false. If true, Multiply, keeps all entries in C corresponding to hard zeros. If false, the following happens by case: A*B^T, A^T*B^T - Does not store entries caused by hard zeros in C. A^T*B (unoptimized) - Hard zeros are always stored (this option has no effect) A*B, A^T*B (optimized) - Hard zeros in corresponding to hard zeros in A are not stored, There are certain cases involving reuse of C, where this can be useful.
      * @param EnforceInitialGraph If the initial graph is enforced, or a new one is generated
      */
-    static void BDBtProductOperation(
+    inline static void BDBtProductOperation(
         MatrixType& rA,
         const MatrixType& rD,
         const MatrixType& rB,
@@ -600,7 +610,7 @@ public:
      * @param rX The vector considered
      * @param A The scalar considered
      */
-    static void InplaceMult(
+    inline static void InplaceMult(
         VectorType& rX,
         const double A
         )
@@ -620,7 +630,7 @@ public:
      * @param A The scalar considered
      * @param rY The multiplied vector considered
      */
-    static void Assign(
+    inline static void Assign(
         VectorType& rX,
         const double A,
         const VectorType& rY
@@ -643,7 +653,7 @@ public:
      * @param A The scalar considered
      * @param rY The multiplied vector considered
      */
-    static void UnaliasedAdd(
+    inline static void UnaliasedAdd(
         VectorType& rX,
         const double A,
         const VectorType& rY
@@ -661,7 +671,7 @@ public:
      * @param rY The second vector considered
      * @param rZ The resulting vector considered
      */
-    static void ScaleAndAdd(
+    inline static void ScaleAndAdd(
         const double A,
         const VectorType& rX,
         const double B,
@@ -681,7 +691,7 @@ public:
      * @param B The scalar considered
      * @param rY The resulting vector considered
      */
-    static void ScaleAndAdd(
+    inline static void ScaleAndAdd(
         const double A,
         const VectorType& rX,
         const double B,
@@ -693,12 +703,55 @@ public:
     }
 
     /**
+     * @brief Returns the unaliased addition of two matrices by a scalar
+     * @details rY = (A * rX) + (B * rY)
+     * @param A The scalar considered
+     * @param rX The first matrix considered
+     * @param B The scalar considered
+     * @param rY The resulting matrix considered
+     */
+    inline static void ScaleAndAdd(
+        const double A,
+        const MatrixType& rX,
+        const double B,
+        MatrixType& rY
+        )
+    {
+        // Use a temporary CrsMatrix to allow for dynamic sparsity
+        Teuchos::RCP<CrsMatrixType> aux_Y = Teuchos::rcp(new CrsMatrixType(rY.getRowMap(), 100));
+        Tpetra::MatrixMatrix::Add(rX, false, A, rY, false, B, aux_Y);
+        aux_Y->fillComplete();
+
+        // Inline copy logic from CrsMatrixType to MatrixType
+        MatrixType& rDest = rY;
+        const CrsMatrixType& rSrc = *aux_Y;
+        if (!rDest.isFillActive()) rDest.resumeFill();
+        auto p_fe_Dest = dynamic_cast<MatrixType*>(&rDest);
+        if (p_fe_Dest) p_fe_Dest->beginAssembly();
+        for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
+            const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> local_cols;
+            Teuchos::ArrayView<const ST> vals;
+            rSrc.getLocalRowView(i, local_cols, vals);
+            if (vals.size() > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.size());
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
+                    global_cols[j] = rSrc.getColMap()->getGlobalElement(local_cols[j]);
+                }
+                rDest.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+            }
+        }
+        if (p_fe_Dest) p_fe_Dest->endAssembly();
+        if (rDest.isFillActive()) rDest.fillComplete();
+    }
+
+    /**
      * @brief Sets a value in a vector
      * @param rX The vector considered
      * @param i The index of the value considered
      * @param value The value considered
      */
-    static void SetValue(
+    inline static void SetValue(
         VectorType& rX,
         IndexType i,
         const double value
@@ -722,7 +775,7 @@ public:
      * @param rX The vector considered
      * @param A The scalar considered
      */
-    static void Set(
+    inline static void Set(
         VectorType& rX,
         const DataType A
         )
@@ -736,7 +789,7 @@ public:
      * @param m The new number of rows
      * @param n The new number of columns
      */
-    static void Resize(
+    inline static void Resize(
         MatrixType& rA,
         const SizeType m,
         const SizeType n
@@ -750,7 +803,7 @@ public:
      * @param rX The vector to be resized
      * @param n The new size
      */
-    static void Resize(
+    inline static void Resize(
         VectorType& rX,
         const SizeType n
         )
@@ -763,7 +816,7 @@ public:
      * @param pA The pointer to the vector to be resized
      * @param n The new size
     */
-    static void Resize(
+    inline static void Resize(
         VectorPointerType pX,
         const SizeType n
         )
@@ -779,7 +832,7 @@ public:
      * @brief Clears a matrix
      * @param pA The pointer to the matrix to be cleared
      */
-    static void Clear(MatrixPointerType pA)
+    inline static void Clear(MatrixPointerType pA)
     {
         if(pA != Teuchos::null) {
             int global_elems = 0;
@@ -794,7 +847,7 @@ public:
      * @brief Clears a vector
      * @param pX The pointer to the vector to be cleared
      */
-    static void Clear(VectorPointerType pX)
+    inline static void Clear(VectorPointerType pX)
     {
         if(pX != Teuchos::null) {
             int global_elems = 0;
@@ -972,7 +1025,7 @@ public:
      * @param IndexArray The array containing the indices of the values to be gathered
      * @param pValues The array containing the gathered values
      */
-    static void GatherValues(
+    inline static void GatherValues(
         const VectorType& rX,
         const std::vector<int>& IndexArray,
         double* pValues
@@ -1011,44 +1064,56 @@ public:
      * @param rComm The MPI communicator
      * @return The matrix read from the file
      */
-    MatrixPointerType ReadMatrixMarket(
+    inline static MatrixPointerType ReadMatrixMarket(
         const std::string FileName,
         CommunicatorType& rComm
         )
     {
         KRATOS_TRY
+        // Load the matrix using Tpetra's MatrixMarket reader into a standard CrsMatrix
+        Teuchos::RCP<CrsMatrixType> p_base_matrix = Tpetra::MatrixMarket::Reader<CrsMatrixType>::readSparseFile(FileName, Teuchos::rcp(&rComm, false));
+        KRATOS_ERROR_IF(p_base_matrix.is_null()) << "Error thrown while reading Matrix Market file " << FileName << std::endl;
 
-    //     // Load the matrix using Tpetra's MatrixMarket reader
-    //     RCP<const MapType> map;
-    //     RCP<MatrixType> matrix = Tpetra::MatrixMarket::Reader<MatrixType>::readSparseFile(FileName, map, rComm);
+        // Wrap it into a FECrsMatrix (MatrixType)
+        // We create a new FECrsGraph with the same maps and populate it
+        Teuchos::RCP<GraphType> p_fe_graph = Teuchos::rcp(new GraphType(p_base_matrix->getRowMap(), p_base_matrix->getColMap(), 16));
+        for (LO i = 0; i < static_cast<LO>(p_base_matrix->getNodeNumRows()); ++i) {
+            const auto global_row_index = p_base_matrix->getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> indices;
+            Teuchos::ArrayView<const ST> values;
+            p_base_matrix->getLocalRowView(i, indices, values);
+            std::vector<GO> global_indices(indices.size());
+            for(std::size_t j=0; j<indices.size(); ++j) {
+                global_indices[j] = p_base_matrix->getColMap()->getGlobalElement(indices[j]);
+            }
+            p_fe_graph->insertGlobalIndices(global_row_index, Teuchos::ArrayView<const GO>(global_indices));
+        }
+        p_fe_graph->fillComplete();
+        MatrixPointerType p_matrix = Teuchos::rcp(new MatrixType(p_fe_graph));
+        
+        // Inline copy logic from CrsMatrixType to MatrixType
+        MatrixType& rA = *p_matrix;
+        const CrsMatrixType& rB = *p_base_matrix;
+        if (!rA.isFillActive()) rA.resumeFill();
+        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_A) p_fe_A->beginAssembly();
+        for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {
+            const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> local_cols;
+            Teuchos::ArrayView<const ST> vals;
+            rB.getLocalRowView(i, local_cols, vals);
+            if (vals.size() > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.size());
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
+                    global_cols[j] = rB.getColMap()->getGlobalElement(local_cols[j]);
+                }
+                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+            }
+        }
+        if (p_fe_A) p_fe_A->endAssembly();
+        if (rA.isFillActive()) rA.fillComplete();
 
-    //     KRATOS_ERROR_IF(matrix.is_null()) << "Error thrown while reading Matrix Market file " << FileName;
-
-    //     rComm.barrier();
-
-    //     // Create a copy of the matrix
-    //     MatrixPointerType paux = Teuchos::cp(new MatrixType(matrix->getRowMap(), matrix->getColMap(), matrix->getNodeNumEntries()));
-
-    //     // Copy values from original matrix to the new matrix
-    //     for (std::size_t i = 0; i < matrix->getNodeNumRows(); ++i) {
-    //         const auto globalRow = matrix->getRowMap()->getGlobalElement(i);
-
-    //         Teuchos::ArrayView<const ST> values;
-    //         Teuchos::ArrayView<const LO> indices;
-
-    //         matrix->getLocalRowView(i, indices, values);
-
-    //         paux->replaceGlobalValues(globalRow, indices, values);
-    //     }
-
-    //     // Assemble the matrix
-    //     paux->fillComplete();
-
-    //     return paux;
-
-        KRATOS_ERROR << "ReadMatrixMarket is not implemented for Trilinos TPetra" << std::endl;
-        return CreateEmptyMatrixPointer();
-
+        return p_matrix;
         KRATOS_CATCH("");
     }
 
@@ -1058,36 +1123,19 @@ public:
      * @param pComm The MPI communicator
      * @param N The size of the vector
      */
-    VectorPointerType ReadMatrixMarketVector(
+    inline static VectorPointerType ReadMatrixMarketVector(
         const std::string& rFileName,
         CommunicatorPointerType pComm,
         const int N
         )
     {
         KRATOS_TRY
-
-    //     // Create a Tpetra::Map
-    //     MapPointerType my_map = Tpetra::createUniformContigMapWithNode<GO, GO>(N, pComm);
-
-    //     // Create an empty Tpetra vector
-    //     VectorPointerType final_vector = Teuchos::rcp(new VectorType(my_map));
-
-    //     // Read the vector from the Matrix Market file
-    //     const int error_code = Tpetra::MatrixMarket::Reader<VectorType>::readVectorFile(rFileName, final_vector);
-    //     KRATOS_ERROR_IF(error_code != 0) << "Error thrown while reading Matrix Market Vector file: " << rFileName << " error code is: " << error_code << std::endl;
-
-    //     // Ensure all processes are synchronized
-    //     pComm->barrier();
-
-    //     // Global assemble the vector (if necessary)
-    //     final_vector->doImport(*final_vector, Tpetra::Import<GO, GO>(my_map, my_map), Tpetra::INSERT);
-    //     final_vector->globalAssemble();
-
-    //     return final_vector;
-
-        KRATOS_ERROR << "ReadMatrixMarketVector is not implemented for Trilinos TPetra" << std::endl;
-        return CreateEmptyVectorPointer();
-
+        // Create a map
+        MapPointerType p_map = Teuchos::rcp(new MapType(N, 0, pComm));
+        // Load the vector using Tpetra's MatrixMarket reader
+        VectorPointerType p_vector = Tpetra::MatrixMarket::Reader<VectorType>::readVectorFile(rFileName, pComm, p_map);
+        KRATOS_ERROR_IF(p_vector.is_null()) << "Error thrown while reading Matrix Market Vector file " << rFileName << std::endl;
+        return p_vector;
         KRATOS_CATCH("");
     }
 
@@ -1156,7 +1204,7 @@ public:
      * @param rA The matrix where assigning values
      * @param rB The matrix to be copied
      */
-    static void CopyMatrixValues(
+    inline static void CopyMatrixValues(
         MatrixType& rA,
         const MatrixType& rB
         )
@@ -1205,7 +1253,7 @@ public:
      * @param ScalingDiagonal The type of scaling diagonal considered
      * @return The scale norm
      */
-    static double CheckAndCorrectZeroDiagonalValues(
+    inline static double CheckAndCorrectZeroDiagonalValues(
         const ProcessInfo& rProcessInfo,
         MatrixType& rA,
         VectorType& rb,
@@ -1261,7 +1309,7 @@ public:
      * @param ScalingDiagonal The type of scaling diagonal considered
      * @return The scale norm
      */
-    static double GetScaleNorm(
+    inline static double GetScaleNorm(
         const ProcessInfo& rProcessInfo,
         const MatrixType& rA,
         const SCALING_DIAGONAL ScalingDiagonal = SCALING_DIAGONAL::NO_SCALING
@@ -1292,7 +1340,7 @@ public:
     * @param rA The LHS matrix
     * @return The diagonal norm
     */
-    static double GetDiagonalNorm(const MatrixType& rA)
+    inline static double GetDiagonalNorm(const MatrixType& rA)
     {
         KRATOS_TRY
 
@@ -1330,7 +1378,7 @@ public:
     * @param rA The LHS matrix
     * @return The diagonal max value
     */
-    static double GetAveragevalueDiagonal(const MatrixType& rA)
+    inline static double GetAveragevalueDiagonal(const MatrixType& rA)
     {
         KRATOS_TRY
 
@@ -1344,7 +1392,7 @@ public:
     * @param rA The LHS matrix
     * @return The diagonal max value
     */
-    static double GetMaxDiagonal(const MatrixType& rA)
+    inline static double GetMaxDiagonal(const MatrixType& rA)
     {
         KRATOS_TRY
 
@@ -1383,7 +1431,7 @@ public:
     * @param rA The LHS matrix
     * @return The diagonal min value
     */
-    static double GetMinDiagonal(const MatrixType& rA)
+    inline static double GetMinDiagonal(const MatrixType& rA)
     {
         KRATOS_TRY
 
@@ -1465,52 +1513,53 @@ public:
     {
     }
 
-    // /**
-    //  * @brief Writes a matrix to a file in MatrixMarket format
-    //  * @param pFileName The name of the file to be written
-    //  * @param rM The matrix to be written
-    //  * @param Symmetric If the matrix is symmetric
-    //  * @return True if the file was successfully written, false otherwise
-    //  */
-    // template< class TOtherMatrixType >
-    // static bool WriteMatrixMarketMatrix(
-    //     const char* pFileName,
-    //     const TOtherMatrixType& rM,
-    //     const bool Symmetric
-    //     )
-    // {
-    //     // the argument "Symmetric" does not have an effect for Trilinos => needed for compatibility with other Spaces
-    //     KRATOS_TRY;
-    //     return EpetraExt::RowMatrixToMatrixMarketFile(pFileName, rM); // Returns 0 if no error, -1 if any problems with file system.
-    //     KRATOS_CATCH("");
-    // }
+    /**
+     * @brief Writes a matrix to a file in MatrixMarket format
+     * @param pFileName The name of the file to be written
+     * @param rM The matrix to be written
+     * @param Symmetric If the matrix is symmetric
+     * @return True if the file was successfully written, false otherwise
+     */
+    template< class TOtherMatrixType >
+    inline static bool WriteMatrixMarketMatrix(
+        const char* pFileName,
+        const TOtherMatrixType& rM,
+        const bool Symmetric
+        )
+    {
+        // the argument "Symmetric" does not have an effect for Trilinos => needed for compatibility with other Spaces
+        KRATOS_TRY;
+        Tpetra::MatrixMarket::Writer<typename ClassType::CrsMatrixType>::writeSparseFile(pFileName, Teuchos::rcp(dynamic_cast<const typename ClassType::CrsMatrixType*>(&rM), false));
+        return true;
+        KRATOS_CATCH("");
+    }
 
-    // /**
-    //  * @brief Writes a vector to a file in MatrixMarket format
-    //  * @param pFileName The name of the file to be written
-    //  * @param rV The vector to be written
-    //  * @return True if the file was successfully written, false otherwise
-    //  */
-    // template< class VectorType >
-    // static bool WriteMatrixMarketVector(
-    //     const char* pFileName,
-    //     const VectorType& rV
-    //     )
-    // {
-    //     KRATOS_TRY;
-    //     return EpetraExt::MultiVectorToMatrixMarketFile(pFileName, rV);
-    //     KRATOS_CATCH("");
-    // }
+    /**
+     * @brief Writes a vector to a file in MatrixMarket format
+     * @param pFileName The name of the file to be written
+     * @param rV The vector to be written
+     * @return True if the file was successfully written, false otherwise
+     */
+    template< class TOtherVectorType >
+    inline static bool WriteMatrixMarketVector(
+        const char* pFileName,
+        const TOtherVectorType& rV
+        )
+    {
+        KRATOS_TRY;
+        Tpetra::MatrixMarket::Writer<VectorType>::writeDenseFile(pFileName, Teuchos::rcp(&rV, false));
+        return true;
+        KRATOS_CATCH("");
+    }
 
-    // /**
-    //  * @brief Creates a new dof updater
-    //  * @return The new dof updater
-    //  */
-    // static DofUpdaterPointerType CreateDofUpdater()
-    // {
-    //     DofUpdaterType tmp;
-    //     return tmp.Create();
-    // }
+    /**
+     * @brief Creates a new dof updater
+     * @return The new dof updater
+     */
+    inline static DofUpdaterPointerType CreateDofUpdater()
+    {
+        return DofUpdaterPointerType(new DofUpdater<TrilinosSpaceExperimental<TMatrixType, TVectorType>>());
+    }
 
     ///@}
 private:
