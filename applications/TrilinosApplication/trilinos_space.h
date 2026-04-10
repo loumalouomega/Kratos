@@ -1022,7 +1022,7 @@ public:
      * @param rComm The MPI communicator
      * @return The matrix read from the file
      */
-    MatrixPointerType ReadMatrixMarket(
+    static MatrixPointerType ReadMatrixMarket(
         const std::string FileName,
         CommunicatorType& rComm
         )
@@ -1082,7 +1082,7 @@ public:
      * @param rComm The MPI communicator
      * @param N The size of the vector
      */
-    VectorPointerType ReadMatrixMarketVector(
+    static VectorPointerType ReadMatrixMarketVector(
         const std::string& rFileName,
         CommunicatorType& rComm,
         const int N
