@@ -206,6 +206,26 @@ public:
         MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
         return Teuchos::rcp(new VectorType(map));
     }
+    /**
+     * @brief This method creates an empty pointer to a matrix using TPetra communicator
+     * @param rComm The Tpetra communicator
+     * @return The pointer to the matrix
+     */
+    inline static MatrixPointerType CreateEmptyMatrixPointer(CommunicatorType& rComm)
+    {
+        return CreateEmptyMatrixPointer(Teuchos::rcp(&rComm, false));
+    }
+
+    /**
+     * @brief This method creates an empty pointer to a vector using Tpetra communicator
+     * @param rComm The Tpetra communicator
+     * @return The pointer to the vector
+     */
+    inline static VectorPointerType CreateEmptyVectorPointer(CommunicatorType& rComm)
+    {
+        return CreateEmptyVectorPointer(Teuchos::rcp(&rComm, false));
+    }
+
 
     /**
      * @brief Returns size of vector rV

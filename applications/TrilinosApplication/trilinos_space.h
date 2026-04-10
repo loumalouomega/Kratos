@@ -641,6 +641,26 @@ public:
         const int ierr = rY.Update(A, rX, B);
         KRATOS_ERROR_IF(ierr != 0) << "Epetra scale and add failure " << ierr << std::endl;
     }
+    /**
+     * @brief Returns the unaliased addition of two matrices by a scalar
+     * @details rY = (A * rX) + (B * rY)
+     * @param A The scalar considered
+     * @param rX The first matrix considered
+     * @param B The scalar considered
+     * @param rY The resulting matrix considered
+     */
+    static void ScaleAndAdd(
+        const double A,
+        const MatrixType& rX,
+        const double B,
+        MatrixType& rY
+        )
+    {
+        // Compute rY = A * rX + B * rY
+        const int ierr = EpetraExt::MatrixMatrix::Add(rX, false, A, rY, B);
+        KRATOS_ERROR_IF(ierr != 0) << "Epetra scale and add failure " << ierr << std::endl;
+    }
+
 
     /**
      * @brief Sets a value in a vector
@@ -884,6 +904,15 @@ public:
     {
         return true;
     }
+    /**
+     * @brief This function returns if we are in a distributed system
+     * @return True if we are in a distributed system, false otherwise (always true in this case)
+     */
+    inline static constexpr bool IsDistributedSpace()
+    {
+        return true;
+    }
+
 
     /**
      * @brief Returns a list of the fastest direct solvers.

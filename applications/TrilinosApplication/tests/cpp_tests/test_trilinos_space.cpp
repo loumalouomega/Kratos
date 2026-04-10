@@ -677,4 +677,92 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosGetScaleNorm, KratosTrilinosApplicationMPITest
     KRATOS_EXPECT_DOUBLE_EQ(norm, 1.0);
 }
 
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosScaleAndAddMatrix, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy matrix
+    const int size = 12;
+    auto matrix_1 = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 10.0, true);
+    auto matrix_2 = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 20.0, true);
+
+    // Solution
+    TrilinosSparseSpaceType::ScaleAndAdd(2.0, *matrix_1, 3.0, *matrix_2);
+
+    // Check
+    auto local_matrix_1 = TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
+    auto local_matrix_2 = TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(size, 20.0, true);
+    auto local_reference = 2.0 * local_matrix_1 + 3.0 * local_matrix_2;
+
+    TrilinosCPPTestUtilities::CheckSparseMatrixFromLocalMatrix(*matrix_2, local_reference);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosMatrixMarket, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy matrix
+    const int size = 12;
+    auto matrix = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 10.0, true);
+
+    // Write to file
+    const std::string file_name = "test_matrix_epetra.mm";
+    TrilinosSparseSpaceType::WriteMatrixMarketMatrix(file_name.c_str(), *matrix, false);
+
+    // Epetra communicator
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    TrilinosSparseSpaceType::CommunicatorType epetra_comm(raw_mpi_comm);
+
+    // Read from file
+    auto read_matrix = TrilinosSparseSpaceType::ReadMatrixMarket(file_name, epetra_comm);
+
+    // Check
+    auto local_matrix = TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
+    TrilinosCPPTestUtilities::CheckSparseMatrixFromLocalMatrix(*read_matrix, local_matrix);
+
+    // Clean up
+    if (r_comm.Rank() == 0) {
+        std::remove(file_name.c_str());
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosMatrixMarketVector, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy vector
+    const int size = 12;
+    auto vector = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size);
+
+    // Write to file
+    const std::string file_name = "test_vector_epetra.mm";
+    TrilinosSparseSpaceType::WriteMatrixMarketVector(file_name.c_str(), *vector);
+
+    // Epetra communicator
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    TrilinosSparseSpaceType::CommunicatorType epetra_comm(raw_mpi_comm);
+
+    // Read from file
+    auto read_vector = TrilinosSparseSpaceType::ReadMatrixMarketVector(file_name, Teuchos::rcp(&epetra_comm, false), size);
+
+    // Check
+    auto local_vector = TrilinosCPPTestUtilities::GenerateDummyLocalVector(size);
+    TrilinosCPPTestUtilities::CheckSparseVectorFromLocalVector(*read_vector, local_vector);
+
+    // Clean up
+    if (r_comm.Rank() == 0) {
+        std::remove(file_name.c_str());
+    }
+}
+
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosIsDistributedSpace, KratosTrilinosApplicationMPITestSuite)
+{
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsDistributedSpace());
+}
+
 } // namespace Kratos::Testing

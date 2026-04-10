@@ -180,7 +180,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixVector, KratosTrilinosAp
     TrilinosCPPTestExperimentalUtilities::CheckSparseVectorFromLocalVector(mult, multiply_reference);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixMatrix, KratosTrilinosApplicationMPITestSuite)
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalTransposeMultMatrixMatrix, KratosTrilinosApplicationMPITestSuite)
 {
     // The data communicator
     const auto& r_comm = Testing::GetDefaultDataCommunicator();
@@ -674,6 +674,64 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMatrixMarketVector, KratosTrilinos
     if (r_comm.Rank() == 0) {
         std::remove(file_name.c_str());
     }
+}
+
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalTransposeMultMatrixVector, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy matrix
+    const int size = 2 * r_comm.Size();
+    auto matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 10.0, true, 100);
+    auto local_matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
+    auto vector = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseVector(r_comm, size, 10.0);
+    auto local_vector = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalVector(size, 10.0);
+
+    // Create an Tpetra_Vector
+    TrilinosSparseVector mult(matrix->getDomainMap());
+
+    // Solution
+    TrilinosSparseSpaceType::TransposeMult(*matrix, *vector, mult);
+
+    // Check
+    const TrilinosLocalVectorType multiply_reference = prod(trans(local_matrix), local_vector);
+    TrilinosCPPTestExperimentalUtilities::CheckSparseVectorFromLocalVector(mult, multiply_reference);
+}
+
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixMatrix, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy matrix
+    const int size = 2 * r_comm.Size();
+    auto matrix_1 = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 10.0, true, 100);
+    auto local_matrix_1 = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
+    auto matrix_2 = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 20.0, true, 100);
+    auto local_matrix_2 = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalMatrix(size, 20.0, true);
+
+    // Create an Tpetra_Matrix with enough capacity for product
+    using LO = TrilinosSparseSpaceType::LO;
+    using GO = TrilinosSparseSpaceType::GO;
+    Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_mult = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(matrix_1->getRowMap(), matrix_1->getRowMap(), size));
+    for (LO i = 0; i < static_cast<LO>(matrix_1->getNodeNumRows()); ++i) {
+        const GO global_row = matrix_1->getRowMap()->getGlobalElement(i);
+        std::vector<GO> indices(size);
+        for (int j = 0; j < size; ++j) indices[j] = j;
+        p_graph_mult->insertGlobalIndices(global_row, Teuchos::ArrayView<const GO>(indices));
+    }
+    p_graph_mult->fillComplete();
+    TrilinosSparseMatrixType mult(p_graph_mult);
+
+    // Solution
+    TrilinosSparseSpaceType::Mult(*matrix_1, *matrix_2, mult);
+
+    // Check
+    const TrilinosLocalMatrixType multiply_reference = prod(local_matrix_1, local_matrix_2);
+    TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(mult, multiply_reference);
 }
 
 } // namespace Kratos::Testing
