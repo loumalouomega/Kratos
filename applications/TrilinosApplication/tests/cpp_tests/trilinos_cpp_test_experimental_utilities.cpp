@@ -225,7 +225,7 @@ void TrilinosCPPTestExperimentalUtilities::CheckSparseVector(
 /***********************************************************************************/
 
 void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
-    const TrilinosBaseMatrixType& rA,
+    const TrilinosSparseMatrixType& rA,
     const TrilinosLocalMatrixType& rB,
     const double NegligibleValueThreshold
     )
@@ -254,7 +254,7 @@ void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
 /***********************************************************************************/
 
 void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
-    const TrilinosBaseMatrixType& rA,
+    const TrilinosSparseMatrixType& rA,
     const std::vector<int>& rRowIndexes,
     const std::vector<int>& rColumnIndexes,
     const TrilinosLocalMatrixType& rB,
@@ -276,7 +276,7 @@ void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(
 /***********************************************************************************/
 
 void TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(
-    const TrilinosBaseMatrixType& rA,
+    const TrilinosSparseMatrixType& rA,
     const std::vector<int>& rRowIndexes,
     const std::vector<int>& rColumnIndexes,
     const std::vector<double>& rValues,

@@ -50,7 +50,7 @@ public:
 
     /// Trilinos definitions
     using TrilinosSparseMatrixType = TrilinosSparseSpaceType::MatrixType;
-    using TrilinosBaseMatrixType = TrilinosSparseSpaceType::BaseMatrixType;
+    
     using TrilinosVectorType = TrilinosSparseSpaceType::VectorType;
 
     using TrilinosLocalMatrixType = TrilinosLocalSpaceType::MatrixType;
@@ -172,7 +172,7 @@ public:
     * @param NegligibleValueThreshold The tolerance considered
     */
     static void CheckSparseMatrixFromLocalMatrix(
-        const TrilinosBaseMatrixType& rA,
+        const TrilinosSparseMatrixType& rA,
         const TrilinosLocalMatrixType& rB,
         const double NegligibleValueThreshold = 1e-8
         );
@@ -186,7 +186,7 @@ public:
     * @param NegligibleValueThreshold The tolerance considered
     */
     static void CheckSparseMatrixFromLocalMatrix(
-        const TrilinosBaseMatrixType& rA,
+        const TrilinosSparseMatrixType& rA,
         const std::vector<int>& rRowIndexes,
         const std::vector<int>& rColumnIndexes,
         const TrilinosLocalMatrixType& rB,
@@ -202,7 +202,7 @@ public:
     * @param NegligibleValueThreshold The tolerance considered
     */
     static void CheckSparseMatrix(
-        const TrilinosBaseMatrixType& rA,
+        const TrilinosSparseMatrixType& rA,
         const std::vector<int>& rRowIndexes,
         const std::vector<int>& rColumnIndexes,
         const std::vector<double>& rValues,

@@ -407,7 +407,25 @@ public:
         Tpetra::MatrixMatrix::Multiply(rA, false, rB, false, *aux_C, CallFillCompleteOnResult);
 
         // Copy values back to rC
-        CopyMatrixValues(rC, *aux_C);
+        // Inline copy logic from BaseMatrixType to MatrixType
+        if (!rC.isFillActive()) rC.resumeFill();
+        auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
+        if (p_fe_rC) p_fe_rC->beginAssembly();
+        for (LO i = 0; i < static_cast<LO>(aux_C->getNodeNumRows()); ++i) {
+            const auto global_row_index = aux_C->getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> local_cols;
+            Teuchos::ArrayView<const ST> vals;
+            aux_C->getLocalRowView(i, local_cols, vals);
+            if (vals.size() > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.size());
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
+                    global_cols[j] = aux_C->getColMap()->getGlobalElement(local_cols[j]);
+                }
+                rC.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+            }
+        }
+        if (p_fe_rC) p_fe_rC->endAssembly();
+        if (rC.isFillActive()) rC.fillComplete();
 
         KRATOS_CATCH("")
     }
@@ -456,7 +474,25 @@ public:
         Tpetra::MatrixMatrix::Multiply(rA, TransposeFlag.first, rB, TransposeFlag.second, *aux_C, CallFillCompleteOnResult);
 
         // Copy values back to rC
-        CopyMatrixValues(rC, *aux_C);
+        // Inline copy logic from BaseMatrixType to MatrixType
+        if (!rC.isFillActive()) rC.resumeFill();
+        auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
+        if (p_fe_rC) p_fe_rC->beginAssembly();
+        for (LO i = 0; i < static_cast<LO>(aux_C->getNodeNumRows()); ++i) {
+            const auto global_row_index = aux_C->getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> local_cols;
+            Teuchos::ArrayView<const ST> vals;
+            aux_C->getLocalRowView(i, local_cols, vals);
+            if (vals.size() > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.size());
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
+                    global_cols[j] = aux_C->getColMap()->getGlobalElement(local_cols[j]);
+                }
+                rC.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+            }
+        }
+        if (p_fe_rC) p_fe_rC->endAssembly();
+        if (rC.isFillActive()) rC.fillComplete();
 
         KRATOS_CATCH("")
     }
@@ -491,7 +527,25 @@ public:
         // We must ensure rA has enough space. 
         // If it is an FECrsMatrix, we might need to recreate it if the graph is too small.
         // But we try to copy values directly.
-        CopyMatrixValues(rA, *aux_2);
+        // Inline copy logic from BaseMatrixType to MatrixType
+        if (!rA.isFillActive()) rA.resumeFill();
+        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_A) p_fe_A->beginAssembly();
+        for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
+            const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> local_cols;
+            Teuchos::ArrayView<const ST> vals;
+            aux_2->getLocalRowView(i, local_cols, vals);
+            if (vals.size() > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.size());
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
+                    global_cols[j] = aux_2->getColMap()->getGlobalElement(local_cols[j]);
+                }
+                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+            }
+        }
+        if (p_fe_A) p_fe_A->endAssembly();
+        if (rA.isFillActive()) rA.fillComplete();
     }
 
     /**
@@ -520,7 +574,25 @@ public:
         Teuchos::RCP<CrsMatrixType> aux_2 = Teuchos::rcp(new CrsMatrixType(aux_1->getRowMap(), 16));
         Tpetra::MatrixMatrix::Multiply(*aux_1, false, rB, true, *aux_2);
 
-        CopyMatrixValues(rA, *aux_2);
+        // Inline copy logic from BaseMatrixType to MatrixType
+        if (!rA.isFillActive()) rA.resumeFill();
+        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_A) p_fe_A->beginAssembly();
+        for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
+            const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
+            Teuchos::ArrayView<const LO> local_cols;
+            Teuchos::ArrayView<const ST> vals;
+            aux_2->getLocalRowView(i, local_cols, vals);
+            if (vals.size() > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.size());
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
+                    global_cols[j] = aux_2->getColMap()->getGlobalElement(local_cols[j]);
+                }
+                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+            }
+        }
+        if (p_fe_A) p_fe_A->endAssembly();
+        if (rA.isFillActive()) rA.fillComplete();
     }
 
     /**
@@ -738,7 +810,7 @@ public:
      * @brief Sets a matrix to zero
      * @param rX The matrix to be set
      */
-    inline static void SetToZero(BaseMatrixType& rA)
+    inline static void SetToZero(MatrixType& rA)
     {
         // Set all values in the matrix to zero.
         if (!rA.isFillActive()) {
@@ -1087,8 +1159,8 @@ public:
      * @param rB The matrix to be copied
      */
     static void CopyMatrixValues(
-        BaseMatrixType& rA,
-        const BaseMatrixType& rB
+        MatrixType& rA,
+        const MatrixType& rB
         )
     {
         // Cleaning destination matrix
