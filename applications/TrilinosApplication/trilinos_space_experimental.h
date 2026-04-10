@@ -104,7 +104,9 @@ public:
     using GO = typename MatrixType::global_ordinal_type;
     // The Node type.  e.g., Kokkos::DefaultNode::DefaultNodeType, defined in KokkosCompat_DefaultNode.hpp.
     using NT = typename MatrixType::node_type;
-    using BaseMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
+
+    /// Definition of the CrsMatrix type
+    using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
 
     /// Define the import/export types
     using ImportType = Tpetra::Import<LO, GO, NT>;
@@ -402,12 +404,11 @@ public:
         KRATOS_TRY
 
         // Use a temporary CrsMatrix to allow for dynamic sparsity
-        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
         Teuchos::RCP<CrsMatrixType> aux_C = Teuchos::rcp(new CrsMatrixType(rC.getRowMap(), 16));
         Tpetra::MatrixMatrix::Multiply(rA, false, rB, false, *aux_C, CallFillCompleteOnResult);
 
         // Copy values back to rC
-        // Inline copy logic from BaseMatrixType to MatrixType
+        // Inline copy logic from CrsMatrixType to MatrixType
         if (!rC.isFillActive()) rC.resumeFill();
         auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
         if (p_fe_rC) p_fe_rC->beginAssembly();
@@ -469,12 +470,11 @@ public:
         KRATOS_TRY
 
         // Use a temporary CrsMatrix to allow for dynamic sparsity
-        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
         Teuchos::RCP<CrsMatrixType> aux_C = Teuchos::rcp(new CrsMatrixType(rC.getRowMap(), 16));
         Tpetra::MatrixMatrix::Multiply(rA, TransposeFlag.first, rB, TransposeFlag.second, *aux_C, CallFillCompleteOnResult);
 
         // Copy values back to rC
-        // Inline copy logic from BaseMatrixType to MatrixType
+        // Inline copy logic from CrsMatrixType to MatrixType
         if (!rC.isFillActive()) rC.resumeFill();
         auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
         if (p_fe_rC) p_fe_rC->beginAssembly();
@@ -517,7 +517,6 @@ public:
         )
     {
         // Use temporary CrsMatrix for intermediate steps
-        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
         Teuchos::RCP<CrsMatrixType> aux_1 = Teuchos::rcp(new CrsMatrixType(rB.getDomainMap(), 16));
         Tpetra::MatrixMatrix::Multiply(rB, true, rD, false, *aux_1);
 
@@ -527,7 +526,7 @@ public:
         // We must ensure rA has enough space. 
         // If it is an FECrsMatrix, we might need to recreate it if the graph is too small.
         // But we try to copy values directly.
-        // Inline copy logic from BaseMatrixType to MatrixType
+        // Inline copy logic from CrsMatrixType to MatrixType
         if (!rA.isFillActive()) rA.resumeFill();
         auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
         if (p_fe_A) p_fe_A->beginAssembly();
@@ -567,14 +566,13 @@ public:
         )
     {
         // Use temporary CrsMatrix for intermediate steps
-        using CrsMatrixType = Tpetra::CrsMatrix<ST, LO, GO, NT>;
         Teuchos::RCP<CrsMatrixType> aux_1 = Teuchos::rcp(new CrsMatrixType(rB.getRowMap(), 16));
         Tpetra::MatrixMatrix::Multiply(rB, false, rD, false, *aux_1);
 
         Teuchos::RCP<CrsMatrixType> aux_2 = Teuchos::rcp(new CrsMatrixType(aux_1->getRowMap(), 16));
         Tpetra::MatrixMatrix::Multiply(*aux_1, false, rB, true, *aux_2);
 
-        // Inline copy logic from BaseMatrixType to MatrixType
+        // Inline copy logic from CrsMatrixType to MatrixType
         if (!rA.isFillActive()) rA.resumeFill();
         auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
         if (p_fe_A) p_fe_A->beginAssembly();
