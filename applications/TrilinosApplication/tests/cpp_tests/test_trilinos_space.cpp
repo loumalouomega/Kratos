@@ -13,6 +13,7 @@
 // System includes
 
 // External includes
+#include <Teuchos_RCP.hpp>
 
 // Project includes
 #include "tests/cpp_tests/trilinos_fast_suite.h"
@@ -689,14 +690,14 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosScaleAndAddMatrix, KratosTrilinosApplicationMP
     auto matrix_2 = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 20.0, true);
 
     // Solution
-    TrilinosSparseSpaceType::ScaleAndAdd(2.0, *matrix_1, 3.0, *matrix_2);
+    TrilinosSparseSpaceType::ScaleAndAdd(2.0, matrix_1, 3.0, matrix_2);
 
     // Check
     auto local_matrix_1 = TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
     auto local_matrix_2 = TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(size, 20.0, true);
     auto local_reference = 2.0 * local_matrix_1 + 3.0 * local_matrix_2;
 
-    TrilinosCPPTestUtilities::CheckSparseMatrixFromLocalMatrix(*matrix_2, local_reference);
+    TrilinosCPPTestUtilities::CheckSparseMatrixFromLocalMatrix(matrix_2, local_reference);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(TrilinosMatrixMarket, KratosTrilinosApplicationMPITestSuite)
@@ -710,7 +711,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosMatrixMarket, KratosTrilinosApplicationMPITest
 
     // Write to file
     const std::string file_name = "test_matrix_epetra.mm";
-    TrilinosSparseSpaceType::WriteMatrixMarketMatrix(file_name.c_str(), *matrix, false);
+    TrilinosSparseSpaceType::WriteMatrixMarketMatrix(file_name.c_str(), matrix, false);
 
     // Epetra communicator
     auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
@@ -740,14 +741,14 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosMatrixMarketVector, KratosTrilinosApplicationM
 
     // Write to file
     const std::string file_name = "test_vector_epetra.mm";
-    TrilinosSparseSpaceType::WriteMatrixMarketVector(file_name.c_str(), *vector);
+    TrilinosSparseSpaceType::WriteMatrixMarketVector(file_name.c_str(), vector);
 
     // Epetra communicator
     auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
     TrilinosSparseSpaceType::CommunicatorType epetra_comm(raw_mpi_comm);
 
     // Read from file
-    auto read_vector = TrilinosSparseSpaceType::ReadMatrixMarketVector(file_name, Teuchos::rcp(&epetra_comm, false), size);
+    auto read_vector = TrilinosSparseSpaceType::ReadMatrixMarketVector(file_name, epetra_comm, size);
 
     // Check
     auto local_vector = TrilinosCPPTestUtilities::GenerateDummyLocalVector(size);

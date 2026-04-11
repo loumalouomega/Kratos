@@ -740,4 +740,76 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalIsDistributedSpace, KratosTrilinos
     KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsDistributedSpace());
 }
 
+
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBtDBProductOperationRealCase, KratosTrilinosApplicationMPITestSuite)
+{
+    // The data communicator
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+
+    // The dummy matrix
+    const int size = 6;
+
+    // Generate A matrix
+    std::vector<int> row_indexes = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5};
+    std::vector<int> column_indexes = {0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 2, 3, 4, 5, 2, 3, 4, 5};
+    std::vector<double> values = {2069000000.0, 0.0, -2069000000.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2069000000.0, 0.0, 4138000000.0, 0.0, -2069000000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2069000000.0, 0.0, 2069000000.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    auto A = TrilinosCPPTestExperimentalUtilities::GenerateSparseMatrix(r_comm, size, row_indexes, column_indexes, values);
+
+    // Generate T matrix
+    row_indexes = {0,1,2,3,4,4,5};
+    column_indexes = {0,1,2,3,2,4,5};
+    values = {1,1,1,1,1,0,1};
+    auto T = TrilinosCPPTestExperimentalUtilities::GenerateSparseMatrix(r_comm, size, row_indexes, column_indexes, values);
+
+    /* Intermediate multiplication */
+
+    // Create an Tpetra_Matrix with enough capacity
+    using LO = TrilinosSparseSpaceType::LO;
+    using GO = TrilinosSparseSpaceType::GO;
+    Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_aux = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(A->getRowMap(), A->getRowMap(), size));
+    for (LO i = 0; i < static_cast<LO>(A->getNodeNumRows()); ++i) {
+        const GO global_row = A->getRowMap()->getGlobalElement(i);
+        std::vector<GO> indices(size);
+        for (int j = 0; j < size; ++j) indices[j] = j;
+        p_graph_aux->insertGlobalIndices(global_row, Teuchos::ArrayView<const GO>(indices));
+    }
+    p_graph_aux->fillComplete();
+    TrilinosSparseMatrixType aux(p_graph_aux);
+
+    // First multiplication (aux = T^T * A)
+    TrilinosSparseSpaceType::TransposeMult(*T, *A, aux, {true, false});
+
+    // Values to check
+    row_indexes = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5};
+    column_indexes = {0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 2, 3, 4, 5, 2, 3, 4, 5};
+    values = {2069000000.0, 0.0, -2069000000.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2069000000.0, 0.0, 2069000000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+    // Check
+    TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(aux, row_indexes, column_indexes, values);
+
+    // Compute T^T A T
+    // We create a result matrix with enough capacity
+    Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_res = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(A->getRowMap(), A->getRowMap(), size));
+    for (LO i = 0; i < static_cast<LO>(A->getNodeNumRows()); ++i) {
+        const GO global_row = A->getRowMap()->getGlobalElement(i);
+        std::vector<GO> indices(size);
+        for (int j = 0; j < size; ++j) indices[j] = j;
+        p_graph_res->insertGlobalIndices(global_row, Teuchos::ArrayView<const GO>(indices));
+    }
+    p_graph_res->fillComplete();
+    TrilinosSparseMatrixType res(p_graph_res);
+
+    TrilinosSparseSpaceType::BtDBProductOperation(res, *A, *T);
+
+    // Values to check
+    row_indexes = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5};
+    column_indexes = {0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 2, 3, 4, 5, 2, 3, 4, 5};
+    values = {2069000000.0, 0.0, -2069000000.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2069000000.0, 0.0, 2069000000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+    // Check
+    TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(res, row_indexes, column_indexes, values);
+}
+
+
 } // namespace Kratos::Testing

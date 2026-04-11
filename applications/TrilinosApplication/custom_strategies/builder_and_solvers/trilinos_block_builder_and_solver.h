@@ -106,7 +106,7 @@ public:
     using DofsArrayType = typename BaseType::DofsArrayType;
 
     /// Epetra definitions
-    using EpetraCommunicatorType = Epetra_MpiComm;
+    using TrilinosCommunicatorType = typename TSparseSpace::CommunicatorType;
 
     /// Defining the sparse matrices and vectors
     using TSystemMatrixType = typename BaseType::TSystemMatrixType;
@@ -132,7 +132,7 @@ public:
     /**
      * @brief Default constructor.
      */
-    explicit TrilinosBlockBuilderAndSolver(EpetraCommunicatorType& rComm,
+    explicit TrilinosBlockBuilderAndSolver(TrilinosCommunicatorType& rComm,
                                   int GuessRowSize,
                                   typename TLinearSolver::Pointer pNewLinearSystemSolver)
         : BaseType(pNewLinearSystemSolver),
@@ -145,7 +145,7 @@ public:
      * @brief Default constructor. (with parameters)
      */
     explicit TrilinosBlockBuilderAndSolver(
-        EpetraCommunicatorType& rComm,
+        TrilinosCommunicatorType& rComm,
         typename TLinearSolver::Pointer pNewLinearSystemSolver,
         Parameters ThisParameters
         ) : BaseType(pNewLinearSystemSolver),
@@ -1198,7 +1198,7 @@ protected:
     ///@{
 
     /* Base variables */
-    EpetraCommunicatorType& mrComm;                 /// The MPI communicator
+    TrilinosCommunicatorType& mrComm;               /// The MPI communicator
     int mGuessRowSize;                              /// The guess row size
     IndexType mLocalSystemSize;                     /// The local system size
     int mFirstMyId;                                 /// Auxiliary Id (the first row of the local system)

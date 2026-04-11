@@ -1036,7 +1036,8 @@ public:
         KRATOS_ERROR_IF(localIndex == Tpetra::Details::OrdinalTraits<IndexType>::invalid()) << " non-local id: " << I << "." << std::endl;
 
         // Get the value at the specified local index
-        return rX.getLocalElement(localIndex);
+        auto data = rX.getData();
+        return data[localIndex];
     }
 
     /**

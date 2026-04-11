@@ -16,8 +16,8 @@
 
 // Project includes
 #include "includes/expect.h"
-#include "trilinos_cpp_test_utilities.h"
 #include "trilinos_cpp_test_experimental_utilities.h"
+#include "trilinos_cpp_test_utilities.h"
 
 namespace Kratos
 {
@@ -472,6 +472,8 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
 
     // Create the matrix and set values
     MatrixPointerType A = Teuchos::rcp(new TrilinosSparseMatrixType(graph));
+    // Begin matrix assembly
+    A->beginAssembly();
     // Set the matrix values
     for (int i = 0; i < NumMyElements; ++i) {
         auto it_find = initial_and_end_index.find(i);
@@ -484,6 +486,9 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
             A->replaceGlobalValues(MyGlobalElements[i], Teuchos::ArrayView<const GO>(indexes), Teuchos::ArrayView<const double>(values));
         }
     }
+
+    // End matrix assembly
+    A->endAssembly();
 
     // Finish up, transforming the matrix entries into local numbering,
     // to optimize data transfer during matrix-vector products
