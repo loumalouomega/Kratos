@@ -140,6 +140,75 @@ public:
     ///@{
 
     /**
+     * @brief This method returns the rank of the communicator
+     * @param rComm The communicator considered
+     * @return The rank of the communicator
+     */
+    inline static int GetRank(const CommunicatorType& rComm)
+    {
+        return rComm.MyPID();
+    }
+
+    /**
+     * @brief This method returns true if the pointer is null
+     * @param pPointer The pointer considered
+     * @return True if the pointer is null
+     */
+    template<class TPointerType>
+    inline static bool IsNull(const TPointerType& pPointer)
+    {
+        return pPointer == nullptr;
+    }
+
+    /**
+     * @brief This method returns the map of the vector
+     * @param rV The vector considered
+     * @return The map of the vector
+     */
+    inline static const MapType& GetMap(const VectorType& rV)
+    {
+        return rV.Map();
+    }
+
+    /**
+     * @brief This method returns the communicator of the vector
+     * @param rV The vector considered
+     * @return The communicator of the vector
+     */
+    inline static const CommunicatorType& GetCommunicator(const VectorType& rV)
+    {
+        return rV.Comm();
+    }
+
+    /**
+     * @brief This method returns the communicator of the matrix
+     * @param rA The matrix considered
+     * @return The communicator of the matrix
+     */
+    inline static const CommunicatorType& GetCommunicator(const MatrixType& rA)
+    {
+        return rA.Comm();
+    }
+
+    /**
+     * @brief This method performs the global assembly of the matrix
+     * @param rA The matrix considered
+     */
+    inline static void GlobalAssemble(MatrixType& rA)
+    {
+        rA.GlobalAssemble();
+    }
+
+    /**
+     * @brief This method performs the global assembly of the vector
+     * @param rV The vector considered
+     */
+    inline static void GlobalAssemble(VectorType& rV)
+    {
+        rV.GlobalAssemble();
+    }
+
+    /**
      * @brief This method creates an empty pointer to a matrix
      * @return The pointer to the matrix
      */
