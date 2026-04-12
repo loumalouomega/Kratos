@@ -209,6 +209,15 @@ public:
     }
 
     /**
+     * @brief This method creates an empty pointer to a map
+     * @return The pointer to the map
+     */
+    static MapPointerType CreateEmptyMapPointer()
+    {
+        return MapPointerType(nullptr);
+    }
+
+    /**
      * @brief This method creates an empty pointer to a matrix
      * @return The pointer to the matrix
      */
