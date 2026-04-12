@@ -19,6 +19,7 @@
 /* Trilinos includes */
 #include <Tpetra_Core.hpp>
 #include <Tpetra_Vector.hpp>
+#include <Tpetra_FEVector.hpp>
 #include <Tpetra_FECrsMatrix.hpp>
 #include <Tpetra_Map.hpp>
 #include <Tpetra_MultiVector.hpp>
@@ -777,6 +778,7 @@ public:
         MatrixType& rDest = rY;
         const CrsMatrixType& rSrc = *aux_Y;
         if (!rDest.isFillActive()) rDest.resumeFill();
+        rDest.setAllToScalar(0.0);
         auto p_fe_Dest = dynamic_cast<MatrixType*>(&rDest);
         if (p_fe_Dest) p_fe_Dest->beginAssembly();
         for (LO i = 0; i < static_cast<LO>(rSrc.getLocalNumRows()); ++i) {
@@ -818,6 +820,30 @@ public:
             rX.replaceLocalValue(localIndex, value);
         }
         // If the index `i` is not local, it is ignored (handled by Tpetra's parallel distribution)
+    }
+
+    /**
+     * @brief Sets a value in a matrix
+     * @param rA The matrix considered
+     * @param i The row index
+     * @param j The column index
+     * @param value The value considered
+     */
+    inline static void SetValue(
+        MatrixType& rA,
+        IndexType i,
+        IndexType j,
+        const double value
+        )
+    {
+        if (!rA.isFillActive()) {
+            rA.resumeFill();
+        }
+        rA.beginAssembly();
+        const GO globalRow = static_cast<GO>(i);
+        const GO globalCol = static_cast<GO>(j);
+        const ST val = static_cast<ST>(value);
+        rA.replaceGlobalValues(globalRow, 1, &val, &globalCol);
     }
 
     /**
@@ -954,6 +980,10 @@ public:
         }
 
         if (!indices.empty()) {
+            if (!rA.isFillActive()) {
+                rA.resumeFill();
+            }
+            rA.beginAssembly();
             std::vector<GO> global_indices(indices.size());
             for (std::size_t i = 0; i < indices.size(); ++i) {
                 global_indices[i] = static_cast<GO>(indices[i]);
@@ -1000,11 +1030,15 @@ public:
         }
 
         if (!indices.empty()) {
+            auto p_fe_rb = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rb);
+            if (p_fe_rb) p_fe_rb->beginAssembly();
+            std::vector<GO> global_indices(indices.size());
+            std::vector<ST> values(indices.size());
             for (std::size_t i = 0; i < indices.size(); ++i) {
-                const GO globalRow = static_cast<GO>(indices[i]);
-                const ST value = rRHSContribution[i];
-                rb.sumIntoGlobalValue(globalRow, 0, value);
+                global_indices[i] = static_cast<GO>(indices[i]);
+                values[i] = rRHSContribution[i];
             }
+            rb.sumIntoGlobalValues(static_cast<GO>(indices.size()), global_indices.data(), values.data());
         }
     }
 
@@ -1584,10 +1618,29 @@ public:
     }
 
     /// @brief Global assembly on a Tpetra FECrsMatrix (calls endAssembly).
-    static void GlobalAssemble(MatrixType& rA) { rA.endAssembly(); }
+    static void GlobalAssemble(MatrixType& rA)
+    {
+        if (rA.isFillActive()) {
+            try {
+                rA.endAssembly();
+            } catch (...) {
+                // Already closed for FE assembly
+            }
+        }
+    }
 
-    /// @brief Global assembly on a Tpetra Vector - no-op (locally owned rows set directly).
-    static void GlobalAssemble(VectorType& /*rV*/) {}
+    /// @brief Global assembly on a Tpetra Vector.
+    static void GlobalAssemble(VectorType& rV)
+    {
+        auto p_fe_rb = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rV);
+        if (p_fe_rb) {
+            try {
+                p_fe_rb->endAssembly();
+            } catch (...) {
+                // Already closed
+            }
+        }
+    }
 
     /**
      * @brief Build Tpetra FECrsGraph and create new system matrix + vectors.
