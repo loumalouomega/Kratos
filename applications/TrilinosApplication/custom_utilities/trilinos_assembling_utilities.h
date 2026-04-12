@@ -348,6 +348,98 @@ public:
         KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
     }
 
+#ifdef HAVE_TPETRA
+    /// @brief Sets a value in a Tpetra vector by global index.
+    template<class TpetraVectorType>
+    static inline auto SetGlobalValue(
+        TpetraVectorType& rX, IndexType i, const double Value
+        ) -> decltype(rX.replaceGlobalValue(static_cast<typename TpetraVectorType::global_ordinal_type>(i), Value), void())
+    {
+        rX.replaceGlobalValue(static_cast<typename TpetraVectorType::global_ordinal_type>(i), Value);
+    }
+
+    /// @brief Sets a value in a Tpetra vector by global index (no assembly).
+    template<class TpetraVectorType>
+    static inline auto SetGlobalValueWithoutGlobalAssembly(
+        TpetraVectorType& rX, IndexType i, const double Value
+        ) -> decltype(rX.replaceGlobalValue(static_cast<typename TpetraVectorType::global_ordinal_type>(i), Value), void())
+    {
+        rX.replaceGlobalValue(static_cast<typename TpetraVectorType::global_ordinal_type>(i), Value);
+    }
+
+    /// @brief Sets a value in a Tpetra vector by local index.
+    template<class TpetraVectorType>
+    static inline auto SetLocalValue(
+        TpetraVectorType& rX, IndexType i, const double Value
+        ) -> decltype(rX.replaceLocalValue(static_cast<typename TpetraVectorType::local_ordinal_type>(i), Value), void())
+    {
+        rX.replaceLocalValue(static_cast<typename TpetraVectorType::local_ordinal_type>(i), Value);
+    }
+
+    /// @brief Sets a value in a Tpetra vector by local index (no assembly).
+    template<class TpetraVectorType>
+    static inline auto SetLocalValueWithoutGlobalAssembly(
+        TpetraVectorType& rX, IndexType i, const double Value
+        ) -> decltype(rX.replaceLocalValue(static_cast<typename TpetraVectorType::local_ordinal_type>(i), Value), void())
+    {
+        rX.replaceLocalValue(static_cast<typename TpetraVectorType::local_ordinal_type>(i), Value);
+    }
+
+    /// @brief Sets a value in a Tpetra matrix by global indices (calls endAssembly).
+    template<class TpetraMatrixType>
+    static inline auto SetGlobalValue(
+        TpetraMatrixType& rA, IndexType i, IndexType j, const double Value
+        ) -> decltype(rA.getGlobalNumRows(), void())
+    {
+        using GO = typename TpetraMatrixType::global_ordinal_type;
+        using ST = typename TpetraMatrixType::scalar_type;
+        const GO col = static_cast<GO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceGlobalValues(static_cast<GO>(i), 1, &val, &col);
+        rA.endAssembly();
+    }
+
+    /// @brief Sets a value in a Tpetra matrix by global indices (no assembly).
+    template<class TpetraMatrixType>
+    static inline auto SetGlobalValueWithoutGlobalAssembly(
+        TpetraMatrixType& rA, IndexType i, IndexType j, const double Value
+        ) -> decltype(rA.getGlobalNumRows(), void())
+    {
+        using GO = typename TpetraMatrixType::global_ordinal_type;
+        using ST = typename TpetraMatrixType::scalar_type;
+        const GO col = static_cast<GO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceGlobalValues(static_cast<GO>(i), 1, &val, &col);
+    }
+
+    /// @brief Sets a value in a Tpetra matrix by local indices (calls endAssembly).
+    template<class TpetraMatrixType>
+    static inline auto SetLocalValue(
+        TpetraMatrixType& rA, IndexType i, IndexType j, const double Value
+        ) -> decltype(rA.getGlobalNumRows(), void())
+    {
+        using LO = typename TpetraMatrixType::local_ordinal_type;
+        using ST = typename TpetraMatrixType::scalar_type;
+        const LO col = static_cast<LO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceLocalValues(static_cast<LO>(i), 1, &val, &col);
+        rA.endAssembly();
+    }
+
+    /// @brief Sets a value in a Tpetra matrix by local indices (no assembly).
+    template<class TpetraMatrixType>
+    static inline auto SetLocalValueWithoutGlobalAssembly(
+        TpetraMatrixType& rA, IndexType i, IndexType j, const double Value
+        ) -> decltype(rA.getGlobalNumRows(), void())
+    {
+        using LO = typename TpetraMatrixType::local_ordinal_type;
+        using ST = typename TpetraMatrixType::scalar_type;
+        const LO col = static_cast<LO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceLocalValues(static_cast<LO>(i), 1, &val, &col);
+    }
+#endif // HAVE_TPETRA
+
     ///@}
     ///@name Access
     ///@{

@@ -127,7 +127,11 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalDisplacementCriteria, KratosTrilin
     }
     Teuchos::RCP<const Tpetra::Map<LO, GO, NT>> p_map = Teuchos::rcp(new Tpetra::Map<LO, GO, NT>(Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(), Teuchos::ArrayView<const GO>(indices), 0, p_tpetra_comm));
 
-    TrilinosSparseSpaceType::MatrixType rA; // Not used in this criteria but needed for API
+    // Not used in this criteria but needed for API
+    auto p_map_aux = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(0, 0, p_tpetra_comm));
+    auto p_graph_aux = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(p_map_aux, p_map_aux, 0));
+    p_graph_aux->fillComplete();
+    TrilinosSparseSpaceType::MatrixType rA(p_graph_aux);
     TrilinosSparseSpaceType::VectorType Dx(p_map);
     TrilinosSparseSpaceType::VectorType rb; // Not used in this criteria but needed for API
 

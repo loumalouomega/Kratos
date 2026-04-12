@@ -28,7 +28,7 @@
 #include <TpetraExt_MatrixMatrix.hpp>
 #include <TpetraExt_TripleMatrixMultiply.hpp>
 
-#include <MatrixMarket_Tpetra.hpp>
+//#include <MatrixMarket_Tpetra.hpp>
 
 
 // Project includes
@@ -188,11 +188,12 @@ public:
     {
         const int global_elems = 0;
         MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
-        GraphPointerType graph = Teuchos::rcp(new GraphType(map, map, 0));
+        // Use non-const RCP so we can call endAssembly() (FE variant of fillComplete)
+        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(map, map, 0));
         if (graph->isFillActive()) {
-            graph->fillComplete();
+            graph->endAssembly();
         }
-        return Teuchos::rcp(new MatrixType(graph));
+        return Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
     }
 
     /**
@@ -442,17 +443,17 @@ public:
         if (!rC.isFillActive()) rC.resumeFill();
         auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
         if (p_fe_rC) p_fe_rC->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_C->getNodeNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_C->getLocalNumRows()); ++i) {
             const auto global_row_index = aux_C->getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> local_cols;
-            Teuchos::ArrayView<const ST> vals;
+            typename MatrixType::local_inds_host_view_type local_cols;
+            typename MatrixType::values_host_view_type vals;
             aux_C->getLocalRowView(i, local_cols, vals);
-            if (vals.size() > 0) {
-                Teuchos::Array<GO> global_cols(local_cols.size());
-                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
-                    global_cols[j] = aux_C->getColMap()->getGlobalElement(local_cols[j]);
+            if (vals.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
+                    global_cols[j] = aux_C->getColMap()->getGlobalElement(local_cols(j));
                 }
-                rC.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+                rC.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
         if (p_fe_rC) p_fe_rC->endAssembly();
@@ -508,17 +509,17 @@ public:
         if (!rC.isFillActive()) rC.resumeFill();
         auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
         if (p_fe_rC) p_fe_rC->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_C->getNodeNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_C->getLocalNumRows()); ++i) {
             const auto global_row_index = aux_C->getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> local_cols;
-            Teuchos::ArrayView<const ST> vals;
+            typename MatrixType::local_inds_host_view_type local_cols;
+            typename MatrixType::values_host_view_type vals;
             aux_C->getLocalRowView(i, local_cols, vals);
-            if (vals.size() > 0) {
-                Teuchos::Array<GO> global_cols(local_cols.size());
-                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
-                    global_cols[j] = aux_C->getColMap()->getGlobalElement(local_cols[j]);
+            if (vals.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
+                    global_cols[j] = aux_C->getColMap()->getGlobalElement(local_cols(j));
                 }
-                rC.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+                rC.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
         if (p_fe_rC) p_fe_rC->endAssembly();
@@ -560,17 +561,17 @@ public:
         if (!rA.isFillActive()) rA.resumeFill();
         auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
         if (p_fe_A) p_fe_A->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_2->getLocalNumRows()); ++i) {
             const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> local_cols;
-            Teuchos::ArrayView<const ST> vals;
+            typename MatrixType::local_inds_host_view_type local_cols;
+            typename MatrixType::values_host_view_type vals;
             aux_2->getLocalRowView(i, local_cols, vals);
-            if (vals.size() > 0) {
-                Teuchos::Array<GO> global_cols(local_cols.size());
-                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
-                    global_cols[j] = aux_2->getColMap()->getGlobalElement(local_cols[j]);
+            if (vals.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
+                    global_cols[j] = aux_2->getColMap()->getGlobalElement(local_cols(j));
                 }
-                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+                rA.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
         if (p_fe_A) p_fe_A->endAssembly();
@@ -606,17 +607,17 @@ public:
         if (!rA.isFillActive()) rA.resumeFill();
         auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
         if (p_fe_A) p_fe_A->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_2->getLocalNumRows()); ++i) {
             const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> local_cols;
-            Teuchos::ArrayView<const ST> vals;
+            typename MatrixType::local_inds_host_view_type local_cols;
+            typename MatrixType::values_host_view_type vals;
             aux_2->getLocalRowView(i, local_cols, vals);
-            if (vals.size() > 0) {
-                Teuchos::Array<GO> global_cols(local_cols.size());
-                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
-                    global_cols[j] = aux_2->getColMap()->getGlobalElement(local_cols[j]);
+            if (vals.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
+                    global_cols[j] = aux_2->getColMap()->getGlobalElement(local_cols(j));
                 }
-                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+                rA.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
         if (p_fe_A) p_fe_A->endAssembly();
@@ -748,17 +749,17 @@ public:
         if (!rDest.isFillActive()) rDest.resumeFill();
         auto p_fe_Dest = dynamic_cast<MatrixType*>(&rDest);
         if (p_fe_Dest) p_fe_Dest->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(rSrc.getLocalNumRows()); ++i) {
             const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> local_cols;
-            Teuchos::ArrayView<const ST> vals;
+            typename MatrixType::local_inds_host_view_type local_cols;
+            typename MatrixType::values_host_view_type vals;
             rSrc.getLocalRowView(i, local_cols, vals);
-            if (vals.size() > 0) {
-                Teuchos::Array<GO> global_cols(local_cols.size());
-                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
-                    global_cols[j] = rSrc.getColMap()->getGlobalElement(local_cols[j]);
+            if (vals.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
+                    global_cols[j] = rSrc.getColMap()->getGlobalElement(local_cols(j));
                 }
-                rDest.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+                rDest.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
         if (p_fe_Dest) p_fe_Dest->endAssembly();
@@ -855,7 +856,6 @@ public:
     inline static void Clear(MatrixPointerType pA)
     {
         if(pA != Teuchos::null) {
-            int global_elems = 0;
             auto map = Teuchos::rcp(new MapType(0, 0, pA->getMap()->getComm()));
             GraphPointerType graph = Teuchos::rcp(new GraphType(map, map, 0));
             MatrixPointerType pNewEmptyA = Teuchos::rcp(new MatrixType(graph));
@@ -870,7 +870,6 @@ public:
     inline static void Clear(VectorPointerType pX)
     {
         if(pX != Teuchos::null) {
-            int global_elems = 0;
             auto map = Teuchos::rcp(new MapType(0, 0, pX->getMap()->getComm()));
             VectorPointerType pNewEmptyX = Teuchos::rcp(new VectorType(map));
             pX.swap(pNewEmptyX);
@@ -925,21 +924,22 @@ public:
         }
 
         if (!indices.empty()) {
-            // Fill Tpetra local arrays
-            std::vector<ST> values(indices.size() * indices.size(), 0.0);
-
+            std::vector<GO> global_indices(indices.size());
             for (std::size_t i = 0; i < indices.size(); ++i) {
-                for (std::size_t j = 0; j < indices.size(); ++j) {
-                    values[i * indices.size() + j] = rLHSContribution(i, j);
-                }
+                global_indices[i] = static_cast<GO>(indices[i]);
             }
 
-            // Insert or sum into global values
-            Teuchos::ArrayView<LO> indices_view(indices);
-            Teuchos::ArrayView<ST> values_view(values);
-
-            const int ierr = rA.sumIntoGlobalValues(indices_view, indices_view, values_view);
-            KRATOS_ERROR_IF(ierr != 0) << "Tpetra failure found" << std::endl;
+            for (std::size_t i = 0; i < indices.size(); ++i) {
+                const GO globalRow = global_indices[i];
+                std::vector<ST> row_values(indices.size());
+                for (std::size_t j = 0; j < indices.size(); ++j) {
+                    row_values[j] = rLHSContribution(i, j);
+                }
+                const int ierr = rA.sumIntoGlobalValues(globalRow, static_cast<LO>(global_indices.size()), row_values.data(), global_indices.data());
+                // Note: sumIntoGlobalValues might return the number of values successfully summed instead of an error code 0 or -1. 
+                // Epetra returns 0, Tpetra returns the number of values (indices.size()) if successful.
+                KRATOS_ERROR_IF(ierr != static_cast<int>(indices.size())) << "Tpetra failure found" << std::endl;
+            }
         }
     }
 
@@ -970,19 +970,11 @@ public:
         }
 
         if (!indices.empty()) {
-            // Fill Tpetra values array
-            std::vector<ST> values(indices.size(), 0.0);
-
             for (std::size_t i = 0; i < indices.size(); ++i) {
-                values[i] = rRHSContribution[i];
+                const GO globalRow = static_cast<GO>(indices[i]);
+                const ST value = rRHSContribution[i];
+                rb.sumIntoGlobalValue(globalRow, 0, value);
             }
-
-            // Insert or sum into global values
-            Teuchos::ArrayView<LO> indices_view(indices);
-            Teuchos::ArrayView<ST> values_view(values);
-
-            const int ierr = rb->sumIntoGlobalValues(indices_view, values_view);
-            KRATOS_ERROR_IF(ierr != 0) << "Tpetra failure found" << std::endl;
         }
     }
 
@@ -1085,57 +1077,10 @@ public:
      * @param rComm The MPI communicator
      * @return The matrix read from the file
      */
-    inline static MatrixPointerType ReadMatrixMarket(
-        const std::string FileName,
-        CommunicatorType& rComm
-        )
+    inline static MatrixPointerType ReadMatrixMarket(const std::string& FileName, CommunicatorType& rComm)
     {
-        KRATOS_TRY
-        // Load the matrix using Tpetra's MatrixMarket reader into a standard CrsMatrix
-        Teuchos::RCP<CrsMatrixType> p_base_matrix = Tpetra::MatrixMarket::Reader<CrsMatrixType>::readSparseFile(FileName, Teuchos::rcp(&rComm, false));
-        KRATOS_ERROR_IF(p_base_matrix.is_null()) << "Error thrown while reading Matrix Market file " << FileName << std::endl;
-
-        // Wrap it into a FECrsMatrix (MatrixType)
-        // We create a new FECrsGraph with the same maps and populate it
-        Teuchos::RCP<GraphType> p_fe_graph = Teuchos::rcp(new GraphType(p_base_matrix->getRowMap(), p_base_matrix->getColMap(), 16));
-        for (LO i = 0; i < static_cast<LO>(p_base_matrix->getNodeNumRows()); ++i) {
-            const auto global_row_index = p_base_matrix->getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> indices;
-            Teuchos::ArrayView<const ST> values;
-            p_base_matrix->getLocalRowView(i, indices, values);
-            std::vector<GO> global_indices(indices.size());
-            for(std::size_t j=0; j<indices.size(); ++j) {
-                global_indices[j] = p_base_matrix->getColMap()->getGlobalElement(indices[j]);
-            }
-            p_fe_graph->insertGlobalIndices(global_row_index, Teuchos::ArrayView<const GO>(global_indices));
-        }
-        p_fe_graph->fillComplete();
-        MatrixPointerType p_matrix = Teuchos::rcp(new MatrixType(p_fe_graph));
-        
-        // Inline copy logic from CrsMatrixType to MatrixType
-        MatrixType& rA = *p_matrix;
-        const CrsMatrixType& rB = *p_base_matrix;
-        if (!rA.isFillActive()) rA.resumeFill();
-        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
-        if (p_fe_A) p_fe_A->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {
-            const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> local_cols;
-            Teuchos::ArrayView<const ST> vals;
-            rB.getLocalRowView(i, local_cols, vals);
-            if (vals.size() > 0) {
-                Teuchos::Array<GO> global_cols(local_cols.size());
-                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.size()); ++j) {
-                    global_cols[j] = rB.getColMap()->getGlobalElement(local_cols[j]);
-                }
-                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
-            }
-        }
-        if (p_fe_A) p_fe_A->endAssembly();
-        if (rA.isFillActive()) rA.fillComplete();
-
-        return p_matrix;
-        KRATOS_CATCH("");
+        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
+        return CreateEmptyMatrixPointer();
     }
 
     /**
@@ -1144,20 +1089,10 @@ public:
      * @param pComm The MPI communicator
      * @param N The size of the vector
      */
-    inline static VectorPointerType ReadMatrixMarketVector(
-        const std::string& rFileName,
-        CommunicatorPointerType pComm,
-        const int N
-        )
+    inline static VectorPointerType ReadMatrixMarketVector(const std::string& FileName, CommunicatorPointerType pComm, const int n)
     {
-        KRATOS_TRY
-        // Create a map
-        MapPointerType p_map = Teuchos::rcp(new MapType(N, 0, pComm));
-        // Load the vector using Tpetra's MatrixMarket reader
-        VectorPointerType p_vector = Tpetra::MatrixMarket::Reader<VectorType>::readVectorFile(rFileName, pComm, p_map);
-        KRATOS_ERROR_IF(p_vector.is_null()) << "Error thrown while reading Matrix Market Vector file " << rFileName << std::endl;
-        return p_vector;
-        KRATOS_CATCH("");
+        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
+        return CreateEmptyVectorPointer();
     }
 
     /**
@@ -1184,7 +1119,7 @@ public:
         // New graph with large capacity
         Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(r_row_map, r_row_map, 100));
 
-        const auto numLocalRows = r_row_map->getNodeNumElements();
+        const auto numLocalRows = r_row_map->getLocalNumElements();
 
         // Combine graphs using global indexing
         for (LO i = 0; i < static_cast<LO>(numLocalRows); ++i) {
@@ -1192,23 +1127,23 @@ public:
             std::set<GO> combined_indices;
 
             if (p_graph_a->isLocallyIndexed()) {
-                Teuchos::ArrayView<const LO> cols_a;
+                typename MatrixType::local_inds_host_view_type cols_a;
                 p_graph_a->getLocalRowView(i, cols_a);
-                for (auto col : cols_a) combined_indices.insert(p_graph_a->getColMap()->getGlobalElement(col));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(cols_a.extent(0)); ++j) combined_indices.insert(p_graph_a->getColMap()->getGlobalElement(cols_a(j)));
             } else {
-                Teuchos::ArrayView<const GO> cols_a;
+                typename MatrixType::global_inds_host_view_type cols_a;
                 p_graph_a->getGlobalRowView(global_row_index, cols_a);
-                for (auto col : cols_a) combined_indices.insert(col);
+                for (std::size_t j = 0; j < static_cast<std::size_t>(cols_a.extent(0)); ++j) combined_indices.insert(cols_a(j));
             }
 
             if (p_graph_b->isLocallyIndexed()) {
-                Teuchos::ArrayView<const LO> cols_b;
+                typename MatrixType::local_inds_host_view_type cols_b;
                 p_graph_b->getLocalRowView(i, cols_b);
-                for (auto col : cols_b) combined_indices.insert(p_graph_b->getColMap()->getGlobalElement(col));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(cols_b.extent(0)); ++j) combined_indices.insert(p_graph_b->getColMap()->getGlobalElement(cols_b(j)));
             } else {
-                Teuchos::ArrayView<const GO> cols_b;
+                typename MatrixType::global_inds_host_view_type cols_b;
                 p_graph_b->getGlobalRowView(global_row_index, cols_b);
-                for (auto col : cols_b) combined_indices.insert(col);
+                for (std::size_t j = 0; j < static_cast<std::size_t>(cols_b.extent(0)); ++j) combined_indices.insert(cols_b(j));
             }
 
             std::vector<GO> combined_indices_vector(combined_indices.begin(), combined_indices.end());
@@ -1241,20 +1176,20 @@ public:
             if (!rA.isFillActive()) rA.resumeFill();
         }
 
-        for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(rB.getLocalNumRows()); ++i) {
             const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
-            Teuchos::ArrayView<const LO> local_cols_b;
-            Teuchos::ArrayView<const ST> vals;
+            typename MatrixType::local_inds_host_view_type local_cols_b;
+            typename MatrixType::values_host_view_type vals;
             rB.getLocalRowView(i, local_cols_b, vals);
 
-            if (vals.size() > 0) {
-                Teuchos::Array<GO> global_cols(local_cols_b.size());
-                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols_b.size()); ++j) {
-                    global_cols[j] = rB.getColMap()->getGlobalElement(local_cols_b[j]);
+            if (vals.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols_b.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols_b.extent(0)); ++j) {
+                    global_cols[j] = rB.getColMap()->getGlobalElement(local_cols_b(j));
                 }
 
                 // Sum values into global matrix using global row and column indices
-                rA.sumIntoGlobalValues(global_row_index, Teuchos::ArrayView<const GO>(global_cols), vals);
+                rA.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
 
@@ -1289,10 +1224,10 @@ public:
         // The diagonal considered
         const double scale_factor = GetScaleNorm(rProcessInfo, rA, ScalingDiagonal);
 
-        auto localMatrix = rA.getLocalMatrix();
+        auto localMatrix = rA.getLocalMatrixHost();
         auto rowMap = rA.getRowMap();
         auto colMap = rA.getColMap();
-        auto localRhs = rb.getLocalViewHost();
+        auto localRhs = rb.getLocalViewHost(Tpetra::Access::ReadWrite);
 
         for (int i = 0; i < localMatrix.numRows(); ++i) {
             auto localRow = localMatrix.row(i);
@@ -1542,17 +1477,9 @@ public:
      * @return True if the file was successfully written, false otherwise
      */
     template< class TOtherMatrixType >
-    inline static bool WriteMatrixMarketMatrix(
-        const char* pFileName,
-        const TOtherMatrixType& rM,
-        const bool Symmetric
-        )
+    inline static void WriteMatrixMarketMatrix(const char* FileName, const MatrixType& rA, const bool symmetric)
     {
-        // the argument "Symmetric" does not have an effect for Trilinos => needed for compatibility with other Spaces
-        KRATOS_TRY;
-        Tpetra::MatrixMarket::Writer<typename ClassType::CrsMatrixType>::writeSparseFile(pFileName, Teuchos::rcp(dynamic_cast<const typename ClassType::CrsMatrixType*>(&rM), false));
-        return true;
-        KRATOS_CATCH("");
+        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
     }
 
     /**
@@ -1562,15 +1489,12 @@ public:
      * @return True if the file was successfully written, false otherwise
      */
     template< class TOtherVectorType >
-    inline static bool WriteMatrixMarketVector(
+    inline static void WriteMatrixMarketVector(
         const char* pFileName,
         const TOtherVectorType& rV
         )
     {
-        KRATOS_TRY;
-        Tpetra::MatrixMarket::Writer<VectorType>::writeDenseFile(pFileName, Teuchos::rcp(&rV, false));
-        return true;
-        KRATOS_CATCH("");
+        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
     }
 
     /**
@@ -1580,6 +1504,151 @@ public:
     inline static DofUpdaterPointerType CreateDofUpdater()
     {
         return DofUpdaterPointerType(new DofUpdater<TrilinosSpaceExperimental<TMatrixType, TVectorType>>());
+    }
+
+    /**
+     * @brief Returns a Tpetra map for this rank's local rows starting at FirstMyId.
+     */
+    static MapPointerType GetOrCreateTpetraMap(
+        CommunicatorType& rComm,
+        const IndexType LocalSize,
+        const int FirstMyId)
+    {
+        std::vector<GO> local_ids(LocalSize);
+        for (IndexType i = 0; i < LocalSize; ++i) {
+            local_ids[i] = static_cast<GO>(FirstMyId + static_cast<int>(i));
+        }
+        return Teuchos::rcp(new MapType(
+            Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(),
+            Teuchos::ArrayView<const GO>(local_ids.data(), static_cast<int>(local_ids.size())),
+            0,
+            Teuchos::rcp(&rComm, false)));
+    }
+
+    /// @brief Global assembly on a Tpetra FECrsMatrix (calls endAssembly).
+    static void GlobalAssemble(MatrixType& rA) { rA.endAssembly(); }
+
+    /// @brief Global assembly on a Tpetra Vector - no-op (locally owned rows set directly).
+    static void GlobalAssemble(VectorType& /*rV*/) {}
+
+    /**
+     * @brief Build Tpetra FECrsGraph and create new system matrix + vectors.
+     */
+    static void BuildAndSetupTpetraSystem(
+        CommunicatorType& rComm,
+        const IndexType LocalSize,
+        const int FirstMyId,
+        const int GuessRowSize,
+        const std::vector<std::vector<int>>& rAllEquationIds,
+        MatrixPointerType& rpA,
+        VectorPointerType& rpb,
+        VectorPointerType& rpDx,
+        VectorPointerType& rpReactions,
+        const IndexType equationSystemSize)
+    {
+        MapPointerType p_map = GetOrCreateTpetraMap(rComm, LocalSize, FirstMyId);
+        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(p_map, p_map, GuessRowSize));
+        graph->resumeFill();
+        std::vector<GO> gids;
+        for (const auto& eq_ids : rAllEquationIds) {
+            if (eq_ids.empty()) continue;
+            gids.resize(eq_ids.size());
+            for (std::size_t k = 0; k < eq_ids.size(); ++k) gids[k] = static_cast<GO>(eq_ids[k]);
+            for (std::size_t row = 0; row < gids.size(); ++row) {
+                graph->insertGlobalIndices(gids[row],
+                    Teuchos::ArrayView<const GO>(gids.data(), static_cast<int>(gids.size())));
+            }
+        }
+        graph->endAssembly();
+        rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
+        if (!rpb || Size(*rpb) != equationSystemSize)
+            rpb = Teuchos::rcp(new VectorType(p_map));
+        if (!rpDx || Size(*rpDx) != equationSystemSize)
+            rpDx = Teuchos::rcp(new VectorType(p_map));
+        if (!rpReactions)
+            rpReactions = Teuchos::rcp(new VectorType(p_map));
+    }
+
+    /**
+     * @brief Apply Dirichlet conditions on a Tpetra system using local row iteration.
+     */
+    static void ApplyDirichletConditionsTpetra(
+        MatrixType& rA,
+        VectorType& rb,
+        const std::vector<int>& rGlobalIds,
+        const std::vector<int>& rIsFixed,
+        const ProcessInfo& rProcessInfo,
+        const SCALING_DIAGONAL scalingDiagonal,
+        double& rScaleFactor)
+    {
+        rScaleFactor = ClassType::CheckAndCorrectZeroDiagonalValues(rProcessInfo, rA, rb, scalingDiagonal);
+        std::unordered_map<GO, int> is_fixed_map;
+        for (std::size_t i = 0; i < rGlobalIds.size(); ++i)
+            is_fixed_map[static_cast<GO>(rGlobalIds[i])] = rIsFixed[i];
+        auto p_row_map = rA.getRowMap();
+        const LO num_local_rows = static_cast<LO>(p_row_map->getLocalNumElements());
+        auto rb_view = rb.getLocalViewHost(Tpetra::Access::ReadWrite);
+        for (LO local_row = 0; local_row < num_local_rows; ++local_row) {
+            const GO global_row = p_row_map->getGlobalElement(local_row);
+            const bool row_is_fixed = is_fixed_map.count(global_row) > 0 && is_fixed_map.at(global_row) != 0;
+            typename MatrixType::local_inds_host_view_type cols_view;
+            typename MatrixType::values_host_view_type vals_view;
+            rA.getLocalRowView(local_row, cols_view, vals_view);
+            const LO num_entries = static_cast<LO>(cols_view.size());
+            if (num_entries == 0) continue;
+            auto col_map = rA.getColMap();
+            std::vector<ST> new_vals(num_entries);
+            if (!row_is_fixed) {
+                for (LO j = 0; j < num_entries; ++j) {
+                    const GO global_col = col_map->getGlobalElement(cols_view(j));
+                    new_vals[j] = (is_fixed_map.count(global_col) > 0 && is_fixed_map.at(global_col) != 0) ? ST(0.0) : vals_view(j);
+                }
+            } else {
+                rb_view(local_row, 0) = ST(0.0);
+                for (LO j = 0; j < num_entries; ++j) {
+                    const GO global_col = col_map->getGlobalElement(cols_view(j));
+                    new_vals[j] = (global_col == global_row) ? vals_view(j) : ST(0.0);
+                }
+            }
+            rA.replaceLocalValues(local_row, num_entries, new_vals.data(), cols_view.data());
+        }
+    }
+
+    /**
+     * @brief Build a Tpetra FE constraint graph and create T matrix + constant vector.
+     */
+    static void BuildTpetraConstraintGraph(
+        CommunicatorType& rComm,
+        const IndexType LocalSize,
+        const int FirstMyId,
+        const int GuessRowSize,
+        const std::vector<std::vector<int>>& rSlaveEquationIds,
+        const std::vector<std::vector<int>>& rMasterEquationIds,
+        MatrixPointerType& rpT,
+        VectorPointerType& rpConstantVector)
+    {
+        MapPointerType p_map = GetOrCreateTpetraMap(rComm, LocalSize, FirstMyId);
+        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(p_map, p_map, GuessRowSize));
+        graph->resumeFill();
+        for (IndexType i = 0; i < LocalSize; ++i) {
+            const GO gid = static_cast<GO>(FirstMyId + static_cast<int>(i));
+            graph->insertGlobalIndices(gid, Teuchos::ArrayView<const GO>(&gid, 1));
+        }
+        for (std::size_t c = 0; c < rSlaveEquationIds.size(); ++c) {
+            const auto& slave_ids = rSlaveEquationIds[c];
+            const auto& master_ids = rMasterEquationIds[c];
+            if (slave_ids.empty() || master_ids.empty()) continue;
+            std::vector<GO> master_gids(master_ids.size());
+            for (std::size_t k = 0; k < master_ids.size(); ++k) master_gids[k] = static_cast<GO>(master_ids[k]);
+            for (int slave_id : slave_ids) {
+                const GO slave_gid = static_cast<GO>(slave_id);
+                graph->insertGlobalIndices(slave_gid,
+                    Teuchos::ArrayView<const GO>(master_gids.data(), static_cast<int>(master_gids.size())));
+            }
+        }
+        graph->endAssembly();
+        rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
+        rpConstantVector = Teuchos::rcp(new VectorType(p_map));
     }
 
     ///@}

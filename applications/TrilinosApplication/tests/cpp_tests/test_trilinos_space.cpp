@@ -695,7 +695,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosScaleAndAddMatrix, KratosTrilinosApplicationMP
     // Check
     auto local_matrix_1 = TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(size, 10.0, true);
     auto local_matrix_2 = TrilinosCPPTestUtilities::GenerateDummyLocalMatrix(size, 20.0, true);
-    auto local_reference = 2.0 * local_matrix_1 + 3.0 * local_matrix_2;
+    TrilinosLocalMatrixType local_reference = 2.0 * local_matrix_1 + 3.0 * local_matrix_2;
 
     TrilinosCPPTestUtilities::CheckSparseMatrixFromLocalMatrix(matrix_2, local_reference);
 }

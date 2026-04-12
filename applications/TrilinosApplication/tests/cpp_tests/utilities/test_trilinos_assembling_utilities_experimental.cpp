@@ -50,22 +50,18 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalVectorSetValue, KratosTrilinosAppl
 
     // Solution global
     TrilinosSparseSpaceType::SetToZero(*vector);
-    vector->beginAssembly();
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities::SetGlobalValue(*vector, rank * 2 + i, 1.0);
     }
-    vector->endAssembly();
 
     // Check global
     TrilinosCPPTestExperimentalUtilities::CheckSparseVectorFromLocalVector(*vector, local_vector);
 
     // Solution local
     TrilinosSparseSpaceType::SetToZero(*vector);
-    vector->beginAssembly();
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities::SetLocalValue(*vector, i, 1.0);
     }
-    vector->endAssembly();
 
     // Check local
     TrilinosCPPTestExperimentalUtilities::CheckSparseVectorFromLocalVector(*vector, local_vector);
@@ -87,22 +83,18 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalVectorSetGlobalValueWithoutGlobalA
 
     // Solution global
     TrilinosSparseSpaceType::SetToZero(*vector);
-    vector->beginAssembly();
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities::SetGlobalValueWithoutGlobalAssembly(*vector, rank * 2 + i, 1.0);
     }
-    vector->endAssembly();
 
     // Check global
     TrilinosCPPTestExperimentalUtilities::CheckSparseVectorFromLocalVector(*vector, local_vector);
 
     // Solution local
     TrilinosSparseSpaceType::SetToZero(*vector);
-    vector->beginAssembly();
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities::SetLocalValueWithoutGlobalAssembly(*vector, i, 1.0);
     }
-    vector->endAssembly();
 
     // Check local
     TrilinosCPPTestExperimentalUtilities::CheckSparseVectorFromLocalVector(*vector, local_vector);
@@ -127,7 +119,6 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMatrixSetValue, KratosTrilinosAppl
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities::SetGlobalValue(*matrix, rank * 2 + i, rank * 2 + i, 1.0);
     }
-    matrix->endAssembly();
 
     // Check global
     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*matrix, local_matrix);
@@ -138,7 +129,6 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMatrixSetValue, KratosTrilinosAppl
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities::SetLocalValue(*matrix, i, i, 1.0);
     }
-    matrix->endAssembly();
 
     // Check local
     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*matrix, local_matrix);
