@@ -766,4 +766,111 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosIsDistributedSpace, KratosTrilinosApplicationM
     KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsDistributedSpace());
 }
 
+KRATOS_TEST_CASE_IN_SUITE(TrilinosGetRank, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    Epetra_MpiComm epetra_comm(raw_mpi_comm);
+    KRATOS_EXPECT_EQ(r_comm.Rank(), TrilinosSparseSpaceType::GetRank(epetra_comm));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosIsNull, KratosTrilinosApplicationMPITestSuite)
+{
+    TrilinosSparseSpaceType::MatrixPointerType pA = nullptr;
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsNull(pA));
+    pA = TrilinosSparseSpaceType::CreateEmptyMatrixPointer();
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pA));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosCreateEmptyPointer, KratosTrilinosApplicationMPITestSuite)
+{
+    auto p_map = TrilinosSparseSpaceType::CreateEmptyMapPointer();
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsNull(p_map));
+    auto p_A = TrilinosSparseSpaceType::CreateEmptyMatrixPointer();
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(p_A));
+    auto p_v = TrilinosSparseSpaceType::CreateEmptyVectorPointer();
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsNull(p_v));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosGetMap, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 2 * r_comm.Size();
+    auto vector = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size);
+    auto& r_map = TrilinosSparseSpaceType::GetMap(*vector);
+    KRATOS_EXPECT_EQ(size, r_map.NumGlobalElements());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosGetCommunicator, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 2 * r_comm.Size();
+    auto vector = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size);
+    auto& r_trilinos_comm = TrilinosSparseSpaceType::GetCommunicator(*vector);
+    KRATOS_EXPECT_EQ(r_comm.Rank(), r_trilinos_comm.MyPID());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosGlobalAssemble, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 2 * r_comm.Size();
+    auto vector = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size);
+    auto matrix = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size);
+    TrilinosSparseSpaceType::GlobalAssemble(*vector);
+    TrilinosSparseSpaceType::GlobalAssemble(*matrix);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosBuildSystemStructure, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    Epetra_MpiComm epetra_comm(raw_mpi_comm);
+
+    const int local_size = 2;
+    const int first_my_id = r_comm.Rank() * local_size;
+    const int system_size = 2 * r_comm.Size();
+
+    std::vector<std::vector<int>> all_equation_ids = {{first_my_id, first_my_id + 1}};
+
+    TrilinosSparseSpaceType::MatrixPointerType pA;
+    TrilinosSparseSpaceType::VectorPointerType pb;
+    TrilinosSparseSpaceType::VectorPointerType pDx;
+    TrilinosSparseSpaceType::VectorPointerType pReactions;
+
+    TrilinosSparseSpaceType::BuildSystemStructure(
+        epetra_comm, local_size, first_my_id, 5, all_equation_ids,
+        pA, pb, pDx, pReactions, system_size
+    );
+
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pA));
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pb));
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pDx));
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pReactions));
+    KRATOS_EXPECT_EQ(static_cast<std::size_t>(system_size), TrilinosSparseSpaceType::Size1(*pA));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosBuildConstraintsStructure, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    Epetra_MpiComm epetra_comm(raw_mpi_comm);
+
+    const int local_size = 2;
+    const int first_my_id = r_comm.Rank() * local_size;
+
+    std::vector<std::vector<int>> all_slave_ids = {{first_my_id}};
+    std::vector<std::vector<int>> all_master_ids = {{first_my_id + 1}};
+
+    TrilinosSparseSpaceType::MatrixPointerType pT;
+    TrilinosSparseSpaceType::VectorPointerType pConstantVector;
+
+    TrilinosSparseSpaceType::BuildConstraintsStructure(
+        epetra_comm, local_size, first_my_id, 5, all_slave_ids, all_master_ids,
+        pT, pConstantVector
+    );
+
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pT));
+    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pConstantVector));
+}
+
 } // namespace Kratos::Testing
