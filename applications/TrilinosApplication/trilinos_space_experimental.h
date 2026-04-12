@@ -183,6 +183,15 @@ public:
     }
 
     /**
+     * @brief This method creates an empty pointer to a map
+     * @return The pointer to the map
+     */
+    inline static MapPointerType CreateEmptyMapPointer()
+    {
+        return Teuchos::null;
+    }
+
+    /**
      * @brief This method creates an empty pointer to a matrix
      * @return The pointer to the matrix
      */
@@ -1497,8 +1506,7 @@ public:
      * @param Symmetric If the matrix is symmetric
      * @return True if the file was successfully written, false otherwise
      */
-    template< class TOtherMatrixType >
-    inline static void WriteMatrixMarketMatrix(const char* FileName, const MatrixType& rA, const bool symmetric)
+    static void WriteMatrixMarketMatrix(const char* FileName, const MatrixType& rA, const bool symmetric)
     {
         KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
     }
@@ -1509,10 +1517,9 @@ public:
      * @param rV The vector to be written
      * @return True if the file was successfully written, false otherwise
      */
-    template< class TOtherVectorType >
-    inline static void WriteMatrixMarketVector(
+    static void WriteMatrixMarketVector(
         const char* pFileName,
-        const TOtherVectorType& rV
+        const VectorType& rV
         )
     {
         KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
