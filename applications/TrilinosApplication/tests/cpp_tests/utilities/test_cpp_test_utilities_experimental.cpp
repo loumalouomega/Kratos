@@ -60,7 +60,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalCPPTestUtilitiesGenerateSparseMatr
     auto matrix = TrilinosCPPTestExperimentalUtilities::GenerateSparseMatrix(r_comm, size, row_indexes, column_indexes, values);
 
     // Check
-    TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(matrix, row_indexes, column_indexes, values);
+    TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(*matrix, row_indexes, column_indexes, values);
 }
 
 } // namespace Kratos::Testing
