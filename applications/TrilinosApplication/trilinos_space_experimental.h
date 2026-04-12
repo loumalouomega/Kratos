@@ -790,10 +790,14 @@ public:
                 for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
                     global_cols[j] = rSrc.getColMap()->getGlobalElement(local_cols(j));
                 }
-                rDest.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
+                rDest.replaceGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
-        if (p_fe_Dest) p_fe_Dest->endAssembly();
+        if (p_fe_Dest) {
+            if (p_fe_Dest->isAssemblyActive()) {
+                p_fe_Dest->endAssembly();
+            }
+        }
         if (rDest.isFillActive()) rDest.fillComplete();
     }
 
@@ -1628,12 +1632,13 @@ public:
     /// @brief Global assembly on a Tpetra FECrsMatrix (calls endAssembly and fillComplete).
     static void GlobalAssemble(MatrixType& rA)
     {
-        if (rA.isFillActive()) {
-            try {
-                rA.endAssembly();
-            } catch (...) {
-                // Already closed for FE assembly
+        auto p_fe_rA = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_rA) {
+            if (p_fe_rA->isAssemblyActive()) {
+                p_fe_rA->endAssembly();
             }
+        }
+        if (rA.isFillActive()) {
             rA.fillComplete();
         }
     }
@@ -1643,10 +1648,8 @@ public:
     {
         auto p_fe_rb = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rV);
         if (p_fe_rb) {
-            try {
+            if (p_fe_rb->isAssemblyActive()) {
                 p_fe_rb->endAssembly();
-            } catch (...) {
-                // Already closed
             }
         }
     }
