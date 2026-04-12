@@ -395,6 +395,8 @@ public:
         using ST = typename TpetraMatrixType::scalar_type;
         const GO col = static_cast<GO>(j);
         const ST val = static_cast<ST>(Value);
+        if (!rA.isFillActive()) rA.resumeFill();
+        rA.beginAssembly();
         rA.replaceGlobalValues(static_cast<GO>(i), 1, &val, &col);
         rA.endAssembly();
     }
@@ -409,6 +411,8 @@ public:
         using ST = typename TpetraMatrixType::scalar_type;
         const GO col = static_cast<GO>(j);
         const ST val = static_cast<ST>(Value);
+        if (!rA.isFillActive()) rA.resumeFill();
+        rA.beginAssembly();
         rA.replaceGlobalValues(static_cast<GO>(i), 1, &val, &col);
     }
 
@@ -422,6 +426,8 @@ public:
         using ST = typename TpetraMatrixType::scalar_type;
         const LO col = static_cast<LO>(j);
         const ST val = static_cast<ST>(Value);
+        if (!rA.isFillActive()) rA.resumeFill();
+        rA.beginAssembly();
         rA.replaceLocalValues(static_cast<LO>(i), 1, &val, &col);
         rA.endAssembly();
     }
@@ -436,6 +442,8 @@ public:
         using ST = typename TpetraMatrixType::scalar_type;
         const LO col = static_cast<LO>(j);
         const ST val = static_cast<ST>(Value);
+        if (!rA.isFillActive()) rA.resumeFill();
+        rA.beginAssembly();
         rA.replaceLocalValues(static_cast<LO>(i), 1, &val, &col);
     }
 #endif // HAVE_TPETRA
