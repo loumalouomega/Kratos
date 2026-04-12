@@ -162,6 +162,27 @@ public:
     ///@{
 
     /**
+     * @brief This method returns the rank of the communicator
+     * @param rComm The communicator considered
+     * @return The rank of the communicator
+     */
+    inline static int GetRank(const CommunicatorType& rComm)
+    {
+        return rComm.getRank();
+    }
+
+    /**
+     * @brief This method returns true if the pointer is null
+     * @param pPointer The pointer considered
+     * @return True if the pointer is null
+     */
+    template<class TPointerType>
+    inline static bool IsNull(const TPointerType& pPointer)
+    {
+        return pPointer == Teuchos::null;
+    }
+
+    /**
      * @brief This method creates an empty pointer to a matrix
      * @return The pointer to the matrix
      */
@@ -959,7 +980,7 @@ public:
         const std::vector<std::size_t>& rEquationId
         )
     {
-        const std::size_t system_size = rb->getGlobalLength();
+        const std::size_t system_size = rb.getGlobalLength();
 
         // Count active indices
         std::vector<LO> indices;
@@ -1523,6 +1544,36 @@ public:
             Teuchos::ArrayView<const GO>(local_ids.data(), static_cast<int>(local_ids.size())),
             0,
             Teuchos::rcp(&rComm, false)));
+    }
+
+    /**
+     * @brief This method returns the map of the vector
+     * @param rV The vector considered
+     * @return The map of the vector
+     */
+    inline static const MapType& GetMap(const VectorType& rV)
+    {
+        return *(rV.getMap());
+    }
+
+    /**
+     * @brief This method returns the communicator of the vector
+     * @param rV The vector considered
+     * @return The communicator of the vector
+     */
+    inline static const CommunicatorType& GetCommunicator(const VectorType& rV)
+    {
+        return *(rV.getMap()->getComm());
+    }
+
+    /**
+     * @brief This method returns the communicator of the matrix
+     * @param rA The matrix considered
+     * @return The communicator of the matrix
+     */
+    inline static const CommunicatorType& GetCommunicator(const MatrixType& rA)
+    {
+        return *(rA.getMap()->getComm());
     }
 
     /// @brief Global assembly on a Tpetra FECrsMatrix (calls endAssembly).
