@@ -778,7 +778,6 @@ public:
         MatrixType& rDest = rY;
         const CrsMatrixType& rSrc = *aux_Y;
         if (!rDest.isFillActive()) rDest.resumeFill();
-        rDest.setAllToScalar(0.0);
         auto p_fe_Dest = dynamic_cast<MatrixType*>(&rDest);
         if (p_fe_Dest) p_fe_Dest->beginAssembly();
         for (LO i = 0; i < static_cast<LO>(rSrc.getLocalNumRows()); ++i) {
@@ -942,6 +941,7 @@ public:
         if (!rA.isFillActive()) {
             rA.resumeFill();
         }
+        rA.beginAssembly();
         rA.setAllToScalar(0.0);
     }
 
@@ -951,6 +951,8 @@ public:
      */
     inline static void SetToZero(VectorType& rX)
     {
+        auto p_fe_rX = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rX);
+        if (p_fe_rX) p_fe_rX->beginAssembly();
         rX.putScalar(static_cast<ST>(0));
     }
 
@@ -983,7 +985,9 @@ public:
             if (!rA.isFillActive()) {
                 rA.resumeFill();
             }
-            rA.beginAssembly();
+            if (!rA.isAssemblyActive()) {
+                rA.beginAssembly();
+            }
             std::vector<GO> global_indices(indices.size());
             for (std::size_t i = 0; i < indices.size(); ++i) {
                 global_indices[i] = static_cast<GO>(indices[i]);
@@ -1031,7 +1035,11 @@ public:
 
         if (!indices.empty()) {
             auto p_fe_rb = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rb);
-            if (p_fe_rb) p_fe_rb->beginAssembly();
+            if (p_fe_rb) {
+                if (!p_fe_rb->isAssemblyActive()) {
+                    p_fe_rb->beginAssembly();
+                }
+            }
             std::vector<GO> global_indices(indices.size());
             std::vector<ST> values(indices.size());
             for (std::size_t i = 0; i < indices.size(); ++i) {
@@ -1617,7 +1625,7 @@ public:
         return *(rA.getMap()->getComm());
     }
 
-    /// @brief Global assembly on a Tpetra FECrsMatrix (calls endAssembly).
+    /// @brief Global assembly on a Tpetra FECrsMatrix (calls endAssembly and fillComplete).
     static void GlobalAssemble(MatrixType& rA)
     {
         if (rA.isFillActive()) {
@@ -1626,6 +1634,7 @@ public:
             } catch (...) {
                 // Already closed for FE assembly
             }
+            rA.fillComplete();
         }
     }
 
@@ -1645,7 +1654,7 @@ public:
     /**
      * @brief Build Tpetra FECrsGraph and create new system matrix + vectors.
      */
-    static void BuildAndSetupTpetraSystem(
+    static void BuildSystemStructure(
         CommunicatorType& rComm,
         const IndexType LocalSize,
         const int FirstMyId,
@@ -1660,6 +1669,7 @@ public:
         MapPointerType p_map = GetOrCreateTpetraMap(rComm, LocalSize, FirstMyId);
         Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(p_map, p_map, GuessRowSize));
         graph->resumeFill();
+        graph->beginAssembly();
         std::vector<GO> gids;
         for (const auto& eq_ids : rAllEquationIds) {
             if (eq_ids.empty()) continue;
@@ -1671,6 +1681,7 @@ public:
             }
         }
         graph->endAssembly();
+        graph->fillComplete();
         rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
         if (!rpb || Size(*rpb) != equationSystemSize)
             rpb = Teuchos::rcp(new VectorType(p_map));
@@ -1728,7 +1739,7 @@ public:
     /**
      * @brief Build a Tpetra FE constraint graph and create T matrix + constant vector.
      */
-    static void BuildTpetraConstraintGraph(
+    static void BuildConstraintsStructure(
         CommunicatorType& rComm,
         const IndexType LocalSize,
         const int FirstMyId,
@@ -1741,6 +1752,7 @@ public:
         MapPointerType p_map = GetOrCreateTpetraMap(rComm, LocalSize, FirstMyId);
         Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(p_map, p_map, GuessRowSize));
         graph->resumeFill();
+        graph->beginAssembly();
         for (IndexType i = 0; i < LocalSize; ++i) {
             const GO gid = static_cast<GO>(FirstMyId + static_cast<int>(i));
             graph->insertGlobalIndices(gid, Teuchos::ArrayView<const GO>(&gid, 1));
@@ -1758,6 +1770,7 @@ public:
             }
         }
         graph->endAssembly();
+        graph->fillComplete();
         rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
         rpConstantVector = Teuchos::rcp(new VectorType(p_map));
     }
