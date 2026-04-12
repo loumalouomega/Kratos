@@ -23,7 +23,7 @@
 namespace Kratos::Testing
 {
 /// Basic definitions
-using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>>;
+using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>>;
 using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
 
 using TrilinosSparseMatrixType = TrilinosSparseSpaceType::MatrixType;
