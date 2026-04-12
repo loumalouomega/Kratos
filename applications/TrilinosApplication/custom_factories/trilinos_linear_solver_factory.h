@@ -19,7 +19,7 @@
 
 // Project includes
 #include "includes/define.h"
-#include "trilinos_space.h"
+#include "trilinos_space_experimental.h"
 #include "factories/linear_solver_factory.h"
 
 namespace Kratos
@@ -105,9 +105,15 @@ inline std::ostream& operator << (std::ostream& rOStream,
 void RegisterTrilinosLinearSolvers();
 
 typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
+#ifdef HAVE_TPETRA
+typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>> TrilinosExperimentalSparseSpaceType;
+#endif
 typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
 
 typedef LinearSolverFactory<TrilinosSparseSpaceType,  TrilinosLocalSpaceType> TrilinosLinearSolverFactoryType;
+#ifdef HAVE_TPETRA
+typedef LinearSolverFactory<TrilinosExperimentalSparseSpaceType, TrilinosLocalSpaceType> TrilinosExperimentalLinearSolverFactoryType;
+#endif
 
 #ifdef KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER
 #undef KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER
@@ -115,6 +121,17 @@ typedef LinearSolverFactory<TrilinosSparseSpaceType,  TrilinosLocalSpaceType> Tr
 #define KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER(name, reference) ; \
     KratosComponents<TrilinosLinearSolverFactoryType>::Add(name, reference);
 
+#ifdef HAVE_TPETRA
+#ifdef KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER
+#undef KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER
+#endif
+#define KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER(name, reference) ; \
+    KratosComponents<TrilinosExperimentalLinearSolverFactoryType>::Add(name, reference);
+#endif
+
 KRATOS_API_EXTERN template class KRATOS_API(TRILINOS_APPLICATION) KratosComponents<TrilinosLinearSolverFactoryType>;
+#ifdef HAVE_TPETRA
+KRATOS_API_EXTERN template class KRATOS_API(TRILINOS_APPLICATION) KratosComponents<TrilinosExperimentalLinearSolverFactoryType>;
+#endif
 
 }  // namespace Kratos.

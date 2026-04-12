@@ -49,7 +49,7 @@ namespace Kratos::Testing
 {
     /// Initial definitons
     using GeometryType = Geometry<Node>;
-    using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>>;
+    using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>>;
     using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
 
     /// Linear solvers Trilinos definitions
@@ -815,7 +815,7 @@ namespace Kratos::Testing
         return true;
     }
 
-    static TrilinosSparseSpaceType::MatrixType BuildSystem(
+    static TrilinosSparseSpaceType::MatrixPointerType BuildSystem(
         ModelPart& rModelPart,
         TrilinosSchemeType::Pointer pScheme,
         TrilinosBuilderAndSolverType::Pointer pBuilderAndSolver
@@ -847,7 +847,7 @@ namespace Kratos::Testing
         }
         pBuilderAndSolver->ApplyDirichletConditions(pScheme, rModelPart, rA, rDx, rb);
 
-        return rA;
+        return pA;
     }
 
     // static void DebugLHS(const TrilinosSparseSpaceType::MatrixType& rA)
@@ -889,7 +889,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -914,7 +915,8 @@ namespace Kratos::Testing
         r_model_part.GetProcessInfo().SetValue(BUILD_SCALE_FACTOR, 2.26648e+10);
         auto p_builder_and_solver_scale = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA_scale = BuildSystem(r_model_part, p_scheme, p_builder_and_solver_scale);
+        const auto pA_scale = BuildSystem(r_model_part, p_scheme, p_builder_and_solver_scale);
+        const auto& rA_scale = *pA_scale;
 
         // // To create the solution of reference
         // DebugLHS(rA_scale);
@@ -966,7 +968,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1040,7 +1043,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1065,7 +1069,8 @@ namespace Kratos::Testing
         r_model_part.GetProcessInfo().SetValue(BUILD_SCALE_FACTOR, 2.26648e+10);
         auto p_builder_and_solver_scale = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA_scale = BuildSystem(r_model_part, p_scheme, p_builder_and_solver_scale);
+        const auto pA_scale = BuildSystem(r_model_part, p_scheme, p_builder_and_solver_scale);
+        const auto& rA_scale = *pA_scale;
 
         // // To create the solution of reference
         // DebugLHS(rA_scale);
@@ -1114,7 +1119,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1187,7 +1193,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1260,7 +1267,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // To create the solution of reference
         // DebugLHS(rA);
@@ -1352,7 +1360,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1422,7 +1431,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1492,7 +1502,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1560,7 +1571,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1623,7 +1635,8 @@ namespace Kratos::Testing
     //     auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
     //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
 
-    //     const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+    //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+    //     const auto& rA = *pA;
 
     //     // // To create the solution of reference
     //     // DebugLHS(rA);
@@ -1670,7 +1683,8 @@ namespace Kratos::Testing
     //     auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
     //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
 
-    //     const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+    //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+    //     const auto& rA = *pA;
 
     //     // // To create the solution of reference
     //     // DebugLHS(rA);
@@ -1720,7 +1734,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1772,7 +1787,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1837,7 +1853,8 @@ namespace Kratos::Testing
     //     auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
     //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
 
-    //     const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+    //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+    //     const auto& rA = *pA;
 
     //     // // To create the solution of reference
     //     // DebugLHS(rA);
@@ -1892,7 +1909,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);
@@ -1972,7 +1990,8 @@ namespace Kratos::Testing
         })" );
         auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverType(epetra_comm, p_solver, parameters) );
 
-        const auto& rA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
         // // To create the solution of reference
         // DebugLHS(rA);

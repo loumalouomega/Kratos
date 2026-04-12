@@ -39,89 +39,114 @@
 
 namespace Kratos {
 
-void RegisterTrilinosLinearSolvers()
-{
-    using TrilinosSparseSpaceType = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
-    using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
+namespace {
+    template<class TSparseSpace>
+    void RegisterSolvers()
+    {
+        using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
 
-    using TrilinosFallbackLinearSolverType = FallbackLinearSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType>;
-    const static auto TrilinosFallbackLinearSolverFactory = TrilinosLinearSolverFactory<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosFallbackLinearSolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("fallback_linear_solver", TrilinosFallbackLinearSolverFactory);
+        using TrilinosFallbackLinearSolverType = FallbackLinearSolver<TSparseSpace, TrilinosLocalSpaceType>;
+        const static auto TrilinosFallbackLinearSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, TrilinosFallbackLinearSolverType>();
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("fallback_linear_solver", TrilinosFallbackLinearSolverFactory);
+        } else {
+#ifdef HAVE_TPETRA
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("fallback_linear_solver", TrilinosFallbackLinearSolverFactory);
+#endif
+        }
 
 #ifndef TRILINOS_EXCLUDE_AZTEC_SOLVER
-    using AztecSolverType = AztecSolver<TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType >;
-    static auto AztecSolverFactory = TrilinosLinearSolverFactory<
-        TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType,
-        AztecSolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("aztec",    AztecSolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("cg",       AztecSolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("bicgstab", AztecSolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("gmres",    AztecSolverFactory);
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            using AztecSolverType = AztecSolver<TSparseSpace, TrilinosLocalSpaceType >;
+            static auto AztecSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AztecSolverType>();
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("aztec",    AztecSolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("cg",       AztecSolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("bicgstab", AztecSolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("gmres",    AztecSolverFactory);
+        }
 #endif
 
 #ifndef TRILINOS_EXCLUDE_AMESOS_SOLVER
-    using AmesosSolverType = AmesosSolver<TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType >;
-    static auto AmesosSolverFactory = TrilinosLinearSolverFactory<
-        TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType,
-        AmesosSolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amesos",        AmesosSolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("klu",           AmesosSolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("super_lu_dist", AmesosSolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("mumps",         AmesosSolverFactory);
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            using AmesosSolverType = AmesosSolver<TSparseSpace, TrilinosLocalSpaceType >;
+            static auto AmesosSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AmesosSolverType>();
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amesos",        AmesosSolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("klu",           AmesosSolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("super_lu_dist", AmesosSolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("mumps",         AmesosSolverFactory);
+        }
 #endif
 
 #ifndef TRILINOS_EXCLUDE_AMESOS2_SOLVER
-    using Amesos2SolverType = Amesos2Solver<TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType >;
-    static auto Amesos2SolverFactory = TrilinosLinearSolverFactory<
-        TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType,
-        Amesos2SolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amesos2",        Amesos2SolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("klu2",           Amesos2SolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("mumps2",         Amesos2SolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("super_lu_dist2", Amesos2SolverFactory);
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("basker",         Amesos2SolverFactory);
+        using Amesos2SolverType = Amesos2Solver<TSparseSpace, TrilinosLocalSpaceType >;
+        static auto Amesos2SolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, Amesos2SolverType>();
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amesos2",        Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("klu2",           Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("mumps2",         Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("super_lu_dist2", Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("basker",         Amesos2SolverFactory);
+        } else {
+#ifdef HAVE_TPETRA
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("amesos2",        Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("klu2",           Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("mumps2",         Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("super_lu_dist2", Amesos2SolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("basker",         Amesos2SolverFactory);
+#endif
+        }
 #endif
 
 #ifndef TRILINOS_EXCLUDE_ML_SOLVER
-    using MLSolverType = MultiLevelSolver<TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType >;
-    static auto MultiLevelSolverFactory = TrilinosLinearSolverFactory<
-        TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType,
-        MLSolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("multi_level", MultiLevelSolverFactory);
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            using MLSolverType = MultiLevelSolver<TSparseSpace, TrilinosLocalSpaceType >;
+            static auto MultiLevelSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, MLSolverType>();
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("multi_level", MultiLevelSolverFactory);
+        }
 #endif
 
-    using AmgclMPISolverType = AmgclMPISolver<TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType >;
-    static auto AmgclMPISolverFactory = TrilinosLinearSolverFactory<
-        TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType,
-        AmgclMPISolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amgcl", AmgclMPISolverFactory);
+        using AmgclMPISolverType = AmgclMPISolver<TSparseSpace, TrilinosLocalSpaceType >;
+        static auto AmgclMPISolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AmgclMPISolverType>();
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amgcl", AmgclMPISolverFactory);
+        } else {
+#ifdef HAVE_TPETRA
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("amgcl", AmgclMPISolverFactory);
+#endif
+        }
 
-    using AmgclMPISchurComplementSolverType = AmgclMPISchurComplementSolver<TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType >;
-    static auto AmgclMPISchurComplementSolverFactory = TrilinosLinearSolverFactory<
-        TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType,
-        AmgclMPISchurComplementSolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amgcl_schur_complement", AmgclMPISchurComplementSolverFactory);
+        using AmgclMPISchurComplementSolverType = AmgclMPISchurComplementSolver<TSparseSpace, TrilinosLocalSpaceType >;
+        static auto AmgclMPISchurComplementSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AmgclMPISchurComplementSolverType>();
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amgcl_schur_complement", AmgclMPISchurComplementSolverFactory);
+        } else {
+#ifdef HAVE_TPETRA
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("amgcl_schur_complement", AmgclMPISchurComplementSolverFactory);
+#endif
+        }
 
-    using TrilinosMonotonicityPreservingSolverType = TrilinosMonotonicityPreservingSolver<TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType >;
-    static auto TrilinosMonotonicityPreservingSolverFactory = TrilinosLinearSolverFactory<
-        TrilinosSparseSpaceType,
-        TrilinosLocalSpaceType,
-        TrilinosMonotonicityPreservingSolverType>();
-    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("monotonicity_preserving", TrilinosMonotonicityPreservingSolverFactory);
+        using TrilinosMonotonicityPreservingSolverType = TrilinosMonotonicityPreservingSolver<TSparseSpace, TrilinosLocalSpaceType >;
+        static auto TrilinosMonotonicityPreservingSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, TrilinosMonotonicityPreservingSolverType>();
+        if constexpr (std::is_same_v<TSparseSpace, TrilinosSparseSpaceType>) {
+            KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("monotonicity_preserving", TrilinosMonotonicityPreservingSolverFactory);
+        } else {
+#ifdef HAVE_TPETRA
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("monotonicity_preserving", TrilinosMonotonicityPreservingSolverFactory);
+#endif
+        }
+    }
+}
+
+void RegisterTrilinosLinearSolvers()
+{
+    RegisterSolvers<TrilinosSparseSpaceType>();
+#ifdef HAVE_TPETRA
+    RegisterSolvers<TrilinosExperimentalSparseSpaceType>();
+#endif
 }
 
 template class KratosComponents<TrilinosLinearSolverFactoryType>;
+#ifdef HAVE_TPETRA
+template class KratosComponents<TrilinosExperimentalLinearSolverFactoryType>;
+#endif
 }

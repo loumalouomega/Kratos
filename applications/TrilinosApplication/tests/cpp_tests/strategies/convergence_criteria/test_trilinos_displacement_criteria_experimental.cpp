@@ -28,7 +28,7 @@
 namespace Kratos::Testing
 {
 using GeometryType = Geometry<Node>;
-using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>>;
+using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>>;
 using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
 
 using DofsArrayType = ModelPart::DofsArrayType;
