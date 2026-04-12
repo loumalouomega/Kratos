@@ -71,6 +71,21 @@ if(${KRATOS_BUILD_TESTING} MATCHES ON)
     kratos_add_gtests(TARGET KratosTrilinosCore SOURCES "${KRATOS_TRILINOS_TEST_SOURCES}" USE_MPI)
 endif(${KRATOS_BUILD_TESTING} MATCHES ON)
 
+## Kratos benchmark sources. Disabled by default
+if(${KRATOS_BUILD_BENCHMARK} MATCHES ON)
+    file(GLOB_RECURSE KRATOS_BENCHMARK_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/*.cpp
+    )
+
+    foreach(file ${KRATOS_BENCHMARK_SOURCES})
+        get_filename_component(filename ${file} NAME_WE)
+        add_executable(${filename} ${file})
+        target_link_libraries(${filename} PUBLIC KratosTrilinosCore benchmark::benchmark)
+        set_target_properties(${filename} PROPERTIES COMPILE_DEFINITIONS "KRATOS_BENCHMARK=IMPORT,API")
+        install(TARGETS ${filename} DESTINATION benchmark)
+    endforeach(file ${KRATOS_BENCHMARK_SOURCES})
+endif(${KRATOS_BUILD_BENCHMARK} MATCHES ON)
+
 # ###############################################################
 ## TrilinosApplication core library (C++ parts)
 set(TRILINOS_LINK_LIBS KratosCore KratosMPICore ${TRILINOS_LIBRARIES})
