@@ -62,6 +62,11 @@ file(GLOB_RECURSE KRATOS_TRILINOS_PYTHON_INTERFACE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/*.cpp
 )
 
+# Addiing Tpetra definitions
+if(HAVE_TPETRA)
+    add_definitions(-DHAVE_TPETRA)
+endif()
+
 ## Kratos tests sources. Enabled by default
 if(${KRATOS_BUILD_TESTING} MATCHES ON)
     file(GLOB_RECURSE KRATOS_TRILINOS_TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp_tests/*.cpp)
