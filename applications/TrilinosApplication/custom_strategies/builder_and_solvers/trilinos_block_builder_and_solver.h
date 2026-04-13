@@ -21,9 +21,10 @@
 /* Trilinos includes */
 #include <Epetra_FECrsGraph.h>
 #include <Epetra_IntVector.h>
-#ifdef HAVE_TPETRA
+#if defined(HAVE_TPETRA)
 #include <Tpetra_FECrsGraph.hpp>
 #include <Tpetra_FECrsMatrix.hpp>
+#include <Tpetra_FEMultiVector.hpp>
 #include <Tpetra_Vector.hpp>
 #include <Teuchos_RCP.hpp>
 #include <Teuchos_OrdinalTraits.hpp>
@@ -31,6 +32,9 @@
 
 // Project includes
 #include "trilinos_space.h"
+#if defined(HAVE_TPETRA)
+#include "trilinos_space_experimental.h"
+#endif 
 #include "custom_utilities/trilinos_assembling_utilities.h"
 #include "solving_strategies/builder_and_solvers/builder_and_solver.h"
 #include "utilities/timer.h"
@@ -361,11 +365,11 @@ public:
 
         // If there are master-slave constraints
         if(TSparseSpace::Size1(r_T) != 0) {
-            // Recover solution of the original problem
-            TSystemVectorType Dxmodified(rDx);
+            // Recover solution of the original problem; use CreateVectorCopy (safe for FEMultiVector)
+            auto p_Dxmodified = TSparseSpace::CreateVectorCopy(rDx);
 
             // Recover solution of the original problem
-            TSparseSpace::Mult(r_T, Dxmodified, rDx);
+            TSparseSpace::Mult(r_T, *p_Dxmodified, rDx);
         }
 
         // Prints information about the current time
@@ -391,18 +395,12 @@ public:
 
         // If considering MPC
         if (rModelPart.GetCommunicator().GlobalNumberOfMasterSlaveConstraints() > 0) {
-            TSystemVectorType Dxmodified(rb);
-
-            // Initialize the vector
-            TSparseSpace::SetToZero(Dxmodified);
-
-            InternalSystemSolveWithPhysics(rA, Dxmodified, rb, rModelPart);
-
-            // Reference to T
+            // Create modified Dx using CreateVectorCopy (safe for FEMultiVector whose copy ctor is deleted)
+            auto p_Dxmodified = TSparseSpace::CreateVectorCopy(rb);
+            TSparseSpace::SetToZero(*p_Dxmodified);
+            InternalSystemSolveWithPhysics(rA, *p_Dxmodified, rb, rModelPart);
             const TSystemMatrixType& r_T = GetConstraintRelationMatrix();
-
-            // Recover solution of the original problem
-            TSparseSpace::Mult(r_T, Dxmodified, rDx);
+            TSparseSpace::Mult(r_T, *p_Dxmodified, rDx);
         } else {
             InternalSystemSolveWithPhysics(rA, rDx, rb, rModelPart);
         }
@@ -776,9 +774,7 @@ public:
             if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
                 pNewReactionsVector = TSystemVectorPointerType(new TSystemVectorType(rpDx->Map()));
             } else {
-        #ifdef HAVE_TPETRA
-                pNewReactionsVector = Teuchos::rcp(new TSystemVectorType(rpDx->getMap()));
-        #endif
+                pNewReactionsVector = TSparseSpace::CreateVector(rpDx->getMap());
             }
             BaseType::mpReactionsVector.swap(pNewReactionsVector);
         }
@@ -885,7 +881,6 @@ public:
                 (dof_iterator->GetSolutionStepReactionValue()) = -react_val;
             }
         } else {
-#ifdef HAVE_TPETRA
             using MapType = typename TSparseSpace::MapType;
             using VectorType = typename TSparseSpace::VectorType;
             using GO = typename MapType::global_ordinal_type;
@@ -915,7 +910,12 @@ public:
             Teuchos::RCP<ImportType> p_dof_importer = Teuchos::rcp(new ImportType(rb.getMap(), p_dof_update_map));
 
             // Defining a temporary vector to gather all of the values needed
-            VectorType temp_RHS(p_dof_update_map);
+            // Use plain MultiVector (not FEMultiVector) for this intermediate import
+            using ST_t = typename VectorType::scalar_type;
+            using LO_t = typename VectorType::local_ordinal_type;
+            using GO_t = typename VectorType::global_ordinal_type;
+            using NT_t = typename VectorType::node_type;
+            Tpetra::MultiVector<ST_t, LO_t, GO_t, NT_t> temp_RHS(p_dof_update_map, 1);
 
             // Importing in the new temp_RHS vector the values
             temp_RHS.doImport(rb, *p_dof_importer, Tpetra::INSERT);
@@ -929,7 +929,6 @@ public:
                     dof.GetSolutionStepReactionValue() = -react_val;
                 }
             }
-#endif
         }
     }
 
@@ -1016,9 +1015,7 @@ public:
             }
         }
         } else {
-#ifdef HAVE_TPETRA
             TSparseSpace::ApplyDirichletConditionsTpetra(rA, rb, global_ids, is_dirichlet, r_process_info, mScalingDiagonal, mScaleFactor);
-#endif
         }
 
         KRATOS_CATCH("");
@@ -1045,8 +1042,8 @@ public:
             const TSystemMatrixType& r_T = GetConstraintRelationMatrix();
 
             // Compute T' b
-            const TSystemVectorType copy_b(rb);
-            TSparseSpace::TransposeMult(r_T, copy_b, rb);
+            auto p_copy_b = TSparseSpace::CreateVectorCopy(rb);
+            TSparseSpace::TransposeMult(r_T, *p_copy_b, rb);
 
             // Apply diagonal values on slaves
             IndexPartition<std::size_t>(mSlaveIds.size()).for_each([&](std::size_t Index){
@@ -1090,25 +1087,12 @@ public:
                 const TSystemMatrixType copy_A(rA);
                 TSparseSpace::BtDBProductOperation(rA, copy_A, r_T, true, true);
             } else {
-#ifdef HAVE_TPETRA
                 TSparseSpace::BtDBProductOperation(rA, rA, r_T, true, true);
-#endif
             }
 
             // Compute T' b
-            if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-                const TSystemVectorType copy_b(rb);
-                TSparseSpace::TransposeMult(r_T, copy_b, rb);
-            } else {
-#ifdef HAVE_TPETRA
-                typename TSparseSpace::VectorPointerType p_copy_b = TSparseSpace::CreateEmptyVectorPointer();
-                if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Teuchos::MpiComm<int>>) {
-                    p_copy_b = Teuchos::rcp(new TSystemVectorType(rb.getMap()));
-                }
-                *p_copy_b = rb; // This should work for Tpetra::Vector (assignment operator)
-                TSparseSpace::TransposeMult(r_T, *p_copy_b, rb);
-#endif
-            }
+            auto p_copy_b = TSparseSpace::CreateVectorCopy(rb);
+            TSparseSpace::TransposeMult(r_T, *p_copy_b, rb);
 
             // Compute the scale factor value
             const auto& r_process_info = rModelPart.GetProcessInfo();
@@ -1530,10 +1514,8 @@ protected:
             if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
                 TSparseSpace::GlobalAssemble(r_T);
             } else {
-            #ifdef HAVE_TPETRA
                 r_T.endAssembly();
                 if (r_T.isFillActive()) r_T.fillComplete();
-            #endif
             }
 
             TSparseSpace::GlobalAssemble(r_constant_vector);
@@ -1706,14 +1688,10 @@ private:
             if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
                 mpMap = Kratos::make_shared<Epetra_Map>(-1, mLocalSystemSize, temp_primary.data(), 0, mrComm);
             } else {
-#ifdef HAVE_TPETRA
                 using MapType = typename TSparseSpace::MapType;
                 using GO = typename MapType::global_ordinal_type;
                 std::vector<GO> global_ids(temp_primary.begin(), temp_primary.begin() + mLocalSystemSize);
                 mpMap = Teuchos::rcp(new MapType(Teuchos::OrdinalTraits<GO>::invalid(), global_ids, 0, Teuchos::rcpFromRef(mrComm)));
-#else
-                KRATOS_ERROR << "TPetra is not available" << std::endl;
-#endif
             }
         }
 
