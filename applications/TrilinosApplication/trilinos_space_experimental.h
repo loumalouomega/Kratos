@@ -799,10 +799,16 @@ public:
         // Inline copy logic from CrsMatrixType to MatrixType
         MatrixType& rDest = rY;
         const CrsMatrixType& rSrc = *aux_Y;
-        if (!rDest.isFillActive()) rDest.resumeFill();
         auto p_fe_Dest = dynamic_cast<MatrixType*>(&rDest);
         if (p_fe_Dest) {
-            p_fe_Dest->beginAssembly();
+            // For FECrsMatrix: beginAssembly() handles closed->open transition directly.
+            // Do NOT call resumeFill() first - it sets isFillActive()=true and then
+            // beginAssembly() would crash expecting a closed matrix.
+            if (!rDest.isFillActive()) {
+                p_fe_Dest->beginAssembly();
+            }
+        } else if (!rDest.isFillActive()) {
+            rDest.resumeFill();
         }
         for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
             const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
@@ -861,16 +867,18 @@ public:
         const double value
         )
     {
-        if (!rA.isFillActive()) {
-            rA.resumeFill();
+        const bool was_closed = !rA.isFillActive();
+        if (was_closed) {
+            rA.beginAssembly();
         }
-        rA.beginAssembly();
         const GO globalRow = static_cast<GO>(i);
         const GO globalCol = static_cast<GO>(j);
         const ST val = static_cast<ST>(value);
         rA.replaceGlobalValues(globalRow, 1, &val, &globalCol);
-        rA.endAssembly();
-        if (rA.isFillActive()) rA.fillComplete();
+        if (was_closed) {
+            rA.endAssembly();
+            if (rA.isFillActive()) rA.fillComplete();
+        }
     }
 
     /**
@@ -989,10 +997,6 @@ public:
      */
     inline static void SetToZero(VectorType& rX)
     {
-        auto p_fe_rX = dynamic_cast<Tpetra::FEMultiVector<ST, LO, GO, NT>*>(&rX);
-        if (p_fe_rX) {
-            p_fe_rX->beginAssembly();
-        }
         rX.putScalar(static_cast<ST>(0));
     }
 
@@ -1278,10 +1282,15 @@ public:
         )
     {
         // Open for FE assembly if the matrix is closed, then zero all entries.
-        // Do NOT call SetToZero separately followed by beginAssembly() as that would
-        // double-open the matrix and trigger FECrsMatrix state machine errors.
-        if (!rA.isFillActive()) {
-            rA.beginAssembly();
+        // Do NOT call resumeFill() before beginAssembly() on FECrsMatrix: beginAssembly
+        // expects a closed matrix and handles the transition itself.
+        auto p_fe_rA_copy = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_rA_copy) {
+            if (!rA.isFillActive()) {
+                rA.beginAssembly();
+            }
+        } else if (!rA.isFillActive()) {
+            rA.resumeFill();
         }
         rA.setAllToScalar(static_cast<ST>(0));
 
@@ -1659,18 +1668,22 @@ public:
         return dynamic_cast<const CommunicatorType&>(*(rA.getMap()->getComm()));
     }
 
-    /// @brief Global assembly on a Tpetra FECrsMatrix - no-op (lifecycle managed by structure builders).
+    /**
+     * @brief Global assembly on a Tpetra FECrsMatrix - no-op (lifecycle managed by structure builders).
+     */
     static void GlobalAssemble(MatrixType& rA)
     {
     }
 
-    /// @brief Global assembly on a Tpetra Vector.
+    /**
+     * @brief Global assembly on a Tpetra Vector.
+     * @note No-op: vectors in this space use a null importer (no overlap),
+     * so all RHS contributions go directly to locally owned entries via
+     * sumIntoGlobalValue. No FE state-machine management or cross-process
+     * communication is required.
+     */
     static void GlobalAssemble(VectorType& rV)
     {
-        auto p_fe_rb = dynamic_cast<Tpetra::FEMultiVector<ST, LO, GO, NT>*>(&rV);
-        if (p_fe_rb) {
-            p_fe_rb->endAssembly();
-        }
     }
 
     /**
@@ -1711,8 +1724,8 @@ public:
                     Teuchos::ArrayView<const GO>(gids.data(), static_cast<int>(gids.size())));
             }
         }
-        graph->endAssembly();
-        graph->fillComplete();
+        if (graph->isFillActive()) graph->endAssembly();
+        if (graph->isFillActive()) graph->fillComplete();
         rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
         if (!rpb || Size(*rpb) != equationSystemSize)
             rpb = CreateVector(pMap);
@@ -1798,8 +1811,8 @@ public:
                     Teuchos::ArrayView<const GO>(master_gids.data(), static_cast<int>(master_gids.size())));
             }
         }
-        graph->endAssembly();
-        graph->fillComplete();
+        if (graph->isFillActive()) graph->endAssembly();
+        if (graph->isFillActive()) graph->fillComplete();
         rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
         rpConstantVector = CreateVector(pMap);
     }
