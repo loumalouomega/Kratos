@@ -38,6 +38,12 @@ void ExperimentalScaleAndAdd(
     ExperimentalTrilinosSparseSpaceType::VectorType &rY) {
   dummy.ScaleAndAdd(A, rX, B, rY);
 }
+void ExperimentalScaleAndAddMatrix(
+    ExperimentalTrilinosSparseSpaceType &dummy, const double A,
+    const ExperimentalTrilinosSparseSpaceType::MatrixType &rX, const double B,
+    ExperimentalTrilinosSparseSpaceType::MatrixType &rY) {
+  dummy.ScaleAndAdd(A, rX, B, rY);
+}
 void ExperimentalMult(ExperimentalTrilinosSparseSpaceType &dummy,
                       ExperimentalTrilinosSparseSpaceType::MatrixType &rA,
                       ExperimentalTrilinosSparseSpaceType::VectorType &rX,
@@ -78,9 +84,9 @@ void ExperimentalClearVector(
 }
 void ExperimentalResizeVector(
     ExperimentalTrilinosSparseSpaceType &dummy,
-    ExperimentalTrilinosSparseSpaceType::VectorType &x,
-    ExperimentalTrilinosSparseSpaceType::IndexType size) {
-  dummy.Resize(x, size);
+    ExperimentalTrilinosSparseSpaceType::VectorPointerType &pX,
+    ExperimentalTrilinosSparseSpaceType::SizeType n) {
+  dummy.Resize(pX, n);
 }
 void ExperimentalSetToZeroMatrix(
     ExperimentalTrilinosSparseSpaceType &dummy,
@@ -123,6 +129,109 @@ ExperimentalGetVecRef(ExperimentalAuxiliaryVectorWrapper &dummy) {
   return dummy.GetReference();
 }
 
+// Additional bindings
+
+void ExperimentalCopyVector(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::VectorType &rX,
+    ExperimentalTrilinosSparseSpaceType::VectorType &rY) {
+  dummy.Copy(rX, rY);
+}
+void ExperimentalCopyMatrix(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::MatrixType &rX,
+    ExperimentalTrilinosSparseSpaceType::MatrixType &rY) {
+  dummy.Copy(rX, rY);
+}
+void ExperimentalCopyMatrixValues(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::MatrixType &rA,
+    const ExperimentalTrilinosSparseSpaceType::MatrixType &rB) {
+  dummy.CopyMatrixValues(rA, rB);
+}
+void ExperimentalAssign(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::VectorType &rX, const double A,
+    const ExperimentalTrilinosSparseSpaceType::VectorType &rY) {
+  dummy.Assign(rX, A, rY);
+}
+void ExperimentalInplaceMult(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::VectorType &rX, const double A) {
+  dummy.InplaceMult(rX, A);
+}
+void ExperimentalSetV(ExperimentalTrilinosSparseSpaceType &dummy,
+                      ExperimentalTrilinosSparseSpaceType::VectorType &rX,
+                      double value) {
+  dummy.Set(rX, value);
+}
+double ExperimentalGetValue(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::VectorType &rX, std::size_t I) {
+  return dummy.GetValue(rX, I);
+}
+void ExperimentalSetValueVector(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::VectorType &rX,
+    ExperimentalTrilinosSparseSpaceType::IndexType i, double value) {
+  dummy.SetValue(rX, i, value);
+}
+void ExperimentalSetValueMatrix(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::MatrixType &rA,
+    ExperimentalTrilinosSparseSpaceType::IndexType i,
+    ExperimentalTrilinosSparseSpaceType::IndexType j, double value) {
+  dummy.SetValue(rA, i, j, value);
+}
+pybind11::object ExperimentalGatherValues(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::VectorType &rX,
+    const std::vector<int> &IndexArray) {
+  std::vector<double> values(IndexArray.size());
+  dummy.GatherValues(rX, IndexArray, values.data());
+  return pybind11::cast(values);
+}
+void ExperimentalGlobalAssembleMatrix(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::MatrixType &rA) {
+  dummy.GlobalAssemble(rA);
+}
+void ExperimentalGlobalAssembleVector(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::VectorType &rV) {
+  dummy.GlobalAssemble(rV);
+}
+void ExperimentalManualFinalize(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    ExperimentalTrilinosSparseSpaceType::MatrixType &rA) {
+  dummy.ManualFinalize(rA);
+}
+double ExperimentalGetDiagonalNorm(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::MatrixType &rA) {
+  return dummy.GetDiagonalNorm(rA);
+}
+double ExperimentalGetAveragevalueDiagonal(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::MatrixType &rA) {
+  return dummy.GetAveragevalueDiagonal(rA);
+}
+double ExperimentalGetMaxDiagonal(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::MatrixType &rA) {
+  return dummy.GetMaxDiagonal(rA);
+}
+double ExperimentalGetMinDiagonal(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::MatrixType &rA) {
+  return dummy.GetMinDiagonal(rA);
+}
+ExperimentalAuxiliaryVectorWrapper ExperimentalCreateVectorCopy(
+    ExperimentalTrilinosSparseSpaceType &dummy,
+    const ExperimentalTrilinosSparseSpaceType::VectorType &rV) {
+  return ExperimentalAuxiliaryVectorWrapper(dummy.CreateVectorCopy(rV));
+}
+
 } // namespace
 
 #endif
@@ -155,24 +264,57 @@ void AddBasicOperationsExperimental(pybind11::module &m) {
   py::class_<ExperimentalTrilinosSparseSpaceType>(
       m, "ExperimentalTrilinosSparseSpace")
       .def(py::init<>())
+      // --- Clear / Resize ---
       .def("ClearMatrix", ExperimentalClearMatrix)
       .def("ClearVector", ExperimentalClearVector)
       .def("ResizeVector", ExperimentalResizeVector)
+      // --- Zero-fill ---
       .def("SetToZeroMatrix", ExperimentalSetToZeroMatrix)
       .def("SetToZeroVector", ExperimentalSetToZeroVector)
+      // --- Norms ---
       .def("TwoNorm", ExperimentalTwoNorm)
+      .def("GetDiagonalNorm", ExperimentalGetDiagonalNorm)
+      .def("GetAveragevalueDiagonal", ExperimentalGetAveragevalueDiagonal)
+      .def("GetMaxDiagonal", ExperimentalGetMaxDiagonal)
+      .def("GetMinDiagonal", ExperimentalGetMinDiagonal)
+      // --- Dot / vector algebra ---
       .def("Dot", ExperimentalDot)
+      .def("UnaliasedAdd", ExperimentalUnaliasedAdd)
+      .def("ScaleAndAdd", ExperimentalScaleAndAdd)
+      .def("ScaleAndAddMatrix", ExperimentalScaleAndAddMatrix)
+      .def("Assign", ExperimentalAssign)
+      .def("InplaceMult", ExperimentalInplaceMult)
+      // --- Matrix-vector / matrix-matrix products ---
       .def("Mult", ExperimentalMult)
       .def("TransposeMult", ExperimentalTransposeMult)
+      // --- Sizes ---
       .def("Size", ExperimentalSize)
       .def("Size1", ExperimentalSize1)
       .def("Size2", ExperimentalSize2)
-      .def("UnaliasedAdd", ExperimentalUnaliasedAdd)
-      .def("ScaleAndAdd", ExperimentalScaleAndAdd)
+      // --- Copy ---
+      .def("CopyVector", ExperimentalCopyVector)
+      .def("CopyMatrix", ExperimentalCopyMatrix)
+      .def("CopyMatrixValues", ExperimentalCopyMatrixValues)
+      // --- Pointer factories ---
       .def("CreateEmptyMatrixPointer", ExperimentalCreateEmptyMatrixPointer)
       .def("CreateEmptyVectorPointer", ExperimentalCreateEmptyVectorPointer)
+      .def("CreateVectorCopy", ExperimentalCreateVectorCopy)
+      // --- Element access ---
+      .def("GetValue", ExperimentalGetValue)
+      .def("SetValueVector", ExperimentalSetValueVector)
+      .def("SetValueMatrix", ExperimentalSetValueMatrix)
+      .def("GatherValues", ExperimentalGatherValues)
+      // --- Set scalar ---
+      .def("Set", ExperimentalSetV)
+      // --- Assembly ---
+      .def("GlobalAssembleMatrix", ExperimentalGlobalAssembleMatrix)
+      .def("GlobalAssembleVector", ExperimentalGlobalAssembleVector)
+      .def("ManualFinalize", ExperimentalManualFinalize)
+      // --- Static queries ---
       .def_static("IsDistributed",
                   &ExperimentalTrilinosSparseSpaceType::IsDistributed)
+      .def_static("IsDistributedSpace",
+                  &ExperimentalTrilinosSparseSpaceType::IsDistributedSpace)
       .def_static(
           "FastestDirectSolverList",
           &ExperimentalTrilinosSparseSpaceType::FastestDirectSolverList);

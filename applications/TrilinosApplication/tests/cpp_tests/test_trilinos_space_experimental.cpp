@@ -1227,4 +1227,104 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalResizeThrows, KratosTrilinosApplic
     );
 }
 
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalCreateEmptyMapPointer, KratosTrilinosApplicationMPITestSuite)
+{
+    // CreateEmptyMapPointer always returns Teuchos::null (a null RCP)
+    auto p_map = TrilinosSparseSpaceType::CreateEmptyMapPointer();
+    KRATOS_EXPECT_TRUE(p_map == Teuchos::null);
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsNull(p_map));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalGetMinDiagonal, KratosTrilinosApplicationMPITestSuite)
+{
+    // Diagonal entries of the dummy matrix (scale=1) are 1, 2, ..., size → min = 1.0
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 12;
+    auto matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    // min diagonal is the smallest entry = 1.0 (global row 0 has diagonal = scale * 1)
+    const double diag_min = TrilinosSparseSpaceType::GetMinDiagonal(*matrix);
+    KRATOS_EXPECT_NEAR(diag_min, 1.0, 1.0e-10);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalGetAveragevalueDiagonal, KratosTrilinosApplicationMPITestSuite)
+{
+    // Diagonal entries are 1, 2, ..., 12 → average = (1+12)/2 = 6.5
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 12;
+    auto matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    const double expected_avg = 0.5 * (1.0 + 12.0);
+    KRATOS_EXPECT_NEAR(TrilinosSparseSpaceType::GetAveragevalueDiagonal(*matrix), expected_avg, 1.0e-10);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalManualFinalize, KratosTrilinosApplicationMPITestSuite)
+{
+    // ManualFinalize calls endAssembly() on a matrix that's open for FE assembly
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 2 * r_comm.Size();
+    auto matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size);
+    // Open the matrix for FE assembly (this is valid after the matrix is in closed state)
+    matrix->beginAssembly();
+    KRATOS_EXPECT_TRUE(matrix->isFillActive());
+    // ManualFinalize must close it without throwing
+    TrilinosSparseSpaceType::ManualFinalize(*matrix);
+    KRATOS_EXPECT_FALSE(matrix->isFillActive());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalResizeVectorPointer, KratosTrilinosApplicationMPITestSuite)
+{
+    // Resize(VectorPointerType&, n) replaces the pointed-to vector with a new empty one of global size n
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int original_size = 2 * r_comm.Size();
+    auto p_vec = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseVector(r_comm, original_size);
+    KRATOS_EXPECT_EQ(TrilinosSparseSpaceType::Size(*p_vec), static_cast<std::size_t>(original_size));
+    // Resize to 0 — pointer must be updated in-place (pass-by-ref)
+    TrilinosSparseSpaceType::Resize(p_vec, std::size_t(0));
+    KRATOS_EXPECT_EQ(TrilinosSparseSpaceType::Size(*p_vec), std::size_t(0));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalGetOrCreateTpetraMap, KratosTrilinosApplicationMPITestSuite)
+{
+    // GetOrCreateTpetraMap creates a Tpetra::Map with LocalSize entries starting at FirstMyId
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+    TrilinosSparseSpaceType::CommunicatorType tpetra_comm(raw_mpi_comm);
+
+    const int rank = r_comm.Rank();
+    const int local_size = 2;
+    const int first_my_id = rank * local_size;
+    auto p_map = TrilinosSparseSpaceType::GetOrCreateTpetraMap(tpetra_comm, local_size, first_my_id);
+
+    KRATOS_EXPECT_NE(p_map, Teuchos::null);
+    KRATOS_EXPECT_EQ(static_cast<int>(p_map->getNodeNumElements()), local_size);
+    // Check that global IDs for this rank start at first_my_id
+    auto node_elements = p_map->getNodeElementList();
+    KRATOS_EXPECT_EQ(static_cast<int>(node_elements[0]), first_my_id);
+    KRATOS_EXPECT_EQ(static_cast<int>(node_elements[1]), first_my_id + 1);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalApplyDirichletConditionsTpetra, KratosTrilinosApplicationMPITestSuite)
+{
+    // ApplyDirichletConditionsTpetra zeros rows/columns of fixed DOFs and sets the RHS entry to 0
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 2 * r_comm.Size();
+    const int rank = r_comm.Rank();
+    const int first_my_id = rank * 2;
+
+    auto matrix = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    auto p_rhs = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseVector(r_comm, size, 1.0);
+
+    // Fix the first DOF on rank 0 (global DOF 0)
+    std::vector<int> global_ids = {first_my_id};
+    std::vector<int> is_fixed   = {1};
+
+    ProcessInfo process_info;
+    double scale_factor = 0.0;
+    TrilinosSparseSpaceType::ApplyDirichletConditionsTpetra(
+        *matrix, *p_rhs, global_ids, is_fixed, process_info,
+        SCALING_DIAGONAL::NO_SCALING, scale_factor);
+
+    // After application: scale_factor should be 1.0 (NO_SCALING)
+    KRATOS_EXPECT_NEAR(scale_factor, 1.0, 1.0e-10);
+}
+
 } // namespace Kratos::Testing

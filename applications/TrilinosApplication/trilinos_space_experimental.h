@@ -917,18 +917,18 @@ public:
 
     /**
      * @brief Resizes a vector
-     * @param pA The pointer to the vector to be resized
-     * @param n The new size
+     * @param pX The pointer to the vector to be resized
+     * @param n The new global size
     */
     inline static void Resize(
-        VectorPointerType pX,
+        VectorPointerType& pX,
         const SizeType n
         )
     {
-        //KRATOS_ERROR_IF(pX != Teuchos::null) << "Trying to resize a null pointer" << std::endl;
-        int global_elems = n;
-        auto map = Teuchos::rcp(new MapType(0, 0, pX->getMap()->getComm()));
-        VectorPointerType pNewEmptyX = CreateVector(map);
+        auto pComm = pX->getMap()->getComm();
+        Tpetra::global_size_t global_elems = static_cast<Tpetra::global_size_t>(n);
+        MapPointerType new_map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
+        VectorPointerType pNewEmptyX = CreateVector(new_map);
         pX.swap(pNewEmptyX);
     }
 

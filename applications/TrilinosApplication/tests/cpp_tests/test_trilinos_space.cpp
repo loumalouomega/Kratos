@@ -1158,4 +1158,31 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosResizeThrows, KratosTrilinosApplicationMPITest
     );
 }
 
+KRATOS_TEST_CASE_IN_SUITE(TrilinosCreateEmptyMapPointer, KratosTrilinosApplicationMPITestSuite)
+{
+    // CreateEmptyMapPointer always returns nullptr
+    auto p_map = TrilinosSparseSpaceType::CreateEmptyMapPointer();
+    KRATOS_EXPECT_TRUE(p_map == nullptr);
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsNull(p_map));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosGetMinDiagonal, KratosTrilinosApplicationMPITestSuite)
+{
+    // Diagonal of the dummy matrix (scale=1) is i+1 for global row i, so min = 1.0
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 12;
+    auto matrix = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    KRATOS_EXPECT_DOUBLE_EQ(1.0, TrilinosSparseSpaceType::GetMinDiagonal(matrix));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(TrilinosGetAveragevalueDiagonal, KratosTrilinosApplicationMPITestSuite)
+{
+    // Diagonal entries are 1, 2, ..., 12 → average = (1+12)/2 = 6.5
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 12;
+    auto matrix = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    const double expected_avg = 0.5 * (1.0 + 12.0);
+    KRATOS_EXPECT_DOUBLE_EQ(expected_avg, TrilinosSparseSpaceType::GetAveragevalueDiagonal(matrix));
+}
+
 } // namespace Kratos::Testing
