@@ -810,6 +810,8 @@ public:
         } else if (!rDest.isFillActive()) {
             rDest.resumeFill();
         }
+        // Zero out rDest before summing to avoid accumulating onto existing values
+        rDest.setAllToScalar(static_cast<ST>(0));
         for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
             const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
@@ -1015,6 +1017,13 @@ public:
         const std::vector<std::size_t>& rEquationId
         )
     {
+        // Lazily open for FE assembly on first call in a Build() cycle.
+        // GlobalAssemble() will close it at the end.
+        auto p_fe_rA = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_rA && !rA.isFillActive()) {
+            p_fe_rA->beginAssembly();
+        }
+
         const std::size_t system_size = rA.getGlobalNumRows();
 
         // Count active indices
@@ -1234,6 +1243,8 @@ public:
 
         // New graph with large capacity
         Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(r_row_map, r_row_map, 100));
+        // Open the FE graph for insertion (sets fillState_=open)
+        graph->beginAssembly();
 
         const auto numLocalRows = r_row_map->getNodeNumElements();
 
@@ -1266,7 +1277,8 @@ public:
             graph->insertGlobalIndices(global_row_index, Teuchos::ArrayView<const GO>(combined_indices_vector));
         }
 
-        if (graph->isFillActive()) graph->fillComplete(r_row_map, r_row_map);
+        // Close via endAssembly which calls endFill() -> activeCrsGraph_ = OWNED -> fillComplete
+        graph->endAssembly();
         return graph;
     }
 
@@ -1286,9 +1298,13 @@ public:
         // expects a closed matrix and handles the transition itself.
         auto p_fe_rA_copy = dynamic_cast<MatrixType*>(&rA);
         if (p_fe_rA_copy) {
-            if (!rA.isFillActive()) {
-                rA.beginAssembly();
+            // Handle the FECrsMatrix post-construction anomaly:
+            // constructor leaves isFillActive()=true but fillState_=closed.
+            // Normalize with fillComplete() so beginAssembly() can proceed.
+            if (rA.isFillActive()) {
+                rA.fillComplete();
             }
+            rA.beginAssembly();
         } else if (!rA.isFillActive()) {
             rA.resumeFill();
         }
@@ -1669,10 +1685,15 @@ public:
     }
 
     /**
-     * @brief Global assembly on a Tpetra FECrsMatrix - no-op (lifecycle managed by structure builders).
+     * @brief Global assembly on a Tpetra FECrsMatrix — close matrix if open.
+     * @details After AssembleLHS opens the matrix lazily, this finalizes assembly
+     * so the matrix is in a closed (fillComplete) state for solver consumption.
      */
     static void GlobalAssemble(MatrixType& rA)
     {
+        if (rA.isFillActive()) {
+            rA.endAssembly();
+        }
     }
 
     /**
@@ -1724,9 +1745,13 @@ public:
                     Teuchos::ArrayView<const GO>(gids.data(), static_cast<int>(gids.size())));
             }
         }
-        if (graph->isFillActive()) graph->endAssembly();
         if (graph->isFillActive()) graph->fillComplete();
         rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
+        // Post-construction normalization: FECrsMatrix constructor leaves isFillActive()=true
+        // but fillState_=closed (due to internal beginFill()->resumeFill() calls).
+        // Call fillComplete() to reset isFillActive() to false so GlobalAssemble
+        // does not mistake this for an open-assembly matrix and call endAssembly().
+        if (rpA->isFillActive()) rpA->fillComplete();
         if (!rpb || Size(*rpb) != equationSystemSize)
             rpb = CreateVector(pMap);
         if (!rpDx || Size(*rpDx) != equationSystemSize)
@@ -1811,9 +1836,10 @@ public:
                     Teuchos::ArrayView<const GO>(master_gids.data(), static_cast<int>(master_gids.size())));
             }
         }
-        if (graph->isFillActive()) graph->endAssembly();
         if (graph->isFillActive()) graph->fillComplete();
         rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
+        // Post-construction normalization (same as BuildSystemStructure above).
+        if (rpT->isFillActive()) rpT->fillComplete();
         rpConstantVector = CreateVector(pMap);
     }
 
