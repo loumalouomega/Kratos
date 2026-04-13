@@ -228,10 +228,10 @@ using GO_t = typename Tpetra::FECrsMatrix<>::global_ordinal_type;
 using NT_t = typename Tpetra::FECrsMatrix<>::node_type;
 
 template <>
-struct AMGCLAdaptor<TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<ST_t, LO_t, GO_t, NT_t>>>
+struct AMGCLAdaptor<TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<ST_t, LO_t, GO_t, NT_t>>>
 {
     using TpetraMatrixType = Tpetra::FECrsMatrix<>;
-    using TpetraVectorType = Tpetra::Vector<ST_t, LO_t, GO_t, NT_t>;
+    using TpetraVectorType = Tpetra::FEMultiVector<ST_t, LO_t, GO_t, NT_t>;
 
     template <int BlockSize>
     auto MakeMatrixAdaptor(const TpetraMatrixType& rMatrix)
@@ -279,7 +279,7 @@ private:
 };
 
 template class KRATOS_API(TRILINOS_APPLICATION) AmgclMPISolver<
-    TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<ST_t, LO_t, GO_t, NT_t>>,
+    TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<ST_t, LO_t, GO_t, NT_t>>,
     UblasSpace<double, Matrix, Vector>
 >;
 #endif

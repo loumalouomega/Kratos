@@ -23,7 +23,7 @@
 
 namespace Kratos {
 
-typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>>
+typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>>
     ExperimentalTrilinosSparseSpaceType;
 
 class ExperimentalAuxiliaryMatrixWrapper {

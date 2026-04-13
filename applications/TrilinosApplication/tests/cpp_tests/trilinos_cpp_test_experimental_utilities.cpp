@@ -162,13 +162,13 @@ TrilinosCPPTestExperimentalUtilities::VectorPointerType TrilinosCPPTestExperimen
     auto MyGlobalElements = map->getNodeElementList();
 
     // Create a Tpetra_Vector
-    Teuchos::RCP<Tpetra::Vector<>> b = Teuchos::rcp(new Tpetra::Vector<>(map));
+    Teuchos::RCP<Tpetra::FEMultiVector<>> b = Teuchos::rcp(new Tpetra::FEMultiVector<>(map, Teuchos::null, 1));
 
     // Fill the vector with values
     double value;
     for (std::size_t i = 0; i < NumMyElements; ++i) {
         value = Offset + static_cast<double>(MyGlobalElements[i]);
-        b->replaceLocalValue(i, value);
+        b->replaceLocalValue(i, size_t(0), value);
     }
 
     return b;

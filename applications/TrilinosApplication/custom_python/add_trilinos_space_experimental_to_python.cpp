@@ -138,8 +138,8 @@ void AddBasicOperationsExperimental(pybind11::module &m) {
       //.def(py::init< Tpetra::FECrsMatrix<>& >())
       ;
 
-  py::class_<Tpetra::Vector<>>(m, "Experimental_FEVector")
-      //.def(py::init< Tpetra::Vector<>& >())
+  py::class_<Tpetra::FEMultiVector<>>(m, "Experimental_FEMultiVector")
+      //.def(py::init< Tpetra::FEMultiVector<>& >())
       ;
 
   py::class_<ExperimentalAuxiliaryMatrixWrapper>(

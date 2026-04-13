@@ -49,7 +49,7 @@ namespace Kratos::Testing
 {
     /// Initial definitons
     using GeometryType = Geometry<Node>;
-    using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>>;
+    using TrilinosSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>>;
     using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
 
     /// Linear solvers Trilinos definitions

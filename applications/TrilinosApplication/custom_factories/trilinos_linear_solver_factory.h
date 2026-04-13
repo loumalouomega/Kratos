@@ -106,7 +106,7 @@ void RegisterTrilinosLinearSolvers();
 
 typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
 #ifdef HAVE_TPETRA
-typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>> TrilinosExperimentalSparseSpaceType;
+typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>> TrilinosExperimentalSparseSpaceType;
 #endif
 typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
 
