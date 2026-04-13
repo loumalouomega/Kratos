@@ -842,7 +842,9 @@ public:
         if (!rA.isFillActive()) {
             rA.resumeFill();
         }
+        if (!rA.isAssemblyActive()) {
         rA.beginAssembly();
+        }
         const GO globalRow = static_cast<GO>(i);
         const GO globalCol = static_cast<GO>(j);
         const ST val = static_cast<ST>(value);
@@ -1667,12 +1669,10 @@ public:
         VectorPointerType& rpb,
         VectorPointerType& rpDx,
         VectorPointerType& rpReactions,
-        const IndexType equationSystemSize)
+        const IndexType equationSystemSize,
+        MapPointerType pMap)
     {
-        MapPointerType p_map = GetOrCreateTpetraMap(rComm, LocalSize, FirstMyId);
-        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(p_map, p_map, GuessRowSize));
-        graph->resumeFill();
-        graph->beginAssembly();
+        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(pMap, pMap, GuessRowSize));
         std::vector<GO> gids;
         for (const auto& eq_ids : rAllEquationIds) {
             if (eq_ids.empty()) continue;
@@ -1686,12 +1686,13 @@ public:
         graph->endAssembly();
         graph->fillComplete();
         rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
+        rpA->resumeFill();
         if (!rpb || Size(*rpb) != equationSystemSize)
-            rpb = Teuchos::rcp(new VectorType(p_map));
+            rpb = Teuchos::rcp(new VectorType(pMap));
         if (!rpDx || Size(*rpDx) != equationSystemSize)
-            rpDx = Teuchos::rcp(new VectorType(p_map));
+            rpDx = Teuchos::rcp(new VectorType(pMap));
         if (!rpReactions)
-            rpReactions = Teuchos::rcp(new VectorType(p_map));
+            rpReactions = Teuchos::rcp(new VectorType(pMap));
     }
 
     /**
@@ -1750,12 +1751,10 @@ public:
         const std::vector<std::vector<int>>& rSlaveEquationIds,
         const std::vector<std::vector<int>>& rMasterEquationIds,
         MatrixPointerType& rpT,
-        VectorPointerType& rpConstantVector)
+        VectorPointerType& rpConstantVector,
+        MapPointerType pMap)
     {
-        MapPointerType p_map = GetOrCreateTpetraMap(rComm, LocalSize, FirstMyId);
-        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(p_map, p_map, GuessRowSize));
-        graph->resumeFill();
-        graph->beginAssembly();
+        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(pMap, pMap, GuessRowSize));
         for (IndexType i = 0; i < LocalSize; ++i) {
             const GO gid = static_cast<GO>(FirstMyId + static_cast<int>(i));
             graph->insertGlobalIndices(gid, Teuchos::ArrayView<const GO>(&gid, 1));
@@ -1775,7 +1774,8 @@ public:
         graph->endAssembly();
         graph->fillComplete();
         rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
-        rpConstantVector = Teuchos::rcp(new VectorType(p_map));
+        rpT->resumeFill();
+        rpConstantVector = Teuchos::rcp(new VectorType(pMap));
     }
 
     ///@}

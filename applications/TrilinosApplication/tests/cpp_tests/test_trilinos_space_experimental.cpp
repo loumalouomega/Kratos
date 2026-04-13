@@ -883,9 +883,14 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBuildSystemStructure, KratosTrilin
     TrilinosSparseSpaceType::VectorPointerType pDx;
     TrilinosSparseSpaceType::VectorPointerType pReactions;
 
+    TrilinosSparseSpaceType::MapPointerType pMap;
+    std::vector<typename TrilinosSparseSpaceType::MapType::global_ordinal_type> local_ids(local_size);
+    for (int i = 0; i < local_size; i++) local_ids[i] = first_my_id + i;
+    pMap = Teuchos::rcp(new typename TrilinosSparseSpaceType::MapType(Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(), local_ids, 0, Teuchos::rcp(&tpetra_comm, false)));
+
     TrilinosSparseSpaceType::BuildSystemStructure(
         tpetra_comm, local_size, first_my_id, 5, all_equation_ids,
-        pA, pb, pDx, pReactions, system_size
+        pA, pb, pDx, pReactions, system_size, pMap
     );
 
     KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pA));
@@ -910,9 +915,14 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBuildConstraintsStructure, KratosT
     TrilinosSparseSpaceType::MatrixPointerType pT;
     TrilinosSparseSpaceType::VectorPointerType pConstantVector;
 
+    TrilinosSparseSpaceType::MapPointerType pMap;
+    std::vector<typename TrilinosSparseSpaceType::MapType::global_ordinal_type> local_ids(local_size);
+    for (int i = 0; i < local_size; i++) local_ids[i] = first_my_id + i;
+    pMap = Teuchos::rcp(new typename TrilinosSparseSpaceType::MapType(Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(), local_ids, 0, Teuchos::rcp(&tpetra_comm, false)));
+
     TrilinosSparseSpaceType::BuildConstraintsStructure(
         tpetra_comm, local_size, first_my_id, 5, all_slave_ids, all_master_ids,
-        pT, pConstantVector
+        pT, pConstantVector, pMap
     );
 
     KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pT));
