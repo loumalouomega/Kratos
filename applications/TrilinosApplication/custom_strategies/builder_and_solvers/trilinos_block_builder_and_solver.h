@@ -1588,6 +1588,8 @@ protected:
             }
         }
 
+        GetMap(); // Ensure mpMap is lazily initialized before use
+
         TSparseSpace::BuildSystemStructure(
             mrComm,
             mLocalSystemSize,

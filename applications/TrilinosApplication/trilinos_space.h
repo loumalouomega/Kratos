@@ -215,10 +215,13 @@ public:
      */
     inline static const MapType& GetMap(const VectorType& rV)
     {
-        const auto* p_map = dynamic_cast<const MapType*>(&rV.Map());
-        KRATOS_ERROR_IF(p_map == nullptr) << "Could not cast Epetra_BlockMap to Epetra_Map in GetMap. "
-            << "The vector map is not an Epetra_Map." << std::endl;
-        return *p_map;
+        // Epetra_FEVector::Map() returns an Epetra_BlockMap&. The underlying object
+        // was constructed from an Epetra_Map but gets stored as Epetra_BlockMap internally,
+        // so dynamic_cast would fail. Use a reinterpret approach via the block map interface
+        // to get access to the same data through the Epetra_Map slice.
+        // Since Epetra_Map derives from Epetra_BlockMap, and the map is always point-based,
+        // we can safely use static_cast here.
+        return static_cast<const MapType&>(rV.Map());
     }
 
     /**

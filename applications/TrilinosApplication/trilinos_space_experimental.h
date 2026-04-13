@@ -219,10 +219,11 @@ public:
     {
         const int global_elems = 0;
         MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
-        // Use non-const RCP so we can call endAssembly() (FE variant of fillComplete)
         Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(map, map, 0));
+        // Use fillComplete() for the CRS graph (avoids FE state machine issues with endAssembly on a
+        // fresh graph whose FE state may already be considered closed)
         if (graph->isFillActive()) {
-            graph->endAssembly();
+            graph->fillComplete();
         }
         return Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
     }
@@ -935,12 +936,17 @@ public:
      * @brief Clears a matrix
      * @param pA The pointer to the matrix to be cleared
      */
-    inline static void Clear(MatrixPointerType pA)
+    inline static void Clear(MatrixPointerType& pA)
     {
         if(pA != Teuchos::null) {
             auto map = Teuchos::rcp(new MapType(0, 0, pA->getMap()->getComm()));
-            GraphPointerType graph = Teuchos::rcp(new GraphType(map, map, 0));
-            MatrixPointerType pNewEmptyA = Teuchos::rcp(new MatrixType(graph));
+            Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(map, map, 0));
+            // Use fillComplete() instead of endAssembly() to avoid FE state machine issues
+            if (graph->isFillActive()) {
+                graph->fillComplete();
+            }
+            MatrixPointerType pNewEmptyA = Teuchos::rcp(new MatrixType(
+                Teuchos::rcp_const_cast<const GraphType>(graph)));
             pA.swap(pNewEmptyA);
         }
     }
@@ -949,7 +955,7 @@ public:
      * @brief Clears a vector
      * @param pX The pointer to the vector to be cleared
      */
-    inline static void Clear(VectorPointerType pX)
+    inline static void Clear(VectorPointerType& pX)
     {
         if(pX != Teuchos::null) {
             auto map = Teuchos::rcp(new MapType(0, 0, pX->getMap()->getComm()));
@@ -964,12 +970,17 @@ public:
      */
     inline static void SetToZero(MatrixType& rA)
     {
-        // Set all values in the matrix to zero.
-        if (!rA.isFillActive()) {
-            rA.resumeFill();
+        // Open for FE assembly if the matrix is currently closed (fillComplete was called).
+        // Avoid mixing resumeFill() + beginAssembly() which conflicts in FECrsMatrix.
+        const bool was_open = rA.isFillActive();
+        if (!was_open) {
+            rA.beginAssembly();
         }
-        rA.beginAssembly();
-        rA.setAllToScalar(0.0);
+        rA.setAllToScalar(static_cast<ST>(0));
+        // If we opened it ourselves, close it back so callers see a consistent closed state.
+        if (!was_open && rA.isFillActive()) {
+            rA.endAssembly();
+        }
     }
 
     /**
@@ -1266,16 +1277,13 @@ public:
         const MatrixType& rB
         )
     {
-        // Cleaning destination matrix
-        SetToZero(rA);
-
-        // Begin matrix assembly if FECrsMatrix
-        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
-        if (p_fe_A) {
-            p_fe_A->beginAssembly();
-        } else {
-            if (!rA.isFillActive()) rA.resumeFill();
+        // Open for FE assembly if the matrix is closed, then zero all entries.
+        // Do NOT call SetToZero separately followed by beginAssembly() as that would
+        // double-open the matrix and trigger FECrsMatrix state machine errors.
+        if (!rA.isFillActive()) {
+            rA.beginAssembly();
         }
+        rA.setAllToScalar(static_cast<ST>(0));
 
         for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {
             const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
@@ -1294,11 +1302,8 @@ public:
             }
         }
 
-        // Finalizing the fill process
-        if (p_fe_A) {
-            p_fe_A->endAssembly();
-        }
-        if (rA.isFillActive()) rA.fillComplete();
+        // Finalizing the fill process: endAssembly handles fillComplete internally
+        rA.endAssembly();
     }
 
     /**

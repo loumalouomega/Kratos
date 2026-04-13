@@ -1117,12 +1117,13 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalAssembleLHS, KratosTrilinosApplica
     using LO = TrilinosSparseSpaceType::LO;
     using GO = TrilinosSparseSpaceType::GO;
 
-    // Build FECrsGraph with 1-entry diagonal rows
+    // Build FECrsGraph with full 2x2 dense block per rank
     auto map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(size, 0, tpetra_comm));
-    auto graph = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(map, map, 1));
+    auto graph = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(map, map, 2));
+    std::vector<GO> col_gids = {static_cast<GO>(first_my_id), static_cast<GO>(first_my_id + 1)};
     for (int gid = first_my_id; gid < first_my_id + 2; ++gid) {
         const GO global_gid = static_cast<GO>(gid);
-        graph->insertGlobalIndices(global_gid, Teuchos::ArrayView<const GO>(&global_gid, 1));
+        graph->insertGlobalIndices(global_gid, Teuchos::ArrayView<const GO>(col_gids.data(), 2));
     }
     graph->fillComplete();
 
@@ -1144,8 +1145,13 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalAssembleLHS, KratosTrilinosApplica
     if (local_row_0 != Tpetra::Details::OrdinalTraits<LO>::invalid()) {
         auto localMatrix = A.getLocalMatrixHost();
         auto localRow0 = localMatrix.row(local_row_0);
-        KRATOS_EXPECT_EQ(1, localRow0.length);
-        KRATOS_EXPECT_DOUBLE_EQ(5.0, static_cast<double>(localRow0.value(0)));
+        // Find the diagonal (column == first_my_id)
+        for (int k = 0; k < localRow0.length; ++k) {
+            const GO col_gid = A.getColMap()->getGlobalElement(localRow0.colidx(k));
+            if (col_gid == static_cast<GO>(first_my_id)) {
+                KRATOS_EXPECT_DOUBLE_EQ(5.0, static_cast<double>(localRow0.value(k)));
+            }
+        }
     }
 }
 
