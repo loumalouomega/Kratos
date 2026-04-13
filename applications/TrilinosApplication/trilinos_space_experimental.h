@@ -236,7 +236,7 @@ public:
     {
         const int global_elems = 0;
         MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
-        return Teuchos::rcp(new VectorType(map));
+        return CreateVector(map);
     }
     /**
      * @brief This method creates an empty pointer to a matrix using TPetra communicator
@@ -820,7 +820,7 @@ public:
         // Check if the index is on this process
         if (localIndex != Tpetra::Details::OrdinalTraits<IndexType>::invalid()) {
             // Set the value at the specified local index
-            rX.replaceLocalValue(localIndex, value);
+            rX.replaceLocalValue(localIndex, size_t(0), value);
         }
         // If the index `i` is not local, it is ignored (handled by Tpetra's parallel distribution)
     }
@@ -904,7 +904,7 @@ public:
         //KRATOS_ERROR_IF(pX != Teuchos::null) << "Trying to resize a null pointer" << std::endl;
         int global_elems = n;
         auto map = Teuchos::rcp(new MapType(0, 0, pX->getMap()->getComm()));
-        VectorPointerType pNewEmptyX = Teuchos::rcp(new VectorType(map));
+        VectorPointerType pNewEmptyX = CreateVector(map);
         pX.swap(pNewEmptyX);
     }
 
@@ -930,7 +930,7 @@ public:
     {
         if(pX != Teuchos::null) {
             auto map = Teuchos::rcp(new MapType(0, 0, pX->getMap()->getComm()));
-            VectorPointerType pNewEmptyX = Teuchos::rcp(new VectorType(map));
+            VectorPointerType pNewEmptyX = CreateVector(map);
             pX.swap(pNewEmptyX);
         }
     }
@@ -1041,7 +1041,7 @@ public:
                 values[i] = rRHSContribution[i];
             }
             for (std::size_t i = 0; i < global_indices.size(); ++i) {
-                rb.sumIntoGlobalValue(global_indices[i], values[i]);
+                rb.sumIntoGlobalValue(global_indices[i], size_t(0), values[i]);
             }
         }
     }
@@ -1677,11 +1677,11 @@ public:
         graph->fillComplete();
         rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
         if (!rpb || Size(*rpb) != equationSystemSize)
-            rpb = Teuchos::rcp(new VectorType(pMap));
+            rpb = CreateVector(pMap);
         if (!rpDx || Size(*rpDx) != equationSystemSize)
-            rpDx = Teuchos::rcp(new VectorType(pMap));
+            rpDx = CreateVector(pMap);
         if (!rpReactions)
-            rpReactions = Teuchos::rcp(new VectorType(pMap));
+            rpReactions = CreateVector(pMap);
     }
 
     /**
@@ -1763,13 +1763,23 @@ public:
         graph->endAssembly();
         graph->fillComplete();
         rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
-        rpConstantVector = Teuchos::rcp(new VectorType(pMap));
+        rpConstantVector = CreateVector(pMap);
     }
 
     ///@}
 private:
     ///@name Un accessible methods
     ///@{
+
+    /// @brief Creates an empty VectorType from a map. Handles both Tpetra::FEMultiVector (needs importer+numVecs) and plain Vector/MultiVector.
+    inline static VectorPointerType CreateVector(const Teuchos::RCP<const MapType>& pMap)
+    {
+        if constexpr (std::is_same_v<VectorType, Tpetra::FEMultiVector<ST, LO, GO, NT>>) {
+            return Teuchos::rcp(new VectorType(pMap, Teuchos::null, 1));
+        } else {
+            return Teuchos::rcp(new VectorType(pMap));
+        }
+    }
 
     /// Assignment operator.
     TrilinosSpaceExperimental & operator=(TrilinosSpaceExperimental const& rOther);
