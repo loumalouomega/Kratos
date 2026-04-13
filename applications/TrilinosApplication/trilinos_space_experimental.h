@@ -26,6 +26,7 @@
 #include <Teuchos_RCP.hpp>
 #include <Teuchos_ArrayView.hpp>
 #include <Teuchos_GlobalMPISession.hpp>
+#include <Teuchos_CommHelpers.hpp>
 #include <TpetraExt_MatrixMatrix.hpp>
 #include <TpetraExt_TripleMatrixMultiply.hpp>
 
@@ -1720,6 +1721,10 @@ public:
 
     /**
      * @brief Build Tpetra FECrsGraph and create new system matrix + vectors.
+     * @details Uses a proper OWNED_PLUS_SHARED map that includes ghost DOFs
+     *          (equation IDs referenced by local elements but owned by other
+     *          processes). This enables FECrsMatrix to accept cross-partition
+     *          element contributions and communicate them in endAssembly().
      */
     static void BuildSystemStructure(
         CommunicatorType& rComm,
@@ -1734,24 +1739,131 @@ public:
         const IndexType equationSystemSize,
         MapPointerType pMap)
     {
-        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(pMap, pMap, GuessRowSize));
+        auto comm = pMap->getComm();
+        const int nproc = static_cast<int>(comm->getSize());
+
+        const GO firstId = static_cast<GO>(FirstMyId);
+        const GO lastId  = firstId + static_cast<GO>(LocalSize);
+
+        // Step 1: collect locally-visible ghost DOF GIDs (referenced by local elements
+        // but owned by other processes, i.e. outside [firstId, lastId)).
+        std::set<GO> ghost_gids_set;
+        for (const auto& eq_ids : rAllEquationIds) {
+            for (int id : eq_ids) {
+                const GO gid = static_cast<GO>(id);
+                if (gid < firstId || gid >= lastId)
+                    ghost_gids_set.insert(gid);
+            }
+        }
+
+        // Step 2: Symmetric ghost expansion.
+        //
+        // FECrsGraph::endFill() has two code paths controlled solely by whether
+        // ownedRowsImporter_ is null.  The importer is set to null whenever the
+        // ownedMap and ownedPlusSharedMap are identical (maps_are_the_same==true).
+        // The "easy case"  (null importer) skips doExport(); the "hard case" calls it.
+        // When some processes take the easy case and others the hard case, their MPI
+        // operations diverge → MPI_ERR_TRUNCATE.
+        //
+        // Fix: every process that will *receive* ghost contributions (i.e. some other
+        // process is sending rows that fall in my owned range) must also have at least
+        // one ghost DOF so it enters the hard case.  We achieve this with an AllGather
+        // of each process's owned-DOF range, followed by a notification round-trip that
+        // tells each receiver to add a dummy ghost from the sender's range.
+
+        // Gather every process's [firstId, localSize] so we can find ownership.
+        GO myFid = firstId, mySz = static_cast<GO>(LocalSize);
+        Teuchos::Array<GO> allFirstIds(nproc), allLocalSizes(nproc);
+        Teuchos::gatherAll(*comm, 1, &myFid, nproc, allFirstIds.getRawPtr());
+        Teuchos::gatherAll(*comm, 1, &mySz,  nproc, allLocalSizes.getRawPtr());
+
+        // For each ghost GID we own locally, identify its owner process and record
+        // that we will send that process a contribution.  We notify the owner by
+        // storing our firstId in notify_to[owner].
+        Teuchos::Array<GO> notify_to(nproc, static_cast<GO>(-1));
+        for (GO g : ghost_gids_set) {
+            for (int p = 0; p < nproc; ++p) {
+                if (g >= allFirstIds[p] && g < allFirstIds[p] + allLocalSizes[p]) {
+                    if (p != static_cast<int>(comm->getRank()))
+                        notify_to[p] = firstId;
+                    break;
+                }
+            }
+        }
+
+        // AllGather the full nproc×nproc notification matrix.
+        // notify_all[q*nproc + k] = value that process q put in notify_to[k].
+        Teuchos::Array<GO> notify_all(nproc * nproc, static_cast<GO>(-1));
+        Teuchos::gatherAll(*comm, nproc, notify_to.getRawPtr(),
+                           nproc * nproc, notify_all.getRawPtr());
+
+        // Each process k checks column k of notify_all.  If process q will send it
+        // data (notify_all[q*nproc+k] != -1), add q's firstId as a dummy ghost so
+        // process k also enters the hard case.
+        const int myrank = static_cast<int>(comm->getRank());
+        for (int q = 0; q < nproc; ++q) {
+            if (notify_all[q * nproc + myrank] != static_cast<GO>(-1)) {
+                const GO q_first = allFirstIds[q];
+                if (q_first < firstId || q_first >= lastId)   // not already owned
+                    ghost_gids_set.insert(q_first);
+            }
+        }
+
+        // Step 3: Build OWNED_PLUS_SHARED map.
+        // After symmetric expansion every process with any cross-partition elements
+        // has a non-trivially-different OPS map → all enter FECrsGraph's hard case
+        // → all call doExport during endAssembly → no MPI divergence.
+        MapPointerType owned_plus_shared_map;
+        if (ghost_gids_set.empty()) {
+            // Purely serial or identical partition — safe easy case for ALL processes.
+            owned_plus_shared_map = pMap;
+        } else {
+            // Owned GIDs first (required by FECrsGraph::setup locality check),
+            // then ghost GIDs.
+            std::vector<GO> ops_gids;
+            ops_gids.reserve(LocalSize + ghost_gids_set.size());
+            for (IndexType i = 0; i < LocalSize; ++i)
+                ops_gids.push_back(firstId + static_cast<GO>(i));
+            for (GO g : ghost_gids_set)
+                ops_gids.push_back(g);
+            owned_plus_shared_map = Teuchos::rcp(new MapType(
+                Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(),
+                Teuchos::ArrayView<const GO>(ops_gids.data(),
+                                            static_cast<int>(ops_gids.size())),
+                0, pMap->getComm()));
+        }
+
+        // Step 4: Build FECrsGraph with (ownedMap, ownedPlusSharedMap).
+        Teuchos::RCP<GraphType> graph =
+            Teuchos::rcp(new GraphType(pMap, owned_plus_shared_map, GuessRowSize));
+        graph->beginAssembly();
         std::vector<GO> gids;
         for (const auto& eq_ids : rAllEquationIds) {
             if (eq_ids.empty()) continue;
             gids.resize(eq_ids.size());
-            for (std::size_t k = 0; k < eq_ids.size(); ++k) gids[k] = static_cast<GO>(eq_ids[k]);
+            for (std::size_t k = 0; k < eq_ids.size(); ++k)
+                gids[k] = static_cast<GO>(eq_ids[k]);
             for (std::size_t row = 0; row < gids.size(); ++row) {
-                graph->insertGlobalIndices(gids[row],
-                    Teuchos::ArrayView<const GO>(gids.data(), static_cast<int>(gids.size())));
+                if (owned_plus_shared_map->getLocalElement(gids[row]) !=
+                        Teuchos::OrdinalTraits<LO>::invalid()) {
+                    graph->insertGlobalIndices(
+                        gids[row],
+                        Teuchos::ArrayView<const GO>(gids.data(),
+                                                     static_cast<int>(gids.size())));
+                }
             }
         }
-        if (graph->isFillActive()) graph->fillComplete();
-        rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
-        // Post-construction normalization: FECrsMatrix constructor leaves isFillActive()=true
-        // but fillState_=closed (due to internal beginFill()->resumeFill() calls).
-        // Call fillComplete() to reset isFillActive() to false so GlobalAssemble
-        // does not mistake this for an open-assembly matrix and call endAssembly().
+        // endAssembly: communicates ghost-row structure to owning processes and
+        // switches the active graph from OWNED_PLUS_SHARED to OWNED.
+        graph->endAssembly();
+
+        rpA = Teuchos::rcp(new MatrixType(
+            Teuchos::rcp_const_cast<const GraphType>(graph)));
+        // Post-construction normalization: FECrsMatrix ctor leaves isFillActive()=true
+        // but fillState_=closed (internal beginFill→resumeFill).  Call fillComplete()
+        // to reset so GlobalAssemble does not incorrectly call endAssembly().
         if (rpA->isFillActive()) rpA->fillComplete();
+
         if (!rpb || Size(*rpb) != equationSystemSize)
             rpb = CreateVector(pMap);
         if (!rpDx || Size(*rpDx) != equationSystemSize)
