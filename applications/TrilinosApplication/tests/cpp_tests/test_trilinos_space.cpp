@@ -837,9 +837,14 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosBuildSystemStructure, KratosTrilinosApplicatio
     TrilinosSparseSpaceType::VectorPointerType pDx;
     TrilinosSparseSpaceType::VectorPointerType pReactions;
 
+    TrilinosSparseSpaceType::MapPointerType pMap;
+    std::vector<int> local_ids(local_size);
+    for (int i = 0; i < local_size; i++) local_ids[i] = first_my_id + i;
+    pMap = Kratos::make_shared<Epetra_Map>(-1, local_size, local_ids.data(), 0, epetra_comm);
+
     TrilinosSparseSpaceType::BuildSystemStructure(
         epetra_comm, local_size, first_my_id, 5, all_equation_ids,
-        pA, pb, pDx, pReactions, system_size
+        pA, pb, pDx, pReactions, system_size, pMap
     );
 
     KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pA));
@@ -864,9 +869,14 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosBuildConstraintsStructure, KratosTrilinosAppli
     TrilinosSparseSpaceType::MatrixPointerType pT;
     TrilinosSparseSpaceType::VectorPointerType pConstantVector;
 
+    TrilinosSparseSpaceType::MapPointerType pMap;
+    std::vector<int> local_ids(local_size);
+    for (int i = 0; i < local_size; i++) local_ids[i] = first_my_id + i;
+    pMap = Kratos::make_shared<Epetra_Map>(-1, local_size, local_ids.data(), 0, epetra_comm);
+
     TrilinosSparseSpaceType::BuildConstraintsStructure(
         epetra_comm, local_size, first_my_id, 5, all_slave_ids, all_master_ids,
-        pT, pConstantVector
+        pT, pConstantVector, pMap
     );
 
     KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pT));

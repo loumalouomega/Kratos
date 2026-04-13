@@ -173,17 +173,11 @@ public:
         VectorPointerType& rpb,
         VectorPointerType& rpDx,
         VectorPointerType& rpReactions,
-        const IndexType equationSystemSize)
+        const IndexType equationSystemSize,
+        MapPointerType pMap)
     {
-        // Generate map
-        std::vector<int> local_ids(LocalSize);
-        for (IndexType i = 0; i < LocalSize; i++) {
-            local_ids[i] = FirstMyId + i;
-        }
-        Epetra_Map map(-1, LocalSize, local_ids.data(), 0, rComm);
-
         // Create graph
-        Epetra_FECrsGraph graph(::Copy, map, GuessRowSize);
+        Epetra_FECrsGraph graph(::Copy, *pMap, GuessRowSize);
         for (const auto& r_ids : rAllEquationIds) {
             if (r_ids.size() != 0) {
                 graph.InsertGlobalIndices(r_ids.size(), r_ids.data(), r_ids.size(), r_ids.data());
@@ -196,13 +190,13 @@ public:
         // Create matrix and vectors
         rpA = MatrixPointerType(new MatrixType(::Copy, graph));
         if (IsNull(rpb) || Size(*rpb) != equationSystemSize) {
-            rpb = VectorPointerType(new VectorType(map));
+            rpb = VectorPointerType(new VectorType(*pMap));
         }
         if (IsNull(rpDx) || Size(*rpDx) != equationSystemSize) {
-            rpDx = VectorPointerType(new VectorType(map));
+            rpDx = VectorPointerType(new VectorType(*pMap));
         }
         if (IsNull(rpReactions)) {
-            rpReactions = VectorPointerType(new VectorType(map));
+            rpReactions = VectorPointerType(new VectorType(*pMap));
         }
     }
 
@@ -247,17 +241,11 @@ public:
         const std::vector<std::vector<int>>& rSlaveEquationIds,
         const std::vector<std::vector<int>>& rMasterEquationIds,
         MatrixPointerType& rpT,
-        VectorPointerType& rpConstantVector)
+        VectorPointerType& rpConstantVector,
+        MapPointerType pMap)
     {
-        // Generate map
-        std::vector<int> local_ids(LocalSize);
-        for (IndexType i = 0; i < LocalSize; i++) {
-            local_ids[i] = FirstMyId + i;
-        }
-        Epetra_Map map(-1, LocalSize, local_ids.data(), 0, rComm);
-
         // Create graph
-        Epetra_FECrsGraph graph(::Copy, map, GuessRowSize);
+        Epetra_FECrsGraph graph(::Copy, *pMap, GuessRowSize);
         for (IndexType i = 0; i < LocalSize; i++) {
             int gid = FirstMyId + i;
             graph.InsertGlobalIndices(1, &gid, 1, &gid);
@@ -277,7 +265,7 @@ public:
 
         // Create matrix and vector
         rpT = MatrixPointerType(new MatrixType(::Copy, graph));
-        rpConstantVector = VectorPointerType(new VectorType(map));
+        rpConstantVector = VectorPointerType(new VectorType(*pMap));
     }
 
     /**
