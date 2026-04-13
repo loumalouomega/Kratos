@@ -215,7 +215,10 @@ public:
      */
     inline static const MapType& GetMap(const VectorType& rV)
     {
-        return dynamic_cast<const MapType&>(rV.Map());
+        const auto* p_map = dynamic_cast<const MapType*>(&rV.Map());
+        KRATOS_ERROR_IF(p_map == nullptr) << "Could not cast Epetra_BlockMap to Epetra_Map in GetMap. "
+            << "The vector map is not an Epetra_Map." << std::endl;
+        return *p_map;
     }
 
     /**
