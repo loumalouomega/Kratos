@@ -1797,6 +1797,15 @@ public:
         }
     }
 
+    /// @brief Creates a copy of srcVector into a new heap-allocated VectorType.
+    /// Safe for FEMultiVector whose copy ctor is deleted; data is deep-copied via update().
+    inline static VectorPointerType CreateVectorCopy(const VectorType& src)
+    {
+        auto p = CreateVector(src.getMap());
+        p->update(1.0, src, 0.0);
+        return p;
+    }
+
 private:
     ///@name Un accessible methods
     ///@{
