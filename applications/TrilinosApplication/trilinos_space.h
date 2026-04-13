@@ -235,7 +235,7 @@ public:
      */
     inline static const CommunicatorType& GetCommunicator(const MatrixType& rA)
     {
-        return rA.Comm();
+        return dynamic_cast<const CommunicatorType&>(rA.Comm());
     }
 
     /**
