@@ -61,7 +61,7 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
     graph->resumeFill();
 
     const int NumMyElements = map->getNodeNumElements();
-    auto MyGlobalElements = map->getLocalElementList();
+    auto MyGlobalElements = map->getNodeElementList();
     std::vector<GO> nonDiagonalIndices(2); // Define based on your Tpetra types
 
     for (int i = 0; i < NumMyElements; ++i) {
@@ -159,7 +159,7 @@ TrilinosCPPTestExperimentalUtilities::VectorPointerType TrilinosCPPTestExperimen
     const std::size_t NumMyElements = map->getNodeNumElements();
 
     // Get update list
-    auto MyGlobalElements = map->getLocalElementList();
+    auto MyGlobalElements = map->getNodeElementList();
 
     // Create a Tpetra_Vector
     Teuchos::RCP<Tpetra::Vector<>> b = Teuchos::rcp(new Tpetra::Vector<>(map));
@@ -416,7 +416,7 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
     const int NumMyElements = map->getNodeNumElements();
 
     // Get update list
-    auto MyGlobalElements = map->getLocalElementList();
+    auto MyGlobalElements = map->getNodeElementList();
 
     // Create an integer vector NumNz that is used to build the Tpetra Matrix.
     const int size_global_vector = rRowIndexes.size();
