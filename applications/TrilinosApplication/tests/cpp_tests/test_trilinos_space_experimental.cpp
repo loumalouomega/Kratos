@@ -170,7 +170,8 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixVector, KratosTrilinosAp
     TrilinosSparseSpaceType::MapPointerType map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(global_elems, 0, tpetra_comm));
 
     // Create an Tpetra_Vector
-    TrilinosVectorType mult(map);
+    auto p_mult = TrilinosSparseSpaceType::CreateVector(map);
+    auto& mult = *p_mult;
 
     // Solution
     TrilinosSparseSpaceType::Mult(*matrix, *vector, mult);
@@ -547,7 +548,8 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalCheckAndCorrectZeroDiagonalValues,
 
     // Dummy vector
     auto map = Teuchos::rcp(new TrilinosSparseSpaceType::MapType(size, size, tpetra_comm));
-    TrilinosVectorType vector12(map);
+    auto p_vector12 = TrilinosSparseSpaceType::CreateVector(map);
+    auto& vector12 = *p_vector12;
 
     // Test the norm of the matrix
     double norm = 0.0;
@@ -697,7 +699,8 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalTransposeMultMatrixVector, KratosT
     auto local_vector = TrilinosCPPTestExperimentalUtilities::GenerateDummyLocalVector(size, 10.0);
 
     // Create an Tpetra_Vector
-    TrilinosSparseVector mult(matrix->getDomainMap());
+    auto p_mult = TrilinosSparseSpaceType::CreateVector(matrix->getDomainMap());
+    auto& mult = *p_mult;
 
     // Solution
     TrilinosSparseSpaceType::TransposeMult(*matrix, *vector, mult);

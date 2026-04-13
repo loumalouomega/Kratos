@@ -132,8 +132,10 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalResidualCriteria, KratosTrilinosAp
     auto p_graph_aux = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(p_map_aux, p_map_aux, 0));
     p_graph_aux->fillComplete();
     TrilinosSparseSpaceType::MatrixType rA(p_graph_aux);
-    TrilinosSparseSpaceType::VectorType Dx; // Not used in this criteria but needed for API
-    TrilinosSparseSpaceType::VectorType rb(p_map);
+    auto p_Dx = TrilinosSparseSpaceType::CreateVector(p_map_aux); // Not used in this criteria but needed for API
+    auto& Dx = *p_Dx;
+    auto p_rb = TrilinosSparseSpaceType::CreateVector(p_map);
+    auto& rb = *p_rb;
 
     // Set the auxiliary fake data to check the convergence for
     const double aux_constant = 1.0e-3;
