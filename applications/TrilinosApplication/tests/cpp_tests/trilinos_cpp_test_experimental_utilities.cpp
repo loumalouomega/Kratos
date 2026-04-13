@@ -162,7 +162,7 @@ TrilinosCPPTestExperimentalUtilities::VectorPointerType TrilinosCPPTestExperimen
     auto MyGlobalElements = map->getLocalElementList();
 
     // Create a Tpetra_Vector
-    Teuchos::RCP<Tpetra::FEVector<>> b = Teuchos::rcp(new Tpetra::FEVector<>(map));
+    Teuchos::RCP<Tpetra::Vector<>> b = Teuchos::rcp(new Tpetra::Vector<>(map));
 
     // Fill the vector with values
     double value;

@@ -1531,7 +1531,7 @@ protected:
                 TSparseSpace::GlobalAssemble(r_T);
             } else {
             #ifdef HAVE_TPETRA
-                if (r_T.isAssemblyActive()) r_T.endAssembly();
+                r_T.endAssembly();
                 if (r_T.isFillActive()) r_T.fillComplete();
             #endif
             }

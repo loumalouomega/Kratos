@@ -780,9 +780,7 @@ public:
         if (!rDest.isFillActive()) rDest.resumeFill();
         auto p_fe_Dest = dynamic_cast<MatrixType*>(&rDest);
         if (p_fe_Dest) {
-            if (!p_fe_Dest->isAssemblyActive()) {
-                p_fe_Dest->beginAssembly();
-            }
+            p_fe_Dest->beginAssembly();
         }
         for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
             const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
@@ -798,9 +796,7 @@ public:
             }
         }
         if (p_fe_Dest) {
-            if (p_fe_Dest->isAssemblyActive()) {
-                p_fe_Dest->endAssembly();
-            }
+            p_fe_Dest->endAssembly();
         }
         if (rDest.isFillActive()) rDest.fillComplete();
     }
@@ -846,9 +842,7 @@ public:
         if (!rA.isFillActive()) {
             rA.resumeFill();
         }
-        if (!rA.isAssemblyActive()) {
-            rA.beginAssembly();
-        }
+        rA.beginAssembly();
         const GO globalRow = static_cast<GO>(i);
         const GO globalCol = static_cast<GO>(j);
         const ST val = static_cast<ST>(value);
@@ -951,9 +945,7 @@ public:
         if (!rA.isFillActive()) {
             rA.resumeFill();
         }
-        if (!rA.isAssemblyActive()) {
-            rA.beginAssembly();
-        }
+        rA.beginAssembly();
         rA.setAllToScalar(0.0);
     }
 
@@ -965,9 +957,7 @@ public:
     {
         auto p_fe_rX = dynamic_cast<Tpetra::FEMultiVector<ST, LO, GO, NT>*>(&rX);
         if (p_fe_rX) {
-            if (!p_fe_rX->isAssemblyActive()) {
-                p_fe_rX->beginAssembly();
-            }
+            p_fe_rX->beginAssembly();
         }
         rX.putScalar(static_cast<ST>(0));
     }
@@ -1050,7 +1040,9 @@ public:
                 global_indices[i] = static_cast<GO>(indices[i]);
                 values[i] = rRHSContribution[i];
             }
-            rb.sumIntoGlobalValues(static_cast<GO>(indices.size()), global_indices.data(), values.data());
+            for (std::size_t i = 0; i < global_indices.size(); ++i) {
+                rb.sumIntoGlobalValue(global_indices[i], values[i]);
+            }
         }
     }
 
@@ -1616,7 +1608,7 @@ public:
      */
     inline static const CommunicatorType& GetCommunicator(const VectorType& rV)
     {
-        return *(rV.getMap()->getComm());
+        return dynamic_cast<const CommunicatorType&>(*(rV.getMap()->getComm()));
     }
 
     /**
@@ -1626,7 +1618,7 @@ public:
      */
     inline static const CommunicatorType& GetCommunicator(const MatrixType& rA)
     {
-        return *(rA.getMap()->getComm());
+        return dynamic_cast<const CommunicatorType&>(*(rA.getMap()->getComm()));
     }
 
     /// @brief Global assembly on a Tpetra FECrsMatrix - no-op (lifecycle managed by structure builders).
@@ -1639,9 +1631,7 @@ public:
     {
         auto p_fe_rb = dynamic_cast<Tpetra::FEMultiVector<ST, LO, GO, NT>*>(&rV);
         if (p_fe_rb) {
-            if (p_fe_rb->isAssemblyActive()) {
-                p_fe_rb->endAssembly();
-            }
+            p_fe_rb->endAssembly();
         }
     }
 
@@ -1650,9 +1640,7 @@ public:
      */
     static void ManualFinalize(MatrixType& rA)
     {
-        if (rA.isAssemblyActive()) {
-            rA.endAssembly();
-        }
+        rA.endAssembly();
         if (rA.isFillActive()) {
             rA.fillComplete();
         }
