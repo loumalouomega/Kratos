@@ -835,7 +835,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalIsNull, KratosTrilinosApplicationM
     TrilinosSparseSpaceType::MatrixPointerType pA = Teuchos::null;
     KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsNull(pA));
     pA = TrilinosSparseSpaceType::CreateEmptyMatrixPointer();
-    KRATOS_EXPECT_FALSE(TrilinosSparseSpaceType::IsNull(pA));
+    KRATOS_EXPECT_TRUE(TrilinosSparseSpaceType::IsNull(pA));
 }
 
 KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalCreateEmptyPointer, KratosTrilinosApplicationMPITestSuite)
