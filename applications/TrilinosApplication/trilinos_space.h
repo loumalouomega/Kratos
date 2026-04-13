@@ -322,6 +322,16 @@ public:
     }
 
     /**
+     * @brief Creates a copy of a vector.
+     * @param src The source vector
+     * @return Shared pointer to a deep copy of src
+     */
+    static VectorPointerType CreateVectorCopy(const VectorType& src)
+    {
+        return VectorPointerType(new VectorType(src));
+    }
+
+    /**
      * @brief This method creates an empty pointer to a matrix using epetra communicator
      * @param rComm The epetra communicator
      * @return The pointer to the matrix
