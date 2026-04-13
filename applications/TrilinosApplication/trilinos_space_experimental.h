@@ -779,7 +779,11 @@ public:
         const CrsMatrixType& rSrc = *aux_Y;
         if (!rDest.isFillActive()) rDest.resumeFill();
         auto p_fe_Dest = dynamic_cast<MatrixType*>(&rDest);
-        if (p_fe_Dest) p_fe_Dest->beginAssembly();
+        if (p_fe_Dest) {
+            if (!p_fe_Dest->isAssemblyActive()) {
+                p_fe_Dest->beginAssembly();
+            }
+        }
         for (LO i = 0; i < static_cast<LO>(rSrc.getLocalNumRows()); ++i) {
             const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
@@ -790,7 +794,7 @@ public:
                 for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
                     global_cols[j] = rSrc.getColMap()->getGlobalElement(local_cols(j));
                 }
-                rDest.replaceGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
+                rDest.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
         if (p_fe_Dest) {
@@ -843,7 +847,7 @@ public:
             rA.resumeFill();
         }
         if (!rA.isAssemblyActive()) {
-        rA.beginAssembly();
+            rA.beginAssembly();
         }
         const GO globalRow = static_cast<GO>(i);
         const GO globalCol = static_cast<GO>(j);
@@ -947,7 +951,9 @@ public:
         if (!rA.isFillActive()) {
             rA.resumeFill();
         }
-        rA.beginAssembly();
+        if (!rA.isAssemblyActive()) {
+            rA.beginAssembly();
+        }
         rA.setAllToScalar(0.0);
     }
 
@@ -958,7 +964,11 @@ public:
     inline static void SetToZero(VectorType& rX)
     {
         auto p_fe_rX = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rX);
-        if (p_fe_rX) p_fe_rX->beginAssembly();
+        if (p_fe_rX) {
+            if (!p_fe_rX->isAssemblyActive()) {
+                p_fe_rX->beginAssembly();
+            }
+        }
         rX.putScalar(static_cast<ST>(0));
     }
 
@@ -988,12 +998,6 @@ public:
         }
 
         if (!indices.empty()) {
-            if (!rA.isFillActive()) {
-                rA.resumeFill();
-            }
-            if (!rA.isAssemblyActive()) {
-                rA.beginAssembly();
-            }
             std::vector<GO> global_indices(indices.size());
             for (std::size_t i = 0; i < indices.size(); ++i) {
                 global_indices[i] = static_cast<GO>(indices[i]);
@@ -1040,12 +1044,6 @@ public:
         }
 
         if (!indices.empty()) {
-            auto p_fe_rb = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rb);
-            if (p_fe_rb) {
-                if (!p_fe_rb->isAssemblyActive()) {
-                    p_fe_rb->beginAssembly();
-                }
-            }
             std::vector<GO> global_indices(indices.size());
             std::vector<ST> values(indices.size());
             for (std::size_t i = 0; i < indices.size(); ++i) {
@@ -1631,18 +1629,9 @@ public:
         return *(rA.getMap()->getComm());
     }
 
-    /// @brief Global assembly on a Tpetra FECrsMatrix (calls endAssembly and fillComplete).
+    /// @brief Global assembly on a Tpetra FECrsMatrix - no-op (lifecycle managed by structure builders).
     static void GlobalAssemble(MatrixType& rA)
     {
-        auto p_fe_rA = dynamic_cast<MatrixType*>(&rA);
-        if (p_fe_rA) {
-            if (p_fe_rA->isAssemblyActive()) {
-                p_fe_rA->endAssembly();
-            }
-        }
-        if (rA.isFillActive()) {
-            rA.fillComplete();
-        }
     }
 
     /// @brief Global assembly on a Tpetra Vector.
@@ -1653,6 +1642,19 @@ public:
             if (p_fe_rb->isAssemblyActive()) {
                 p_fe_rb->endAssembly();
             }
+        }
+    }
+
+    /**
+     * @brief Manually finalizes matrix assembly.
+     */
+    static void ManualFinalize(MatrixType& rA)
+    {
+        if (rA.isAssemblyActive()) {
+            rA.endAssembly();
+        }
+        if (rA.isFillActive()) {
+            rA.fillComplete();
         }
     }
 
@@ -1686,7 +1688,6 @@ public:
         graph->endAssembly();
         graph->fillComplete();
         rpA = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
-        rpA->resumeFill();
         if (!rpb || Size(*rpb) != equationSystemSize)
             rpb = Teuchos::rcp(new VectorType(pMap));
         if (!rpDx || Size(*rpDx) != equationSystemSize)
@@ -1774,7 +1775,6 @@ public:
         graph->endAssembly();
         graph->fillComplete();
         rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
-        rpT->resumeFill();
         rpConstantVector = Teuchos::rcp(new VectorType(pMap));
     }
 
