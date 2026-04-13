@@ -201,6 +201,13 @@ public:
     }
 
     /**
+     * @brief Manually finalizes matrix assembly (no-op for Epetra).
+     */
+    static void ManualFinalize(MatrixType& rA)
+    {
+    }
+
+    /**
      * @brief This method returns the map of the vector
      * @param rV The vector considered
      * @return The map of the vector
