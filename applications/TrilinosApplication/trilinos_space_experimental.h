@@ -320,7 +320,8 @@ public:
         MatrixType& rY
         )
     {
-        rY = rX;
+        // FECrsMatrix copy assignment is unreliable; use CopyMatrixValues instead
+        CopyMatrixValues(rY, rX);
     }
 
     /**
@@ -334,7 +335,8 @@ public:
         VectorType& rY
         )
     {
-        rY = rX;
+        // FEMultiVector has deleted copy assignment; use update instead
+        rY.update(1.0, rX, 0.0);
     }
 
     /**
@@ -866,6 +868,8 @@ public:
         const GO globalCol = static_cast<GO>(j);
         const ST val = static_cast<ST>(value);
         rA.replaceGlobalValues(globalRow, 1, &val, &globalCol);
+        rA.endAssembly();
+        if (rA.isFillActive()) rA.fillComplete();
     }
 
     /**
@@ -1136,24 +1140,34 @@ public:
         // Get the total size of the index array
         const std::size_t tot_size = IndexArray.size();
 
-        // Create a Map with the desired indices
-        Teuchos::ArrayView<const IndexType> indexArrayView(IndexArray.data(), IndexArray.size());
-        MapPointerType dof_update_map = Tpetra::createNonContigMapWithNode<IndexType, IndexType>(indexArrayView, rX.getMap()->getComm());
+        // Convert to the correct GO type for Tpetra
+        std::vector<GO> global_indices(tot_size);
+        for (std::size_t i = 0; i < tot_size; ++i) {
+            global_indices[i] = static_cast<GO>(IndexArray[i]);
+        }
 
-        // Define the Importer
-        Tpetra::Import<IndexType, IndexType> importer(dof_update_map, rX.getMap());
+        // Create a Map with the desired indices using the correct Tpetra types
+        auto pComm = rX.getMap()->getComm();
+        auto dof_update_map = Tpetra::createNonContigMapWithNode<LO, GO, NT>(
+            Teuchos::ArrayView<const GO>(global_indices.data(), tot_size), pComm);
 
-        // Create a temporary vector to gather the values
-        VectorType temp(dof_update_map);
+        // Define importer: source=rX.getMap(), target=dof_update_map
+        Tpetra::Import<LO, GO, NT> importer(rX.getMap(), dof_update_map);
+
+        // Use a plain MultiVector (FEMultiVector has no single-map constructor)
+        Tpetra::MultiVector<ST, LO, GO, NT> temp(dof_update_map, 1);
 
         // Import the values from rX into the temp vector
         temp.doImport(rX, importer, Tpetra::INSERT);
 
-        // Extract the values from the temp vector
-        temp.get1dCopy(Teuchos::ArrayView<double>(pValues, tot_size));
+        // Extract values via local view
+        auto localView = temp.getLocalViewHost(Tpetra::Access::ReadOnly);
+        for (std::size_t i = 0; i < tot_size; ++i) {
+            pValues[i] = static_cast<double>(localView(i, 0));
+        }
 
         // Synchronize processes
-        rX.getMap()->getComm()->barrier();
+        pComm->barrier();
 
         KRATOS_CATCH("")
     }
