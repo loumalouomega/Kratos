@@ -204,66 +204,70 @@ public:
         ModelPart& r_model_part
     ) override
     {
-        std::vector<int> global_ids(rdof_set.size());
-        std::vector<double> dofs_values(rdof_set.size());
+        if constexpr (std::is_same_v<typename TSparseSpaceType::CommunicatorType, Epetra_MpiComm>) {
+            std::vector<int> global_ids(rdof_set.size());
+            std::vector<double> dofs_values(rdof_set.size());
 
-        IndexType i = 0;
-        for (const auto& dof : rdof_set) {
-            const int global_id = dof.EquationId();
-            global_ids[i] = global_id;
-            dofs_values[i] = dof.GetSolutionStepValue();
-            ++i;
-        }
+            IndexType i = 0;
+            for (const auto& dof : rdof_set) {
+                const int global_id = dof.EquationId();
+                global_ids[i] = global_id;
+                dofs_values[i] = dof.GetSolutionStepValue();
+                ++i;
+            }
 
-        Epetra_Map localmap(-1, global_ids.size(), global_ids.data(), 0, rA.Comm());
-        Epetra_Vector dofs_local(Copy, localmap, dofs_values.data());
+            Epetra_Map localmap(-1, global_ids.size(), global_ids.data(), 0, rA.Comm());
+            Epetra_Vector dofs_local(Copy, localmap, dofs_values.data());
 
-        Epetra_Import dirichlet_importer(rA.ColMap(), dofs_local.Map());
+            Epetra_Import dirichlet_importer(rA.ColMap(), dofs_local.Map());
 
-        // defining a temporary vector to gather all of the values needed
-        Epetra_Vector dofs(rA.ColMap());
+            // defining a temporary vector to gather all of the values needed
+            Epetra_Vector dofs(rA.ColMap());
 
-        // importing in the new temp vector the values
-        int ierr = dofs.Import(dofs_local, dirichlet_importer, Insert);
-        if (ierr != 0)
-            KRATOS_ERROR << "Epetra failure found";
+            // importing in the new temp vector the values
+            int ierr = dofs.Import(dofs_local, dirichlet_importer, Insert);
+            if (ierr != 0)
+                KRATOS_ERROR << "Epetra failure found";
 
-        for (int i = 0; i < rA.NumMyRows(); i++) {
-            int numEntries; // number of non-zero entries
-            double* vals;   // row non-zero values
-            int* cols;      // column indices of row non-zero values
-            rA.ExtractMyRowView(i, numEntries, vals, cols);
+            for (int i = 0; i < rA.NumMyRows(); i++) {
+                int numEntries; // number of non-zero entries
+                double* vals;   // row non-zero values
+                int* cols;      // column indices of row non-zero values
+                rA.ExtractMyRowView(i, numEntries, vals, cols);
 
-            for (int j = 0; j < numEntries; j++) {
-                const double value = vals[j];
-                if (value > 0.0) {
-                    const int row_gid = rA.RowMap().GID(i);
-                    const int col_gid = rA.ColMap().GID(cols[j]);
-                    if (row_gid > col_gid) {
-                        Matrix LHS(2, 2);
-                        LHS(0, 0) = value;
-                        LHS(0, 1) = -value;
-                        LHS(1, 0) = -value;
-                        LHS(1, 1) = value;
-                        Vector dofs_sol(2);
-                        int row_lid = localmap.LID(row_gid);
-                        dofs_sol[0] = dofs_local[row_lid];
-                        dofs_sol[1] = dofs[cols[j]];
-                        Vector RHS = -prod(LHS, dofs_sol);
-                        Element::EquationIdVectorType equations_ids = {static_cast<std::size_t>(row_gid), static_cast<std::size_t>(col_gid)};
-                        TSparseSpaceType::AssembleLHS(rA, LHS, equations_ids);
-                        TSparseSpaceType::AssembleRHS(rB, RHS, equations_ids);
+                for (int j = 0; j < numEntries; j++) {
+                    const double value = vals[j];
+                    if (value > 0.0) {
+                        const int row_gid = rA.RowMap().GID(i);
+                        const int col_gid = rA.ColMap().GID(cols[j]);
+                        if (row_gid > col_gid) {
+                            Matrix LHS(2, 2);
+                            LHS(0, 0) = value;
+                            LHS(0, 1) = -value;
+                            LHS(1, 0) = -value;
+                            LHS(1, 1) = value;
+                            Vector dofs_sol(2);
+                            int row_lid = localmap.LID(row_gid);
+                            dofs_sol[0] = dofs_local[row_lid];
+                            dofs_sol[1] = dofs[cols[j]];
+                            Vector RHS = -prod(LHS, dofs_sol);
+                            Element::EquationIdVectorType equations_ids = {static_cast<std::size_t>(row_gid), static_cast<std::size_t>(col_gid)};
+                            TSparseSpaceType::AssembleLHS(rA, LHS, equations_ids);
+                            TSparseSpaceType::AssembleRHS(rB, RHS, equations_ids);
 
+                        }
                     }
                 }
             }
-        }
 
-        rA.GlobalAssemble();
-        rB.GlobalAssemble();
+            rA.GlobalAssemble();
+            rB.GlobalAssemble();
 
-        if (mpLinearSolver->AdditionalPhysicalDataIsNeeded()) {
-            mpLinearSolver->ProvideAdditionalData(rA,rX,rB,rdof_set,r_model_part);
+            if (mpLinearSolver->AdditionalPhysicalDataIsNeeded()) {
+                mpLinearSolver->ProvideAdditionalData(rA,rX,rB,rdof_set,r_model_part);
+            }
+        } else {
+            KRATOS_ERROR << "TrilinosMonotonicityPreservingSolver is not implemented for Tpetra";
         }
     }
 

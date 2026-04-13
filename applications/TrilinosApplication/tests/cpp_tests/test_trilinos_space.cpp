@@ -797,7 +797,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosGetMap, KratosTrilinosApplicationMPITestSuite)
     const auto& r_comm = Testing::GetDefaultDataCommunicator();
     const int size = 2 * r_comm.Size();
     auto vector = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size);
-    auto& r_map = TrilinosSparseSpaceType::GetMap(*vector);
+    auto& r_map = TrilinosSparseSpaceType::GetMap(vector);
     KRATOS_EXPECT_EQ(size, r_map.NumGlobalElements());
 }
 
@@ -806,7 +806,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosGetCommunicator, KratosTrilinosApplicationMPIT
     const auto& r_comm = Testing::GetDefaultDataCommunicator();
     const int size = 2 * r_comm.Size();
     auto vector = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size);
-    auto& r_trilinos_comm = TrilinosSparseSpaceType::GetCommunicator(*vector);
+    auto& r_trilinos_comm = TrilinosSparseSpaceType::GetCommunicator(vector);
     KRATOS_EXPECT_EQ(r_comm.Rank(), r_trilinos_comm.MyPID());
 }
 
@@ -816,8 +816,8 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosGlobalAssemble, KratosTrilinosApplicationMPITe
     const int size = 2 * r_comm.Size();
     auto vector = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size);
     auto matrix = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size);
-    TrilinosSparseSpaceType::GlobalAssemble(*vector);
-    TrilinosSparseSpaceType::GlobalAssemble(*matrix);
+    TrilinosSparseSpaceType::GlobalAssemble(vector);
+    TrilinosSparseSpaceType::GlobalAssemble(matrix);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(TrilinosBuildSystemStructure, KratosTrilinosApplicationMPITestSuite)

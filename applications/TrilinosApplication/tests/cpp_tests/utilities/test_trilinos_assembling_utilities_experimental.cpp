@@ -115,24 +115,24 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMatrixSetValue, KratosTrilinosAppl
     }
 
     // Solution global
+    if (!matrix->isFillActive()) matrix->resumeFill();
     matrix->beginAssembly();
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities<TrilinosSparseSpaceType>::SetGlobalValue(*matrix, rank * 2 + i, rank * 2 + i, 1.0);
     }
-    matrix->endAssembly();
-    matrix->fillComplete();
+    TrilinosSparseSpaceType::GlobalAssemble(*matrix);
 
     // Check global
     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*matrix, local_matrix);
 
     // Solution local
     TrilinosSparseSpaceType::SetToZero(*matrix);
+    if (!matrix->isFillActive()) matrix->resumeFill();
     matrix->beginAssembly();
     for (int i = 0; i < 2; ++i) {
         TrilinosAssemblingUtilities<TrilinosSparseSpaceType>::SetLocalValue(*matrix, i, i, 1.0);
     }
-    matrix->endAssembly();
-    matrix->fillComplete();
+    TrilinosSparseSpaceType::GlobalAssemble(*matrix);
 
     // Check local
     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*matrix, local_matrix);
@@ -153,20 +153,25 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMatrixSetGlobalValueWithoutGlobalA
     }
 
     // Solution global
+    if (!matrix->isFillActive()) matrix->resumeFill();
+    matrix->beginAssembly();
     for (int i = 0; i < 2; ++i) {
-        TrilinosAssemblingUtilities<TrilinosSparseSpaceType>::SetGlobalValueWithoutGlobalAssembly(*matrix, rank * 2 + i, rank * 2 + i, 1.0);
+        TrilinosAssemblingUtilities<TrilinosSparseSpaceType>::SetGlobalValue(*matrix, rank * 2 + i, rank * 2 + i, 1.0);
     }
-    matrix->endAssembly();
+    TrilinosSparseSpaceType::GlobalAssemble(*matrix);
 
     // Check global
     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*matrix, local_matrix);
 
     // Solution local
     TrilinosSparseSpaceType::SetToZero(*matrix);
+    if (!matrix->isFillActive()) matrix->resumeFill();
+    matrix->beginAssembly();
     for (int i = 0; i < 2; ++i) {
-        TrilinosAssemblingUtilities<TrilinosSparseSpaceType>::SetLocalValueWithoutGlobalAssembly(*matrix, i, i, 1.0);
+        TrilinosAssemblingUtilities<TrilinosSparseSpaceType>::SetLocalValue(*matrix, i, i, 1.0);
     }
-    matrix->endAssembly();
+    TrilinosSparseSpaceType::GlobalAssemble(*matrix);
+
 
     // Check local
     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrixFromLocalMatrix(*matrix, local_matrix);

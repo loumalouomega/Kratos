@@ -37,7 +37,7 @@ namespace py = pybind11;
 typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
 typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
 #ifdef HAVE_TPETRA
-typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>> TrilinosExperimentalSparseSpaceType;
+typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>> TrilinosExperimentalSparseSpaceType;
 #endif
 
 template <class TSparseSpace, class TValueType, unsigned int TDim>

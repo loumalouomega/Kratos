@@ -18,7 +18,7 @@
 // External includes
 
 // Project includes
-#include "includes/define.h"
+#include "trilinos_space.h"
 #include "trilinos_space_experimental.h"
 #include "factories/linear_solver_factory.h"
 
@@ -106,7 +106,7 @@ void RegisterTrilinosLinearSolvers();
 
 typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
 #ifdef HAVE_TPETRA
-typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>> TrilinosExperimentalSparseSpaceType;
+typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<>> TrilinosExperimentalSparseSpaceType;
 #endif
 typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
 

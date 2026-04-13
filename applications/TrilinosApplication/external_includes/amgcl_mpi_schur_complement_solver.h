@@ -188,81 +188,84 @@ public:
     {
         KRATOS_TRY
 
-        //using amgcl::prof;
-        //prof.reset();
+        if constexpr (std::is_same_v<typename TSparseSpaceType::CommunicatorType, Epetra_MpiComm>) {
+            //using amgcl::prof;
+            //prof.reset();
 
-        MPI_Comm the_comm = TrilinosSolverUtilities::GetMPICommFromEpetraComm(rA.Comm());
+            MPI_Comm the_comm = TrilinosSolverUtilities::GetMPICommFromEpetraComm(rA.Comm());
 
-        amgcl::mpi::communicator world ( the_comm );
-        if ( mVerbosity >=0 && world.rank == 0 ) {
-            std::cout << "World size: " << world.size << std::endl;
-        }
-
-        int chunk = rA.NumMyRows();
-        boost::iterator_range<double*> xrange ( rX.Values(), rX.Values() + chunk );
-        boost::iterator_range<double*> frange ( rB.Values(), rB.Values() + chunk );
-
-        if ( mVerbosity > 1 && world.rank == 0 ) {
-            write_json ( std::cout, mprm );
-        }
-
-        typedef amgcl::backend::builtin<double> Backend;
-
-        typedef  amgcl::mpi::make_solver<
-            amgcl::mpi::schur_pressure_correction<
-                amgcl::mpi::make_solver<
-                    amgcl::mpi::block_preconditioner<
-                        amgcl::relaxation::as_preconditioner<Backend, amgcl::runtime::relaxation::wrapper>
-                        >,
-                    amgcl::runtime::mpi::solver::wrapper<Backend>
-                    >,
-                amgcl::mpi::make_solver<
-                    amgcl::mpi::amg<
-                        Backend,
-                        amgcl::runtime::mpi::coarsening::wrapper<Backend>,
-                        amgcl::runtime::mpi::relaxation::wrapper<Backend>,
-                        amgcl::runtime::mpi::direct::solver<double>,
-                        amgcl::runtime::mpi::partition::wrapper<Backend>
-                        >,
-                    amgcl::runtime::mpi::solver::wrapper<Backend>
-                    >
-                >,
-            amgcl::runtime::mpi::solver::wrapper<Backend>
-            > Solver;
-
-        mprm.put("precond.pmask", static_cast<void*>(&mPressureMask[0]));
-        mprm.put("precond.pmask_size", mPressureMask.size());
-
-        //prof.tic ( "setup" );
-        Solver solve ( world, amgcl::adapter::map ( rA ), mprm );
-        //double tm_setup = prof.toc ( "setup" );
-
-        //prof.tic ( "Solve" );
-        size_t iters;
-        double resid;
-        std::tie ( iters, resid ) = solve ( frange, xrange );
-        //double solve_tm = prof.toc ( "Solve" );
-
-
-
-        if ( rA.Comm().MyPID() == 0 ) {
-            if ( mVerbosity > 0 ) {
-                std::cout
-                        << "------- AMGCL -------\n" << std::endl
-                        << "Iterations      : " << iters   << std::endl
-                        << "Error           : " << resid   << std::endl;
-                        //<< "amgcl setup time: " << tm_setup   << std::endl
-                        //<< "amgcl solve time: " << solve_tm   << std::endl;
+            amgcl::mpi::communicator world ( the_comm );
+            if ( mVerbosity >=0 && world.rank == 0 ) {
+                std::cout << "World size: " << world.size << std::endl;
             }
 
-            // if ( mVerbosity > 1 ) {
-            //     std::cout << prof  << std::endl;
-            // }
+            int chunk = rA.NumMyRows();
+            boost::iterator_range<double*> xrange ( rX.Values(), rX.Values() + chunk );
+            boost::iterator_range<double*> frange ( rB.Values(), rB.Values() + chunk );
+
+            if ( mVerbosity > 1 && world.rank == 0 ) {
+                write_json ( std::cout, mprm );
+            }
+
+            typedef amgcl::backend::builtin<double> Backend;
+
+            typedef  amgcl::mpi::make_solver<
+                amgcl::mpi::schur_pressure_correction<
+                    amgcl::mpi::make_solver<
+                        amgcl::mpi::block_preconditioner<
+                            amgcl::relaxation::as_preconditioner<Backend, amgcl::runtime::relaxation::wrapper>
+                            >,
+                        amgcl::runtime::mpi::solver::wrapper<Backend>
+                        >,
+                    amgcl::mpi::make_solver<
+                        amgcl::mpi::amg<
+                            Backend,
+                            amgcl::runtime::mpi::coarsening::wrapper<Backend>,
+                            amgcl::runtime::mpi::relaxation::wrapper<Backend>,
+                            amgcl::runtime::mpi::direct::solver<double>,
+                            amgcl::runtime::mpi::partition::wrapper<Backend>
+                            >,
+                        amgcl::runtime::mpi::solver::wrapper<Backend>
+                        >
+                    >,
+                amgcl::runtime::mpi::solver::wrapper<Backend>
+                > Solver;
+
+            mprm.put("precond.pmask", static_cast<void*>(&mPressureMask[0]));
+            mprm.put("precond.pmask_size", mPressureMask.size());
+
+            //prof.tic ( "setup" );
+            Solver solve ( world, amgcl::adapter::map ( rA ), mprm );
+            //double tm_setup = prof.toc ( "setup" );
+
+            //prof.tic ( "Solve" );
+            size_t iters;
+            double resid;
+            std::tie ( iters, resid ) = solve ( frange, xrange );
+            //double solve_tm = prof.toc ( "Solve" );
+
+
+
+            if ( rA.Comm().MyPID() == 0 ) {
+                if ( mVerbosity > 0 ) {
+                    std::cout
+                            << "------- AMGCL -------\n" << std::endl
+                            << "Iterations      : " << iters   << std::endl
+                            << "Error           : " << resid   << std::endl;
+                            //<< "amgcl setup time: " << tm_setup   << std::endl
+                            //<< "amgcl solve time: " << solve_tm   << std::endl;
+                }
+
+                // if ( mVerbosity > 1 ) {
+                //     std::cout << prof  << std::endl;
+                // }
+            }
+
+            return true;
+        } else {
+            KRATOS_ERROR << "AmgclMPISchurComplementSolver is not implemented for Tpetra";
+            return false;
         }
-
-
-
-        return true;
 
         KRATOS_CATCH ( "" );
     }
@@ -315,36 +318,38 @@ public:
         ModelPart& rModelPart
     ) override
     {
+        if constexpr (std::is_same_v<typename TSparseSpaceType::CommunicatorType, Epetra_MpiComm>) {
+            int my_pid = rA.Comm().MyPID();
 
-        int my_pid = rA.Comm().MyPID();
+            //filling the pressure mask
+            if(mPressureMask.size() != static_cast<unsigned int>(rA.NumMyRows()))
+                mPressureMask.resize( rA.NumMyRows(), false );
 
-        //filling the pressure mask
-        if(mPressureMask.size() != static_cast<unsigned int>(rA.NumMyRows()))
-            mPressureMask.resize( rA.NumMyRows(), false );
-
-        int counter = 0;
+            int counter = 0;
 #ifdef KRATOS_DEBUG
-        int npressures = 0;
+            int npressures = 0;
 #endif
-        for (ModelPart::DofsArrayType::iterator it = rDofSet.begin(); it!=rDofSet.end(); it++)
-        {
-            if( it->GetSolutionStepValue ( PARTITION_INDEX ) == my_pid )
+            for (ModelPart::DofsArrayType::iterator it = rDofSet.begin(); it!=rDofSet.end(); it++)
             {
-                mPressureMask[counter]  = (it->GetVariable().Key() == PRESSURE);
-                counter++;
+                if( it->GetSolutionStepValue ( PARTITION_INDEX ) == my_pid )
+                {
+                    mPressureMask[counter]  = (it->GetVariable().Key() == PRESSURE);
+                    counter++;
 
 #ifdef KRATOS_DEBUG
-                if(it->GetVariable().Key() == PRESSURE)
-                   npressures++;
+                    if(it->GetVariable().Key() == PRESSURE)
+                       npressures++;
 #endif
+                }
             }
-        }
 #ifdef KRATOS_DEBUG
-    std::cout << "MPI proc :" << my_pid << " npressures = " << npressures << " local rows = " << rA.NumMyRows();
+        std::cout << "MPI proc :" << my_pid << " npressures = " << npressures << " local rows = " << rA.NumMyRows();
 #endif
-        if(counter != rA.NumMyRows())
-            KRATOS_ERROR << "pressure mask as a size " << mPressureMask.size() << " which does not correspond with the number of local rows:" << rA.NumMyRows() << std::endl;
-
+            if(counter != rA.NumMyRows())
+                KRATOS_ERROR << "pressure mask as a size " << mPressureMask.size() << " which does not correspond with the number of local rows:" << rA.NumMyRows() << std::endl;
+        } else {
+            KRATOS_ERROR << "AmgclMPISchurComplementSolver is not implemented for Tpetra";
+        }
     }
 
     /// Print information about this object.

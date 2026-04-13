@@ -27,6 +27,7 @@
 #include <Epetra_IntSerialDenseVector.h>
 #include <Epetra_SerialDenseMatrix.h>
 #include <Epetra_SerialDenseVector.h>
+#include <Epetra_FECrsGraph.h>
 #include <EpetraExt_CrsMatrixIn.h>
 #include <EpetraExt_VectorIn.h>
 #include <EpetraExt_RowMatrixOut.h>
@@ -214,7 +215,7 @@ public:
      */
     inline static const MapType& GetMap(const VectorType& rV)
     {
-        return rV.Map();
+        return dynamic_cast<const MapType&>(rV.Map());
     }
 
     /**
@@ -224,7 +225,7 @@ public:
      */
     inline static const CommunicatorType& GetCommunicator(const VectorType& rV)
     {
-        return rV.Comm();
+        return dynamic_cast<const CommunicatorType&>(rV.Comm());
     }
 
     /**

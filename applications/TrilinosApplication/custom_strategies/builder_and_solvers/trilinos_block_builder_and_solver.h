@@ -24,7 +24,6 @@
 #ifdef HAVE_TPETRA
 #include <Tpetra_FECrsGraph.hpp>
 #include <Tpetra_FECrsMatrix.hpp>
-#include <Tpetra_FEVector.hpp>
 #include <Tpetra_Vector.hpp>
 #include <Teuchos_RCP.hpp>
 #include <Teuchos_OrdinalTraits.hpp>
@@ -596,6 +595,7 @@ public:
         // Finalizing the assembly
         TSparseSpace::GlobalAssemble(rb);
 
+
         STOP_TIMER("BuildRHS ", 0)
 
         KRATOS_CATCH("")
@@ -782,7 +782,7 @@ public:
             }
             BaseType::mpReactionsVector.swap(pNewReactionsVector);
         }
- else {
+        else {
             if (TSparseSpace::Size1(*rpA) == 0 ||
                 TSparseSpace::Size1(*rpA) != BaseType::mEquationSystemSize ||
                 TSparseSpace::Size2(*rpA) != BaseType::mEquationSystemSize) {
@@ -791,6 +791,12 @@ public:
         }
 
         ConstructMasterSlaveConstraintsStructure(rModelPart);
+
+        // Finalize assembly after all structure is built
+        TSparseSpace::GlobalAssemble(*rpA);
+        if (!TSparseSpace::IsNull(mpT)) {
+            TSparseSpace::GlobalAssemble(*mpT);
+        }
 
         KRATOS_CATCH("")
     }
@@ -1360,7 +1366,8 @@ protected:
                 all_slave_ids,
                 all_master_ids,
                 mpT,
-                mpConstantVector
+                mpConstantVector,
+                mpMap
             );
 
             /* Fill ids for master/slave */
@@ -1519,7 +1526,15 @@ protected:
             }
 
             // Finalizing the assembly
-            TSparseSpace::GlobalAssemble(r_T);
+            if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
+                TSparseSpace::GlobalAssemble(r_T);
+            } else {
+            #ifdef HAVE_TPETRA
+                if (r_T.isAssemblyActive()) r_T.endAssembly();
+                if (r_T.isFillActive()) r_T.fillComplete();
+            #endif
+            }
+
             TSparseSpace::GlobalAssemble(r_constant_vector);
 
             // Mark constraints as assembled
@@ -1579,14 +1594,14 @@ protected:
             r_const.EquationIdVector(slave_equation_ids_vector, master_equation_ids_vector, r_current_process_info);
             if (slave_equation_ids_vector.size() > 0) {
                 if (master_equation_ids_vector.size() > 0) {
-                    std::vector<int> combined_ids = slave_equation_ids_vector;
+                    std::vector<int> combined_ids(slave_equation_ids_vector.begin(), slave_equation_ids_vector.end());
                     combined_ids.insert(combined_ids.end(), master_equation_ids_vector.begin(), master_equation_ids_vector.end());
                     all_equation_ids.push_back(combined_ids);
                 } else {
-                    all_equation_ids.push_back(slave_equation_ids_vector);
+                    all_equation_ids.emplace_back(slave_equation_ids_vector.begin(), slave_equation_ids_vector.end());
                 }
             } else if (master_equation_ids_vector.size() > 0) {
-                all_equation_ids.push_back(master_equation_ids_vector);
+                all_equation_ids.emplace_back(master_equation_ids_vector.begin(), master_equation_ids_vector.end());
             }
         }
 
@@ -1600,7 +1615,8 @@ protected:
             rpb,
             rpDx,
             BaseType::mpReactionsVector,
-            BaseType::mEquationSystemSize
+            BaseType::mEquationSystemSize,
+            mpMap
         );
 
         STOP_TIMER("MatrixStructure", 0)

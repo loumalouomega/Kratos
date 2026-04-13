@@ -606,6 +606,13 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalScaleAndAddMatrix, KratosTrilinosA
     auto matrix_1 = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 10.0, true, 100);
     auto matrix_2 = TrilinosCPPTestExperimentalUtilities::GenerateDummySparseMatrix(r_comm, size, 20.0, true, 100);
 
+    if (r_comm.Rank() == 0) {
+        auto v1 = matrix_1->getLocalMatrixHost();
+        auto v2 = matrix_2->getLocalMatrixHost();
+        KRATOS_WATCH(v1.values(0));
+        KRATOS_WATCH(v2.values(0));
+    }
+
     // Solution
     TrilinosSparseSpaceType::ScaleAndAdd(2.0, *matrix_1, 3.0, *matrix_2);
 
