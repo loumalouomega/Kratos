@@ -348,7 +348,17 @@ public:
         const VectorType& rY
         )
     {
-        return rX.dot(rY);
+        // FEMultiVector doesn't have a single-value dot(); compute via local views
+        auto localViewX = rX.getLocalViewHost(Tpetra::Access::ReadOnly);
+        auto localViewY = rY.getLocalViewHost(Tpetra::Access::ReadOnly);
+        ST localDot = Teuchos::ScalarTraits<ST>::zero();
+        const auto n = rX.getLocalLength();
+        for (std::size_t i = 0; i < n; ++i) {
+            localDot += localViewX(i, 0) * localViewY(i, 0);
+        }
+        ST globalDot = Teuchos::ScalarTraits<ST>::zero();
+        Teuchos::reduceAll(*rX.getMap()->getComm(), Teuchos::REDUCE_SUM, localDot, Teuchos::outArg(globalDot));
+        return static_cast<double>(globalDot);
     }
 
     /**
@@ -407,8 +417,16 @@ public:
      */
     inline static double TwoNorm(const VectorType& rX)
     {
-        // Use the built-in norm2() method to compute the Euclidean norm (2-norm)
-        return rX.norm2();
+        // FEMultiVector doesn't have a scalar-returning norm2(); compute via local views
+        auto localView = rX.getLocalViewHost(Tpetra::Access::ReadOnly);
+        ST localSumSq = Teuchos::ScalarTraits<ST>::zero();
+        const auto n = rX.getLocalLength();
+        for (std::size_t i = 0; i < n; ++i) {
+            localSumSq += localView(i, 0) * localView(i, 0);
+        }
+        ST globalSumSq = Teuchos::ScalarTraits<ST>::zero();
+        Teuchos::reduceAll(*rX.getMap()->getComm(), Teuchos::REDUCE_SUM, localSumSq, Teuchos::outArg(globalSumSq));
+        return std::sqrt(static_cast<double>(globalSumSq));
     }
 
     /**
@@ -692,7 +710,8 @@ public:
             // Perform the operation x = A * y
             rX.update(A, rY, 0.0);
         } else {
-            rX = rY;
+            // FEMultiVector has deleted copy assignment; use update to copy
+            rX.update(1.0, rY, 0.0);
         }
     }
 
@@ -1095,9 +1114,9 @@ public:
         // Index must be local to this proc
         KRATOS_ERROR_IF(localIndex == Tpetra::Details::OrdinalTraits<IndexType>::invalid()) << " non-local id: " << I << "." << std::endl;
 
-        // Get the value at the specified local index
-        auto data = rX.getData();
-        return data[localIndex];
+        // Get the value at the specified local index via local view (FEMultiVector-compatible)
+        auto localView = rX.getLocalViewHost(Tpetra::Access::ReadOnly);
+        return static_cast<double>(localView(localIndex, 0));
     }
 
     /**
@@ -1368,8 +1387,8 @@ public:
     {
         KRATOS_TRY
 
-        // Create a vector to store the diagonal
-        VectorType diag(rA.getRowMap());
+        // Create a plain Vector (not FEMultiVector) for diagonal copy — getLocalDiagCopy requires Vector
+        Tpetra::Vector<ST, LO, GO, NT> diag(rA.getRowMap());
 
         // Extract the diagonal entries
         rA.getLocalDiagCopy(diag);
@@ -1420,8 +1439,8 @@ public:
     {
         KRATOS_TRY
 
-        // Create a vector to store the diagonal
-        VectorType diag(rA.getRowMap());
+        // Create a plain Vector (not FEMultiVector) for diagonal copy — getLocalDiagCopy requires Vector
+        Tpetra::Vector<ST, LO, GO, NT> diag(rA.getRowMap());
 
         // Extract the diagonal entries
         rA.getLocalDiagCopy(diag);
@@ -1459,8 +1478,8 @@ public:
     {
         KRATOS_TRY
 
-        // Create a vector to store the diagonal
-        VectorType diag(rA.getRowMap());
+        // Create a plain Vector (not FEMultiVector) for diagonal copy — getLocalDiagCopy requires Vector
+        Tpetra::Vector<ST, LO, GO, NT> diag(rA.getRowMap());
 
         // Extract the diagonal entries
         rA.getLocalDiagCopy(diag);
@@ -1767,9 +1786,6 @@ public:
     }
 
     ///@}
-private:
-    ///@name Un accessible methods
-    ///@{
 
     /// @brief Creates an empty VectorType from a map. Handles both Tpetra::FEMultiVector (needs importer+numVecs) and plain Vector/MultiVector.
     inline static VectorPointerType CreateVector(const Teuchos::RCP<const MapType>& pMap)
@@ -1780,6 +1796,10 @@ private:
             return Teuchos::rcp(new VectorType(pMap));
         }
     }
+
+private:
+    ///@name Un accessible methods
+    ///@{
 
     /// Assignment operator.
     TrilinosSpaceExperimental & operator=(TrilinosSpaceExperimental const& rOther);
