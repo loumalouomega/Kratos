@@ -197,7 +197,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalTransposeMultMatrixMatrix, KratosT
     using LO = TrilinosSparseSpaceType::LO;
     using GO = TrilinosSparseSpaceType::GO;
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_mult = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(matrix_1->getRowMap(), matrix_1->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(matrix_1->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(matrix_1->getNodeNumRows()); ++i) {
         const GO global_row = matrix_1->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;
@@ -231,7 +231,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBtDBProductOperation, KratosTrilin
     using LO = TrilinosSparseSpaceType::LO;
     using GO = TrilinosSparseSpaceType::GO;
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_mult = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(matrix_1->getRowMap(), matrix_1->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(matrix_1->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(matrix_1->getNodeNumRows()); ++i) {
         const GO global_row = matrix_1->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;
@@ -250,7 +250,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBtDBProductOperation, KratosTrilin
 
     // Non zero matrix
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> graph_second = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(matrix_1->getRowMap(), matrix_1->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(matrix_1->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(matrix_1->getNodeNumRows()); ++i) {
         const GO global_row = matrix_1->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;
@@ -281,7 +281,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBDBtProductOperation, KratosTrilin
     using LO = TrilinosSparseSpaceType::LO;
     using GO = TrilinosSparseSpaceType::GO;
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_mult = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(matrix_1->getRowMap(), matrix_1->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(matrix_1->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(matrix_1->getNodeNumRows()); ++i) {
         const GO global_row = matrix_1->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;
@@ -300,7 +300,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBDBtProductOperation, KratosTrilin
 
     // Non zero matrix
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> graph_second = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(matrix_1->getRowMap(), matrix_1->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(matrix_1->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(matrix_1->getNodeNumRows()); ++i) {
         const GO global_row = matrix_1->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;
@@ -724,7 +724,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalMultMatrixMatrix, KratosTrilinosAp
     using LO = TrilinosSparseSpaceType::LO;
     using GO = TrilinosSparseSpaceType::GO;
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_mult = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(matrix_1->getRowMap(), matrix_1->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(matrix_1->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(matrix_1->getNodeNumRows()); ++i) {
         const GO global_row = matrix_1->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;
@@ -775,7 +775,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBtDBProductOperationRealCase, Krat
     using LO = TrilinosSparseSpaceType::LO;
     using GO = TrilinosSparseSpaceType::GO;
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_aux = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(A->getRowMap(), A->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(A->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(A->getNodeNumRows()); ++i) {
         const GO global_row = A->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;
@@ -798,7 +798,7 @@ KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBtDBProductOperationRealCase, Krat
     // Compute T^T A T
     // We create a result matrix with enough capacity
     Teuchos::RCP<TrilinosSparseSpaceType::GraphType> p_graph_res = Teuchos::rcp(new TrilinosSparseSpaceType::GraphType(A->getRowMap(), A->getRowMap(), size));
-    for (LO i = 0; i < static_cast<LO>(A->getLocalNumRows()); ++i) {
+    for (LO i = 0; i < static_cast<LO>(A->getNodeNumRows()); ++i) {
         const GO global_row = A->getRowMap()->getGlobalElement(i);
         std::vector<GO> indices(size);
         for (int j = 0; j < size; ++j) indices[j] = j;

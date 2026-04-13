@@ -19,7 +19,7 @@
 /* Trilinos includes */
 #include <Tpetra_Core.hpp>
 #include <Tpetra_Vector.hpp>
-#include <Tpetra_FEVector.hpp>
+#include <Tpetra_FEMultiVector.hpp>
 #include <Tpetra_FECrsMatrix.hpp>
 #include <Tpetra_Map.hpp>
 #include <Tpetra_MultiVector.hpp>
@@ -474,7 +474,7 @@ public:
         if (!rC.isFillActive()) rC.resumeFill();
         auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
         if (p_fe_rC) p_fe_rC->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_C->getLocalNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_C->getNodeNumRows()); ++i) {
             const auto global_row_index = aux_C->getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
             typename MatrixType::values_host_view_type vals;
@@ -540,7 +540,7 @@ public:
         if (!rC.isFillActive()) rC.resumeFill();
         auto p_fe_rC = dynamic_cast<MatrixType*>(&rC);
         if (p_fe_rC) p_fe_rC->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_C->getLocalNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_C->getNodeNumRows()); ++i) {
             const auto global_row_index = aux_C->getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
             typename MatrixType::values_host_view_type vals;
@@ -592,7 +592,7 @@ public:
         if (!rA.isFillActive()) rA.resumeFill();
         auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
         if (p_fe_A) p_fe_A->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_2->getLocalNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
             const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
             typename MatrixType::values_host_view_type vals;
@@ -638,7 +638,7 @@ public:
         if (!rA.isFillActive()) rA.resumeFill();
         auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
         if (p_fe_A) p_fe_A->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_2->getLocalNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
             const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
             typename MatrixType::values_host_view_type vals;
@@ -784,7 +784,7 @@ public:
                 p_fe_Dest->beginAssembly();
             }
         }
-        for (LO i = 0; i < static_cast<LO>(rSrc.getLocalNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
             const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
             typename MatrixType::values_host_view_type vals;
@@ -963,7 +963,7 @@ public:
      */
     inline static void SetToZero(VectorType& rX)
     {
-        auto p_fe_rX = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rX);
+        auto p_fe_rX = dynamic_cast<Tpetra::FEMultiVector<ST, LO, GO, NT>*>(&rX);
         if (p_fe_rX) {
             if (!p_fe_rX->isAssemblyActive()) {
                 p_fe_rX->beginAssembly();
@@ -1195,7 +1195,7 @@ public:
         // New graph with large capacity
         Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(r_row_map, r_row_map, 100));
 
-        const auto numLocalRows = r_row_map->getLocalNumElements();
+        const auto numLocalRows = r_row_map->getNodeNumElements();
 
         // Combine graphs using global indexing
         for (LO i = 0; i < static_cast<LO>(numLocalRows); ++i) {
@@ -1252,7 +1252,7 @@ public:
             if (!rA.isFillActive()) rA.resumeFill();
         }
 
-        for (LO i = 0; i < static_cast<LO>(rB.getLocalNumRows()); ++i) {
+        for (LO i = 0; i < static_cast<LO>(rB.getNodeNumRows()); ++i) {
             const auto global_row_index = rB.getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols_b;
             typename MatrixType::values_host_view_type vals;
@@ -1637,7 +1637,7 @@ public:
     /// @brief Global assembly on a Tpetra Vector.
     static void GlobalAssemble(VectorType& rV)
     {
-        auto p_fe_rb = dynamic_cast<Tpetra::FEVector<ST, LO, GO, NT>*>(&rV);
+        auto p_fe_rb = dynamic_cast<Tpetra::FEMultiVector<ST, LO, GO, NT>*>(&rV);
         if (p_fe_rb) {
             if (p_fe_rb->isAssemblyActive()) {
                 p_fe_rb->endAssembly();
@@ -1713,7 +1713,7 @@ public:
         for (std::size_t i = 0; i < rGlobalIds.size(); ++i)
             is_fixed_map[static_cast<GO>(rGlobalIds[i])] = rIsFixed[i];
         auto p_row_map = rA.getRowMap();
-        const LO num_local_rows = static_cast<LO>(p_row_map->getLocalNumElements());
+        const LO num_local_rows = static_cast<LO>(p_row_map->getNodeNumElements());
         auto rb_view = rb.getLocalViewHost(Tpetra::Access::ReadWrite);
         for (LO local_row = 0; local_row < num_local_rows; ++local_row) {
             const GO global_row = p_row_map->getGlobalElement(local_row);

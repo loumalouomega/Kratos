@@ -44,7 +44,7 @@
 
 #ifdef HAVE_TPETRA
 #include <Tpetra_FECrsMatrix.hpp>
-#include <Tpetra_FEVector.hpp>
+#include <Tpetra_FEMultiVector.hpp>
 #include <Tpetra_Vector.hpp>
 #include <Tpetra_Import.hpp>
 #endif
@@ -67,7 +67,7 @@ class tpetra_map {
             auto p_row_map = A.getRowMap();
             auto p_col_map = A.getColMap();
 
-            GO local_entries = p_row_map->getLocalNumElements();
+            GO local_entries = p_row_map->getNodeNumElements();
             GO entries_before;
             Teuchos::scan(*p_row_map->getComm(), Teuchos::REDUCE_SUM, local_entries, Teuchos::outArg(entries_before));
             entries_before -= local_entries;
@@ -85,7 +85,7 @@ class tpetra_map {
         }
 
         size_t rows() const {
-            return A.getLocalNumRows();
+            return A.getNodeNumRows();
         }
 
         size_t cols() const {
@@ -93,7 +93,7 @@ class tpetra_map {
         }
 
         size_t nonzeros() const {
-            return A.getLocalNumEntries();
+            return A.getNodeNumEntries();
         }
 
         class row_iterator {
@@ -220,11 +220,18 @@ private:
 
 
 #ifdef HAVE_TPETRA
+
+/// Tpetra type aliases mirroring TrilinosSpaceExperimental
+using ST_t = typename Tpetra::FECrsMatrix<>::scalar_type;
+using LO_t = typename Tpetra::FECrsMatrix<>::local_ordinal_type;
+using GO_t = typename Tpetra::FECrsMatrix<>::global_ordinal_type;
+using NT_t = typename Tpetra::FECrsMatrix<>::node_type;
+
 template <>
-struct AMGCLAdaptor<TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>>>
+struct AMGCLAdaptor<TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<ST_t, LO_t, GO_t, NT_t>>>
 {
     using TpetraMatrixType = Tpetra::FECrsMatrix<>;
-    using TpetraVectorType = Tpetra::FEVector<>;
+    using TpetraVectorType = Tpetra::Vector<ST_t, LO_t, GO_t, NT_t>;
 
     template <int BlockSize>
     auto MakeMatrixAdaptor(const TpetraMatrixType& rMatrix)
@@ -245,7 +252,7 @@ struct AMGCLAdaptor<TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEV
     template <class TStaticMatrix>
     std::size_t BlockSystemSize(const TpetraMatrixType& rMatrix) const noexcept
     {
-        return rMatrix.getLocalNumRows() / AMGCLStaticVectorTraits<TStaticMatrix>::value;
+        return rMatrix.getNodeNumRows() / AMGCLStaticVectorTraits<TStaticMatrix>::value;
     }
 
     auto MakeVectorIterator(const TpetraVectorType& rVector) const
@@ -272,7 +279,7 @@ private:
 };
 
 template class KRATOS_API(TRILINOS_APPLICATION) AmgclMPISolver<
-    TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEVector<>>,
+    TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::Vector<ST_t, LO_t, GO_t, NT_t>>,
     UblasSpace<double, Matrix, Vector>
 >;
 #endif

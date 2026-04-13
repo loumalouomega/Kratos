@@ -1350,8 +1350,8 @@ protected:
             for (auto& r_const : r_constraints_array) {
                 r_const.EquationIdVector(slave_equation_ids_vector, master_equation_ids_vector, r_current_process_info);
                 if (slave_equation_ids_vector.size() > 0) {
-                    all_slave_ids.push_back(slave_equation_ids_vector);
-                    all_master_ids.push_back(master_equation_ids_vector);
+                    all_slave_ids.emplace_back(slave_equation_ids_vector.begin(), slave_equation_ids_vector.end());
+                    all_master_ids.emplace_back(master_equation_ids_vector.begin(), master_equation_ids_vector.end());
                     for (auto id : slave_equation_ids_vector) {
                         indices.insert(id);
                     }
@@ -1407,6 +1407,7 @@ protected:
             mSlaveIds = std::vector<IndexType>(auxiliary_slave_ids[current_rank].begin(), auxiliary_slave_ids[current_rank].end());
 
             // Master DoFs are complementary
+            const IndexType number_of_local_rows = mLocalSystemSize;
             std::unordered_set<IndexType> temp_master_ids;
             for (IndexType i = 0; i < number_of_local_rows; ++i) {
                 temp_master_ids.insert(mFirstMyId + i);
@@ -1579,13 +1580,13 @@ protected:
         // Assemble all elements
         for (auto& r_elem : r_elements_array) {
             pScheme->EquationId(r_elem, equation_ids_vector, r_current_process_info);
-            all_equation_ids.push_back(equation_ids_vector);
+            all_equation_ids.emplace_back(equation_ids_vector.begin(), equation_ids_vector.end());
         }
 
         // Assemble all conditions
         for (auto& r_cond : r_conditions_array) {
             pScheme->EquationId(r_cond, equation_ids_vector, r_current_process_info);
-            all_equation_ids.push_back(equation_ids_vector);
+            all_equation_ids.emplace_back(equation_ids_vector.begin(), equation_ids_vector.end());
         }
 
         // Assemble all constraints

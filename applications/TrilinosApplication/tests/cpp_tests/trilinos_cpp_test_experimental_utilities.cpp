@@ -60,7 +60,7 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
     // Begin graph assembly
     graph->resumeFill();
 
-    const int NumMyElements = map->getLocalNumElements();
+    const int NumMyElements = map->getNodeNumElements();
     auto MyGlobalElements = map->getLocalElementList();
     std::vector<GO> nonDiagonalIndices(2); // Define based on your Tpetra types
 
@@ -156,7 +156,7 @@ TrilinosCPPTestExperimentalUtilities::VectorPointerType TrilinosCPPTestExperimen
     Teuchos::RCP<const MapType> map = Teuchos::rcp(new MapType(NumGlobalElements, 0, tpetra_comm));
 
     // Local number of rows
-    const std::size_t NumMyElements = map->getLocalNumElements();
+    const std::size_t NumMyElements = map->getNodeNumElements();
 
     // Get update list
     auto MyGlobalElements = map->getLocalElementList();
@@ -346,7 +346,7 @@ void TrilinosCPPTestExperimentalUtilities::GenerateSparseMatrixIndexAndValuesVec
     }
 
     std::vector<double> values;
-    for (std::size_t i = 0; i < rA.getLocalNumRows(); i++) {
+    for (std::size_t i = 0; i < rA.getNodeNumRows(); i++) {
         typename TrilinosSparseSpaceType::MatrixType::values_host_view_type vals;   // Row non-zero values
         typename TrilinosSparseSpaceType::MatrixType::local_inds_host_view_type cols;      // Column indices of row non-zero values
         rA.getLocalRowView(i, cols, vals);
@@ -413,7 +413,7 @@ TrilinosCPPTestExperimentalUtilities::MatrixPointerType TrilinosCPPTestExperimen
     }
 
     // Local number of rows
-    const int NumMyElements = map->getLocalNumElements();
+    const int NumMyElements = map->getNodeNumElements();
 
     // Get update list
     auto MyGlobalElements = map->getLocalElementList();
