@@ -62,7 +62,7 @@ file(GLOB_RECURSE KRATOS_TRILINOS_PYTHON_INTERFACE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/*.cpp
 )
 
-# Addiing Tpetra definitions
+# Adding Tpetra definitions
 if(HAVE_TPETRA)
     add_definitions(-DHAVE_TPETRA)
 endif()
