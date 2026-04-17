@@ -15,14 +15,15 @@
 // System includes
 
 // External includes
-#include <Epetra_MpiComm.h>
-#include <Epetra_IntSerialDenseVector.h>
 #include <Epetra_SerialDenseVector.h>
 #include <Epetra_FEVector.h>
 #include <Epetra_FECrsMatrix.h>
+#if (HAVE_TPETRA)
+#include <Tpetra_FEMultiVector.hpp>
+#include <Tpetra_FECrsMatrix.hpp>
+#endif
 
 // Project includes
-#include "includes/define.h"
 
 namespace Kratos
 {
@@ -50,7 +51,9 @@ namespace Kratos
  * @class TrilinosAssemblingUtilities
  * @ingroup TrilinosApplication
  * @brief The Trilinos assembling utilities
+ * @details This class provides utility functions for assembling matrices and vectors in Trilinos.
  * @author Vicente Mataix Ferrandiz
+ * @tparam TSparseSpace The sparse space type
  */
 template<class TSparseSpace>
 class TrilinosAssemblingUtilities
@@ -103,7 +106,7 @@ public:
         const std::vector<std::size_t>& rMasterEquationId
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
+        if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
             const unsigned int system_size = rT.NumGlobalRows();
 
             // Count active indices
@@ -143,10 +146,17 @@ public:
                     }
                 }
             }
-        } else {
+        } else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+        #if (HAVE_TPETRA)
             using GO = typename MatrixType::global_ordinal_type;
             using ST = typename MatrixType::scalar_type;
             const std::size_t system_size = rT.getGlobalNumRows();
+
+            // Open for FE assembly if not already active (mirrors lazy-open in AssembleLHS).
+            auto p_fe_T = dynamic_cast<MatrixType*>(&rT);
+            if (p_fe_T && !rT.isFillActive()) {
+                p_fe_T->beginAssembly();
+            }
 
             for (std::size_t i = 0; i < rSlaveEquationId.size(); ++i) {
                 if (rSlaveEquationId[i] < system_size) {
@@ -164,6 +174,11 @@ public:
                     }
                 }
             }
+        #else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+        #endif
+        } else {
+            KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
     }
 
@@ -179,7 +194,7 @@ public:
         const std::vector<std::size_t>& rSlaveEquationId
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
+        if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
             const unsigned int system_size = rC.GlobalLength();
 
             // Count active indices
@@ -206,7 +221,8 @@ public:
                 const int ierr = rC.SumIntoGlobalValues(indices, values);
                 KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
             }
-        } else {
+        } else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+        #if (HAVE_TPETRA)
             using GO = typename VectorType::global_ordinal_type;
             using ST = typename VectorType::scalar_type;
             const std::size_t system_size = rC.getGlobalLength();
@@ -218,6 +234,11 @@ public:
                     rC.sumIntoGlobalValue(global_id, size_t(0), val);
                 }
             }
+        #else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+        #endif
+        } else {
+            KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
     }
 
@@ -229,15 +250,11 @@ public:
      */
     static inline void SetGlobalValue(
         VectorType& rX,
-        IndexType i,
+        const IndexType i,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetGlobalVec(rX, i, Value);
-        } else {
-            rX.replaceGlobalValue(static_cast<typename VectorType::global_ordinal_type>(i), size_t(0), Value);
-        }
+        TSparseSpace::SetGlobalVec(rX, i, Value);
     }
 
     /**
@@ -248,15 +265,11 @@ public:
      */
     static inline void SetGlobalValueWithoutGlobalAssembly(
         VectorType& rX,
-        IndexType i,
+        const IndexType i,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetGlobalVecNoAssemble(rX, i, Value);
-        } else {
-            rX.replaceGlobalValue(static_cast<typename VectorType::global_ordinal_type>(i), size_t(0), Value);
-        }
+        TSparseSpace::SetGlobalVecNoAssemble(rX, i, Value);
     }
 
     /**
@@ -267,15 +280,11 @@ public:
      */
     static inline void SetLocalValue(
         VectorType& rX,
-        IndexType i,
+        const IndexType i,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetLocalVec(rX, i, Value);
-        } else {
-            rX.replaceLocalValue(static_cast<typename VectorType::local_ordinal_type>(i), size_t(0), Value);
-        }
+        TSparseSpace::SetLocalVec(rX, i, Value);
     }
 
     /**
@@ -286,15 +295,11 @@ public:
      */
     static inline void SetLocalValueWithoutGlobalAssembly(
         VectorType& rX,
-        IndexType i,
+        const IndexType i,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetLocalVecNoAssemble(rX, i, Value);
-        } else {
-            rX.replaceLocalValue(static_cast<typename VectorType::local_ordinal_type>(i), size_t(0), Value);
-        }
+        TSparseSpace::SetLocalVecNoAssemble(rX, i, Value);
     }
 
     /**
@@ -306,20 +311,12 @@ public:
      */
     static inline void SetGlobalValue(
         MatrixType& rA,
-        IndexType i,
-        IndexType j,
+        const IndexType i,
+        const IndexType j,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetGlobalMat(rA, i, j, Value);
-        } else {
-            using GO = typename MatrixType::global_ordinal_type;
-            using ST = typename MatrixType::scalar_type;
-            const GO col = static_cast<GO>(j);
-            const ST val = static_cast<ST>(Value);
-            rA.replaceGlobalValues(static_cast<GO>(i), 1, &val, &col);
-        }
+        TSparseSpace::SetGlobalMat(rA, i, j, Value);
     }
 
     /**
@@ -331,20 +328,12 @@ public:
      */
     static inline void SetGlobalValueWithoutGlobalAssembly(
         MatrixType& rA,
-        IndexType i,
-        IndexType j,
+        const IndexType i,
+        const IndexType j,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetGlobalMatNoAssemble(rA, i, j, Value);
-        } else {
-            using GO = typename MatrixType::global_ordinal_type;
-            using ST = typename MatrixType::scalar_type;
-            const GO col = static_cast<GO>(j);
-            const ST val = static_cast<ST>(Value);
-            rA.replaceGlobalValues(static_cast<GO>(i), 1, &val, &col);
-        }
+        TSparseSpace::SetGlobalMatNoAssemble(rA, i, j, Value);
     }
 
     /**
@@ -356,20 +345,12 @@ public:
      */
     static inline void SetLocalValue(
         MatrixType& rA,
-        IndexType i,
-        IndexType j,
+        const IndexType i,
+        const IndexType j,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetLocalMat(rA, i, j, Value);
-        } else {
-            using LO = typename MatrixType::local_ordinal_type;
-            using ST = typename MatrixType::scalar_type;
-            const LO col = static_cast<LO>(j);
-            const ST val = static_cast<ST>(Value);
-            rA.replaceLocalValues(static_cast<LO>(i), 1, &val, &col);
-        }
+        TSparseSpace::SetLocalMat(rA, i, j, Value);
     }
 
     /**
@@ -381,20 +362,12 @@ public:
      */
     static inline void SetLocalValueWithoutGlobalAssembly(
         MatrixType& rA,
-        IndexType i,
-        IndexType j,
+        const IndexType i,
+        const IndexType j,
         const double Value
         )
     {
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            EpetraSetLocalMatNoAssemble(rA, i, j, Value);
-        } else {
-            using LO = typename MatrixType::local_ordinal_type;
-            using ST = typename MatrixType::scalar_type;
-            const LO col = static_cast<LO>(j);
-            const ST val = static_cast<ST>(Value);
-            rA.replaceLocalValues(static_cast<LO>(i), 1, &val, &col);
-        }
+        TSparseSpace::SetLocalMatNoAssemble(rA, i, j, Value);
     }
 
     ///@}
@@ -445,74 +418,6 @@ private:
 
     /// Copy constructor.
     TrilinosAssemblingUtilities(TrilinosAssemblingUtilities const& rOther);
-
-    // Private template helpers for Epetra-specific operations.
-    // Being function templates with type deduced from their arguments,
-    // they are only instantiated if explicitly called — GCC will not
-    // instantiate these from discarded if constexpr branches on Tpetra types.
-
-    template<class V>
-    static void EpetraSetGlobalVec(V& rX, IndexType i, double Value) {
-        Epetra_IntSerialDenseVector indices(1);
-        Epetra_SerialDenseVector values(1);
-        indices[0] = i; values[0] = Value;
-        int ierr = rX.ReplaceGlobalValues(indices, values);
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-        ierr = rX.GlobalAssemble(Insert, true);
-        KRATOS_ERROR_IF(ierr < 0) << "Epetra failure in SetGlobalValue" << std::endl;
-    }
-    template<class V>
-    static void EpetraSetGlobalVecNoAssemble(V& rX, IndexType i, double Value) {
-        Epetra_IntSerialDenseVector indices(1);
-        Epetra_SerialDenseVector values(1);
-        indices[0] = i; values[0] = Value;
-        const int ierr = rX.ReplaceGlobalValues(indices, values);
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-    }
-    template<class V>
-    static void EpetraSetLocalVec(V& rX, IndexType i, double Value) {
-        int ierr = rX.ReplaceMyValue(static_cast<int>(i), 0, Value);
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-        ierr = rX.GlobalAssemble(Insert, true);
-        KRATOS_ERROR_IF(ierr < 0) << "Epetra failure in SetLocalValue" << std::endl;
-    }
-    template<class V>
-    static void EpetraSetLocalVecNoAssemble(V& rX, IndexType i, double Value) {
-        const int ierr = rX.ReplaceMyValue(static_cast<int>(i), 0, Value);
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-    }
-    template<class M>
-    static void EpetraSetGlobalMat(M& rA, IndexType i, IndexType j, double Value) {
-        std::vector<double> values(1, Value);
-        std::vector<int> indices(1, static_cast<int>(j));
-        int ierr = rA.ReplaceGlobalValues(static_cast<int>(i), 1, values.data(), indices.data());
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-        ierr = rA.GlobalAssemble();
-        KRATOS_ERROR_IF(ierr < 0) << "Epetra failure in SetGlobalValue matrix" << std::endl;
-    }
-    template<class M>
-    static void EpetraSetGlobalMatNoAssemble(M& rA, IndexType i, IndexType j, double Value) {
-        std::vector<double> values(1, Value);
-        std::vector<int> indices(1, static_cast<int>(j));
-        const int ierr = rA.ReplaceGlobalValues(static_cast<int>(i), 1, values.data(), indices.data());
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-    }
-    template<class M>
-    static void EpetraSetLocalMat(M& rA, IndexType i, IndexType j, double Value) {
-        std::vector<double> values(1, Value);
-        std::vector<int> indices(1, static_cast<int>(j));
-        int ierr = rA.ReplaceMyValues(static_cast<int>(i), 1, values.data(), indices.data());
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-        ierr = rA.GlobalAssemble();
-        KRATOS_ERROR_IF(ierr < 0) << "Epetra failure in SetLocalValue matrix" << std::endl;
-    }
-    template<class M>
-    static void EpetraSetLocalMatNoAssemble(M& rA, IndexType i, IndexType j, double Value) {
-        std::vector<double> values(1, Value);
-        std::vector<int> indices(1, static_cast<int>(j));
-        const int ierr = rA.ReplaceMyValues(static_cast<int>(i), 1, values.data(), indices.data());
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
-    }
 
     ///@}
 }; // Class TrilinosAssemblingUtilities

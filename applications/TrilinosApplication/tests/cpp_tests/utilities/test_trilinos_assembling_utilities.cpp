@@ -32,7 +32,6 @@ using TrilinosVectorType = TrilinosSparseSpaceType::VectorType;
 using TrilinosLocalMatrixType = TrilinosLocalSpaceType::MatrixType;
 using TrilinosLocalVectorType = TrilinosLocalSpaceType::VectorType;
 
-
 KRATOS_TEST_CASE_IN_SUITE(TrilinosVectorSetValue, KratosTrilinosApplicationMPITestSuite)
 {
     // The data communicator

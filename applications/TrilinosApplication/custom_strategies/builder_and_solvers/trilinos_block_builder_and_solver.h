@@ -21,20 +21,9 @@
 /* Trilinos includes */
 #include <Epetra_FECrsGraph.h>
 #include <Epetra_IntVector.h>
-#if defined(HAVE_TPETRA)
-#include <Tpetra_FECrsGraph.hpp>
-#include <Tpetra_FECrsMatrix.hpp>
-#include <Tpetra_FEMultiVector.hpp>
-#include <Tpetra_Vector.hpp>
-#include <Teuchos_RCP.hpp>
-#include <Teuchos_OrdinalTraits.hpp>
-#endif
 
 // Project includes
 #include "trilinos_space.h"
-#if defined(HAVE_TPETRA)
-#include "trilinos_space_experimental.h"
-#endif 
 #include "custom_utilities/trilinos_assembling_utilities.h"
 #include "solving_strategies/builder_and_solvers/builder_and_solver.h"
 #include "utilities/timer.h"
@@ -398,8 +387,14 @@ public:
             // Create modified Dx using CreateVectorCopy (safe for FEMultiVector whose copy ctor is deleted)
             auto p_Dxmodified = TSparseSpace::CreateVectorCopy(rb);
             TSparseSpace::SetToZero(*p_Dxmodified);
+
+            // Do solve
             InternalSystemSolveWithPhysics(rA, *p_Dxmodified, rb, rModelPart);
+
+            // Reference to T
             const TSystemMatrixType& r_T = GetConstraintRelationMatrix();
+
+            // Recover solution of the original problem; use CreateVectorCopy (safe for FEMultiVector)
             TSparseSpace::Mult(r_T, *p_Dxmodified, rDx);
         } else {
             InternalSystemSolveWithPhysics(rA, rDx, rb, rModelPart);
@@ -593,7 +588,6 @@ public:
         // Finalizing the assembly
         TSparseSpace::GlobalAssemble(rb);
 
-
         STOP_TIMER("BuildRHS ", 0)
 
         KRATOS_CATCH("")
@@ -771,14 +765,13 @@ public:
             ConstructMatrixStructure(pScheme, rpA, rpDx, rpb, rModelPart);
         } else if (TSparseSpace::IsNull(BaseType::mpReactionsVector) && this->mCalculateReactionsFlag) {
             TSystemVectorPointerType pNewReactionsVector = TSparseSpace::CreateEmptyVectorPointer();
-            if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
+            if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
                 pNewReactionsVector = TSystemVectorPointerType(new TSystemVectorType(rpDx->Map()));
             } else {
                 pNewReactionsVector = TSparseSpace::CreateVector(rpDx->getMap());
             }
             BaseType::mpReactionsVector.swap(pNewReactionsVector);
-        }
-        else {
+        } else {
             if (TSparseSpace::Size1(*rpA) == 0 ||
                 TSparseSpace::Size1(*rpA) != BaseType::mEquationSystemSize ||
                 TSparseSpace::Size2(*rpA) != BaseType::mEquationSystemSize) {
@@ -818,7 +811,7 @@ public:
         // Refresh RHS to have the correct reactions
         BuildRHS(pScheme, rModelPart, rb);
 
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
+        if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
             // Initialize the Epetra importer
             // TODO: this part of the code has been pasted until a better solution
             // is found
@@ -829,8 +822,8 @@ public:
             // Filling the array with the global ids
             int counter = 0;
             int id = 0;
-            for (const auto& dof : BaseType::mDofSet) {
-                id = dof.EquationId();
+            for (const auto& r_dof : BaseType::mDofSet) {
+                id = r_dof.EquationId();
                 if (id < system_size) {
                     index_array[counter++] = id;
                 }
@@ -880,7 +873,8 @@ public:
                 const double react_val = temp_RHS[pDofImporter->TargetMap().LID(i)];
                 (dof_iterator->GetSolutionStepReactionValue()) = -react_val;
             }
-        } else {
+        } else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+        #if (HAVE_TPETRA)
             using MapType = typename TSparseSpace::MapType;
             using VectorType = typename TSparseSpace::VectorType;
             using GO = typename MapType::global_ordinal_type;
@@ -891,8 +885,8 @@ public:
             index_array.reserve(number_of_dofs);
 
             // Filling the array with the global ids
-            for (const auto& dof : BaseType::mDofSet) {
-                const std::size_t id = dof.EquationId();
+            for (const auto& r_dof : BaseType::mDofSet) {
+                const std::size_t id = r_dof.EquationId();
                 if (id < system_size) {
                     index_array.push_back(static_cast<GO>(id));
                 }
@@ -929,6 +923,11 @@ public:
                     dof.GetSolutionStepReactionValue() = -react_val;
                 }
             }
+        #else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+        #endif
+        } else {
+            KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
     }
 
@@ -954,9 +953,7 @@ public:
     {
         KRATOS_TRY
 
-        const auto& r_process_info = rModelPart.GetProcessInfo();
-
-        // loop over all dofs to find the fixed ones
+        // Loop over all dofs to find the fixed ones
         std::vector<int> global_ids(BaseType::mDofSet.size());
         std::vector<int> is_dirichlet(BaseType::mDofSet.size());
 
@@ -968,54 +965,122 @@ public:
             ++i_dof;
         }
 
-        if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-            // here we construct and fill a vector "fixed local" which cont
-
-        Epetra_Map localmap(-1, global_ids.size(), global_ids.data(), 0, rA.Comm());
-        Epetra_IntVector fixed_local(Copy, localmap, is_dirichlet.data());
-
-        Epetra_Import dirichlet_importer(rA.ColMap(), fixed_local.Map());
-
-        // defining a temporary vector to gather all of the values needed
-        Epetra_IntVector fixed(rA.ColMap());
-
         // Detect if there is a line of all zeros and set the diagonal to a certain number (1 if not scale, some norms values otherwise) if this happens
         const auto& r_process_info = rModelPart.GetProcessInfo();
         mScaleFactor = TSparseSpace::CheckAndCorrectZeroDiagonalValues(r_process_info, rA, rb, mScalingDiagonal);
 
-        // Importing in the new temp vector the values
-        int ierr = fixed.Import(fixed_local, dirichlet_importer, Insert);
-        KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
+        // Apply the dirichlet conditions by setting to zero the rows and columns corresponding to the fixed dofs and setting the diagonal entry to 1 (or to the value of mScaleFactor)
+        if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
+            // Here we construct and fill a vector "fixed local" which cont
+            Epetra_Map localmap(-1, global_ids.size(), global_ids.data(), 0, rA.Comm());
+            Epetra_IntVector fixed_local(Copy, localmap, is_dirichlet.data());
 
-        for (int i = 0; i < rA.NumMyRows(); i++) {
-            int numEntries; // Number of non-zero entries
-            double* vals;   // Row non-zero values
-            int* cols;      // Column indices of row non-zero values
-            rA.ExtractMyRowView(i, numEntries, vals, cols);
+            Epetra_Import dirichlet_importer(rA.ColMap(), fixed_local.Map());
 
-            const int row_gid = rA.RowMap().GID(i);
-            const int row_lid = localmap.LID(row_gid);
+            // defining a temporary vector to gather all of the values needed
+            Epetra_IntVector fixed(rA.ColMap());
 
-            if (fixed_local[row_lid] == 0) { // Not a dirichlet row
-                for (int j = 0; j < numEntries; j++) {
-                    if (fixed[cols[j]] == true)
-                        vals[j] = 0.0;
-                }
-            } else { // This IS a dirichlet row
-                // Set to zero the rhs
-                rb[0][i] = 0.0; // note that the index of i is expected to be
-                                // coherent with the rows of A
+            // Importing in the new temp vector the values
+            int ierr = fixed.Import(fixed_local, dirichlet_importer, Insert);
+            KRATOS_ERROR_IF(ierr != 0) << "Epetra failure found" << std::endl;
 
-                // Set to zero the whole row
-                for (int j = 0; j < numEntries; j++) {
-                    int col_gid = rA.ColMap().GID(cols[j]);
-                    if (col_gid != row_gid)
-                        vals[j] = 0.0;
+            for (int i = 0; i < rA.NumMyRows(); i++) {
+                int numEntries; // Number of non-zero entries
+                double* vals;   // Row non-zero values
+                int* cols;      // Column indices of row non-zero values
+                rA.ExtractMyRowView(i, numEntries, vals, cols);
+
+                const int row_gid = rA.RowMap().GID(i);
+                const int row_lid = localmap.LID(row_gid);
+
+                if (fixed_local[row_lid] == 0) { // Not a dirichlet row
+                    for (int j = 0; j < numEntries; j++) {
+                        if (fixed[cols[j]] == true)
+                            vals[j] = 0.0;
+                    }
+                } else { // This IS a dirichlet row
+                    // Set to zero the rhs
+                    rb[0][i] = 0.0; // note that the index of i is expected to be
+                                    // coherent with the rows of A
+
+                    // Set to zero the whole row
+                    for (int j = 0; j < numEntries; j++) {
+                        int col_gid = rA.ColMap().GID(cols[j]);
+                        if (col_gid != row_gid)
+                            vals[j] = 0.0;
+                    }
                 }
             }
-        }
+        } else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+        #if (HAVE_TPETRA)
+            using GO = typename TSystemMatrixType::global_ordinal_type;
+            using LO = typename TSystemMatrixType::local_ordinal_type;
+            using ST = typename TSystemMatrixType::scalar_type;
+            using NT = typename TSystemMatrixType::node_type;
+
+            // Build a local lookup for owned DOFs (quick access by global equation ID).
+            std::unordered_map<GO, int> is_fixed_map;
+            for (std::size_t i = 0; i < global_ids.size(); ++i) {
+                is_fixed_map[static_cast<GO>(global_ids[i])] = is_dirichlet[i];
+            }
+
+            // Communicate fixed-DOF flags to ghost columns via Tpetra Import.
+            // Build a vector of fixed flags on the (one-to-one) row map, then
+            // import it to the column map, which covers both owned and ghost columns.
+            auto p_row_map = rA.getRowMap();
+            const LO num_local_rows = static_cast<LO>(p_row_map->getNodeNumElements());
+            Tpetra::Vector<ST, LO, GO, NT> fixed_owned(p_row_map);
+            {
+                auto view = fixed_owned.getLocalViewHost(Tpetra::Access::ReadWrite);
+                for (LO local_row = 0; local_row < num_local_rows; ++local_row) {
+                    const GO global_row = p_row_map->getGlobalElement(local_row);
+                    const bool is_fixed = is_fixed_map.count(global_row) > 0 && is_fixed_map.at(global_row) != 0;
+                    view(local_row, 0) = is_fixed ? ST(1) : ST(0);
+                }
+            }
+            // Import from the row map (one-to-one) to the column map (possibly overlapping).
+            // This gives every rank the fixed status of ghost columns owned by other ranks.
+            // Ranks with an empty partition may have a null colMap; fall back to the row map
+            // so that the Import (a collective operation) still succeeds on all ranks.
+            auto col_map = rA.getColMap();
+            auto p_import_target_map = col_map.is_null() ? p_row_map : col_map;
+            Tpetra::Import<LO, GO, NT> dirichlet_importer(p_row_map, p_import_target_map);
+            Tpetra::Vector<ST, LO, GO, NT> fixed_col(p_import_target_map);
+            fixed_col.putScalar(ST(0));
+            fixed_col.doImport(fixed_owned, dirichlet_importer, Tpetra::INSERT);
+            auto fixed_col_view = fixed_col.getLocalViewHost(Tpetra::Access::ReadOnly);
+
+            auto rb_view = rb.getLocalViewHost(Tpetra::Access::ReadWrite);
+            for (LO local_row = 0; local_row < num_local_rows; ++local_row) {
+                const GO global_row = p_row_map->getGlobalElement(local_row);
+                // For owned columns, local_row matches the local column index in the col map
+                // (Tpetra guarantees owned GIDs appear first in the col map in row-map order).
+                const bool row_is_fixed = fixed_col_view(local_row, 0) != ST(0);
+                typename TSparseSpace::MatrixType::local_inds_host_view_type cols_view;
+                typename TSparseSpace::MatrixType::values_host_view_type vals_view;
+                rA.getLocalRowView(local_row, cols_view, vals_view);
+                const LO num_entries = static_cast<LO>(cols_view.size());
+                if (num_entries == 0) continue;
+                std::vector<ST> new_vals(num_entries);
+                if (!row_is_fixed) {
+                    for (LO j = 0; j < num_entries; ++j) {
+                        // fixed_col_view indexed by local column index covers both owned and ghost columns
+                        new_vals[j] = (fixed_col_view(cols_view(j), 0) != ST(0)) ? ST(0.0) : vals_view(j);
+                    }
+                } else {
+                    rb_view(local_row, 0) = ST(0.0);
+                    for (LO j = 0; j < num_entries; ++j) {
+                        const GO global_col = col_map->getGlobalElement(cols_view(j));
+                        new_vals[j] = (global_col == global_row) ? vals_view(j) : ST(0.0);
+                    }
+                }
+                rA.replaceLocalValues(local_row, num_entries, new_vals.data(), cols_view.data());
+            }
+        #else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+        #endif
         } else {
-            TSparseSpace::ApplyDirichletConditionsTpetra(rA, rb, global_ids, is_dirichlet, r_process_info, mScalingDiagonal, mScaleFactor);
+            KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
 
         KRATOS_CATCH("");
@@ -1083,12 +1148,8 @@ public:
             const TSystemMatrixType& r_T = GetConstraintRelationMatrix();
 
             // Compute T' A T
-            if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-                const TSystemMatrixType copy_A(rA);
-                TSparseSpace::BtDBProductOperation(rA, copy_A, r_T, true, true);
-            } else {
-                TSparseSpace::BtDBProductOperation(rA, rA, r_T, true, true);
-            }
+            const auto p_copy_A = TSparseSpace::CreateMatrixCopy(rA);
+            TSparseSpace::BtDBProductOperation(rA, *p_copy_A, r_T, true, true);
 
             // Compute T' b
             auto p_copy_b = TSparseSpace::CreateVectorCopy(rb);
@@ -1278,21 +1339,21 @@ protected:
     ///@{
 
     /* Base variables */
-    TrilinosCommunicatorType& mrComm;               /// The MPI communicator
-    int mGuessRowSize;                              /// The guess row size
-    IndexType mLocalSystemSize;                     /// The local system size
-    int mFirstMyId;                                 /// Auxiliary Id (the first row of the local system)
-    int mLastMyId;                                  /// Auxiliary Id (the last row of the local system) // TODO: This can be removed as can be deduced from mLocalSystemSize
+    TrilinosCommunicatorType& mrComm;                                                    /// The MPI communicator
+    int mGuessRowSize;                                                                   /// The guess row size
+    IndexType mLocalSystemSize;                                                          /// The local system size
+    int mFirstMyId;                                                                      /// Auxiliary Id (the first row of the local system)
+    int mLastMyId;                                                                       /// Auxiliary Id (the last row of the local system) // TODO: This can be removed as can be deduced from mLocalSystemSize
     typename TSparseSpace::MapPointerType mpMap = TSparseSpace::CreateEmptyMapPointer(); /// The map considered for the different vectors and matrices
-    std::vector<int> mFirstMyIds;                   /// The ids corresponding to each partition (only used with MPC)
+    std::vector<int> mFirstMyIds;                                                        /// The ids corresponding to each partition (only used with MPC)
 
     /* MPC variables */
     TSystemMatrixPointerType mpT =  TSparseSpace::CreateEmptyMatrixPointer();              /// This is matrix containing the global relation for the constraints
     TSystemVectorPointerType mpConstantVector =  TSparseSpace::CreateEmptyVectorPointer(); /// This is vector containing the rigid movement of the constraint
-    std::vector<IndexType> mSlaveIds;                     /// The equation ids of the slaves
-    std::vector<IndexType> mMasterIds;                    /// The equation ids of the master
-    std::unordered_set<IndexType> mInactiveSlaveDofs;     /// The set containing the inactive slave dofs
-    double mScaleFactor = 1.0;                            /// The manually set scale factor
+    std::vector<IndexType> mSlaveIds;                                                      /// The equation ids of the slaves
+    std::vector<IndexType> mMasterIds;                                                     /// The equation ids of the master
+    std::unordered_set<IndexType> mInactiveSlaveDofs;                                      /// The set containing the inactive slave dofs
+    double mScaleFactor = 1.0;                                                             /// The manually set scale factor
 
     /* Flags */
     SCALING_DIAGONAL mScalingDiagonal = SCALING_DIAGONAL::CONSIDER_MAX_DIAGONAL; /// We identify the scaling considered for the dirichlet dofs
@@ -1318,37 +1379,53 @@ protected:
             START_TIMER("ConstraintsRelationMatrixStructure", 0)
             const ProcessInfo& r_current_process_info = rModelPart.GetProcessInfo();
 
+            // Generate indices database
+            const IndexType number_of_local_rows = mLocalSystemSize;
+
+            // Ensure map is initialized
+            GetMap();
+
             // Vector containing indices belonging to slave DoFs, not used for graph, but for master/slave index identification
-            std::unordered_set<std::size_t> indices;
+            std::unordered_set<IndexType> indices;
 
             // TODO: Check if these should be local constraints
             auto& r_constraints_array = rModelPart.MasterSlaveConstraints();
 
-            std::vector<std::vector<int>> all_slave_ids;
-            std::vector<std::vector<int>> all_master_ids;
-            all_slave_ids.reserve(r_constraints_array.size());
-            all_master_ids.reserve(r_constraints_array.size());
+            // Auxiliary vectors to construct the relation matrix structure
+            std::vector<std::vector<int>> all_slave_equation_ids;
+            std::vector<std::vector<int>> all_master_equation_ids;
+            all_slave_equation_ids.reserve(r_constraints_array.size());
+            all_master_equation_ids.reserve(r_constraints_array.size());
 
             // Assemble all constraints
             Element::EquationIdVectorType slave_equation_ids_vector, master_equation_ids_vector;
             for (auto& r_const : r_constraints_array) {
                 r_const.EquationIdVector(slave_equation_ids_vector, master_equation_ids_vector, r_current_process_info);
-                if (slave_equation_ids_vector.size() > 0) {
-                    all_slave_ids.emplace_back(slave_equation_ids_vector.begin(), slave_equation_ids_vector.end());
-                    all_master_ids.emplace_back(master_equation_ids_vector.begin(), master_equation_ids_vector.end());
-                    for (auto id : slave_equation_ids_vector) {
-                        indices.insert(id);
-                    }
+
+                std::vector<int> slave_equation_ids;
+                slave_equation_ids.reserve(slave_equation_ids_vector.size());
+                for (const auto r_slave_id : slave_equation_ids_vector) {
+                    indices.insert(r_slave_id);
+                    slave_equation_ids.push_back(static_cast<int>(r_slave_id));
                 }
+
+                std::vector<int> master_equation_ids;
+                master_equation_ids.reserve(master_equation_ids_vector.size());
+                for (const auto r_master_id : master_equation_ids_vector) {
+                    master_equation_ids.push_back(static_cast<int>(r_master_id));
+                }
+
+                all_slave_equation_ids.push_back(std::move(slave_equation_ids));
+                all_master_equation_ids.push_back(std::move(master_equation_ids));
             }
 
             TSparseSpace::BuildConstraintsStructure(
                 mrComm,
-                mLocalSystemSize,
+                number_of_local_rows,
                 mFirstMyId,
                 mGuessRowSize,
-                all_slave_ids,
-                all_master_ids,
+                all_slave_equation_ids,
+                all_master_equation_ids,
                 mpT,
                 mpConstantVector,
                 mpMap
@@ -1391,7 +1468,6 @@ protected:
             mSlaveIds = std::vector<IndexType>(auxiliary_slave_ids[current_rank].begin(), auxiliary_slave_ids[current_rank].end());
 
             // Master DoFs are complementary
-            const IndexType number_of_local_rows = mLocalSystemSize;
             std::unordered_set<IndexType> temp_master_ids;
             for (IndexType i = 0; i < number_of_local_rows; ++i) {
                 temp_master_ids.insert(mFirstMyId + i);
@@ -1511,13 +1587,7 @@ protected:
             }
 
             // Finalizing the assembly
-            if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
-                TSparseSpace::GlobalAssemble(r_T);
-            } else {
-                r_T.endAssembly();
-                if (r_T.isFillActive()) r_T.fillComplete();
-            }
-
+            TSparseSpace::GlobalAssemble(r_T);
             TSparseSpace::GlobalAssemble(r_constant_vector);
 
             // Mark constraints as assembled
@@ -1552,50 +1622,363 @@ protected:
         auto& r_conditions_array = rModelPart.Conditions();
         auto& r_constraints_array = rModelPart.MasterSlaveConstraints();
 
-        const ProcessInfo& r_current_process_info = rModelPart.GetProcessInfo();
+        // Number of local dofs
+        const IndexType number_of_local_rows = mLocalSystemSize;
 
-        std::vector<std::vector<int>> all_equation_ids;
-        all_equation_ids.reserve(r_elements_array.size() + r_conditions_array.size() + r_constraints_array.size());
+        // Ensure map is initialized
+        GetMap();
 
         Element::EquationIdVectorType equation_ids_vector;
+        const ProcessInfo& r_current_process_info = rModelPart.GetProcessInfo();
+
+        // Auxiliary vectors to construct the system matrix structure
+        std::vector<std::vector<int>> all_row_equation_ids;
+        std::vector<std::vector<int>> all_col_equation_ids;
+        const auto reserve_size = r_elements_array.size() + r_conditions_array.size() + 3 * r_constraints_array.size();
+        all_row_equation_ids.reserve(reserve_size);
+        all_col_equation_ids.reserve(reserve_size);
+
+        // Build neighbor map: DOF eq-id → sorted list of all DOF eq-ids sharing an element/condition.
+        // This is needed to expand slave DOF neighborhoods into master rows for T'KT graph positions.
+        std::unordered_map<int, std::vector<int>> dof_neighbors;
+
+        auto add_to_neighbor_map = [&](const Element::EquationIdVectorType& ids) {
+            std::vector<int> local_ids;
+            local_ids.reserve(ids.size());
+            for (const auto id : ids) {
+                local_ids.push_back(static_cast<int>(id));
+            }
+            for (const auto row_id : local_ids) {
+                auto& neighbors = dof_neighbors[row_id];
+                for (const auto col_id : local_ids) {
+                    neighbors.push_back(col_id);
+                }
+            }
+        };
 
         // Assemble all elements
         for (auto& r_elem : r_elements_array) {
             pScheme->EquationId(r_elem, equation_ids_vector, r_current_process_info);
-            all_equation_ids.emplace_back(equation_ids_vector.begin(), equation_ids_vector.end());
+
+            if (!equation_ids_vector.empty()) {
+                if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+                    add_to_neighbor_map(equation_ids_vector);
+                }
+                std::vector<int> local_equation_ids;
+                local_equation_ids.reserve(equation_ids_vector.size());
+                for (const auto equation_id : equation_ids_vector) {
+                    local_equation_ids.push_back(static_cast<int>(equation_id));
+                }
+                all_row_equation_ids.push_back(local_equation_ids);
+                all_col_equation_ids.push_back(std::move(local_equation_ids));
+            }
         }
 
         // Assemble all conditions
         for (auto& r_cond : r_conditions_array) {
             pScheme->EquationId(r_cond, equation_ids_vector, r_current_process_info);
-            all_equation_ids.emplace_back(equation_ids_vector.begin(), equation_ids_vector.end());
-        }
 
-        // Assemble all constraints
-        Element::EquationIdVectorType slave_equation_ids_vector, master_equation_ids_vector;
-        for (auto& r_const : r_constraints_array) {
-            r_const.EquationIdVector(slave_equation_ids_vector, master_equation_ids_vector, r_current_process_info);
-            if (slave_equation_ids_vector.size() > 0) {
-                if (master_equation_ids_vector.size() > 0) {
-                    std::vector<int> combined_ids(slave_equation_ids_vector.begin(), slave_equation_ids_vector.end());
-                    combined_ids.insert(combined_ids.end(), master_equation_ids_vector.begin(), master_equation_ids_vector.end());
-                    all_equation_ids.push_back(combined_ids);
-                } else {
-                    all_equation_ids.emplace_back(slave_equation_ids_vector.begin(), slave_equation_ids_vector.end());
+            if (!equation_ids_vector.empty()) {
+                if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+                    add_to_neighbor_map(equation_ids_vector);
                 }
-            } else if (master_equation_ids_vector.size() > 0) {
-                all_equation_ids.emplace_back(master_equation_ids_vector.begin(), master_equation_ids_vector.end());
+                std::vector<int> local_equation_ids;
+                local_equation_ids.reserve(equation_ids_vector.size());
+                for (const auto equation_id : equation_ids_vector) {
+                    local_equation_ids.push_back(static_cast<int>(equation_id));
+                }
+                all_row_equation_ids.push_back(local_equation_ids);
+                all_col_equation_ids.push_back(std::move(local_equation_ids));
             }
         }
 
-        GetMap(); // Ensure mpMap is lazily initialized before use
+        // Assemble all constraints.
+        Element::EquationIdVectorType slave_equation_ids_vector, master_equation_ids_vector;
+        if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
+            for (auto& r_const : r_constraints_array) {
+                r_const.EquationIdVector(slave_equation_ids_vector, master_equation_ids_vector, r_current_process_info);
+
+                std::vector<int> slave_equation_ids;
+                slave_equation_ids.reserve(slave_equation_ids_vector.size());
+                for (const auto slave_equation_id : slave_equation_ids_vector) {
+                    slave_equation_ids.push_back(static_cast<int>(slave_equation_id));
+                }
+
+                std::vector<int> master_equation_ids;
+                master_equation_ids.reserve(master_equation_ids_vector.size());
+                for (const auto master_equation_id : master_equation_ids_vector) {
+                    master_equation_ids.push_back(static_cast<int>(master_equation_id));
+                }
+
+                // First adding the pure slave dofs (diagonal entries)
+                for (const auto slave_equation_id : slave_equation_ids) {
+                    all_row_equation_ids.push_back({slave_equation_id});
+                    all_col_equation_ids.push_back({slave_equation_id});
+                }
+
+                // Now adding cross master-slave dofs
+                if (!slave_equation_ids.empty() && !master_equation_ids.empty()) {
+                    all_row_equation_ids.push_back(slave_equation_ids);
+                    all_col_equation_ids.push_back(master_equation_ids);
+                }
+
+                // Second adding pure master dofs
+                for (const auto master_equation_id : master_equation_ids) {
+                    all_row_equation_ids.push_back({master_equation_id});
+                    all_col_equation_ids.push_back({master_equation_id});
+                }
+            }
+        }  else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+            auto sort_unique_ids = [](std::vector<int>& rIds) {
+                std::sort(rIds.begin(), rIds.end());
+                rIds.erase(std::unique(rIds.begin(), rIds.end()), rIds.end());
+            };
+
+            // For T'KT correctness: when slave s maps to masters {m_i}, T'KT places
+            // values at positions (m_i, neighbor_of_s) and (neighbor_of_s, m_i) where
+            // neighbor_of_s are the K-graph neighbors of s (DOFs sharing an element).
+            // Additionally, slave row entries and slave↔master connectivity are needed.
+            std::vector<std::vector<int>> local_constraint_row_equation_ids;
+            std::vector<std::vector<int>> local_constraint_col_equation_ids;
+            local_constraint_row_equation_ids.reserve(4 * r_constraints_array.size());
+            local_constraint_col_equation_ids.reserve(4 * r_constraints_array.size());
+            auto append_constraint_block = [&local_constraint_row_equation_ids, &local_constraint_col_equation_ids](
+                const std::vector<int>& rRows,
+                const std::vector<int>& rCols) {
+                if (!rRows.empty() && !rCols.empty()) {
+                    local_constraint_row_equation_ids.push_back(rRows);
+                    local_constraint_col_equation_ids.push_back(rCols);
+                }
+            };
+            std::unordered_map<int, std::vector<int>> slave_to_masters;
+            slave_to_masters.reserve(2 * r_constraints_array.size());
+            const auto& r_data_comm = rModelPart.GetCommunicator().GetDataCommunicator();
+            const int current_rank = r_data_comm.Rank();
+
+            std::vector<int> slave_equation_ids;
+            std::vector<int> master_equation_ids;
+
+            for (auto& r_const : r_constraints_array) {
+                r_const.EquationIdVector(slave_equation_ids_vector, master_equation_ids_vector, r_current_process_info);
+
+                slave_equation_ids.clear();
+                slave_equation_ids.reserve(slave_equation_ids_vector.size());
+                for (const auto slave_equation_id : slave_equation_ids_vector) {
+                    slave_equation_ids.push_back(static_cast<int>(slave_equation_id));
+                }
+
+                master_equation_ids.clear();
+                master_equation_ids.reserve(master_equation_ids_vector.size());
+                for (const auto master_equation_id : master_equation_ids_vector) {
+                    master_equation_ids.push_back(static_cast<int>(master_equation_id));
+                }
+                std::sort(master_equation_ids.begin(), master_equation_ids.end());
+                master_equation_ids.erase(std::unique(master_equation_ids.begin(), master_equation_ids.end()), master_equation_ids.end());
+
+                for (const auto slave_equation_id : slave_equation_ids) {
+                    auto& r_masters = slave_to_masters[slave_equation_id];
+                    r_masters.insert(r_masters.end(), master_equation_ids.begin(), master_equation_ids.end());
+                }
+
+                // Slave diagonal entries (keeps slave rows in graph)
+                for (const auto slave_equation_id : slave_equation_ids) {
+                    local_constraint_row_equation_ids.push_back({slave_equation_id});
+                    local_constraint_col_equation_ids.push_back({slave_equation_id});
+                }
+
+                // slave×master and master×slave blocks
+                append_constraint_block(slave_equation_ids, master_equation_ids);
+                append_constraint_block(master_equation_ids, slave_equation_ids);
+
+                // master×master block (cross-master T'KT entries)
+                append_constraint_block(master_equation_ids, master_equation_ids);
+
+            }
+
+            for (auto& r_pair : slave_to_masters) {
+                sort_unique_ids(r_pair.second);
+            }
+
+            std::vector<int> constrained_slave_ids;
+            constrained_slave_ids.reserve(slave_to_masters.size());
+            for (const auto& [slave_id, _] : slave_to_masters) {
+                constrained_slave_ids.push_back(slave_id);
+            }
+
+            auto deduplicate_neighbors_for_constrained_slaves = [&dof_neighbors, &constrained_slave_ids, &sort_unique_ids]() {
+                for (const auto slave_id : constrained_slave_ids) {
+                    auto it = dof_neighbors.find(slave_id);
+                    if (it != dof_neighbors.end()) {
+                        sort_unique_ids(it->second);
+                    }
+                }
+            };
+
+            // Deduplicate only the constrained slave neighborhood (relevant subset).
+            deduplicate_neighbors_for_constrained_slaves();
+
+            // Complete slave-neighbor map across ranks for constrained slaves.
+            // Some constrained tests miss entries when a slave's neighbors come
+            // from elements assembled on a different partition.
+            auto serialize_slave_neighbors = [&](const std::unordered_map<int, std::vector<int>>& rNeighborMap,
+                                                const std::unordered_map<int, std::vector<int>>& rSlaveToMasters) {
+                std::size_t reserve_size = 1 + 2 * constrained_slave_ids.size();
+                for (const auto slave_id : constrained_slave_ids) {
+                    auto it = rNeighborMap.find(slave_id);
+                    if (it != rNeighborMap.end()) {
+                        reserve_size += it->second.size();
+                    }
+                }
+                std::vector<int> serialized;
+                serialized.reserve(reserve_size);
+                serialized.push_back(static_cast<int>(constrained_slave_ids.size()));
+                for (const auto slave_id : constrained_slave_ids) {
+                    serialized.push_back(slave_id);
+                    auto it = rNeighborMap.find(slave_id);
+                    if (it == rNeighborMap.end()) {
+                        serialized.push_back(0);
+                        continue;
+                    }
+                    const auto& neighbors = it->second;
+                    serialized.push_back(static_cast<int>(neighbors.size()));
+                    serialized.insert(serialized.end(), neighbors.begin(), neighbors.end());
+                }
+                return serialized;
+            };
+
+            auto merge_serialized_slave_neighbors = [](const std::vector<int>& rSerialized,
+                                                    std::unordered_map<int, std::vector<int>>& rNeighborMap) {
+                if (rSerialized.empty()) return;
+                std::size_t cursor = 0;
+                const std::size_t num_slaves = static_cast<std::size_t>(rSerialized[cursor++]);
+                for (std::size_t i = 0; i < num_slaves; ++i) {
+                    KRATOS_DEBUG_ERROR_IF(cursor + 1 >= rSerialized.size()) << "Invalid serialized slave-neighbor payload" << std::endl;
+                    const int slave_id = rSerialized[cursor++];
+                    const std::size_t num_neighbors = static_cast<std::size_t>(rSerialized[cursor++]);
+                    KRATOS_DEBUG_ERROR_IF(cursor + num_neighbors > rSerialized.size()) << "Invalid serialized slave-neighbor payload" << std::endl;
+                    auto& neighbors = rNeighborMap[slave_id];
+                    neighbors.insert(neighbors.end(), rSerialized.begin() + cursor, rSerialized.begin() + cursor + num_neighbors);
+                    cursor += num_neighbors;
+                }
+                KRATOS_DEBUG_ERROR_IF(cursor != rSerialized.size()) << "Invalid serialized slave-neighbor payload: extra data" << std::endl;
+            };
+
+            const std::vector<int> local_serialized_slave_neighbors = serialize_slave_neighbors(dof_neighbors, slave_to_masters);
+
+            const auto gathered_serialized_slave_neighbors = r_data_comm.AllGatherv(local_serialized_slave_neighbors);
+            for (std::size_t rank_index = 0; rank_index < gathered_serialized_slave_neighbors.size(); ++rank_index) {
+                if (static_cast<int>(rank_index) == current_rank) {
+                    continue;
+                }
+                merge_serialized_slave_neighbors(gathered_serialized_slave_neighbors[rank_index], dof_neighbors);
+            }
+
+            deduplicate_neighbors_for_constrained_slaves();
+
+            // Re-apply first-order slave-neighbor closure with the merged global map.
+            for (const auto& [slave_id, masters] : slave_to_masters) {
+                auto it_neighbors = dof_neighbors.find(slave_id);
+                if (it_neighbors == dof_neighbors.end()) continue;
+                append_constraint_block(masters, it_neighbors->second);
+                append_constraint_block(it_neighbors->second, masters);
+            }
+
+            // Second-order constraint closure for T'KT graph:
+            // if s and n are constrained slaves and n is in neighbors(s), then
+            // master(s) × master(n) couplings can appear in T'KT.
+            for (const auto& [slave_id, r_slave_masters] : slave_to_masters) {
+                auto it_neighbors = dof_neighbors.find(slave_id);
+                if (it_neighbors == dof_neighbors.end()) continue;
+
+                for (const auto neighbor_id : it_neighbors->second) {
+                    auto it_neighbor_masters = slave_to_masters.find(neighbor_id);
+                    if (it_neighbor_masters == slave_to_masters.end()) continue;
+
+                    const auto& r_neighbor_masters = it_neighbor_masters->second;
+                    append_constraint_block(r_slave_masters, r_neighbor_masters);
+                    append_constraint_block(r_neighbor_masters, r_slave_masters);
+                }
+            }
+
+            // Constraints may be partition-local; exchange their graph blocks so owners
+            // of remote rows can insert the corresponding structure entries.
+            auto serialize_constraint_blocks = [](const std::vector<std::vector<int>>& rRows,
+                                                const std::vector<std::vector<int>>& rCols) {
+                std::size_t reserve_size = 1;
+                for (std::size_t i = 0; i < rRows.size(); ++i) {
+                    reserve_size += 2 + rRows[i].size() + rCols[i].size();
+                }
+                std::vector<int> serialized;
+                serialized.reserve(reserve_size);
+                serialized.push_back(static_cast<int>(rRows.size()));
+                for (std::size_t i = 0; i < rRows.size(); ++i) {
+                    serialized.push_back(static_cast<int>(rRows[i].size()));
+                    serialized.insert(serialized.end(), rRows[i].begin(), rRows[i].end());
+                    serialized.push_back(static_cast<int>(rCols[i].size()));
+                    serialized.insert(serialized.end(), rCols[i].begin(), rCols[i].end());
+                }
+                return serialized;
+            };
+
+            auto deserialize_and_append_constraint_blocks = [](const std::vector<int>& rSerialized,
+                                                            std::vector<std::vector<int>>& rRows,
+                                                            std::vector<std::vector<int>>& rCols) {
+                std::size_t cursor = 0;
+                KRATOS_DEBUG_ERROR_IF(rSerialized.empty()) << "Invalid serialized constraint blocks: empty payload" << std::endl;
+                const std::size_t num_blocks = static_cast<std::size_t>(rSerialized[cursor++]);
+                for (std::size_t i = 0; i < num_blocks; ++i) {
+                    KRATOS_DEBUG_ERROR_IF(cursor >= rSerialized.size()) << "Invalid serialized constraint blocks: truncated rows size" << std::endl;
+                    const std::size_t row_size = static_cast<std::size_t>(rSerialized[cursor++]);
+                    KRATOS_DEBUG_ERROR_IF(cursor + row_size > rSerialized.size()) << "Invalid serialized constraint blocks: truncated row data" << std::endl;
+                    std::vector<int> row_block(rSerialized.begin() + cursor, rSerialized.begin() + cursor + row_size);
+                    cursor += row_size;
+
+                    KRATOS_DEBUG_ERROR_IF(cursor >= rSerialized.size()) << "Invalid serialized constraint blocks: truncated cols size" << std::endl;
+                    const std::size_t col_size = static_cast<std::size_t>(rSerialized[cursor++]);
+                    KRATOS_DEBUG_ERROR_IF(cursor + col_size > rSerialized.size()) << "Invalid serialized constraint blocks: truncated col data" << std::endl;
+                    std::vector<int> col_block(rSerialized.begin() + cursor, rSerialized.begin() + cursor + col_size);
+                    cursor += col_size;
+
+                    rRows.push_back(std::move(row_block));
+                    rCols.push_back(std::move(col_block));
+                }
+                KRATOS_DEBUG_ERROR_IF(cursor != rSerialized.size()) << "Invalid serialized constraint blocks: extra trailing data" << std::endl;
+            };
+
+            std::vector<int> local_serialized_constraint_blocks =
+                serialize_constraint_blocks(local_constraint_row_equation_ids, local_constraint_col_equation_ids);
+
+            const auto gathered_serialized_constraint_blocks = r_data_comm.AllGatherv(local_serialized_constraint_blocks);
+            for (std::size_t rank_index = 0; rank_index < gathered_serialized_constraint_blocks.size(); ++rank_index) {
+                if (static_cast<int>(rank_index) == current_rank) {
+                    continue;
+                }
+                const auto& r_serialized_constraint_blocks = gathered_serialized_constraint_blocks[rank_index];
+                if (!r_serialized_constraint_blocks.empty()) {
+                    deserialize_and_append_constraint_blocks(
+                        r_serialized_constraint_blocks,
+                        local_constraint_row_equation_ids,
+                        local_constraint_col_equation_ids);
+                }
+            }
+
+            all_row_equation_ids.insert(
+                all_row_equation_ids.end(),
+                local_constraint_row_equation_ids.begin(),
+                local_constraint_row_equation_ids.end());
+            all_col_equation_ids.insert(
+                all_col_equation_ids.end(),
+                local_constraint_col_equation_ids.begin(),
+                local_constraint_col_equation_ids.end());
+        }
 
         TSparseSpace::BuildSystemStructure(
             mrComm,
-            mLocalSystemSize,
+            number_of_local_rows,
             mFirstMyId,
             mGuessRowSize,
-            all_equation_ids,
+            all_row_equation_ids,
+            all_col_equation_ids,
             rpA,
             rpb,
             rpDx,
@@ -1687,13 +2070,19 @@ private:
                 temp_primary[i] = mFirstMyId + i;
             }
 
-            if constexpr (std::is_same_v<typename TSparseSpace::CommunicatorType, Epetra_MpiComm>) {
+            if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
                 mpMap = Kratos::make_shared<Epetra_Map>(-1, mLocalSystemSize, temp_primary.data(), 0, mrComm);
-            } else {
+            }  else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+            #if (HAVE_TPETRA)
                 using MapType = typename TSparseSpace::MapType;
                 using GO = typename MapType::global_ordinal_type;
                 std::vector<GO> global_ids(temp_primary.begin(), temp_primary.begin() + mLocalSystemSize);
                 mpMap = Teuchos::rcp(new MapType(Teuchos::OrdinalTraits<GO>::invalid(), global_ids, 0, Teuchos::rcpFromRef(mrComm)));
+            #else
+                KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+            #endif
+            } else {
+                KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
             }
         }
 

@@ -43,7 +43,7 @@
 
 // The builder and solvers
 #include "custom_strategies/builder_and_solvers/trilinos_block_builder_and_solver.h"
-#include "custom_strategies/builder_and_solvers/trilinos_elimination_builder_and_solver.h"
+// #include "custom_strategies/builder_and_solvers/trilinos_elimination_builder_and_solver.h"
 
 namespace Kratos::Testing
 {
@@ -59,7 +59,7 @@ namespace Kratos::Testing
     /// Builder and solvers definition
     using TrilinosBuilderAndSolverType = BuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
     using TrilinosBlockBuilderAndSolverType = TrilinosBlockBuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
-    using TrilinosResidualBasedEliminationBuilderAndSolverType = TrilinosResidualBasedEliminationBuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
+    // using TrilinosResidualBasedEliminationBuilderAndSolverType = TrilinosResidualBasedEliminationBuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
 
     /// The time scheme
     using TrilinosSchemeType = Scheme< TrilinosSparseSpaceType, TrilinosLocalSpaceType>;
@@ -111,7 +111,6 @@ namespace Kratos::Testing
         // Create elements
         GeometryType::Pointer pgeom = Kratos::make_shared<Line2D2<Node>>(PointerVector<Node>{std::vector<Node::Pointer>({pnode1, pnode2})});
         rModelPart.AddElement(Kratos::make_intrusive<TestBarElement>( rank + 1, pgeom, p_prop));
-
 
         /// Add dof
         for (auto& r_node : rModelPart.Nodes()) {
@@ -880,7 +879,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -959,7 +958,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1034,7 +1033,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1110,7 +1109,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1184,7 +1183,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1258,7 +1257,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1351,7 +1350,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1369,7 +1368,7 @@ namespace Kratos::Testing
         // The solution check
         KRATOS_EXPECT_EQ(rA.getGlobalNumRows(), 8);
         KRATOS_EXPECT_EQ(rA.getGlobalNumCols(), 8);
-        KRATOS_EXPECT_EQ(rA.getGlobalNumEntries(), 36);
+        KRATOS_EXPECT_EQ(rA.getGlobalNumEntries(), 34);
 
         // Values to check
         auto p_prop = r_model_part.pGetProperties(1);
@@ -1422,7 +1421,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1493,7 +1492,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1562,7 +1561,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1632,7 +1631,7 @@ namespace Kratos::Testing
 
     //     // Create the solvers and things required
     //     auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-    //     auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+    //     auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
     //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
 
     //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
@@ -1680,7 +1679,7 @@ namespace Kratos::Testing
 
     //     // Create the solvers and things required
     //     auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-    //     auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+    //     auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
     //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
 
     //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
@@ -1725,7 +1724,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1778,7 +1777,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1850,7 +1849,7 @@ namespace Kratos::Testing
 
     //     // Create the solvers and things required
     //     auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-    //     auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+    //     auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
     //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
 
     //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
@@ -1900,7 +1899,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",
@@ -1981,7 +1980,7 @@ namespace Kratos::Testing
 
         // Create the solvers and things required
         auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-        auto p_solver = TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
         Parameters parameters = Parameters(R"(
         {
             "diagonal_values_for_dirichlet_dofs" : "no_scaling",

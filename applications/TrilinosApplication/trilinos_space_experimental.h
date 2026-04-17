@@ -28,17 +28,17 @@
 #include <Teuchos_GlobalMPISession.hpp>
 #include <Teuchos_CommHelpers.hpp>
 #include <TpetraExt_MatrixMatrix.hpp>
-#include <TpetraExt_TripleMatrixMultiply.hpp>
-
-//#include <MatrixMarket_Tpetra.hpp>
-
+// #include <TpetraExt_TripleMatrixMultiply.hpp> // NOTE: TripleMatrixMultiply is giving segmentation fault in the version of Trilinos available in Ubuntu 24.04. We cannot use it for the BDB' operation, and instead must do two separate multiplications with an intermediate CrsMatrix. This is less efficient than a single triple-matrix multiply, but it is a temporary workaround until we can upgrade to a newer Trilinos version with a working TpetraExt_TripleMatrixMultiply_def implementation.
+// NOTE: MatrixMarket_Tpetra.hpp is intentionally NOT included here — see
+// custom_utilities/auxiliary_matrix_market.h for the rationale.
 
 // Project includes
+#include "trilinos_application.h"
+#include "custom_utilities/auxiliary_matrix_market.h"
 #include "includes/ublas_interface.h"
 #include "spaces/ublas_space.h"
 #include "includes/data_communicator.h"
 #include "mpi/includes/mpi_data_communicator.h"
-
 
 namespace Kratos
 {
@@ -164,6 +164,15 @@ public:
     ///@{
 
     /**
+     * @brief This method returns the linear algebra library used
+     * @return The linear algebra library, TPETRA in this case
+     */
+    static constexpr TrilinosLinearAlgebraLibrary LinearAlgebraLibrary()
+    {
+        return TrilinosLinearAlgebraLibrary::TPETRA;
+    }
+
+    /**
      * @brief This method returns the rank of the communicator
      * @param rComm The communicator considered
      * @return The rank of the communicator
@@ -185,6 +194,113 @@ public:
     }
 
     /**
+     * @brief This method returns the map of the vector
+     * @param rV The vector considered
+     * @return The map of the vector
+     */
+    inline static const MapType& GetMap(const VectorType& rV)
+    {
+        return *(rV.getMap());
+    }
+
+    /**
+     * @brief Returns a Tpetra map for this rank's local rows starting at FirstMyId.
+     * @param rComm The MPI communicator
+     * @param LocalSize The number of locally owned rows on this rank
+     * @param FirstMyId The first global row index owned by this rank
+     * @return A Tpetra::Map covering the locally owned GIDs [FirstMyId, FirstMyId+LocalSize)
+     */
+    static MapPointerType GetOrCreateMap(
+        CommunicatorType& rComm,
+        const IndexType LocalSize,
+        const int FirstMyId)
+    {
+        std::vector<GO> local_ids(LocalSize);
+        for (IndexType i = 0; i < LocalSize; ++i) {
+            local_ids[i] = static_cast<GO>(FirstMyId + static_cast<int>(i));
+        }
+        return Teuchos::rcp(new MapType(
+            Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(),
+            Teuchos::ArrayView<const GO>(local_ids.data(), static_cast<int>(local_ids.size())),
+            0,
+            Teuchos::rcp(&rComm, false)));
+    }
+
+    /**
+     * @brief This method returns the communicator of the vector
+     * @param rV The vector considered
+     * @return The communicator of the vector
+     */
+    inline static const CommunicatorType& GetCommunicator(const VectorType& rV)
+    {
+        return dynamic_cast<const CommunicatorType&>(*(rV.getMap()->getComm()));
+    }
+
+    /**
+     * @brief This method returns the communicator of the matrix
+     * @param rA The matrix considered
+     * @return The communicator of the matrix
+     */
+    inline static const CommunicatorType& GetCommunicator(const MatrixType& rA)
+    {
+        return dynamic_cast<const CommunicatorType&>(*(rA.getMap()->getComm()));
+    }
+
+    /**
+     * @brief Global assembly on a Tpetra FECrsMatrix — close matrix if open.
+     * @param rA The matrix to assemble
+     * @details After AssembleLHS opens the matrix lazily, this finalizes assembly
+     * so the matrix is in a closed (fillComplete) state for solver consumption.
+     */
+    static void GlobalAssemble(MatrixType& rA)
+    {
+        // endAssembly() is an MPI collective on FECrsMatrix. All ranks must call it,
+        // even idle ones that contributed no entries (and therefore never called
+        // beginAssembly() via AssembleLHS). Open the matrix first if needed.
+        auto p_fe_rA = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_rA) {
+            if (!rA.isFillActive()) {
+                p_fe_rA->beginAssembly();
+            }
+            p_fe_rA->endAssembly();
+        } else if (rA.isFillActive()) {
+            rA.endAssembly();
+        }
+    }
+
+    /**
+     * @brief Global assembly on a Tpetra Vector.
+     * @param rV The vector to assemble (no-op)
+     * @note No-op: vectors in this space use a null importer (no overlap),
+     * so all RHS contributions go directly to locally owned entries via
+     * sumIntoGlobalValue. No FE state-machine management or cross-process
+     * communication is required.
+     */
+    static void GlobalAssemble(VectorType& rV)
+    {
+        // No-op: vectors in this space use a null importer (no overlap),
+        // so all RHS contributions go directly to locally owned entries via
+        // sumIntoGlobalValue. No FE state-machine management or cross-process communication is required.
+    }
+
+    /**
+     * @brief Manually finalizes matrix assembly.
+     * @param rA The matrix to finalize
+     * @details Calls endAssembly() followed by fillComplete() if the matrix is
+     * still in fill-active state after endAssembly().
+     * @param rA The matrix to finalize
+     * @details Calls endAssembly() followed by fillComplete() if the matrix is
+     * still in fill-active state after endAssembly().
+     */
+    static void ManualFinalize(MatrixType& rA)
+    {
+        rA.endAssembly();
+        if (rA.isFillActive()) {
+            rA.fillComplete();
+        }
+    }
+
+    /**
      * @brief This method creates an empty pointer to a map
      * @return The pointer to the map
      */
@@ -194,21 +310,134 @@ public:
     }
 
     /**
-     * @brief This method creates an empty pointer to a matrix
-     * @return The pointer to the matrix
-     */
-    inline static MatrixPointerType CreateEmptyMatrixPointer()
-    {
-        return MatrixPointerType(nullptr);
-    }
-
-    /**
      * @brief This method creates an empty pointer to a vector
      * @return The pointer to the vector
      */
     inline static VectorPointerType CreateEmptyVectorPointer()
     {
         return VectorPointerType(nullptr);
+    }
+
+    /**
+     * @brief Creates an empty VectorType from a map.
+     * @details Handles both Tpetra::FEMultiVector (needs importer+numVecs) and
+     *          plain Vector/MultiVector types.
+     * @param pMap The map to be used for the construction of the vector
+     * @return The pointer to the created vector
+     */
+    inline static VectorPointerType CreateVector(const MapPointerType& pMap)
+    {
+        if constexpr (std::is_same_v<VectorType, Tpetra::FEMultiVector<ST, LO, GO, NT>>) {
+            return Teuchos::rcp(new VectorType(pMap, Teuchos::null, 1));
+        } else {
+            return Teuchos::rcp(new VectorType(pMap));
+        }
+    }
+
+    /**
+     * @brief Creates a copy of srcVector into a new heap-allocated VectorType.
+     * Safe for FEMultiVector whose copy ctor is deleted; data is deep-copied via update().
+     * @param rVector The source vector
+     * @return The pointer to the new vector
+     */
+    inline static VectorPointerType CreateVectorCopy(const VectorType& rVector)
+    {
+        auto p = CreateVector(rVector.getMap());
+        p->update(1.0, rVector, 0.0);
+        return p;
+    }
+
+    /**
+     * @brief This method creates an empty pointer to a vector using Tpetra communicator
+     * @param pComm The Tpetra communicator
+     * @return The pointer to the vector
+     */
+    inline static VectorPointerType CreateEmptyVectorPointer(CommunicatorPointerType pComm)
+    {
+        const int global_elems = 0;
+        MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
+        return CreateVector(map);
+    }
+
+    /**
+     * @brief This method creates an empty pointer to a vector using Tpetra communicator
+     * @param rComm The Tpetra communicator
+     * @return The pointer to the vector
+     */
+    inline static VectorPointerType CreateEmptyVectorPointer(CommunicatorType& rComm)
+    {
+        return CreateEmptyVectorPointer(Teuchos::rcp(&rComm, false));
+    }
+
+
+    /**
+     * @brief Creates an empty MatrixType from a graph.
+     * @param pGraph The FECrsGraph used to construct the matrix
+     * @return The pointer to the created matrix
+     */
+    inline static MatrixPointerType CreateMatrix(const GraphPointerType& pGraph)
+    {
+        return Teuchos::rcp(new MatrixType(pGraph));
+    }
+
+    /**
+     * @brief Creates a deep copy of a matrix.
+     * @details Replicates the sparsity pattern of @p rMatrix into a freshly
+     *          allocated FECrsMatrix and then copies all values via CopyMatrixValues.
+     *          Safe for FECrsMatrix whose copy constructor and assignment operator
+     *          are deleted/unreliable.
+     * @param rMatrix The source matrix
+     * @return The pointer to the new matrix (same graph, same values)
+     */
+    inline static MatrixPointerType CreateMatrixCopy(const MatrixType& rMatrix)
+    {
+        // Reproduce the sparsity pattern through a new FECrsGraph
+        const auto p_row_map = rMatrix.getRowMap();
+        const auto p_col_map = rMatrix.getColMap();
+        const LO num_local_rows = static_cast<LO>(rMatrix.getNodeNumRows());
+
+        // Compute max entries per row to size the FE graph allocation.
+        // (FECrsGraph accepts a scalar maxNumEntriesPerRow, not a per-row array.)
+        std::size_t max_entries_per_row = 0;
+        for (LO i = 0; i < num_local_rows; ++i) {
+            max_entries_per_row = std::max(max_entries_per_row,
+                static_cast<std::size_t>(rMatrix.getNumEntriesInLocalRow(i)));
+        }
+        Teuchos::RCP<GraphType> p_graph = Teuchos::rcp(new GraphType(
+            p_row_map, p_col_map, max_entries_per_row));
+
+        // Insert column indices (global indexing)
+        p_graph->beginAssembly();
+        for (LO i = 0; i < num_local_rows; ++i) {
+            const auto global_row_index = p_row_map->getGlobalElement(i);
+            typename MatrixType::local_inds_host_view_type local_cols;
+            typename MatrixType::values_host_view_type vals;
+            rMatrix.getLocalRowView(i, local_cols, vals);
+            if (local_cols.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
+                    global_cols[j] = p_col_map->getGlobalElement(local_cols(j));
+                }
+                p_graph->insertGlobalIndices(global_row_index,
+                    Teuchos::ArrayView<const GO>(global_cols.data(), global_cols.size()));
+            }
+        }
+        p_graph->endAssembly();
+
+        // Construct the new matrix from the closed graph and copy values
+        auto p_new_matrix = Teuchos::rcp(new MatrixType(
+            Teuchos::rcp_const_cast<const GraphType>(p_graph)));
+        CopyMatrixValues(*p_new_matrix, rMatrix);
+        return p_new_matrix;
+    }
+
+    /**
+     * @brief This method creates an empty pointer to a matrix
+     * @return The pointer to the matrix
+     */
+    inline static MatrixPointerType CreateEmptyMatrixPointer()
+    {
+        return MatrixPointerType(nullptr);
     }
 
     /**
@@ -230,17 +459,6 @@ public:
     }
 
     /**
-     * @brief This method creates an empty pointer to a vector using Tpetra communicator
-     * @param pComm The Tpetra communicator
-     * @return The pointer to the vector
-     */
-    inline static VectorPointerType CreateEmptyVectorPointer(CommunicatorPointerType pComm)
-    {
-        const int global_elems = 0;
-        MapPointerType map = Teuchos::rcp(new MapType(global_elems, 0, pComm));
-        return CreateVector(map);
-    }
-    /**
      * @brief This method creates an empty pointer to a matrix using TPetra communicator
      * @param rComm The Tpetra communicator
      * @return The pointer to the matrix
@@ -249,17 +467,6 @@ public:
     {
         return CreateEmptyMatrixPointer(Teuchos::rcp(&rComm, false));
     }
-
-    /**
-     * @brief This method creates an empty pointer to a vector using Tpetra communicator
-     * @param rComm The Tpetra communicator
-     * @return The pointer to the vector
-     */
-    inline static VectorPointerType CreateEmptyVectorPointer(CommunicatorType& rComm)
-    {
-        return CreateEmptyVectorPointer(Teuchos::rcp(&rComm, false));
-    }
-
 
     /**
      * @brief Returns size of vector rV
@@ -452,13 +659,6 @@ public:
      * @param rX The vector considered
      * @param rY The result of the multiplication
      */
-    /**
-     * @brief Returns the multiplication of a matrix by a vector
-     * @details y = A*x
-     * @param rA The matrix considered
-     * @param rX The vector considered
-     * @param rY The result of the multiplication
-     */
     inline static void Mult(
         const MatrixType& rA,
         const VectorType& rX,
@@ -586,10 +786,10 @@ public:
      * @param rA The resulting matrix
      * @param rD The "center" matrix
      * @param rB The matrices to be transposed
-     * @param CallFillCompleteOnResult	Optional argument, defaults to true. Power users may specify this argument to be false if they DON'T want this function to call C.FillComplete. (It is often useful to allow this function to call C.FillComplete, in cases where one or both of the input matrices are rectangular and it is not trivial to know which maps to use for the domain- and range-maps.)
-     * @param KeepAllHardZeros	Optional argument, defaults to false. If true, Multiply, keeps all entries in C corresponding to hard zeros. If false, the following happens by case: A*B^T, A^T*B^T - Does not store entries caused by hard zeros in C. A^T*B (unoptimized) - Hard zeros are always stored (this option has no effect) A*B, A^T*B (optimized) - Hard zeros in corresponding to hard zeros in A are not stored, There are certain cases involving reuse of C, where this can be useful.
-     * @param EnforceInitialGraph If the initial graph is enforced, or a new one is generated
-     * @todo TpetraExt_TripleMatrixMultiply_def is failing compilation in the version of Trilinos available in Ubuntu 20.04. We cannot use TripleMatrixMultiply::MultiplyRAP
+     * @param CallFillCompleteOnResult Reserved for API compatibility with TrilinosSpace; ignored in this experimental implementation.
+     * @param KeepAllHardZeros Reserved for API compatibility with TrilinosSpace; ignored in this experimental implementation.
+     * @param EnforceInitialGraph Reserved for API compatibility with TrilinosSpace; ignored in this experimental implementation.
+     * @todo TripleMatrixMultiply::MultiplyRAP is giving segmentation fault in the version of Trilinos available in Ubuntu 24.04. We cannot use it for the BDB' operation, and instead must do two separate multiplications with an intermediate CrsMatrix. This is less efficient than a single triple-matrix multiply, but it is a temporary workaround until we can upgrade to a newer Trilinos version with a working TpetraExt_TripleMatrixMultiply_def implementation.
      */
     inline static void BtDBProductOperation(
         MatrixType& rA,
@@ -607,28 +807,62 @@ public:
         Teuchos::RCP<CrsMatrixType> aux_2 = Teuchos::rcp(new CrsMatrixType(aux_1->getRowMap(), 16));
         Tpetra::MatrixMatrix::Multiply(*aux_1, false, rB, false, *aux_2);
 
-        // We must ensure rA has enough space. 
-        // If it is an FECrsMatrix, we might need to recreate it if the graph is too small.
-        // But we try to copy values directly.
-        // Inline copy logic from CrsMatrixType to MatrixType
-        if (!rA.isFillActive()) rA.resumeFill();
-        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
-        if (p_fe_A) p_fe_A->beginAssembly();
-        for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
-            const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
-            typename MatrixType::local_inds_host_view_type local_cols;
-            typename MatrixType::values_host_view_type vals;
-            aux_2->getLocalRowView(i, local_cols, vals);
-            if (vals.extent(0) > 0) {
+        auto build_fe_from_crs = [&](const CrsMatrixType& rSrc) {
+            std::size_t max_entries_per_row = 0;
+            for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
+                typename MatrixType::local_inds_host_view_type local_cols;
+                typename MatrixType::values_host_view_type vals;
+                rSrc.getLocalRowView(i, local_cols, vals);
+                max_entries_per_row = std::max(max_entries_per_row, static_cast<std::size_t>(local_cols.extent(0)));
+            }
+
+            Teuchos::RCP<GraphType> p_graph = Teuchos::rcp(new GraphType(
+                rSrc.getRowMap(), rSrc.getColMap(), max_entries_per_row));
+            p_graph->beginAssembly();
+            for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
+                const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
+                typename MatrixType::local_inds_host_view_type local_cols;
+                typename MatrixType::values_host_view_type vals;
+                rSrc.getLocalRowView(i, local_cols, vals);
+                if (vals.extent(0) == 0) continue;
                 Teuchos::Array<GO> global_cols(local_cols.extent(0));
                 for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
-                    global_cols[j] = aux_2->getColMap()->getGlobalElement(local_cols(j));
+                    global_cols[j] = rSrc.getColMap()->getGlobalElement(local_cols(j));
                 }
-                rA.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
+                p_graph->insertGlobalIndices(global_row_index,
+                    Teuchos::ArrayView<const GO>(global_cols.data(), static_cast<int>(global_cols.size())));
             }
+            p_graph->endAssembly();
+
+            auto p_matrix = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(p_graph)));
+            if (p_matrix->isFillActive()) p_matrix->fillComplete();
+            p_matrix->beginAssembly();
+            for (LO i = 0; i < static_cast<LO>(rSrc.getNodeNumRows()); ++i) {
+                const auto global_row_index = rSrc.getRowMap()->getGlobalElement(i);
+                typename MatrixType::local_inds_host_view_type local_cols;
+                typename MatrixType::values_host_view_type vals;
+                rSrc.getLocalRowView(i, local_cols, vals);
+                if (vals.extent(0) == 0) continue;
+                Teuchos::Array<GO> global_cols(local_cols.extent(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols.extent(0)); ++j) {
+                    global_cols[j] = rSrc.getColMap()->getGlobalElement(local_cols(j));
+                }
+                p_matrix->sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
+            }
+            p_matrix->endAssembly();
+            if (CallFillCompleteOnResult && p_matrix->isFillActive()) p_matrix->fillComplete();
+            return p_matrix;
+        };
+
+        auto p_result = build_fe_from_crs(*aux_2);
+        if (EnforceInitialGraph) {
+            auto p_combined_graph = CombineMatricesGraphs(rA, *p_result);
+            auto p_enforced = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(p_combined_graph)));
+            CopyMatrixValues(*p_enforced, *p_result);
+            p_result = p_enforced;
         }
-        if (p_fe_A) p_fe_A->endAssembly();
-        if (rA.isFillActive()) rA.fillComplete();
+
+        CopyMatrixValues(rA, *p_result);
     }
 
     /**
@@ -636,9 +870,10 @@ public:
      * @param rA The resulting matrix
      * @param rD The "center" matrix
      * @param rB The matrices to be transposed
-     * @param CallFillCompleteOnResult	Optional argument, defaults to true. Power users may specify this argument to be false if they DON'T want this function to call C.FillComplete. (It is often useful to allow this function to call C.FillComplete, in cases where one or both of the input matrices are rectangular and it is not trivial to know which maps to use for the domain- and range-maps.)
-     * @param KeepAllHardZeros	Optional argument, defaults to false. If true, Multiply, keeps all entries in C corresponding to hard zeros. If false, the following happens by case: A*B^T, A^T*B^T - Does not store entries caused by hard zeros in C. A^T*B (unoptimized) - Hard zeros are always stored (this option has no effect) A*B, A^T*B (optimized) - Hard zeros in corresponding to hard zeros in A are not stored, There are certain cases involving reuse of C, where this can be useful.
-     * @param EnforceInitialGraph If the initial graph is enforced, or a new one is generated
+     * @param CallFillCompleteOnResult Reserved for API compatibility with TrilinosSpace; ignored in this experimental implementation.
+     * @param KeepAllHardZeros Reserved for API compatibility with TrilinosSpace; ignored in this experimental implementation.
+     * @param EnforceInitialGraph Reserved for API compatibility with TrilinosSpace; ignored in this experimental implementation.
+     * @todo TripleMatrixMultiply::MultiplyRAP is giving segmentation fault in the version of Trilinos available in Ubuntu 24.04. We cannot use it for the BDB' operation, and instead must do two separate multiplications with an intermediate CrsMatrix. This is less efficient than a single triple-matrix multiply, but it is a temporary workaround until we can upgrade to a newer Trilinos version with a working TpetraExt_TripleMatrixMultiply_def implementation.
      */
     inline static void BDBtProductOperation(
         MatrixType& rA,
@@ -656,10 +891,36 @@ public:
         Teuchos::RCP<CrsMatrixType> aux_2 = Teuchos::rcp(new CrsMatrixType(aux_1->getRowMap(), 16));
         Tpetra::MatrixMatrix::Multiply(*aux_1, false, rB, true, *aux_2);
 
-        // Inline copy logic from CrsMatrixType to MatrixType
-        if (!rA.isFillActive()) rA.resumeFill();
-        auto p_fe_A = dynamic_cast<MatrixType*>(&rA);
-        if (p_fe_A) p_fe_A->beginAssembly();
+        // Copy aux_2 values into rA
+        auto p_fe_rA = dynamic_cast<MatrixType*>(&rA);
+        if (p_fe_rA) {
+            if (rA.isFillActive()) {
+                rA.fillComplete();
+            }
+            p_fe_rA->beginAssembly();
+        } else {
+            if (!rA.isFillActive()) rA.resumeFill();
+        }
+
+        // Preserve existing structure from rD (hard-zero positions) so FE
+        // assembly does not shrink the graph to only aux_2 inserted entries.
+        for (LO i = 0; i < static_cast<LO>(rD.getNodeNumRows()); ++i) {
+            const auto global_row_index = rD.getRowMap()->getGlobalElement(i);
+            typename MatrixType::local_inds_host_view_type local_cols_d;
+            typename MatrixType::values_host_view_type vals_d;
+            rD.getLocalRowView(i, local_cols_d, vals_d);
+            if (vals_d.extent(0) > 0) {
+                Teuchos::Array<GO> global_cols(local_cols_d.extent(0));
+                std::vector<ST> zero_vals(static_cast<std::size_t>(local_cols_d.extent(0)), static_cast<ST>(0));
+                for (std::size_t j = 0; j < static_cast<std::size_t>(local_cols_d.extent(0)); ++j) {
+                    global_cols[j] = rD.getColMap()->getGlobalElement(local_cols_d(j));
+                }
+                rA.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), zero_vals.data(), global_cols.data());
+            }
+        }
+
+        // Zero rA before summing: full replacement, not accumulation.
+        rA.setAllToScalar(static_cast<ST>(0));
         for (LO i = 0; i < static_cast<LO>(aux_2->getNodeNumRows()); ++i) {
             const auto global_row_index = aux_2->getRowMap()->getGlobalElement(i);
             typename MatrixType::local_inds_host_view_type local_cols;
@@ -673,8 +934,8 @@ public:
                 rA.sumIntoGlobalValues(global_row_index, static_cast<LO>(global_cols.size()), vals.data(), global_cols.data());
             }
         }
-        if (p_fe_A) p_fe_A->endAssembly();
-        if (rA.isFillActive()) rA.fillComplete();
+        if (p_fe_rA) p_fe_rA->endAssembly();
+        if (CallFillCompleteOnResult && rA.isFillActive()) rA.fillComplete();
     }
 
     /**
@@ -1003,8 +1264,393 @@ public:
         rX.putScalar(static_cast<ST>(0));
     }
 
-    /// TODO: creating the the calculating reaction version
-    // 	template<class TOtherMatrixType, class TEquationIdVectorType>
+    /**
+     * @brief Build Tpetra FECrsGraph and create new system matrix + vectors.
+     * @details Uses a proper OWNED_PLUS_SHARED map that includes ghost DOFs
+     *          (equation IDs referenced by local elements but owned by other
+     *          processes). This enables FECrsMatrix to accept cross-partition
+     *          element contributions and communicate them in endAssembly().
+     * @param rComm The MPI communicator
+     * @param LocalSize The number of locally owned DOFs on this rank
+     * @param FirstMyId The first global DOF id owned by this rank
+     * @param GuessRowSize The estimated number of non-zeros per row
+     * @param rAllEquationIds The list of lists of equation ids for each element
+     * @param rpA The pointer to the system matrix to be created
+     * @param rpb The pointer to the RHS vector to be created
+     * @param rpDx The pointer to the solution vector to be created
+     * @param rpReactions The pointer to the reactions vector to be created
+     * @param equationSystemSize The global size of the equation system
+     * @param pMap The map to be used for the construction of the matrix and vectors
+     */
+    static void BuildSystemStructure(
+        CommunicatorType& rComm,
+        const IndexType LocalSize,
+        const int FirstMyId,
+        const int GuessRowSize,
+        const std::vector<std::vector<int>>& rAllEquationIds,
+        MatrixPointerType& rpA,
+        VectorPointerType& rpb,
+        VectorPointerType& rpDx,
+        VectorPointerType& rpReactions,
+        const IndexType equationSystemSize,
+        MapPointerType pMap)
+    {
+        auto comm = pMap->getComm();
+        const int nproc = static_cast<int>(comm->getSize());
+
+        const GO firstId = static_cast<GO>(FirstMyId);
+        const GO lastId  = firstId + static_cast<GO>(LocalSize);
+
+        // Step 1: collect locally-visible ghost DOF GIDs (referenced by local elements
+        // but owned by other processes, i.e. outside [firstId, lastId)).
+        std::set<GO> ghost_gids_set;
+        for (const auto& eq_ids : rAllEquationIds) {
+            for (int id : eq_ids) {
+                const GO gid = static_cast<GO>(id);
+                if (gid < firstId || gid >= lastId)
+                    ghost_gids_set.insert(gid);
+            }
+        }
+
+        // Step 2: Symmetric ghost expansion.
+        //
+        // FECrsGraph::endFill() has two code paths controlled solely by whether
+        // ownedRowsImporter_ is null.  The importer is set to null whenever the
+        // ownedMap and ownedPlusSharedMap are identical (maps_are_the_same==true).
+        // The "easy case"  (null importer) skips doExport(); the "hard case" calls it.
+        // When some processes take the easy case and others the hard case, their MPI
+        // operations diverge → MPI_ERR_TRUNCATE.
+        //
+        // Fix: every process that will *receive* ghost contributions (i.e. some other
+        // process is sending rows that fall in my owned range) must also have at least
+        // one ghost DOF so it enters the hard case.  We achieve this with an AllGather
+        // of each process's owned-DOF range, followed by a notification round-trip that
+        // tells each receiver to add a dummy ghost from the sender's range.
+
+        // Gather every process's [firstId, localSize] so we can find ownership.
+        GO myFid = firstId, mySz = static_cast<GO>(LocalSize);
+        Teuchos::Array<GO> allFirstIds(nproc), allLocalSizes(nproc);
+        Teuchos::gatherAll(*comm, 1, &myFid, nproc, allFirstIds.getRawPtr());
+        Teuchos::gatherAll(*comm, 1, &mySz,  nproc, allLocalSizes.getRawPtr());
+
+        // For each ghost GID we own locally, identify its owner process and record
+        // that we will send that process a contribution.  We notify the owner by
+        // storing our firstId in notify_to[owner].
+        Teuchos::Array<GO> notify_to(nproc, static_cast<GO>(-1));
+        for (GO g : ghost_gids_set) {
+            for (int p = 0; p < nproc; ++p) {
+                if (g >= allFirstIds[p] && g < allFirstIds[p] + allLocalSizes[p]) {
+                    if (p != static_cast<int>(comm->getRank()))
+                        notify_to[p] = firstId;
+                    break;
+                }
+            }
+        }
+
+        // AllGather the full nproc×nproc notification matrix.
+        // notify_all[q*nproc + k] = value that process q put in notify_to[k].
+        Teuchos::Array<GO> notify_all(nproc * nproc, static_cast<GO>(-1));
+        Teuchos::gatherAll(*comm, nproc, notify_to.getRawPtr(),
+                           nproc * nproc, notify_all.getRawPtr());
+
+        // Each process k checks column k of notify_all.  If process q will send it
+        // data (notify_all[q*nproc+k] != -1), add q's firstId as a dummy ghost so
+        // process k also enters the hard case.
+        const int myrank = static_cast<int>(comm->getRank());
+        for (int q = 0; q < nproc; ++q) {
+            if (notify_all[q * nproc + myrank] != static_cast<GO>(-1)) {
+                const GO q_first = allFirstIds[q];
+                if (q_first < firstId || q_first >= lastId)   // not already owned
+                    ghost_gids_set.insert(q_first);
+            }
+        }
+
+        // Force ALL ranks into the FECrsGraph "hard case" if any rank has ghosts.
+        // Idle ranks (e.g. LocalSize==0, no elements) would otherwise take the
+        // "easy path" in endAssembly(), which skips the MPI collectives that
+        // active ranks call, causing a collective mismatch and crash.
+        {
+            GO has_ghosts_local = ghost_gids_set.empty() ? GO(0) : GO(1);
+            GO has_ghosts_global = GO(0);
+            Teuchos::reduceAll(*comm, Teuchos::REDUCE_MAX, 1, &has_ghosts_local, &has_ghosts_global);
+            if (has_ghosts_global > GO(0) && ghost_gids_set.empty()) {
+                // Add a dummy ghost from the first rank that owns any DOFs.
+                for (int p = 0; p < nproc; ++p) {
+                    const GO q_first = allFirstIds[p];
+                    if (allLocalSizes[p] > 0 && (q_first < firstId || q_first >= lastId)) {
+                        ghost_gids_set.insert(q_first);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Step 3: Build OWNED_PLUS_SHARED map.
+        // After symmetric expansion every process with any cross-partition elements
+        // has a non-trivially-different OPS map → all enter FECrsGraph's hard case
+        // → all call doExport during endAssembly → no MPI divergence.
+        MapPointerType owned_plus_shared_map;
+        if (ghost_gids_set.empty()) {
+            // Purely serial or identical partition — safe easy case for ALL processes.
+            owned_plus_shared_map = pMap;
+        } else {
+            // Owned GIDs first (required by FECrsGraph::setup locality check),
+            // then ghost GIDs.
+            std::vector<GO> ops_gids;
+            ops_gids.reserve(LocalSize + ghost_gids_set.size());
+            for (IndexType i = 0; i < LocalSize; ++i)
+                ops_gids.push_back(firstId + static_cast<GO>(i));
+            for (GO g : ghost_gids_set)
+                ops_gids.push_back(g);
+            owned_plus_shared_map = Teuchos::rcp(new MapType(
+                Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(),
+                Teuchos::ArrayView<const GO>(ops_gids.data(),
+                                            static_cast<int>(ops_gids.size())),
+                0, pMap->getComm()));
+        }
+
+        // Step 4: Build FECrsGraph with (ownedMap, ownedPlusSharedMap).
+        Teuchos::RCP<GraphType> graph =
+            Teuchos::rcp(new GraphType(pMap, owned_plus_shared_map, GuessRowSize));
+        graph->beginAssembly();
+        std::vector<GO> gids;
+        for (const auto& eq_ids : rAllEquationIds) {
+            if (eq_ids.empty()) continue;
+            gids.resize(eq_ids.size());
+            for (std::size_t k = 0; k < eq_ids.size(); ++k)
+                gids[k] = static_cast<GO>(eq_ids[k]);
+            for (std::size_t row = 0; row < gids.size(); ++row) {
+                if (owned_plus_shared_map->getLocalElement(gids[row]) !=
+                        Teuchos::OrdinalTraits<LO>::invalid()) {
+                    graph->insertGlobalIndices(
+                        gids[row],
+                        Teuchos::ArrayView<const GO>(gids.data(),
+                                                     static_cast<int>(gids.size())));
+                }
+            }
+        }
+        // endAssembly: communicates ghost-row structure to owning processes and
+        // switches the active graph from OWNED_PLUS_SHARED to OWNED.
+        graph->endAssembly();
+
+        rpA = Teuchos::rcp(new MatrixType(
+            Teuchos::rcp_const_cast<const GraphType>(graph)));
+        // Post-construction normalization: FECrsMatrix ctor leaves isFillActive()=true
+        // but fillState_=closed (internal beginFill→resumeFill).  Call fillComplete()
+        // to reset so GlobalAssemble does not incorrectly call endAssembly().
+        if (rpA->isFillActive()) rpA->fillComplete();
+
+        if (!rpb || Size(*rpb) != equationSystemSize)
+            rpb = CreateVector(pMap);
+        if (!rpDx || Size(*rpDx) != equationSystemSize)
+            rpDx = CreateVector(pMap);
+        if (!rpReactions)
+            rpReactions = CreateVector(pMap);
+    }
+
+    /**
+     * @brief Build Tpetra FECrsGraph with separate row and column block lists.
+     * @details This overload mirrors the Epetra BuildSystemStructure with separate
+     *          rAllRowEquationIds and rAllColEquationIds block lists, enabling
+     *          rectangular (non-symmetric) sparsity patterns.
+     * @param rComm The MPI communicator
+     * @param LocalSize The local size of the system
+     * @param FirstMyId The first global id owned by this rank
+     * @param GuessRowSize The guess row size for the graph construction
+     * @param rAllRowEquationIds The list of lists of row equation ids for each element
+     * @param rAllColEquationIds The list of lists of column equation ids for each element
+     * @param rpA The pointer to the system matrix to be created
+     * @param rpb The pointer to the RHS vector to be created
+     * @param rpDx The pointer to the solution vector to be created
+     * @param rpReactions The pointer to the reactions vector to be created
+     * @param EquationSystemSize The global size of the equation system
+     * @param pMap The map to be used for the construction of the matrix and vectors
+     */
+    static void BuildSystemStructure(
+        CommunicatorType& rComm,
+        const IndexType LocalSize,
+        const int FirstMyId,
+        const int GuessRowSize,
+        const std::vector<std::vector<int>>& rAllRowEquationIds,
+        const std::vector<std::vector<int>>& rAllColEquationIds,
+        MatrixPointerType& rpA,
+        VectorPointerType& rpb,
+        VectorPointerType& rpDx,
+        VectorPointerType& rpReactions,
+        const IndexType EquationSystemSize,
+        MapPointerType pMap)
+    {
+        KRATOS_ERROR_IF(rAllRowEquationIds.size() != rAllColEquationIds.size())
+            << "BuildSystemStructure: row and column block lists must have the same size" << std::endl;
+
+        auto comm = pMap->getComm();
+        const int nproc = static_cast<int>(comm->getSize());
+        const GO firstId = static_cast<GO>(FirstMyId);
+        const GO lastId  = firstId + static_cast<GO>(LocalSize);
+
+        // Collect ghost GIDs from both row and column ids
+        std::set<GO> ghost_gids_set;
+        for (std::size_t i_block = 0; i_block < rAllRowEquationIds.size(); ++i_block) {
+            for (int id : rAllRowEquationIds[i_block]) {
+                const GO gid = static_cast<GO>(id);
+                if (gid < firstId || gid >= lastId) ghost_gids_set.insert(gid);
+            }
+            for (int id : rAllColEquationIds[i_block]) {
+                const GO gid = static_cast<GO>(id);
+                if (gid < firstId || gid >= lastId) ghost_gids_set.insert(gid);
+            }
+        }
+
+        // Symmetric ghost expansion (same logic as the single-block overload)
+        GO myFid = firstId, mySz = static_cast<GO>(LocalSize);
+        Teuchos::Array<GO> allFirstIds(nproc), allLocalSizes(nproc);
+        Teuchos::gatherAll(*comm, 1, &myFid, nproc, allFirstIds.getRawPtr());
+        Teuchos::gatherAll(*comm, 1, &mySz,  nproc, allLocalSizes.getRawPtr());
+
+        Teuchos::Array<GO> notify_to(nproc, static_cast<GO>(-1));
+        for (GO g : ghost_gids_set) {
+            for (int p = 0; p < nproc; ++p) {
+                if (g >= allFirstIds[p] && g < allFirstIds[p] + allLocalSizes[p]) {
+                    if (p != static_cast<int>(comm->getRank()))
+                        notify_to[p] = firstId;
+                    break;
+                }
+            }
+        }
+
+        Teuchos::Array<GO> notify_all(nproc * nproc, static_cast<GO>(-1));
+        Teuchos::gatherAll(*comm, nproc, notify_to.getRawPtr(),
+                           nproc * nproc, notify_all.getRawPtr());
+
+        const int myrank = static_cast<int>(comm->getRank());
+        for (int q = 0; q < nproc; ++q) {
+            if (notify_all[q * nproc + myrank] != static_cast<GO>(-1)) {
+                const GO q_first = allFirstIds[q];
+                if (q_first < firstId || q_first >= lastId)
+                    ghost_gids_set.insert(q_first);
+            }
+        }
+
+        // Force ALL ranks into the FECrsGraph "hard case" if any rank has ghosts.
+        // (same logic as the single-block overload above)
+        {
+            GO has_ghosts_local = ghost_gids_set.empty() ? GO(0) : GO(1);
+            GO has_ghosts_global = GO(0);
+            Teuchos::reduceAll(*comm, Teuchos::REDUCE_MAX, 1, &has_ghosts_local, &has_ghosts_global);
+            if (has_ghosts_global > GO(0) && ghost_gids_set.empty()) {
+                for (int p = 0; p < nproc; ++p) {
+                    const GO q_first = allFirstIds[p];
+                    if (allLocalSizes[p] > 0 && (q_first < firstId || q_first >= lastId)) {
+                        ghost_gids_set.insert(q_first);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Build OWNED_PLUS_SHARED map
+        MapPointerType owned_plus_shared_map;
+        if (ghost_gids_set.empty()) {
+            owned_plus_shared_map = pMap;
+        } else {
+            std::vector<GO> ops_gids;
+            ops_gids.reserve(LocalSize + ghost_gids_set.size());
+            for (IndexType i = 0; i < LocalSize; ++i)
+                ops_gids.push_back(firstId + static_cast<GO>(i));
+            for (GO g : ghost_gids_set)
+                ops_gids.push_back(g);
+            owned_plus_shared_map = Teuchos::rcp(new MapType(
+                Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(),
+                Teuchos::ArrayView<const GO>(ops_gids.data(),
+                                            static_cast<int>(ops_gids.size())),
+                0, pMap->getComm()));
+        }
+
+        // Build FECrsGraph inserting row_ids × col_ids blocks
+        Teuchos::RCP<GraphType> graph =
+            Teuchos::rcp(new GraphType(pMap, owned_plus_shared_map, GuessRowSize));
+        graph->beginAssembly();
+        for (std::size_t i_block = 0; i_block < rAllRowEquationIds.size(); ++i_block) {
+            const auto& r_row_ids = rAllRowEquationIds[i_block];
+            const auto& r_col_ids = rAllColEquationIds[i_block];
+            if (r_row_ids.empty() || r_col_ids.empty()) continue;
+            std::vector<GO> row_gids(r_row_ids.size());
+            std::vector<GO> col_gids(r_col_ids.size());
+            for (std::size_t k = 0; k < r_row_ids.size(); ++k)
+                row_gids[k] = static_cast<GO>(r_row_ids[k]);
+            for (std::size_t k = 0; k < r_col_ids.size(); ++k)
+                col_gids[k] = static_cast<GO>(r_col_ids[k]);
+            for (const GO row : row_gids) {
+                if (owned_plus_shared_map->getLocalElement(row) !=
+                        Teuchos::OrdinalTraits<LO>::invalid()) {
+                    graph->insertGlobalIndices(
+                        row,
+                        Teuchos::ArrayView<const GO>(col_gids.data(),
+                                                     static_cast<int>(col_gids.size())));
+                }
+            }
+        }
+        graph->endAssembly();
+
+        rpA = Teuchos::rcp(new MatrixType(
+            Teuchos::rcp_const_cast<const GraphType>(graph)));
+        if (rpA->isFillActive()) rpA->fillComplete();
+
+        if (!rpb || Size(*rpb) != EquationSystemSize)
+            rpb = CreateVector(pMap);
+        if (!rpDx || Size(*rpDx) != EquationSystemSize)
+            rpDx = CreateVector(pMap);
+        if (!rpReactions)
+            rpReactions = CreateVector(pMap);
+    }
+
+    /**
+     * @brief Build a Tpetra FE constraint graph and create T matrix + constant vector.
+     * @param rComm The communicator considered
+     * @param LocalSize The local size of the system
+     * @param FirstMyId The first global id owned by this rank
+     * @param GuessRowSize The guess row size for the graph construction
+     * @param rSlaveEquationIds The list of lists of slave equation ids for each local row
+     * @param rMasterEquationIds The list of lists of master equation ids for each local row
+     * @param rpT The pointer to the T matrix to be created
+     * @param rpConstantVector The pointer to the constant vector to be created
+     * @param pMap The map to be used for the construction of the matrix and vectors
+     */
+    static void BuildConstraintsStructure(
+        CommunicatorType& rComm,
+        const IndexType LocalSize,
+        const int FirstMyId,
+        const int GuessRowSize,
+        const std::vector<std::vector<int>>& rSlaveEquationIds,
+        const std::vector<std::vector<int>>& rMasterEquationIds,
+        MatrixPointerType& rpT,
+        VectorPointerType& rpConstantVector,
+        MapPointerType pMap
+        )
+    {
+        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(pMap, pMap, GuessRowSize));
+        for (IndexType i = 0; i < LocalSize; ++i) {
+            const GO gid = static_cast<GO>(FirstMyId + static_cast<int>(i));
+            graph->insertGlobalIndices(gid, Teuchos::ArrayView<const GO>(&gid, 1));
+        }
+        for (std::size_t c = 0; c < rSlaveEquationIds.size(); ++c) {
+            const auto& slave_ids = rSlaveEquationIds[c];
+            const auto& master_ids = rMasterEquationIds[c];
+            if (slave_ids.empty() || master_ids.empty()) continue;
+            std::vector<GO> master_gids(master_ids.size());
+            for (std::size_t k = 0; k < master_ids.size(); ++k) master_gids[k] = static_cast<GO>(master_ids[k]);
+            for (int slave_id : slave_ids) {
+                const GO slave_gid = static_cast<GO>(slave_id);
+                graph->insertGlobalIndices(slave_gid,
+                    Teuchos::ArrayView<const GO>(master_gids.data(), static_cast<int>(master_gids.size())));
+            }
+        }
+        if (graph->isFillActive()) graph->fillComplete();
+        rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
+        // Post-construction normalization (same as BuildSystemStructure above).
+        if (rpT->isFillActive()) rpT->fillComplete();
+        rpConstantVector = CreateVector(pMap);
+    }
 
     /**
      * @brief Assembles the LHS of the system
@@ -1055,10 +1701,6 @@ public:
         }
     }
 
-    //***********************************************************************
-    /// TODO: creating the the calculating reaction version
-    // 	template<class TOtherVectorType, class TEquationIdVectorType>
-
     /**
      * @brief Assembles the RHS of the system
      * @param rb The RHS vector
@@ -1103,6 +1745,16 @@ public:
         return true;
     }
 
+   /**
+    * @brief Check if the TrilinosSpaceExperimental is distributed.
+    * @details This static member function checks whether the TrilinosSpaceExperimental is distributed or not.
+    * @return True if the space is distributed, false otherwise.
+    */
+    static constexpr bool IsDistributedSpace()
+    {
+        return true;
+    }
+
     /**
      * @brief Returns a list of the fastest direct solvers.
      * @details This function returns a vector of strings representing the names of the fastest direct solvers. The order of the solvers in the list may need to be updated and reordered depending on the size of the equation system.
@@ -1123,6 +1775,196 @@ public:
             "basker"          // Amesos2 Basker
         });
         return faster_direct_solvers;
+    }
+
+    /**
+     * @brief Sets a vector entry using a global index and performs assembly.
+     * @param rX The vector to be modified.
+     * @param i The global index of the entry.
+     * @param Value The value to assign.
+     * @details This method sets the value at global index i (if locally owned)
+     * and then calls GlobalAssemble() so the change is synchronized.
+     */
+    static void SetGlobalVec(
+        VectorType& rX,
+        const IndexType i,
+        const double Value
+        )
+    {
+        auto map = rX.getMap();
+        IndexType localIndex = map->getLocalElement(i);
+        if (localIndex != Tpetra::Details::OrdinalTraits<IndexType>::invalid()) {
+            rX.replaceLocalValue(localIndex, size_t(0), static_cast<ST>(Value));
+        }
+        GlobalAssemble(rX);
+    }
+
+    /**
+     * @brief Sets a vector entry using a global index without assembly.
+     * @param rX The vector to be modified.
+     * @param i The global index of the entry.
+     * @param Value The value to assign.
+     * @details This method is intended for batched updates where assembly is
+     * deferred and handled separately by the caller.
+     */
+    static void SetGlobalVecNoAssemble(
+        VectorType& rX,
+        const IndexType i,
+        const double Value
+        )
+    {
+        auto map = rX.getMap();
+        IndexType localIndex = map->getLocalElement(i);
+        if (localIndex != Tpetra::Details::OrdinalTraits<IndexType>::invalid()) {
+            rX.replaceLocalValue(localIndex, size_t(0), static_cast<ST>(Value));
+        }
+    }
+
+    /**
+     * @brief Sets a vector entry using a local index and performs assembly.
+     * @param rX The vector to be modified.
+     * @param i The local index of the entry on the current rank.
+     * @param Value The value to assign.
+     * @details This method uses local indexing and then calls GlobalAssemble()
+     * to propagate pending contributions.
+     */
+    static void SetLocalVec(
+        VectorType& rX,
+        const IndexType i,
+        const double Value
+        )
+    {
+        rX.replaceLocalValue(static_cast<LO>(i), size_t(0), static_cast<ST>(Value));
+        GlobalAssemble(rX);
+    }
+
+    /**
+     * @brief Sets a vector entry using a local index without assembly.
+     * @param rX The vector to be modified.
+     * @param i The local index of the entry on the current rank.
+     * @param Value The value to assign.
+     * @details This method is useful when several local values are modified
+     * and a single later assembly is preferred for efficiency.
+     */
+    static void SetLocalVecNoAssemble(
+        VectorType& rX,
+        const IndexType i,
+        const double Value
+        )
+    {
+        rX.replaceLocalValue(static_cast<LO>(i), size_t(0), static_cast<ST>(Value));
+    }
+
+    /**
+     * @brief Sets a matrix entry using global row and column indices and performs assembly.
+     * @param rA The matrix to be modified.
+     * @param i The global row index.
+     * @param j The global column index.
+     * @param Value The value to assign.
+     * @details The value is inserted with global indexing and the matrix is then
+     * globally assembled so the modification becomes consistent in parallel.
+     */
+    static void SetGlobalMat(
+        MatrixType& rA,
+        IndexType i,
+        IndexType j,
+        double Value
+        )
+    {
+        const bool was_closed = !rA.isFillActive();
+        if (was_closed) {
+            rA.beginAssembly();
+        }
+        const GO globalRow = static_cast<GO>(i);
+        const GO globalCol = static_cast<GO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceGlobalValues(globalRow, 1, &val, &globalCol);
+        if (was_closed) {
+            rA.endAssembly();
+            if (rA.isFillActive()) rA.fillComplete();
+        }
+    }
+
+    /**
+     * @brief Sets a matrix entry using global row and column indices without assembly.
+     * @param rA The matrix to be modified.
+     * @param i The global row index.
+     * @param j The global column index.
+     * @param Value The value to assign.
+     * @details This method is intended for batched matrix insertions where
+     * GlobalAssemble() will be invoked separately by the caller.
+     */
+    static void SetGlobalMatNoAssemble(
+        MatrixType& rA,
+        const IndexType i,
+        const IndexType j,
+        const double Value
+        )
+    {
+        if (!rA.isFillActive()) {
+            rA.beginAssembly();
+        }
+        const GO globalRow = static_cast<GO>(i);
+        const GO globalCol = static_cast<GO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceGlobalValues(globalRow, 1, &val, &globalCol);
+        // Assembly must be finalized by the caller via GlobalAssemble()
+    }
+
+    /**
+     * @brief Sets a matrix entry using local row and column indices and performs assembly.
+     * @param rA The matrix to be modified.
+     * @param i The local row index on the current rank.
+     * @param j The local column index on the current rank.
+     * @param Value The value to assign.
+     * @details This method uses local indexing and then assembles the FE matrix
+     * so pending contributions are synchronized across ranks.
+     */
+    static void SetLocalMat(
+        MatrixType& rA,
+        const IndexType i,
+        const IndexType j,
+        const double Value
+        )
+    {
+        const bool was_closed = !rA.isFillActive();
+        if (was_closed) {
+            rA.beginAssembly();
+        }
+        const LO local_row = static_cast<LO>(i);
+        const LO local_col = static_cast<LO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceLocalValues(local_row, 1, &val, &local_col);
+        if (was_closed) {
+            rA.endAssembly();
+            if (rA.isFillActive()) rA.fillComplete();
+        }
+    }
+
+    /**
+     * @brief Sets a matrix entry using local row and column indices without assembly.
+     * @param rA The matrix to be modified.
+     * @param i The local row index on the current rank.
+     * @param j The local column index on the current rank.
+     * @param Value The value to assign.
+     * @details This method is useful for repeated local updates followed by a
+     * single explicit GlobalAssemble() call.
+     */
+    static void SetLocalMatNoAssemble(
+        MatrixType& rA,
+        const IndexType i,
+        const IndexType j,
+        const double Value
+        )
+    {
+        if (!rA.isFillActive()) {
+            rA.beginAssembly();
+        }
+        const LO local_row = static_cast<LO>(i);
+        const LO local_col = static_cast<LO>(j);
+        const ST val = static_cast<ST>(Value);
+        rA.replaceLocalValues(local_row, 1, &val, &local_col);
+        // Assembly must be finalized by the caller via GlobalAssemble()
     }
 
     /**
@@ -1198,35 +2040,11 @@ public:
     }
 
     /**
-     * @brief Read a matrix from a MatrixMarket file
-     * @param rFileName The name of the file to read
-     * @param rComm The MPI communicator
-     * @return The matrix read from the file
+     * @brief Generates a graph combining the graphs of two matrices
+     * @param rA The first matrix
+     * @param rB The second matrix
+     * @return A pointer to the combined FECrsGraph
      */
-    inline static MatrixPointerType ReadMatrixMarket(const std::string& FileName, CommunicatorType& rComm)
-    {
-        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
-        return CreateEmptyMatrixPointer();
-    }
-
-    /**
-     * @brief Read a vector from a MatrixMarket file
-     * @param rFileName The name of the file to read
-     * @param pComm The MPI communicator
-     * @param N The size of the vector
-     */
-    inline static VectorPointerType ReadMatrixMarketVector(const std::string& FileName, CommunicatorPointerType pComm, const int n)
-    {
-        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
-        return CreateEmptyVectorPointer();
-    }
-
-    /**
-    * @brief Generates a graph combining the graphs of two matrices
-    * @param rA The first matrix
-    * @param rB The second matrix
-    */
-
     static GraphPointerType CombineMatricesGraphs(
         const MatrixType& rA,
         const MatrixType& rB
@@ -1379,8 +2197,16 @@ public:
 
             // If diagonal empty assign scale factor
             if (empty) {
-                const int row_gid_int = static_cast<int>(row_gid);  // Casting to int
-                localMatrix.replaceValues(i, &row_gid_int, 1, &scale_factor, false, true);
+                // replaceValues expects LOCAL column indices, not global IDs.
+                // Convert the global diagonal column ID to a local column index.
+                // This is safe as long as the colMap contains the diagonal entry,
+                // which is guaranteed for owned rows in any properly-structured Tpetra matrix.
+                if (!colMap.is_null()) {
+                    const LO local_diag_col = static_cast<LO>(colMap->getLocalElement(row_gid));
+                    if (local_diag_col != Teuchos::OrdinalTraits<LO>::invalid()) {
+                        localMatrix.replaceValues(i, &local_diag_col, 1, &scale_factor, false, true);
+                    }
+                }
                 localRhs(i, 0) = 0.0;
             }
         }
@@ -1424,10 +2250,10 @@ public:
     }
 
     /**
-    * @brief This method returns the diagonal norm considering for scaling the diagonal
-    * @param rA The LHS matrix
-    * @return The diagonal norm
-    */
+     * @brief This method returns the diagonal norm considering for scaling the diagonal
+     * @param rA The LHS matrix
+     * @return The diagonal norm
+     */
     inline static double GetDiagonalNorm(const MatrixType& rA)
     {
         KRATOS_TRY
@@ -1462,10 +2288,10 @@ public:
     }
 
     /**
-    * @brief This method returns the diagonal max value
-    * @param rA The LHS matrix
-    * @return The diagonal max value
-    */
+     * @brief This method returns the average of the max and min diagonal values
+     * @param rA The LHS matrix
+     * @return The average diagonal value (0.5 * (max + min))
+     */
     inline static double GetAveragevalueDiagonal(const MatrixType& rA)
     {
         KRATOS_TRY
@@ -1476,10 +2302,10 @@ public:
     }
 
     /**
-    * @brief This method returns the diagonal max value
-    * @param rA The LHS matrix
-    * @return The diagonal max value
-    */
+     * @brief This method returns the maximum diagonal value
+     * @param rA The LHS matrix
+     * @return The maximum diagonal value
+     */
     inline static double GetMaxDiagonal(const MatrixType& rA)
     {
         KRATOS_TRY
@@ -1515,10 +2341,10 @@ public:
     }
 
     /**
-    * @brief This method returns the diagonal min value
-    * @param rA The LHS matrix
-    * @return The diagonal min value
-    */
+     * @brief This method returns the minimum diagonal value
+     * @param rA The LHS matrix
+     * @return The minimum diagonal value
+     */
     inline static double GetMinDiagonal(const MatrixType& rA)
     {
         KRATOS_TRY
@@ -1553,14 +2379,71 @@ public:
         KRATOS_CATCH("");
     }
 
-   /**
-    * @brief Check if the TrilinosSpaceExperimental is distributed.
-    * @details This static member function checks whether the TrilinosSpaceExperimental is distributed or not.
-    * @return True if the space is distributed, false otherwise.
-    */
-    static constexpr bool IsDistributedSpace()
+    /**
+     * @brief Read a matrix from a MatrixMarket file
+     * @param rFileName The name of the file to read
+     * @param rComm The Tpetra MPI communicator
+     * @return The FECrsMatrix read from the file
+     */
+    inline static MatrixPointerType ReadMatrixMarket(
+        const std::string& rFileName,
+        CommunicatorType& rComm
+        )
     {
-        return true;
+        return AuxiliaryMatrixMarket<MatrixType, VectorType>::ReadMatrixMarket(rFileName, rComm);
+    }
+
+    /**
+     * @brief Read a vector from a MatrixMarket file
+     * @param rFileName The name of the file to read
+     * @param pComm The Tpetra MPI communicator
+     * @param N The global size of the vector
+     * @return The FEMultiVector read from the file
+     */
+    inline static VectorPointerType ReadMatrixMarketVector(
+        const std::string& rFileName,
+        CommunicatorPointerType pComm,
+        const int N
+        )
+    {
+        return AuxiliaryMatrixMarket<MatrixType, VectorType>::ReadMatrixMarketVector(rFileName, pComm, N);
+    }
+
+    /**
+     * @brief Writes a matrix to a file in MatrixMarket format
+     * @param pFileName The name of the file to be written
+     * @param rA The matrix to be written
+     * @param Symmetric If the matrix is symmetric (unused; kept for API compatibility)
+     */
+    static void WriteMatrixMarketMatrix(
+        const char* pFileName,
+        const MatrixType& rA,
+        const bool Symmetric
+        )
+    {
+        AuxiliaryMatrixMarket<MatrixType, VectorType>::WriteMatrixMarketMatrix(pFileName, rA, Symmetric);
+    }
+
+    /**
+     * @brief Writes a vector to a file in MatrixMarket format
+     * @param pFileName The name of the file to be written
+     * @param rV The vector to be written
+     */
+    static void WriteMatrixMarketVector(
+        const char* pFileName,
+        const VectorType& rV
+        )
+    {
+        AuxiliaryMatrixMarket<MatrixType, VectorType>::WriteMatrixMarketVector(pFileName, rV);
+    }
+
+    /**
+     * @brief Creates a new dof updater
+     * @return The new dof updater
+     */
+    inline static DofUpdaterPointerType CreateDofUpdater()
+    {
+        return DofUpdaterPointerType(new DofUpdater<TrilinosSpaceExperimental<TMatrixType, TVectorType>>());
     }
 
     ///@}
@@ -1601,381 +2484,7 @@ public:
     {
     }
 
-    /**
-     * @brief Writes a matrix to a file in MatrixMarket format
-     * @param pFileName The name of the file to be written
-     * @param rM The matrix to be written
-     * @param Symmetric If the matrix is symmetric
-     * @return True if the file was successfully written, false otherwise
-     */
-    static void WriteMatrixMarketMatrix(const char* FileName, const MatrixType& rA, const bool symmetric)
-    {
-        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
-    }
-
-    /**
-     * @brief Writes a vector to a file in MatrixMarket format
-     * @param pFileName The name of the file to be written
-     * @param rV The vector to be written
-     * @return True if the file was successfully written, false otherwise
-     */
-    static void WriteMatrixMarketVector(
-        const char* pFileName,
-        const VectorType& rV
-        )
-    {
-        KRATOS_ERROR << "MatrixMarket not built due to internal conflicts" << std::endl;
-    }
-
-    /**
-     * @brief Creates a new dof updater
-     * @return The new dof updater
-     */
-    inline static DofUpdaterPointerType CreateDofUpdater()
-    {
-        return DofUpdaterPointerType(new DofUpdater<TrilinosSpaceExperimental<TMatrixType, TVectorType>>());
-    }
-
-    /**
-     * @brief Returns a Tpetra map for this rank's local rows starting at FirstMyId.
-     */
-    static MapPointerType GetOrCreateTpetraMap(
-        CommunicatorType& rComm,
-        const IndexType LocalSize,
-        const int FirstMyId)
-    {
-        std::vector<GO> local_ids(LocalSize);
-        for (IndexType i = 0; i < LocalSize; ++i) {
-            local_ids[i] = static_cast<GO>(FirstMyId + static_cast<int>(i));
-        }
-        return Teuchos::rcp(new MapType(
-            Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(),
-            Teuchos::ArrayView<const GO>(local_ids.data(), static_cast<int>(local_ids.size())),
-            0,
-            Teuchos::rcp(&rComm, false)));
-    }
-
-    /**
-     * @brief This method returns the map of the vector
-     * @param rV The vector considered
-     * @return The map of the vector
-     */
-    inline static const MapType& GetMap(const VectorType& rV)
-    {
-        return *(rV.getMap());
-    }
-
-    /**
-     * @brief This method returns the communicator of the vector
-     * @param rV The vector considered
-     * @return The communicator of the vector
-     */
-    inline static const CommunicatorType& GetCommunicator(const VectorType& rV)
-    {
-        return dynamic_cast<const CommunicatorType&>(*(rV.getMap()->getComm()));
-    }
-
-    /**
-     * @brief This method returns the communicator of the matrix
-     * @param rA The matrix considered
-     * @return The communicator of the matrix
-     */
-    inline static const CommunicatorType& GetCommunicator(const MatrixType& rA)
-    {
-        return dynamic_cast<const CommunicatorType&>(*(rA.getMap()->getComm()));
-    }
-
-    /**
-     * @brief Global assembly on a Tpetra FECrsMatrix — close matrix if open.
-     * @details After AssembleLHS opens the matrix lazily, this finalizes assembly
-     * so the matrix is in a closed (fillComplete) state for solver consumption.
-     */
-    static void GlobalAssemble(MatrixType& rA)
-    {
-        if (rA.isFillActive()) {
-            rA.endAssembly();
-        }
-    }
-
-    /**
-     * @brief Global assembly on a Tpetra Vector.
-     * @note No-op: vectors in this space use a null importer (no overlap),
-     * so all RHS contributions go directly to locally owned entries via
-     * sumIntoGlobalValue. No FE state-machine management or cross-process
-     * communication is required.
-     */
-    static void GlobalAssemble(VectorType& rV)
-    {
-    }
-
-    /**
-     * @brief Manually finalizes matrix assembly.
-     */
-    static void ManualFinalize(MatrixType& rA)
-    {
-        rA.endAssembly();
-        if (rA.isFillActive()) {
-            rA.fillComplete();
-        }
-    }
-
-    /**
-     * @brief Build Tpetra FECrsGraph and create new system matrix + vectors.
-     * @details Uses a proper OWNED_PLUS_SHARED map that includes ghost DOFs
-     *          (equation IDs referenced by local elements but owned by other
-     *          processes). This enables FECrsMatrix to accept cross-partition
-     *          element contributions and communicate them in endAssembly().
-     */
-    static void BuildSystemStructure(
-        CommunicatorType& rComm,
-        const IndexType LocalSize,
-        const int FirstMyId,
-        const int GuessRowSize,
-        const std::vector<std::vector<int>>& rAllEquationIds,
-        MatrixPointerType& rpA,
-        VectorPointerType& rpb,
-        VectorPointerType& rpDx,
-        VectorPointerType& rpReactions,
-        const IndexType equationSystemSize,
-        MapPointerType pMap)
-    {
-        auto comm = pMap->getComm();
-        const int nproc = static_cast<int>(comm->getSize());
-
-        const GO firstId = static_cast<GO>(FirstMyId);
-        const GO lastId  = firstId + static_cast<GO>(LocalSize);
-
-        // Step 1: collect locally-visible ghost DOF GIDs (referenced by local elements
-        // but owned by other processes, i.e. outside [firstId, lastId)).
-        std::set<GO> ghost_gids_set;
-        for (const auto& eq_ids : rAllEquationIds) {
-            for (int id : eq_ids) {
-                const GO gid = static_cast<GO>(id);
-                if (gid < firstId || gid >= lastId)
-                    ghost_gids_set.insert(gid);
-            }
-        }
-
-        // Step 2: Symmetric ghost expansion.
-        //
-        // FECrsGraph::endFill() has two code paths controlled solely by whether
-        // ownedRowsImporter_ is null.  The importer is set to null whenever the
-        // ownedMap and ownedPlusSharedMap are identical (maps_are_the_same==true).
-        // The "easy case"  (null importer) skips doExport(); the "hard case" calls it.
-        // When some processes take the easy case and others the hard case, their MPI
-        // operations diverge → MPI_ERR_TRUNCATE.
-        //
-        // Fix: every process that will *receive* ghost contributions (i.e. some other
-        // process is sending rows that fall in my owned range) must also have at least
-        // one ghost DOF so it enters the hard case.  We achieve this with an AllGather
-        // of each process's owned-DOF range, followed by a notification round-trip that
-        // tells each receiver to add a dummy ghost from the sender's range.
-
-        // Gather every process's [firstId, localSize] so we can find ownership.
-        GO myFid = firstId, mySz = static_cast<GO>(LocalSize);
-        Teuchos::Array<GO> allFirstIds(nproc), allLocalSizes(nproc);
-        Teuchos::gatherAll(*comm, 1, &myFid, nproc, allFirstIds.getRawPtr());
-        Teuchos::gatherAll(*comm, 1, &mySz,  nproc, allLocalSizes.getRawPtr());
-
-        // For each ghost GID we own locally, identify its owner process and record
-        // that we will send that process a contribution.  We notify the owner by
-        // storing our firstId in notify_to[owner].
-        Teuchos::Array<GO> notify_to(nproc, static_cast<GO>(-1));
-        for (GO g : ghost_gids_set) {
-            for (int p = 0; p < nproc; ++p) {
-                if (g >= allFirstIds[p] && g < allFirstIds[p] + allLocalSizes[p]) {
-                    if (p != static_cast<int>(comm->getRank()))
-                        notify_to[p] = firstId;
-                    break;
-                }
-            }
-        }
-
-        // AllGather the full nproc×nproc notification matrix.
-        // notify_all[q*nproc + k] = value that process q put in notify_to[k].
-        Teuchos::Array<GO> notify_all(nproc * nproc, static_cast<GO>(-1));
-        Teuchos::gatherAll(*comm, nproc, notify_to.getRawPtr(),
-                           nproc * nproc, notify_all.getRawPtr());
-
-        // Each process k checks column k of notify_all.  If process q will send it
-        // data (notify_all[q*nproc+k] != -1), add q's firstId as a dummy ghost so
-        // process k also enters the hard case.
-        const int myrank = static_cast<int>(comm->getRank());
-        for (int q = 0; q < nproc; ++q) {
-            if (notify_all[q * nproc + myrank] != static_cast<GO>(-1)) {
-                const GO q_first = allFirstIds[q];
-                if (q_first < firstId || q_first >= lastId)   // not already owned
-                    ghost_gids_set.insert(q_first);
-            }
-        }
-
-        // Step 3: Build OWNED_PLUS_SHARED map.
-        // After symmetric expansion every process with any cross-partition elements
-        // has a non-trivially-different OPS map → all enter FECrsGraph's hard case
-        // → all call doExport during endAssembly → no MPI divergence.
-        MapPointerType owned_plus_shared_map;
-        if (ghost_gids_set.empty()) {
-            // Purely serial or identical partition — safe easy case for ALL processes.
-            owned_plus_shared_map = pMap;
-        } else {
-            // Owned GIDs first (required by FECrsGraph::setup locality check),
-            // then ghost GIDs.
-            std::vector<GO> ops_gids;
-            ops_gids.reserve(LocalSize + ghost_gids_set.size());
-            for (IndexType i = 0; i < LocalSize; ++i)
-                ops_gids.push_back(firstId + static_cast<GO>(i));
-            for (GO g : ghost_gids_set)
-                ops_gids.push_back(g);
-            owned_plus_shared_map = Teuchos::rcp(new MapType(
-                Teuchos::OrdinalTraits<Tpetra::global_size_t>::invalid(),
-                Teuchos::ArrayView<const GO>(ops_gids.data(),
-                                            static_cast<int>(ops_gids.size())),
-                0, pMap->getComm()));
-        }
-
-        // Step 4: Build FECrsGraph with (ownedMap, ownedPlusSharedMap).
-        Teuchos::RCP<GraphType> graph =
-            Teuchos::rcp(new GraphType(pMap, owned_plus_shared_map, GuessRowSize));
-        graph->beginAssembly();
-        std::vector<GO> gids;
-        for (const auto& eq_ids : rAllEquationIds) {
-            if (eq_ids.empty()) continue;
-            gids.resize(eq_ids.size());
-            for (std::size_t k = 0; k < eq_ids.size(); ++k)
-                gids[k] = static_cast<GO>(eq_ids[k]);
-            for (std::size_t row = 0; row < gids.size(); ++row) {
-                if (owned_plus_shared_map->getLocalElement(gids[row]) !=
-                        Teuchos::OrdinalTraits<LO>::invalid()) {
-                    graph->insertGlobalIndices(
-                        gids[row],
-                        Teuchos::ArrayView<const GO>(gids.data(),
-                                                     static_cast<int>(gids.size())));
-                }
-            }
-        }
-        // endAssembly: communicates ghost-row structure to owning processes and
-        // switches the active graph from OWNED_PLUS_SHARED to OWNED.
-        graph->endAssembly();
-
-        rpA = Teuchos::rcp(new MatrixType(
-            Teuchos::rcp_const_cast<const GraphType>(graph)));
-        // Post-construction normalization: FECrsMatrix ctor leaves isFillActive()=true
-        // but fillState_=closed (internal beginFill→resumeFill).  Call fillComplete()
-        // to reset so GlobalAssemble does not incorrectly call endAssembly().
-        if (rpA->isFillActive()) rpA->fillComplete();
-
-        if (!rpb || Size(*rpb) != equationSystemSize)
-            rpb = CreateVector(pMap);
-        if (!rpDx || Size(*rpDx) != equationSystemSize)
-            rpDx = CreateVector(pMap);
-        if (!rpReactions)
-            rpReactions = CreateVector(pMap);
-    }
-
-    /**
-     * @brief Apply Dirichlet conditions on a Tpetra system using local row iteration.
-     */
-    static void ApplyDirichletConditionsTpetra(
-        MatrixType& rA,
-        VectorType& rb,
-        const std::vector<int>& rGlobalIds,
-        const std::vector<int>& rIsFixed,
-        const ProcessInfo& rProcessInfo,
-        const SCALING_DIAGONAL scalingDiagonal,
-        double& rScaleFactor)
-    {
-        rScaleFactor = ClassType::CheckAndCorrectZeroDiagonalValues(rProcessInfo, rA, rb, scalingDiagonal);
-        std::unordered_map<GO, int> is_fixed_map;
-        for (std::size_t i = 0; i < rGlobalIds.size(); ++i)
-            is_fixed_map[static_cast<GO>(rGlobalIds[i])] = rIsFixed[i];
-        auto p_row_map = rA.getRowMap();
-        const LO num_local_rows = static_cast<LO>(p_row_map->getNodeNumElements());
-        auto rb_view = rb.getLocalViewHost(Tpetra::Access::ReadWrite);
-        for (LO local_row = 0; local_row < num_local_rows; ++local_row) {
-            const GO global_row = p_row_map->getGlobalElement(local_row);
-            const bool row_is_fixed = is_fixed_map.count(global_row) > 0 && is_fixed_map.at(global_row) != 0;
-            typename MatrixType::local_inds_host_view_type cols_view;
-            typename MatrixType::values_host_view_type vals_view;
-            rA.getLocalRowView(local_row, cols_view, vals_view);
-            const LO num_entries = static_cast<LO>(cols_view.size());
-            if (num_entries == 0) continue;
-            auto col_map = rA.getColMap();
-            std::vector<ST> new_vals(num_entries);
-            if (!row_is_fixed) {
-                for (LO j = 0; j < num_entries; ++j) {
-                    const GO global_col = col_map->getGlobalElement(cols_view(j));
-                    new_vals[j] = (is_fixed_map.count(global_col) > 0 && is_fixed_map.at(global_col) != 0) ? ST(0.0) : vals_view(j);
-                }
-            } else {
-                rb_view(local_row, 0) = ST(0.0);
-                for (LO j = 0; j < num_entries; ++j) {
-                    const GO global_col = col_map->getGlobalElement(cols_view(j));
-                    new_vals[j] = (global_col == global_row) ? vals_view(j) : ST(0.0);
-                }
-            }
-            rA.replaceLocalValues(local_row, num_entries, new_vals.data(), cols_view.data());
-        }
-    }
-
-    /**
-     * @brief Build a Tpetra FE constraint graph and create T matrix + constant vector.
-     */
-    static void BuildConstraintsStructure(
-        CommunicatorType& rComm,
-        const IndexType LocalSize,
-        const int FirstMyId,
-        const int GuessRowSize,
-        const std::vector<std::vector<int>>& rSlaveEquationIds,
-        const std::vector<std::vector<int>>& rMasterEquationIds,
-        MatrixPointerType& rpT,
-        VectorPointerType& rpConstantVector,
-        MapPointerType pMap)
-    {
-        Teuchos::RCP<GraphType> graph = Teuchos::rcp(new GraphType(pMap, pMap, GuessRowSize));
-        for (IndexType i = 0; i < LocalSize; ++i) {
-            const GO gid = static_cast<GO>(FirstMyId + static_cast<int>(i));
-            graph->insertGlobalIndices(gid, Teuchos::ArrayView<const GO>(&gid, 1));
-        }
-        for (std::size_t c = 0; c < rSlaveEquationIds.size(); ++c) {
-            const auto& slave_ids = rSlaveEquationIds[c];
-            const auto& master_ids = rMasterEquationIds[c];
-            if (slave_ids.empty() || master_ids.empty()) continue;
-            std::vector<GO> master_gids(master_ids.size());
-            for (std::size_t k = 0; k < master_ids.size(); ++k) master_gids[k] = static_cast<GO>(master_ids[k]);
-            for (int slave_id : slave_ids) {
-                const GO slave_gid = static_cast<GO>(slave_id);
-                graph->insertGlobalIndices(slave_gid,
-                    Teuchos::ArrayView<const GO>(master_gids.data(), static_cast<int>(master_gids.size())));
-            }
-        }
-        if (graph->isFillActive()) graph->fillComplete();
-        rpT = Teuchos::rcp(new MatrixType(Teuchos::rcp_const_cast<const GraphType>(graph)));
-        // Post-construction normalization (same as BuildSystemStructure above).
-        if (rpT->isFillActive()) rpT->fillComplete();
-        rpConstantVector = CreateVector(pMap);
-    }
-
     ///@}
-
-    /// @brief Creates an empty VectorType from a map. Handles both Tpetra::FEMultiVector (needs importer+numVecs) and plain Vector/MultiVector.
-    inline static VectorPointerType CreateVector(const Teuchos::RCP<const MapType>& pMap)
-    {
-        if constexpr (std::is_same_v<VectorType, Tpetra::FEMultiVector<ST, LO, GO, NT>>) {
-            return Teuchos::rcp(new VectorType(pMap, Teuchos::null, 1));
-        } else {
-            return Teuchos::rcp(new VectorType(pMap));
-        }
-    }
-
-    /// @brief Creates a copy of srcVector into a new heap-allocated VectorType.
-    /// Safe for FEMultiVector whose copy ctor is deleted; data is deep-copied via update().
-    inline static VectorPointerType CreateVectorCopy(const VectorType& src)
-    {
-        auto p = CreateVector(src.getMap());
-        p->update(1.0, src, 0.0);
-        return p;
-    }
-
 private:
     ///@name Un accessible methods
     ///@{
@@ -1986,6 +2495,7 @@ private:
     /// Copy constructor.
     TrilinosSpaceExperimental(TrilinosSpaceExperimental const& rOther);
 
+    ///@}
 }; // Class TrilinosSpaceExperimental
 
 ///@}
