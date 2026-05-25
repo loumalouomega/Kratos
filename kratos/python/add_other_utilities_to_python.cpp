@@ -69,6 +69,7 @@
 #include "utilities/string_utilities.h"
 #include "utilities/model_part_operation_utilities.h"
 #include "utilities/model_part_utils.h"
+#include "utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos::Python {
 
@@ -868,7 +869,16 @@ void AddOtherUtilitiesToPython(pybind11::module &m)
             py::arg("conditions"),
             py::arg("properties")
         );
-    ;
+
+    py::class_<OctreeHybridMeshUtility>(m, "OctreeHybridMeshUtility")
+        .def_static("BuildAndWriteVtk",
+            &OctreeHybridMeshUtility::BuildAndWriteVtk,
+            py::arg("surface_model_part"),
+            py::arg("vtk_filename"),
+            py::arg("refinement_depth") = 5,
+            "Reads triangles from surface_model_part (populated by StlIO), builds an "
+            "adaptive OctreeHybrid, and writes the resulting hex mesh to a legacy VTK file.")
+        ;
 }
 
 } // namespace Kratos::Python.
