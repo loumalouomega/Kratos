@@ -1,85 +1,125 @@
 """
-Demo: build an adaptive OctreeHybrid hex mesh from a surface mesh (sphere skin)
-and write the result to a legacy VTK file for visualisation in Paraview.
+Demo: build an adaptive OctreeHybrid hex mesh from an STL surface and write the
+result to a legacy VTK file for visualisation in Paraview.
 
-Usage (from the build directory):
-    python3 <path_to_this_file>
+Accepts both ASCII and binary STL files.
+
+Usage:
+    python3 demo_octree_hybrid_mesh.py [path/to/surface.stl] [refinement_depth]
+
+Defaults to Bunny-LowPoly.stl at depth 5 when no arguments are given.
 
 Output:
-    octree_hex_mesh.vtk   — adaptive hex mesh, coloured by "level" in Paraview
+    octree_hex_mesh.vtk  — adaptive hex mesh, colour by "level" in Paraview
 """
 
 import gc
 import os
+import struct
 import sys
 
 # ---------------------------------------------------------------------------
 # 1. Bootstrap Kratos path
 # ---------------------------------------------------------------------------
 script_dir = os.path.dirname(os.path.abspath(__file__))
-build_dir  = os.path.join(script_dir, os.pardir, os.pardir, os.pardir, "build", "Release")
-build_dir  = os.path.realpath(build_dir)
+build_dir  = os.path.realpath(os.path.join(script_dir, os.pardir, os.pardir, os.pardir,
+                                            "build", "Release"))
 if build_dir not in sys.path:
     sys.path.insert(0, build_dir)
 
 import KratosMultiphysics as KM
-from KratosMultiphysics.testing.utilities import ReadModelPart
 
 # ---------------------------------------------------------------------------
-# 2. Read the surface mesh
+# 2. Helper: convert binary STL → ASCII STL
 # ---------------------------------------------------------------------------
-model = KM.Model()
+
+def is_binary_stl(path: str) -> bool:
+    """Return True when the file is a binary (not ASCII) STL."""
+    with open(path, "rb") as f:
+        header = f.read(80)
+    # ASCII STL files begin with the word "solid" (possibly preceded by BOM).
+    try:
+        return not header.lstrip().decode("ascii", errors="replace").startswith("solid")
+    except Exception:
+        return True
+
+
+def binary_stl_to_ascii(src: str, dst: str) -> None:
+    """Convert a binary STL file to ASCII format."""
+    with open(src, "rb") as f:
+        f.read(80)  # skip 80-byte header
+        n_triangles = struct.unpack("<I", f.read(4))[0]
+        with open(dst, "w") as out:
+            out.write("solid converted\n")
+            for _ in range(n_triangles):
+                nx, ny, nz = struct.unpack("<fff", f.read(12))
+                v1 = struct.unpack("<fff", f.read(12))
+                v2 = struct.unpack("<fff", f.read(12))
+                v3 = struct.unpack("<fff", f.read(12))
+                f.read(2)  # attribute byte count
+                out.write(f"  facet normal {nx} {ny} {nz}\n")
+                out.write( "    outer loop\n")
+                out.write(f"      vertex {v1[0]} {v1[1]} {v1[2]}\n")
+                out.write(f"      vertex {v2[0]} {v2[1]} {v2[2]}\n")
+                out.write(f"      vertex {v3[0]} {v3[1]} {v3[2]}\n")
+                out.write( "    endloop\n")
+                out.write( "  endfacet\n")
+            out.write("endsolid converted\n")
+    print(f"  Converted binary STL → {dst}  ({n_triangles} triangles)")
+
+
+# ---------------------------------------------------------------------------
+# 3. Parse arguments
+# ---------------------------------------------------------------------------
+stl_input = sys.argv[1] if len(sys.argv) > 1 else os.path.join(script_dir, "Bunny-LowPoly.stl")
+refinement_depth = int(sys.argv[2]) if len(sys.argv) > 2 else 8
+
+print(f"Input STL     : {stl_input}")
+print(f"Refinement    : depth {refinement_depth}")
+
+# ---------------------------------------------------------------------------
+# 4. Convert binary → ASCII if necessary
+# ---------------------------------------------------------------------------
+ascii_stl = stl_input
+tmp_ascii  = None
+
+if is_binary_stl(stl_input):
+    tmp_ascii  = os.path.join(script_dir, "_demo_ascii_tmp.stl")
+    binary_stl_to_ascii(stl_input, tmp_ascii)
+    ascii_stl = tmp_ascii
+
+# ---------------------------------------------------------------------------
+# 5. Read surface mesh via StlIO (ASCII)
+# ---------------------------------------------------------------------------
+model      = KM.Model()
 surface_mp = model.CreateModelPart("Surface")
 surface_mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
 
-# Coarse sphere skin from the Kratos test auxiliary files.
-mdpa_path = os.path.join(
-    script_dir,
-    "auxiliar_files_for_python_unittest",
-    "mdpa_files",
-    "coarse_sphere_skin"
-)
-
-print(f"Reading surface mesh from: {mdpa_path}.mdpa")
-ReadModelPart(mdpa_path, surface_mp)
-print(f"  Nodes    : {surface_mp.NumberOfNodes()}")
-print(f"  Elements : {surface_mp.NumberOfElements()}")
-print(f"  Conditions: {surface_mp.NumberOfConditions()}")
-
-# StlIO reads triangles into the Geometries container; ReadModelPart loads the
-# .mdpa which populates Elements/Conditions.  The mesh utility reads Nodes
-# for the bounding box and Geometries for intersection tests.  When the model
-# part was loaded from .mdpa its triangles sit in the Conditions container,
-# so we expose them as geometries by registering the condition geometries.
-# The simplest path: write to STL and read back so geometries are populated.
-
-stl_path = os.path.join(script_dir, "_demo_sphere.stl")
-write_settings = KM.Parameters("""{"open_mode": "write"}""")
-stl_io = KM.StlIO(stl_path, write_settings)
-stl_io.WriteModelPart(surface_mp)
-del stl_io  # flush and close the C++ file stream before reading below
+stl_io = KM.StlIO(ascii_stl, KM.Parameters('{"open_mode": "read"}'))
+stl_io.ReadModelPart(surface_mp)
+del stl_io
 gc.collect()
-print(f"STL written to {stl_path}")
 
-# Read the STL back: StlIO populates ModelPart.Geometries with Triangle3D3.
-surface_stl_mp = model.CreateModelPart("SurfaceSTL")
-surface_stl_mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
-read_settings = KM.Parameters("""{"open_mode": "read"}""")
-stl_io2 = KM.StlIO(stl_path, read_settings)
-stl_io2.ReadModelPart(surface_stl_mp)
-print(f"STL read back — Geometries: {surface_stl_mp.NumberOfGeometries()}, "
-      f"Nodes: {surface_stl_mp.NumberOfNodes()}")
+print(f"  Nodes      : {surface_mp.NumberOfNodes()}")
+print(f"  Geometries : {surface_mp.NumberOfGeometries()}")
+
+if tmp_ascii and os.path.exists(tmp_ascii):
+    os.remove(tmp_ascii)
 
 # ---------------------------------------------------------------------------
-# 3. Build the adaptive octree hex mesh
+# 6. Build the adaptive octree hex mesh and write VTK
 # ---------------------------------------------------------------------------
 output_vtk = "octree_hex_mesh.vtk"
-refinement_depth = 5
 
-print(f"\nBuilding OctreeHybrid (depth={refinement_depth}) and writing {output_vtk} …")
-KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_stl_mp, output_vtk, refinement_depth)
-print(f"Done. Open '{output_vtk}' in Paraview and colour by 'level' to see the adaptive refinement.")
+print(f"\nBuilding OctreeHybrid and writing {output_vtk} …")
+KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, output_vtk, refinement_depth)
 
-# Clean up the temporary STL.
-if os.path.exists(stl_path):
-    os.remove(stl_path)
+# Report mesh stats from the VTK file
+with open(output_vtk) as f:
+    for line in f:
+        if line.startswith("POINTS") or line.startswith("CELLS "):
+            print(" ", line.rstrip())
+        if line.startswith("CELL_TYPES"):
+            break
+
+print(f"\nOpen '{output_vtk}' in Paraview and colour by 'level' to see adaptive refinement.")
