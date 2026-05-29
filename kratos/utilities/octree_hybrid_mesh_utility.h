@@ -98,6 +98,15 @@ namespace Kratos {
  *       left the centre dual hex unconsumed once cells were large in finest-grid
  *       units (surfaced at depth >= 6).
  *
+ *       This `DualFullHex` mesh is the reference's *intermediate* output: it is
+ *       conforming in the node-sharing sense but is not by itself a closed
+ *       2-manifold — it carries a small number of T-junctions and template
+ *       overlaps at the refinement interface (e.g. depth 4: 2 overlapping faces,
+ *       827 open boundary edges).  The reference yields the **identical** counts,
+ *       so these are properties of the algorithm stage, not of this port; the
+ *       reference removes them only in its later RemoveOutsideElement /
+ *       ProjectToIsoSurface passes, which are not (yet) ported here.
+ *
  * ### Usage
  * ```python
  * KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, "mesh.vtk", 8)
