@@ -91,6 +91,44 @@ def read_vtk(path):
     return pts, cells, levels
 
 
+HEX_FACES = [
+    (0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
+    (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7),
+]
+
+
+def count_nonconforming_edges(pts, cells, tol=1e-6):
+    """Position-based 2-manifold check on the mesh boundary.
+
+    A watertight, conforming all-hex mesh has a boundary that is a closed
+    2-manifold: every boundary edge is shared by exactly two boundary faces.
+    Node-id duplication is irrelevant here because faces/edges are keyed by
+    rounded vertex *position*, so coincident-but-distinct nodes still match.
+
+    Returns the number of boundary edges NOT shared by exactly two boundary
+    faces (0 == conforming / watertight).
+    """
+    def key(v):
+        return (round(v[0] / tol), round(v[1] / tol), round(v[2] / tol))
+
+    face_count = {}
+    for h in cells:
+        for f in HEX_FACES:
+            quad = tuple(sorted(key(pts[h[c]]) for c in f))
+            face_count[quad] = face_count.get(quad, 0) + 1
+
+    # Boundary faces appear in exactly one hex.
+    edge_count = {}
+    for quad, n in face_count.items():
+        if n != 1:
+            continue
+        for a in range(4):
+            e = tuple(sorted((quad[a], quad[(a + 1) % 4])))
+            edge_count[e] = edge_count.get(e, 0) + 1
+
+    return sum(1 for c in edge_count.values() if c != 2)
+
+
 def classify(pts, cells):
     """Return (degenerate_indices, inverted_indices)."""
     degenerate, inverted = [], []
@@ -162,10 +200,13 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
         self.assertGreater(len(cells), 0, "no hexes generated")
         degenerate, inverted = classify(pts, cells)
 
+        nonconf = count_nonconforming_edges(pts, cells)
+
         # Report a short summary (helps when debugging failures)
         n_tmpl = sum(1 for lv in levels if lv == -1) if levels else 0
         print(f"\n[depth={depth}] hexes={len(cells)} (template={n_tmpl}) "
-              f"degenerate={len(degenerate)} inverted={len(inverted)}")
+              f"degenerate={len(degenerate)} inverted={len(inverted)} "
+              f"nonconforming_edges={nonconf}")
         if degenerate or inverted:
             bad = (degenerate + inverted)[:5]
             for b in bad:
@@ -176,6 +217,9 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
         os.remove(out)
         self.assertEqual(len(degenerate), 0, f"{len(degenerate)} degenerate hexes")
         self.assertEqual(len(inverted), 0, f"{len(inverted)} inverted hexes")
+        self.assertEqual(nonconf, 0,
+                         f"{nonconf} non-conforming boundary edges "
+                         "(mesh boundary is not a closed 2-manifold)")
 
     def test_depth_3(self):
         self._run(3)
