@@ -56,22 +56,32 @@ namespace Kratos {
  * a vertex) the dual hex is distorted but valid, covering the space exactly —
  * the mesh is conforming with no hanging nodes.
  *
- * ### 13-element template
+ * ### Transition templates
  *
  * For every face where one large cell meets four smaller cells, the utility
- * applies the 13-element transition template from the HybridOctree_Hex paper.
- * The template is anchored at the large cell whose in-plane grid indices are
- * both even (matching the reference's `stepI && stepJ` gate) and the parity is
- * evaluated in grid-index space — evaluating it in world coordinates is wrong
- * because they are offset by the bounding-box minimum.  Each template replaces
- * exactly one plain dual hex (at the transition vertex) and fills the remaining
- * gap with the other 12, so the templates and the plain dual never overlap.
+ * applies the transition templates from the HybridOctree_Hex paper, anchored at
+ * the large cell whose in-plane grid indices are both even (the reference's
+ * `stepI && stepJ` gate; the parity must be evaluated in grid-index space, not
+ * in world coordinates which are offset by the bounding-box minimum):
  *
- * @note Only the base 13-element template is generated.  The reference also
- *       emits 4/3/5-element sub-templates along the *edges and corners* of a
- *       transition region; those are not yet ported, so small gaps can remain
- *       at transition edges.  All generated elements are valid (positive
- *       Jacobian) — verified by test_octree_hybrid_dual_mesh.py.
+ *  - the 13-element base template that fills the face transition itself, and
+ *  - the 4/3/5-element edge/corner sub-templates (t2/t22, t3/t32/t33/t34,
+ *    t4/t42/t43/t44) that stitch adjacent transition regions together.
+ *
+ * Each template's bookkeeping mirrors the reference: the 13-element and
+ * 4-element templates always emit; a 3-element template emits only if the
+ * transition vertex it would replace is still unclaimed; a 5-element template
+ * emits only if it introduces at least one new node.  A consumed vertex's plain
+ * dual hex is then skipped (see `consume_at`).
+ *
+ * @note All generated elements are valid (positive Jacobian) — verified by
+ *       test_octree_hybrid_dual_mesh.py.  The mesh is **not yet watertight**:
+ *       at transition regions a few percent of faces are still non-conforming
+ *       (small gaps / overlaps).  Achieving a fully conforming mesh requires the
+ *       reference's exact floating-point node-merge bookkeeping between the
+ *       plain-dual and template element sets, which this port approximates with
+ *       a grid-key vertex match and a spatial node hash.  Adequate for
+ *       visualisation; not yet for FE analysis without a cleanup/merge pass.
  *
  * ### Usage
  * ```python
@@ -451,6 +461,114 @@ public:
             return id;
         };
 
+        // -- Edge/corner transition sub-templates (4/3/5-element) --------------
+        // Tables from StaticVars.h.  Indexed [variant][cell][corner]; variant is
+        // the same `tmpl` selector as the 13-element base.
+        static constexpr int t2Id[2][4][8] = {
+            {{0,8,9,2,1,12,13,3},{2,9,10,4,3,13,14,5},{3,13,14,5,1,12,15,6},{4,10,11,7,5,14,15,6}},
+            {{13,3,1,12,9,2,0,8},{14,5,3,13,10,4,2,9},{15,6,1,12,14,5,3,13},{15,6,5,14,11,7,4,10}}};
+        static constexpr int t22Id[2][4][8] = {
+            {{8,0,2,9,14,1,3,12},{9,2,4,10,12,3,5,13},{12,3,5,13,14,1,6,15},{10,4,7,11,13,5,6,15}},
+            {{3,12,14,1,2,9,8,0},{5,13,12,3,4,10,9,2},{6,15,14,1,5,13,12,3},{6,15,13,5,7,11,10,4}}};
+        static constexpr int t3Id[2][3][8] = {
+            {{0,8,9,2,1,12,13,3},{2,9,10,4,3,13,14,5},{4,10,11,6,5,14,15,7}},
+            {{13,3,1,12,9,2,0,8},{14,5,3,13,10,4,2,9},{15,7,5,14,11,6,4,10}}};
+        static constexpr int t32Id[2][3][8] = {
+            {{0,2,9,8,1,3,12,14},{2,4,10,9,3,5,13,12},{4,6,11,10,5,7,15,13}},
+            {{12,14,1,3,9,8,0,2},{13,12,3,5,10,9,2,4},{15,13,5,7,11,10,4,6}}};
+        static constexpr int t33Id[2][3][8] = {
+            {{8,0,2,9,12,1,3,13},{9,2,4,10,13,3,5,14},{10,4,6,11,14,5,7,15}},
+            {{3,13,12,1,2,9,8,0},{5,14,13,3,4,10,9,2},{7,15,14,5,6,11,10,4}}};
+        static constexpr int t34Id[2][3][8] = {
+            {{8,9,2,0,12,14,3,1},{9,10,4,2,14,15,5,3},{10,11,6,4,15,13,7,5}},
+            {{3,1,12,14,2,0,8,9},{5,3,14,15,4,2,9,10},{7,5,15,13,6,4,10,11}}};
+        static constexpr int t4Id[2][5][8] = {
+            {{0,8,9,2,1,12,13,3},{2,9,10,4,3,13,14,5},{4,10,11,6,5,14,15,7},{0,2,4,6,1,3,5,7},{3,13,14,5,1,12,15,7}},
+            {{13,3,1,12,9,2,0,8},{14,5,3,13,10,4,2,9},{15,7,5,14,11,6,4,10},{5,7,1,3,4,6,0,2},{15,7,1,12,14,5,3,13}}};
+        static constexpr int t42Id[2][5][8] = {
+            {{0,2,9,8,1,3,12,14},{2,4,10,9,3,5,13,12},{4,6,11,10,5,7,15,13},{3,5,13,12,1,7,15,14},{0,6,4,2,1,7,5,3}},
+            {{12,14,1,3,9,8,0,2},{13,12,3,5,10,9,2,4},{15,13,5,7,11,10,4,6},{15,14,1,7,13,12,3,5},{5,3,1,7,4,2,0,6}}};
+        static constexpr int t43Id[2][5][8] = {
+            {{8,0,2,9,12,1,3,13},{9,2,4,10,13,3,5,14},{10,4,6,11,14,5,7,15},{13,3,5,14,12,1,7,15},{2,0,6,4,3,1,7,5}},
+            {{3,13,12,1,2,9,8,0},{5,14,13,3,4,10,9,2},{7,15,14,5,6,11,10,4},{7,15,12,1,5,14,13,3},{7,5,3,1,6,4,2,0}}};
+        static constexpr int t44Id[2][5][8] = {
+            {{0,8,9,2,1,12,14,3},{2,9,10,4,3,14,15,5},{4,10,11,6,5,15,13,7},{3,14,15,5,1,12,13,7},{0,2,4,6,1,3,5,7}},
+            {{14,3,1,12,9,2,0,8},{15,5,3,14,10,4,2,9},{13,7,5,15,11,6,4,10},{13,7,1,12,15,5,3,14},{5,7,1,3,4,6,0,2}}};
+        // "Side" faces of face j: pSId = the two faces whose transition edges run
+        // alongside j; pS2Id = the two on the far (already-meshed) side.
+        static constexpr int pSId[6][2]  = {{2,1},{2,0},{1,0},{1,0},{2,0},{2,1}};
+        static constexpr int pS2Id[6][2] = {{3,4},{3,5},{4,5},{4,5},{3,5},{3,4}};
+
+        // `available` == the reference's `collectNum`: interior (valence-8)
+        // primal vertices whose 8 surrounding cells are NOT all the same size.
+        // A transition template may consume one such vertex (replacing its plain
+        // dual hex); once consumed it is no longer available to other templates.
+        std::vector<bool> available(NV, false);
+        for (int v = 0; v < NV; ++v) {
+            if (vert_adj[v].size() != 8) continue;
+            const int lv0 = leaves[vert_adj[v][0].first]->GetLevel();
+            bool uniform = true;
+            for (auto [ci, co] : vert_adj[v])
+                if (leaves[ci]->GetLevel() != lv0) { uniform = false; break; }
+            if (!uniform) available[v] = true;
+        }
+
+        // Neighbour helpers (mirror elementValenceNumber / elementValence, with
+        // safe handling of boundary faces and missing neighbours).
+        auto vcount = [&](int c, int fc) -> int { return c < 0 ? 0 : adj[c][fc].count; };
+        auto nb     = [&](int c, int fc, int k) -> int { return c < 0 ? -1 : adj[c][fc].ids[k]; };
+
+        // Find the primal vertex nearest a template point and, if it is still
+        // available (a collectNum member), consume it.  Returns true iff a
+        // vertex was consumed.  Mirrors the reference's "delete corresponding
+        // point in collectNum" step.
+        auto consume_at = [&](const double* world) -> bool {
+            double pn[3];
+            rOctree.NormalizeCoordinates(world, pn);
+            long long g[3];
+            for (int d = 0; d < 3; ++d) {
+                g[d] = std::llround(pn[d] * static_cast<double>(R));
+                if (g[d] < 0 || g[d] > static_cast<long long>(R)) return false;
+            }
+            const std::size_t key = static_cast<std::size_t>(g[2])*pts*pts
+                                  + static_cast<std::size_t>(g[1])*pts
+                                  + static_cast<std::size_t>(g[0]);
+            auto it = vid_map.find(key);
+            if (it == vid_map.end() || !available[it->second]) return false;
+            available[it->second] = false;
+            consumed[it->second]  = true;
+            return true;
+        };
+
+        // Emit a template's hexes.  P is the point array it indexes (p[] for the
+        // 13-element base, p16[] for the sub-templates); `table` is the resolved
+        // [cell][corner] connectivity; `ptmp` is the transition vertex used for
+        // the collectNum bookkeeping.  Deletion modes (matching the reference):
+        //   DEL_ALWAYS  : always keep (13-element and 4-element templates).
+        //   DEL_IF_AVAIL: keep only if `ptmp`'s vertex was still available
+        //                 (3-element templates; otherwise a neighbour built it).
+        //   DEL_IF_NEW  : keep only if it introduced at least one new node
+        //                 (5-element templates; otherwise fully overlapped).
+        enum DelMode { DEL_ALWAYS, DEL_IF_AVAIL, DEL_IF_NEW };
+        auto emit = [&](const double (*P)[3], const int (*table)[8], int nh,
+                        const double* ptmp, DelMode mode) {
+            const std::size_t before = tmpl_nodes.size();
+            std::array<std::array<int,8>,13> staged;
+            for (int k = 0; k < nh; ++k)
+                for (int l = 0; l < 8; ++l) {
+                    const int idx = table[k][l];
+                    const std::array<double,3> pt{ P[idx][0], P[idx][1], P[idx][2] };
+                    staged[k][l] = find_or_add_node(pt) + N;
+                }
+            const bool created_new = tmpl_nodes.size() > before;
+            bool keep = true;
+            if (mode == DEL_IF_AVAIL)      keep = consume_at(ptmp);
+            else if (mode == DEL_IF_NEW) { keep = created_new; if (keep) consume_at(ptmp); }
+            else                           consume_at(ptmp);
+            if (keep)
+                for (int k = 0; k < nh; ++k) tmpl_cells.push_back(staged[k]);
+        };
+
         for (int i = 0; i < N; ++i) {
             for (int j = 0; j < 6; ++j) {
                 if (adj[i][j].count != 4) continue;
@@ -536,36 +654,283 @@ public:
 
                 // Template variant: stepI_tmpl = (j==1||j==3||j==5)
                 const int tmpl = (j==1||j==3||j==5) ? 1 : 0;
+                const int oj = 5 - j;  // opposite face
 
-                for (int k = 0; k < 13; ++k) {
-                    std::array<int,8> hex;
-                    for (int l = 0; l < 8; ++l) {
-                        std::array<double,3> pt;
-                        for (int d = 0; d < 3; ++d) pt[d] = p[t1Id[tmpl][k][l]][d];
-                        hex[l] = find_or_add_node(pt) + N;  // offset past cell-centre nodes
+                // -- 13-element base template (always created) -----------------
+                {
+                    double ptmp[3];
+                    for (int d = 0; d < 3; ++d)
+                        ptmp[d] = 0.5*(p[21][d] + p[26][d]) + z[d]*4.0/15.0;
+                    emit(p, t1Id[tmpl], 13, ptmp, DEL_ALWAYS);
+                }
+
+                // The sub-templates fill the edges and corners between adjacent
+                // transition regions.  Each builds 16 working points p16[] from
+                // the base points p[] and the up-axis z, optionally adjusts them
+                // when the neighbouring region is itself a transition, then emits
+                // its hexes.  Geometry and connectivity follow the reference
+                // (HexGen.cpp DualFullHexMeshExtraction) verbatim.
+                double p16[16][3];
+                double ptmp[3];
+
+                // -- 4-element template A (pSId[j][0] side) --------------------
+                if (vcount(i, pSId[j][0]) == 1 && vcount(nb(i, pSId[j][0], 0), j) == 4) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[0][d]  = 2*p[0][d]-p[1][d];
+                        p16[1][d]  = 2*p[18][d]-p[19][d];
+                        p16[2][d]  = 2*p[4][d]-p[5][d];
+                        p16[3][d]  = p[20][d]+1.144*(p[0][d]-p[1][d]);
+                        p16[4][d]  = 2*p[8][d]-p[9][d];
+                        p16[5][d]  = p[24][d]+1.144*(p[0][d]-p[1][d]);
+                        p16[6][d]  = 2*p[28][d]-p[29][d];
+                        p16[7][d]  = 2*p[12][d]-p[13][d];
+                        p16[8][d]  = p[0][d];  p16[9][d]  = p[4][d];
+                        p16[10][d] = p[8][d];  p16[11][d] = p[12][d];
+                        p16[12][d] = p[18][d]; p16[13][d] = p[20][d];
+                        p16[14][d] = p[24][d]; p16[15][d] = p[28][d];
                     }
-                    tmpl_cells.push_back(hex);
+                    for (int d = 0; d < 3; ++d) ptmp[d] = 0.5*(p16[2][d]+p[8][d]) + z[d]/3;
+                    emit(p16, t2Id[tmpl], 4, ptmp, DEL_ALWAYS);
                 }
 
-                // Mark the single plain dual hex this template replaces, so the
-                // plain dual pass below skips it (otherwise the two overlap).
-                // The reference locates that hex at the transition vertex
-                //   ptmp = 0.5*(p21 + p26) + z*4/15.
-                double ptmp[3], pnorm[3];
-                for (int d = 0; d < 3; ++d)
-                    ptmp[d] = 0.5*(p[21][d] + p[26][d]) + z[d]*4.0/15.0;
-                rOctree.NormalizeCoordinates(ptmp, pnorm);
-                bool in_range = true;
-                std::size_t gi[3] = {0,0,0};
-                for (int d = 0; d < 3; ++d) {
-                    const long long g = std::llround(pnorm[d] * static_cast<double>(R));
-                    if (g < 0 || g > static_cast<long long>(R)) { in_range = false; break; }
-                    gi[d] = static_cast<std::size_t>(g);
+                // -- 4-element template B (pSId[j][1] side) --------------------
+                if (vcount(i, pSId[j][1]) == 1 && vcount(nb(i, pSId[j][1], 0), j) == 4) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[0][d]  = 2*p[0][d]-p[4][d];
+                        p16[1][d]  = 2*p[18][d]-p[28][d];
+                        p16[2][d]  = 2*p[1][d]-p[5][d];
+                        p16[3][d]  = p[16][d]+1.144*(p[0][d]-p[4][d]);
+                        p16[4][d]  = 2*p[2][d]-p[6][d];
+                        p16[5][d]  = p[17][d]+1.144*(p[0][d]-p[4][d]);
+                        p16[6][d]  = 2*p[19][d]-p[29][d];
+                        p16[7][d]  = 2*p[3][d]-p[7][d];
+                        p16[8][d]  = p[0][d];  p16[9][d]  = p[1][d];
+                        p16[10][d] = p[2][d];  p16[11][d] = p[3][d];
+                        p16[12][d] = p[16][d]; p16[13][d] = p[17][d];
+                        p16[14][d] = p[18][d]; p16[15][d] = p[19][d];
+                    }
+                    for (int d = 0; d < 3; ++d) ptmp[d] = 0.5*(p16[4][d]+p[1][d]) + z[d]/3;
+                    emit(p16, t22Id[tmpl], 4, ptmp, DEL_ALWAYS);
                 }
-                if (in_range) {
-                    const std::size_t key = gi[2]*pts*pts + gi[1]*pts + gi[0];
-                    auto it = vid_map.find(key);
-                    if (it != vid_map.end()) consumed[it->second] = true;
+
+                // -- 3-element template A (pSId[j][0] is itself a transition) --
+                if (vcount(i, pSId[j][0]) == 4) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[0][d]  = 2*p[0][d]-p[1][d];
+                        p16[1][d]  = p16[0][d]+2*z[d]/3;
+                        p16[2][d]  = 2*p[4][d]-p[5][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[8][d]-p[9][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[6][d]  = 2*p[12][d]-p[13][d];
+                        p16[7][d]  = p16[6][d]+2*z[d]/3;
+                        p16[8][d]  = p[0][d];  p16[9][d]  = p[4][d];
+                        p16[10][d] = p[8][d];  p16[11][d] = p[12][d];
+                        p16[12][d] = p[18][d]; p16[13][d] = p[20][d];
+                        p16[14][d] = p[24][d]; p16[15][d] = p[28][d];
+                    }
+                    const int sf = pSId[j][0];
+                    bool far_trans = false;
+                    for (int k = 0; k < 4; ++k)
+                        if (vcount(nb(nb(i, sf, k), j, 0), oj) == 4) { far_trans = true; break; }
+                    if (far_trans) for (int d = 0; d < 3; ++d) {
+                        p16[0][d] = 2*p[18][d]-p[19][d]-4*z[d]/3;
+                        p16[6][d] = 2*p[28][d]-p[29][d]-4*z[d]/3;
+                        p16[2][d] = p16[5][d]+p[4][d]-p[24][d];
+                        p16[4][d] = p16[5][d]+p[4][d]-p[20][d];
+                    }
+                    for (int d = 0; d < 3; ++d) ptmp[d] = 0.5*(p16[5][d]+p[4][d]);
+                    emit(p16, t3Id[tmpl], 3, ptmp, DEL_IF_AVAIL);
+                }
+
+                // -- 3-element template B (pSId[j][1] is itself a transition) --
+                if (vcount(i, pSId[j][1]) == 4) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[0][d]  = 2*p[0][d]-p[4][d];
+                        p16[1][d]  = p16[0][d]+2*z[d]/3;
+                        p16[2][d]  = 2*p[1][d]-p[5][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[2][d]-p[6][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[6][d]  = 2*p[3][d]-p[7][d];
+                        p16[7][d]  = p16[6][d]+2*z[d]/3;
+                        p16[8][d]  = p[0][d];  p16[9][d]  = p[1][d];
+                        p16[10][d] = p[2][d];  p16[11][d] = p[3][d];
+                        p16[12][d] = p[16][d]; p16[13][d] = p[17][d];
+                        p16[14][d] = p[18][d]; p16[15][d] = p[19][d];
+                    }
+                    const int sf = pSId[j][1];
+                    bool far_trans = false;
+                    for (int k = 0; k < 4; ++k)
+                        if (vcount(nb(nb(i, sf, k), j, 0), oj) == 4) { far_trans = true; break; }
+                    if (far_trans) for (int d = 0; d < 3; ++d) {
+                        p16[0][d] = 2*p[18][d]-p[28][d]-4*z[d]/3;
+                        p16[6][d] = 2*p[19][d]-p[29][d]-4*z[d]/3;
+                        p16[2][d] = p16[3][d]+p[2][d]-p[17][d];
+                        p16[4][d] = p16[3][d]+p[2][d]-p[16][d];
+                    }
+                    for (int d = 0; d < 3; ++d) ptmp[d] = 0.5*(p16[3][d]+p[2][d]);
+                    emit(p16, t32Id[tmpl], 3, ptmp, DEL_IF_AVAIL);
+                }
+
+                // -- 3-element template C (pS2Id[j][0] far side) ---------------
+                if (vcount(nb(i, pS2Id[j][0], 0), pS2Id[j][0]) == 4) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[0][d]  = 2*p[3][d]-p[2][d];
+                        p16[1][d]  = p16[0][d]+2*z[d]/3;
+                        p16[2][d]  = 2*p[7][d]-p[6][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[11][d]-p[10][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[6][d]  = 2*p[15][d]-p[14][d];
+                        p16[7][d]  = p16[6][d]+2*z[d]/3;
+                        p16[8][d]  = p[3][d];  p16[9][d]  = p[7][d];
+                        p16[10][d] = p[11][d]; p16[11][d] = p[15][d];
+                        p16[12][d] = p[19][d]; p16[13][d] = p[23][d];
+                        p16[14][d] = p[27][d]; p16[15][d] = p[29][d];
+                    }
+                    const int sf = pS2Id[j][0];
+                    const int a  = nb(i, sf, 0);
+                    bool far_trans = false;
+                    for (int k = 0; k < 4; ++k)
+                        if (vcount(nb(nb(a, sf, k), j, 0), oj) == 4) { far_trans = true; break; }
+                    if (far_trans) for (int d = 0; d < 3; ++d) {
+                        p16[0][d] = 2*p[19][d]-p[18][d]-4*z[d]/3;
+                        p16[6][d] = 2*p[29][d]-p[28][d]-4*z[d]/3;
+                        p16[2][d] = p16[3][d]+p[11][d]-p[27][d];
+                        p16[4][d] = p16[3][d]+p[11][d]-p[23][d];
+                    }
+                    for (int d = 0; d < 3; ++d) ptmp[d] = 0.5*(p16[3][d]+p[11][d]);
+                    emit(p16, t33Id[tmpl], 3, ptmp, DEL_IF_AVAIL);
+                }
+
+                // -- 3-element template D (pS2Id[j][1] far side) ---------------
+                if (vcount(nb(i, pS2Id[j][1], 0), pS2Id[j][1]) == 4) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[0][d]  = 2*p[12][d]-p[8][d];
+                        p16[1][d]  = p16[0][d]+2*z[d]/3;
+                        p16[2][d]  = 2*p[13][d]-p[9][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[14][d]-p[10][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[6][d]  = 2*p[15][d]-p[11][d];
+                        p16[7][d]  = p16[6][d]+2*z[d]/3;
+                        p16[8][d]  = p[12][d]; p16[9][d]  = p[13][d];
+                        p16[10][d] = p[14][d]; p16[11][d] = p[15][d];
+                        p16[12][d] = p[28][d]; p16[13][d] = p[29][d];
+                        p16[14][d] = p[30][d]; p16[15][d] = p[31][d];
+                    }
+                    const int sf = pS2Id[j][1];
+                    const int a  = nb(i, sf, 0);
+                    bool far_trans = false;
+                    for (int k = 0; k < 4; ++k)
+                        if (vcount(nb(nb(a, sf, k), j, 0), oj) == 4) { far_trans = true; break; }
+                    if (far_trans) for (int d = 0; d < 3; ++d) {
+                        p16[0][d] = 2*p[28][d]-p[18][d]-4*z[d]/3;
+                        p16[6][d] = 2*p[29][d]-p[19][d]-4*z[d]/3;
+                        p16[2][d] = p16[5][d]+p[13][d]-p[31][d];
+                        p16[4][d] = p16[5][d]+p[13][d]-p[30][d];
+                    }
+                    for (int d = 0; d < 3; ++d) ptmp[d] = 0.5*(p16[5][d]+p[13][d]);
+                    emit(p16, t34Id[tmpl], 3, ptmp, DEL_IF_AVAIL);
+                }
+
+                // -- 5-element template A (pSId[j][0] side, no further transition)
+                if (vcount(i, pSId[j][0]) == 1 && vcount(nb(i, pSId[j][0], 0), j) == 1) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[1][d]  = 2*p[18][d]-p[19][d];
+                        p16[0][d]  = p16[1][d]-4*z[d]/3;
+                        p16[2][d]  = 2*p[4][d]-p[5][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[8][d]-p[9][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[7][d]  = 2*p[28][d]-p[29][d];
+                        p16[6][d]  = p16[7][d]-4*z[d]/3;
+                        p16[8][d]  = p[0][d];  p16[9][d]  = p[4][d];
+                        p16[10][d] = p[8][d];  p16[11][d] = p[12][d];
+                        p16[12][d] = p[18][d]; p16[13][d] = p[20][d];
+                        p16[14][d] = p[24][d]; p16[15][d] = p[28][d];
+                    }
+                    for (int d = 0; d < 3; ++d) {
+                        p16[2][d] += p[8][d]-p[24][d]+2*z[d]/3;
+                        p16[4][d] += p[8][d]-p[24][d]+2*z[d]/3;
+                        ptmp[d] = 0.5*(p16[2][d]+p[24][d]);
+                    }
+                    emit(p16, t4Id[tmpl], 5, ptmp, DEL_IF_NEW);
+                }
+
+                // -- 5-element template B (pSId[j][1] side) --------------------
+                if (vcount(i, pSId[j][1]) == 1 && vcount(nb(i, pSId[j][1], 0), j) == 1) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[1][d]  = 2*p[18][d]-p[28][d];
+                        p16[0][d]  = p16[1][d]-4*z[d]/3;
+                        p16[2][d]  = 2*p[1][d]-p[5][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[2][d]-p[6][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[7][d]  = 2*p[19][d]-p[29][d];
+                        p16[6][d]  = p16[7][d]-4*z[d]/3;
+                        p16[8][d]  = p[0][d];  p16[9][d]  = p[1][d];
+                        p16[10][d] = p[2][d];  p16[11][d] = p[3][d];
+                        p16[12][d] = p[16][d]; p16[13][d] = p[17][d];
+                        p16[14][d] = p[18][d]; p16[15][d] = p[19][d];
+                    }
+                    for (int d = 0; d < 3; ++d) {
+                        p16[2][d] += p[1][d]-p[16][d]+2*z[d]/3;
+                        p16[4][d] += p[1][d]-p[16][d]+2*z[d]/3;
+                        ptmp[d] = 0.5*(p16[2][d]+p[17][d]);
+                    }
+                    emit(p16, t42Id[tmpl], 5, ptmp, DEL_IF_NEW);
+                }
+
+                // -- 5-element template C (pS2Id[j][0] far side) ---------------
+                if (vcount(nb(i, pS2Id[j][0], 0), pS2Id[j][0]) == 1 &&
+                    vcount(nb(nb(i, pS2Id[j][0], 0), pS2Id[j][0], 0), j) == 1) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[1][d]  = 2*p[19][d]-p[18][d];
+                        p16[0][d]  = p16[1][d]-4*z[d]/3;
+                        p16[2][d]  = 2*p[7][d]-p[6][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[11][d]-p[10][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[7][d]  = 2*p[29][d]-p[28][d];
+                        p16[6][d]  = p16[7][d]-4*z[d]/3;
+                        p16[8][d]  = p[3][d];  p16[9][d]  = p[7][d];
+                        p16[10][d] = p[11][d]; p16[11][d] = p[15][d];
+                        p16[12][d] = p[19][d]; p16[13][d] = p[23][d];
+                        p16[14][d] = p[27][d]; p16[15][d] = p[29][d];
+                    }
+                    for (int d = 0; d < 3; ++d) {
+                        p16[2][d] += p[7][d]-p[23][d]+2*z[d]/3;
+                        p16[4][d] += p[7][d]-p[23][d]+2*z[d]/3;
+                        ptmp[d] = 0.5*(p16[2][d]+p[27][d]);
+                    }
+                    emit(p16, t43Id[tmpl], 5, ptmp, DEL_IF_NEW);
+                }
+
+                // -- 5-element template D (pS2Id[j][1] far side) ---------------
+                if (vcount(nb(i, pS2Id[j][1], 0), pS2Id[j][1]) == 1 &&
+                    vcount(nb(nb(i, pS2Id[j][1], 0), pS2Id[j][1], 0), j) == 1) {
+                    for (int d = 0; d < 3; ++d) {
+                        p16[1][d]  = 2*p[28][d]-p[18][d];
+                        p16[0][d]  = p16[1][d]-4*z[d]/3;
+                        p16[2][d]  = 2*p[13][d]-p[9][d];
+                        p16[3][d]  = p16[2][d]+2*z[d]/3;
+                        p16[4][d]  = 2*p[14][d]-p[10][d];
+                        p16[5][d]  = p16[4][d]+2*z[d]/3;
+                        p16[7][d]  = 2*p[29][d]-p[19][d];
+                        p16[6][d]  = p16[7][d]-4*z[d]/3;
+                        p16[8][d]  = p[12][d]; p16[9][d]  = p[13][d];
+                        p16[10][d] = p[14][d]; p16[11][d] = p[15][d];
+                        p16[12][d] = p[28][d]; p16[13][d] = p[29][d];
+                        p16[14][d] = p[30][d]; p16[15][d] = p[31][d];
+                    }
+                    for (int d = 0; d < 3; ++d) {
+                        p16[2][d] += p[13][d]-p[30][d]+2*z[d]/3;
+                        p16[4][d] += p[13][d]-p[30][d]+2*z[d]/3;
+                        ptmp[d] = 0.5*(p16[2][d]+p[31][d]);
+                    }
+                    emit(p16, t44Id[tmpl], 5, ptmp, DEL_IF_NEW);
                 }
             }
         }
