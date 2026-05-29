@@ -74,14 +74,26 @@ namespace Kratos {
  * emits only if it introduces at least one new node.  A consumed vertex's plain
  * dual hex is then skipped (see `consume_at`).
  *
+ * ### Node merging
+ *
+ * All hexes - plain dual and template - index into a single merged node array
+ * (`nodes`): it is seeded with the cell centres (the dual nodes), and every
+ * template point is looked up in a spatial hash so that a point coinciding with
+ * an existing node reuses its id.  Template and plain-dual hexes therefore share
+ * the same node at every interface where they geometrically meet, instead of
+ * carrying coincident duplicates.
+ *
  * @note All generated elements are valid (positive Jacobian) — verified by
- *       test_octree_hybrid_dual_mesh.py.  The mesh is **not yet watertight**:
- *       at transition regions a few percent of faces are still non-conforming
- *       (small gaps / overlaps).  Achieving a fully conforming mesh requires the
- *       reference's exact floating-point node-merge bookkeeping between the
- *       plain-dual and template element sets, which this port approximates with
- *       a grid-key vertex match and a spatial node hash.  Adequate for
- *       visualisation; not yet for FE analysis without a cleanup/merge pass.
+ *       test_octree_hybrid_dual_mesh.py.  The merged node array removes
+ *       duplicate vertices, but the mesh is **still not fully watertight**: at
+ *       transition regions a few percent of faces remain non-conforming (small
+ *       geometric gaps where a plain-dual hex sits next to a template that does
+ *       not cover the same vertices, plus a few overlaps).  This residue is a
+ *       *geometric element-tiling* gap, not a node-id one — node merging alone
+ *       does not remove it.  Closing it needs the plain-dual/template coverage
+ *       to match the reference cell-for-cell (the strict uniform-region gating
+ *       and exact consume tried here both regressed it).  Adequate for
+ *       visualisation; needs a cleanup pass before FE analysis.
  *
  * ### Usage
  * ```python
@@ -260,6 +272,16 @@ public:
 
         const int NV = static_cast<int>(vert_adj.size());
 
+        // Characteristic length: world size of one finest-level cell.  Used to
+        // scale the node-merge tolerance so it is independent of the model's
+        // absolute coordinate range.
+        const double invR = 1.0 / static_cast<double>(R);
+        double mc_w0[3], mc_w1[3];
+        { const double n0[3] = {0,0,0}, n1[3] = {invR, invR, invR};
+          rOctree.ScaleBackToOriginalCoordinate(n0, mc_w0);
+          rOctree.ScaleBackToOriginalCoordinate(n1, mc_w1); }
+        const double min_cell = std::min({ mc_w1[0]-mc_w0[0], mc_w1[1]-mc_w0[1], mc_w1[2]-mc_w0[2] });
+
         // ------------------------------------------------------------------ //
         // 4. Build face adjacency using O(N·depth) octree point queries.
         //
@@ -416,21 +438,22 @@ public:
         static constexpr int xyz1[6] = {0,0,1,1,0,0};  // first in-plane axis index
         static constexpr int xyz2[6] = {1,2,2,2,2,1};  // second in-plane axis index
 
-        // Template node positions are floating-point and are shared between
-        // adjacent templates, so they must be merged.  A coincident pair is
-        // within sqrt(DIST_THRES) = 1e-5; distinct template points are at least
-        // a (sub-)cell size apart (>> 1e-5).  We bucket on a quantised grid
-        // coarser than the merge tolerance and probe the 27 neighbouring buckets
-        // so a pair straddling a bucket boundary is still found - O(1) per node
-        // instead of the previous O(n^2) linear scan.
-        std::vector<std::array<double,3>> tmpl_nodes;
+        // Single, merged output node array (the reference's hexMesh.v): every
+        // hex - plain dual or template - references into `nodes`, and any two
+        // points closer than the merge tolerance share one id.  Seeded with the
+        // N cell centres (the dual node positions) so a template point landing on
+        // a cell centre reuses the dual node id and the template stays conforming
+        // with the plain dual hexes around it.  Dual node i == cell centre i.
+        std::vector<std::array<double,3>> nodes = centres;
         std::vector<std::array<int,8>> tmpl_cells;
-        tmpl_nodes.reserve(N);
         tmpl_cells.reserve(N);
 
-        const double DIST_THRES = 1e-10;          // squared merge tolerance
-        const double QUANT = 1.0e4;               // bucket size 1e-4 > 1e-5 tol
-        std::unordered_map<std::size_t, std::vector<int>> tmpl_node_hash;
+        // Tolerances scaled by the finest cell size (model-scale independent).
+        const double merge_eps  = 1.0e-4 * min_cell;     // points within this merge
+        const double merge_tol2 = merge_eps * merge_eps;
+        const double bucket = 1.0e-2 * min_cell;          // spatial-hash bucket size
+        const double QUANT = 1.0 / bucket;
+        std::unordered_map<std::size_t, std::vector<int>> node_hash;
 
         auto cell_hash = [](long long a, long long b, long long c) -> std::size_t {
             std::size_t h = 1469598103934665603ULL;
@@ -438,26 +461,31 @@ public:
                 h = (h ^ static_cast<std::size_t>(v)) * 1099511628211ULL;
             return h;
         };
+        auto bkey = [&](const std::array<double,3>& p) -> std::array<long long,3> {
+            return { std::llround(p[0]*QUANT), std::llround(p[1]*QUANT), std::llround(p[2]*QUANT) };
+        };
+        for (int i = 0; i < N; ++i) {
+            const auto b = bkey(nodes[i]);
+            node_hash[cell_hash(b[0],b[1],b[2])].push_back(i);
+        }
 
         auto find_or_add_node = [&](const std::array<double,3>& pos) -> int {
-            const long long bx = std::llround(pos[0]*QUANT);
-            const long long by = std::llround(pos[1]*QUANT);
-            const long long bz = std::llround(pos[2]*QUANT);
+            const auto b = bkey(pos);
             for (int dx = -1; dx <= 1; ++dx)
             for (int dy = -1; dy <= 1; ++dy)
             for (int dz = -1; dz <= 1; ++dz) {
-                auto it = tmpl_node_hash.find(cell_hash(bx+dx, by+dy, bz+dz));
-                if (it == tmpl_node_hash.end()) continue;
+                auto it = node_hash.find(cell_hash(b[0]+dx, b[1]+dy, b[2]+dz));
+                if (it == node_hash.end()) continue;
                 for (int m : it->second) {
-                    const auto& q = tmpl_nodes[m];
+                    const auto& q = nodes[m];
                     double d2 = 0;
                     for (int d = 0; d < 3; ++d) d2 += (q[d]-pos[d])*(q[d]-pos[d]);
-                    if (d2 < DIST_THRES) return m;
+                    if (d2 < merge_tol2) return m;
                 }
             }
-            const int id = static_cast<int>(tmpl_nodes.size());
-            tmpl_nodes.push_back(pos);
-            tmpl_node_hash[cell_hash(bx, by, bz)].push_back(id);
+            const int id = static_cast<int>(nodes.size());
+            nodes.push_back(pos);
+            node_hash[cell_hash(b[0],b[1],b[2])].push_back(id);
             return id;
         };
 
@@ -518,10 +546,11 @@ public:
         auto vcount = [&](int c, int fc) -> int { return c < 0 ? 0 : adj[c][fc].count; };
         auto nb     = [&](int c, int fc, int k) -> int { return c < 0 ? -1 : adj[c][fc].ids[k]; };
 
-        // Find the primal vertex nearest a template point and, if it is still
-        // available (a collectNum member), consume it.  Returns true iff a
-        // vertex was consumed.  Mirrors the reference's "delete corresponding
-        // point in collectNum" step.
+        // Consume the collectNum vertex a template replaces: round the template's
+        // transition point to the finest grid and look it up among the primal
+        // vertices.  Rounding (rather than a fixed-radius search) is what the
+        // reference's off-grid `ptmp` positions need - it snaps to the intended
+        // octree vertex.  Only an available (collectNum) vertex is consumed.
         auto consume_at = [&](const double* world) -> bool {
             double pn[3];
             rOctree.NormalizeCoordinates(world, pn);
@@ -552,15 +581,15 @@ public:
         enum DelMode { DEL_ALWAYS, DEL_IF_AVAIL, DEL_IF_NEW };
         auto emit = [&](const double (*P)[3], const int (*table)[8], int nh,
                         const double* ptmp, DelMode mode) {
-            const std::size_t before = tmpl_nodes.size();
+            const std::size_t before = nodes.size();
             std::array<std::array<int,8>,13> staged;
             for (int k = 0; k < nh; ++k)
                 for (int l = 0; l < 8; ++l) {
                     const int idx = table[k][l];
                     const std::array<double,3> pt{ P[idx][0], P[idx][1], P[idx][2] };
-                    staged[k][l] = find_or_add_node(pt) + N;
+                    staged[k][l] = find_or_add_node(pt);
                 }
-            const bool created_new = tmpl_nodes.size() > before;
+            const bool created_new = nodes.size() > before;
             bool keep = true;
             if (mode == DEL_IF_AVAIL)      keep = consume_at(ptmp);
             else if (mode == DEL_IF_NEW) { keep = created_new; if (keep) consume_at(ptmp); }
@@ -951,14 +980,15 @@ public:
         }
 
         // ------------------------------------------------------------------ //
-        // 6. Write VTK
+        // 6. Write VTK.  All hexes index into the single merged `nodes` array
+        //    (dual node i == cell centre i == nodes[i]).
         // ------------------------------------------------------------------ //
         std::ofstream f(rFilename);
         KRATOS_ERROR_IF_NOT(f.is_open())
             << "OctreeHybridMeshUtility::WriteDualHexVtk: cannot open '"
             << rFilename << "'" << std::endl;
 
-        const std::size_t n_nodes = static_cast<std::size_t>(N) + tmpl_nodes.size();
+        const std::size_t n_nodes = nodes.size();
         const std::size_t n_cells = dual_cells.size() + tmpl_cells.size();
 
         f << "# vtk DataFile Version 2.0\n"
@@ -968,11 +998,7 @@ public:
 
         f << "POINTS " << n_nodes << " double\n";
         f << std::scientific; f.precision(10);
-        // Nodes 0..N-1: cell centres
-        for (int i = 0; i < N; ++i)
-            f << centres[i][0] << ' ' << centres[i][1] << ' ' << centres[i][2] << '\n';
-        // Nodes N..: template points
-        for (const auto& nd : tmpl_nodes)
+        for (const auto& nd : nodes)
             f << nd[0] << ' ' << nd[1] << ' ' << nd[2] << '\n';
 
         f << "CELLS " << n_cells << ' ' << n_cells * 9 << '\n';
