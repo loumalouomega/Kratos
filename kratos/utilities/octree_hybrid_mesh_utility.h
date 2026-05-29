@@ -13,7 +13,9 @@
 #pragma once
 
 // System includes
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -56,11 +58,20 @@ namespace Kratos {
  *
  * ### 13-element template
  *
- * The utility also applies the 13-element transition template from the
- * HybridOctree_Hex paper for every face where one large cell meets four small
- * cells.  This generates 13 additional hexes that fill the face-transition
- * region with higher element quality than the plain dual approach, replacing
- * the distorted hexes that would otherwise sit in that region.
+ * For every face where one large cell meets four smaller cells, the utility
+ * applies the 13-element transition template from the HybridOctree_Hex paper.
+ * The template is anchored at the large cell whose in-plane grid indices are
+ * both even (matching the reference's `stepI && stepJ` gate) and the parity is
+ * evaluated in grid-index space — evaluating it in world coordinates is wrong
+ * because they are offset by the bounding-box minimum.  Each template replaces
+ * exactly one plain dual hex (at the transition vertex) and fills the remaining
+ * gap with the other 12, so the templates and the plain dual never overlap.
+ *
+ * @note Only the base 13-element template is generated.  The reference also
+ *       emits 4/3/5-element sub-templates along the *edges and corners* of a
+ *       transition region; those are not yet ported, so small gaps can remain
+ *       at transition edges.  All generated elements are valid (positive
+ *       Jacobian) — verified by test_octree_hybrid_dual_mesh.py.
  *
  * ### Usage
  * ```python
@@ -363,29 +374,20 @@ public:
         std::vector<std::array<int,8>> dual_cells;
         dual_cells.reserve(N);
 
-        // -- 5a. 1-element template (uniform and mixed-size interior vertices) --
-        // For each primal vertex with exactly 8 cells → 1 dual hex
-        std::vector<bool> vertex_used(NV, false);
-
-        for (int v = 0; v < NV; ++v) {
-            if (vert_adj[v].size() != 8) continue;
-            std::array<int,8> hex;
-            hex.fill(-1);
-            for (auto [ci, co] : vert_adj[v]) {
-                hex[idTransform[co]] = ci;
-            }
-            if (std::any_of(hex.begin(), hex.end(), [](int x){ return x < 0; })) continue;
-            dual_cells.push_back(hex);
-            vertex_used[v] = true;
-        }
+        // The 13-element transition templates (5b) are built FIRST.  Following
+        // the reference (DualFullHexMeshExtraction), each template *replaces*
+        // exactly one plain dual hex - the one at the transition vertex - while
+        // its other 12 hexes fill the gap the plain dual leaves there.  The
+        // template loop records that consumed vertex in `consumed[]`, and the
+        // plain dual pass (5a, run afterwards) skips it.  Without this the two
+        // meshes overlap in every transition region.
+        std::vector<bool> consumed(NV, false);
 
         // -- 5b. 13-element template: fill face-transition regions --
         // For each leaf i and each face j where adj[i][j].count == 4 (4 smaller
         // neighbors), compute the 32 reference points and create 13 dual hexes.
-        // This improves quality over the plain dual approach in transition zones.
         //
-        // Template tables from StaticVars.h (t1Id[stepI][13][8]):
-        // stepI = (j == 1 || j == 3 || j == 5)
+        // Template tables from StaticVars.h (t1Id[variant][13][8]):
         static constexpr int t1Id[2][13][8] = {
             {{0,1,5,4,18,16,21,20},{1,2,6,5,16,17,22,21},{2,3,7,6,17,19,23,22},
              {4,5,9,8,20,21,25,24},{5,6,10,9,21,22,26,25},{6,7,11,10,22,23,27,26},
@@ -404,78 +406,99 @@ public:
         static constexpr int xyz1[6] = {0,0,1,1,0,0};  // first in-plane axis index
         static constexpr int xyz2[6] = {1,2,2,2,2,1};  // second in-plane axis index
 
-        // Dual hex node positions produced by the 13-element template are
-        // floating-point coordinates deduped with a tolerance.
-        // We collect them in a flat vector and dedup on the fly.
-        struct DualNode { std::array<double,3> pos; };
-        std::vector<DualNode> tmpl_nodes;
+        // Template node positions are floating-point and are shared between
+        // adjacent templates, so they must be merged.  A coincident pair is
+        // within sqrt(DIST_THRES) = 1e-5; distinct template points are at least
+        // a (sub-)cell size apart (>> 1e-5).  We bucket on a quantised grid
+        // coarser than the merge tolerance and probe the 27 neighbouring buckets
+        // so a pair straddling a bucket boundary is still found - O(1) per node
+        // instead of the previous O(n^2) linear scan.
+        std::vector<std::array<double,3>> tmpl_nodes;
         std::vector<std::array<int,8>> tmpl_cells;
-        tmpl_nodes.reserve(N * 4);
-        tmpl_cells.reserve(N * 13);
+        tmpl_nodes.reserve(N);
+        tmpl_cells.reserve(N);
 
-        const double DIST_THRES = 1e-10;
+        const double DIST_THRES = 1e-10;          // squared merge tolerance
+        const double QUANT = 1.0e4;               // bucket size 1e-4 > 1e-5 tol
+        std::unordered_map<std::size_t, std::vector<int>> tmpl_node_hash;
 
-        auto find_or_add_node = [&](const std::array<double,3>& pos) -> int {
-            for (int m = static_cast<int>(tmpl_nodes.size()) - 1; m >= 0; --m) {
-                const auto& q = tmpl_nodes[m].pos;
-                double d2 = 0;
-                for (int d = 0; d < 3; ++d) d2 += (q[d]-pos[d])*(q[d]-pos[d]);
-                if (d2 < DIST_THRES) return m;
-            }
-            tmpl_nodes.push_back({pos});
-            return static_cast<int>(tmpl_nodes.size()) - 1;
+        auto cell_hash = [](long long a, long long b, long long c) -> std::size_t {
+            std::size_t h = 1469598103934665603ULL;
+            for (long long v : {a, b, c})
+                h = (h ^ static_cast<std::size_t>(v)) * 1099511628211ULL;
+            return h;
         };
 
-        // Gather which primal vertices are "claimed" by the 13-element template
-        // so the plain dual approach (5a) doesn't double-create them.
-        // We identify these by looking at which collectNum-style vertices
-        // are handled by the 13-element template.
-        // For simplicity we skip 5a for primal vertices that are adjacent to
-        // any 4-valence face.
-        // (already handled: 5a only runs on vertices not flagged below)
-        // We flag by removing those dual_cells entries that have ALL their 8
-        // contributing cells involved in a 13-element template face.
-        // This is complex; instead we use a simpler rule: the 13-element
-        // template nodes REPLACE the cell-centre nodes for the affected region.
-        // We keep both sets of elements and rely on VTK viewer for display.
+        auto find_or_add_node = [&](const std::array<double,3>& pos) -> int {
+            const long long bx = std::llround(pos[0]*QUANT);
+            const long long by = std::llround(pos[1]*QUANT);
+            const long long bz = std::llround(pos[2]*QUANT);
+            for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+            for (int dz = -1; dz <= 1; ++dz) {
+                auto it = tmpl_node_hash.find(cell_hash(bx+dx, by+dy, bz+dz));
+                if (it == tmpl_node_hash.end()) continue;
+                for (int m : it->second) {
+                    const auto& q = tmpl_nodes[m];
+                    double d2 = 0;
+                    for (int d = 0; d < 3; ++d) d2 += (q[d]-pos[d])*(q[d]-pos[d]);
+                    if (d2 < DIST_THRES) return m;
+                }
+            }
+            const int id = static_cast<int>(tmpl_nodes.size());
+            tmpl_nodes.push_back(pos);
+            tmpl_node_hash[cell_hash(bx, by, bz)].push_back(id);
+            return id;
+        };
 
         for (int i = 0; i < N; ++i) {
             for (int j = 0; j < 6; ++j) {
                 if (adj[i][j].count != 4) continue;
 
-                // Determine sub-case: (stepI, stepJ) for pos calculation
-                // using the large cell's centre in world coordinates
                 const std::array<double,3>& ci = centres[i];
-                // cell size in world space (use first axis as reference)
-                double n_lo[3], n_hi[3], w_lo[3], w_hi[3];
-                leaves[i]->GetMinPointNormalized(n_lo);
-                leaves[i]->GetMaxPointNormalized(n_hi);
-                rOctree.ScaleBackToOriginalCoordinate(n_lo, w_lo);
-                rOctree.ScaleBackToOriginalCoordinate(n_hi, w_hi);
-                const double delta = w_hi[0] - w_lo[0];  // cell size
+                // Sub-case parity must be computed in GRID-INDEX space (as the
+                // reference does — it works in the octree's [0,1] grid that
+                // starts at the origin).  Using world coordinates here is a bug:
+                // they are offset by the bounding-box minimum and, for non-cubic
+                // domains, scaled differently per axis, so the parity comes out
+                // wrong and the template is fed the wrong cells.
+                //
+                // The reference loop `while(posI>0){posI-=delta; stepI=!stepI;}`
+                // applied to a cell centre at (g+0.5)*delta toggles (g+1) times,
+                // i.e. stepI == (g is even), where g is the cell's grid index at
+                // its own level along that axis.
+                const int gidx[3] = { leaves[i]->GetGridX(),
+                                      leaves[i]->GetGridY(),
+                                      leaves[i]->GetGridZ() };
+                const bool sI = (gidx[xyz1[j]] % 2 == 0);
+                const bool sJ = (gidx[xyz2[j]] % 2 == 0);
+                if (!(sI && sJ)) continue;  // only the (even,even) cell anchors the template
 
-                double posI = ci[xyz1[j]], posJ = ci[xyz2[j]];
-                bool sI = false, sJ = false;
-                while (posI > 0) { posI -= delta; sI = !sI; }
-                while (posJ > 0) { posJ -= delta; sJ = !sJ; }
-                if (!(sI && sJ)) continue;  // only handle (T,T) sub-case
-
-                // IDs of the 4 smaller neighbors on face j
-                const int s0 = adj[i][j].ids[0];  // [small,small]
-                const int s1 = adj[i][j].ids[1];  // [big,small]
-                const int s2 = adj[i][j].ids[2];  // [big,big]
-                const int s3 = adj[i][j].ids[3];  // [small,big]
-                if (s0<0 || s1<0 || s2<0 || s3<0) continue;
+                // IDs of the 4 smaller neighbours on face j, in the template's
+                // (I,J) layout.  The face-adjacency probe fills ids[] in the
+                // order  ids[0]=(Ilo,Jlo)  ids[1]=(Ihi,Jlo)  ids[2]=(Ilo,Jhi)
+                // ids[3]=(Ihi,Jhi).  The template wants
+                //   p0 = (Ilo,Jlo)   p1 = (Ihi,Jlo) = +I
+                //   p4 = (Ilo,Jhi) = +J   p5 = (Ihi,Jhi) = +I+J
+                // so p4/p5 come from ids[2]/ids[3].  (The reference numbers its
+                // neighbours [LL,HL,HH,LH], which is why a naive ids[2]->p5,
+                // ids[3]->p4 mapping silently swapped p4/p5 and inverted every
+                // template hex.)
+                const int sLL = adj[i][j].ids[0];  // (Ilo, Jlo)
+                const int sHL = adj[i][j].ids[1];  // (Ihi, Jlo)  -> +I
+                const int sLH = adj[i][j].ids[2];  // (Ilo, Jhi)  -> +J
+                const int sHH = adj[i][j].ids[3];  // (Ihi, Jhi)  -> +I+J
+                if (sLL<0 || sHL<0 || sLH<0 || sHH<0) continue;
 
                 // Build the 32 reference points (p[0..31])
                 double p[32][3];
                 for (int d = 0; d < 3; ++d) {
-                    p[0][d]  = centres[s0][d];
-                    p[1][d]  = centres[s1][d];
+                    p[0][d]  = centres[sLL][d];
+                    p[1][d]  = centres[sHL][d];
                     p[2][d]  = 2*p[1][d]-p[0][d];
                     p[3][d]  = 2*p[2][d]-p[1][d];
-                    p[4][d]  = centres[s3][d];  // [small,big] = m=3
-                    p[5][d]  = centres[s2][d];  // [big,big]   = m=2
+                    p[4][d]  = centres[sLH][d];  // +J
+                    p[5][d]  = centres[sHH][d];  // +I+J
                     p[6][d]  = 2*p[5][d]-p[4][d];
                     p[7][d]  = 2*p[6][d]-p[5][d];
                     p[8][d]  = 2*p[4][d]-p[0][d];
@@ -523,7 +546,43 @@ public:
                     }
                     tmpl_cells.push_back(hex);
                 }
+
+                // Mark the single plain dual hex this template replaces, so the
+                // plain dual pass below skips it (otherwise the two overlap).
+                // The reference locates that hex at the transition vertex
+                //   ptmp = 0.5*(p21 + p26) + z*4/15.
+                double ptmp[3], pnorm[3];
+                for (int d = 0; d < 3; ++d)
+                    ptmp[d] = 0.5*(p[21][d] + p[26][d]) + z[d]*4.0/15.0;
+                rOctree.NormalizeCoordinates(ptmp, pnorm);
+                bool in_range = true;
+                std::size_t gi[3] = {0,0,0};
+                for (int d = 0; d < 3; ++d) {
+                    const long long g = std::llround(pnorm[d] * static_cast<double>(R));
+                    if (g < 0 || g > static_cast<long long>(R)) { in_range = false; break; }
+                    gi[d] = static_cast<std::size_t>(g);
+                }
+                if (in_range) {
+                    const std::size_t key = gi[2]*pts*pts + gi[1]*pts + gi[0];
+                    auto it = vid_map.find(key);
+                    if (it != vid_map.end()) consumed[it->second] = true;
+                }
             }
+        }
+
+        // -- 5a. Plain dual hexes: one per interior primal vertex (valence 8) --
+        // idTransform maps the cell corner k touching the vertex to the dual-hex
+        // node position that cell's centre occupies.  Vertices consumed by a
+        // transition template above are skipped to avoid overlapping elements.
+        for (int v = 0; v < NV; ++v) {
+            if (consumed[v]) continue;
+            if (vert_adj[v].size() != 8) continue;
+            std::array<int,8> hex;
+            hex.fill(-1);
+            for (auto [ci, co] : vert_adj[v])
+                hex[idTransform[co]] = ci;
+            if (std::any_of(hex.begin(), hex.end(), [](int x){ return x < 0; })) continue;
+            dual_cells.push_back(hex);
         }
 
         // ------------------------------------------------------------------ //
@@ -549,7 +608,7 @@ public:
             f << centres[i][0] << ' ' << centres[i][1] << ' ' << centres[i][2] << '\n';
         // Nodes N..: template points
         for (const auto& nd : tmpl_nodes)
-            f << nd.pos[0] << ' ' << nd.pos[1] << ' ' << nd.pos[2] << '\n';
+            f << nd[0] << ' ' << nd[1] << ' ' << nd[2] << '\n';
 
         f << "CELLS " << n_cells << ' ' << n_cells * 9 << '\n';
         for (const auto& h : dual_cells)
