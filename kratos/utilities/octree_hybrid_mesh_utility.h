@@ -84,16 +84,19 @@ namespace Kratos {
  * carrying coincident duplicates.
  *
  * @note All generated elements are valid (positive Jacobian) — verified by
- *       test_octree_hybrid_dual_mesh.py.  The merged node array removes
- *       duplicate vertices, but the mesh is **still not fully watertight**: at
- *       transition regions a few percent of faces remain non-conforming (small
- *       geometric gaps where a plain-dual hex sits next to a template that does
- *       not cover the same vertices, plus a few overlaps).  This residue is a
- *       *geometric element-tiling* gap, not a node-id one — node merging alone
- *       does not remove it.  Closing it needs the plain-dual/template coverage
- *       to match the reference cell-for-cell (the strict uniform-region gating
- *       and exact consume tried here both regressed it).  Adequate for
- *       visualisation; needs a cleanup pass before FE analysis.
+ *       test_octree_hybrid_dual_mesh.py.  The element tiling matches the
+ *       HybridOctree_Hex reference **cell-for-cell**: instrumented against the
+ *       reference's own `DualFullHexMeshExtraction` output on the 2:1-transition
+ *       test surface, the two meshes are identical (same hex set, zero gaps and
+ *       zero overlaps) at refinement depths 3 through 7.  Two bugs that broke
+ *       this were fixed: (a) the face-adjacency "fill opposite side" shortcut
+ *       stamped valence-1 onto a coarse cell's transition face when a fine
+ *       neighbour saw it first, hiding half the transitions (every `j=5`/high
+ *       face) so only half the templates fired; (b) the 13-element base
+ *       template's collectNum erase point used `z*4/15` instead of the
+ *       reference's `0.5*(p21+p26+z*4/15)` = `z*2/15`, which mis-rounded and
+ *       left the centre dual hex unconsumed once cells were large in finest-grid
+ *       units (surfaced at depth >= 6).
  *
  * ### Usage
  * ```python
@@ -365,8 +368,14 @@ public:
                                  found[2]==first && found[3]==first);
                 if (all_same) {
                     adj[i][j].count = 1; adj[i][j].ids[0] = first;
-                    // Fill opposite face if not already done
-                    if (adj[first][opp].count == 0) {
+                    // Fill opposite face only for a SAME-SIZE neighbour.  If
+                    // `first` is coarser (i is one of its 4 smaller children on
+                    // this side), its opposite face genuinely has valence 4 — we
+                    // must NOT stamp count=1 on it here, or it would be skipped
+                    // (line "filled from opposite side") and never detect its 4
+                    // smaller neighbours, dropping that whole transition template.
+                    if (leaves[i]->GetLevel() == leaves[first]->GetLevel() &&
+                        adj[first][opp].count == 0) {
                         adj[first][opp].count = 1; adj[first][opp].ids[0] = i;
                     }
                 } else {
@@ -689,7 +698,12 @@ public:
                 {
                     double ptmp[3];
                     for (int d = 0; d < 3; ++d)
-                        ptmp[d] = 0.5*(p[21][d] + p[26][d]) + z[d]*4.0/15.0;
+                        // Reference erase point is 0.5*(p21 + p26 + z*4/15),
+                        // i.e. 0.5*(p21+p26) + z*2/15 — NOT z*4/15.  The doubled
+                        // z-offset only mis-rounds (and leaves the centre dual hex
+                        // unconsumed) once cells are large in finest-grid units,
+                        // so it surfaced only at depth >= 6.
+                        ptmp[d] = 0.5*(p[21][d] + p[26][d] + z[d]*4.0/15.0);
                     emit(p, t1Id[tmpl], 13, ptmp, DEL_ALWAYS);
                 }
 
