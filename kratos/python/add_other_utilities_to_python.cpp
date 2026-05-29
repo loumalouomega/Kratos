@@ -878,6 +878,13 @@ void AddOtherUtilitiesToPython(pybind11::module &m)
             py::arg("refinement_depth") = 5,
             "Reads triangles from surface_model_part (populated by StlIO), builds an "
             "adaptive OctreeHybrid, and writes the resulting hex mesh to a legacy VTK file.")
+        .def_static("WriteOctreeForReference",
+            &OctreeHybridMeshUtility::WriteOctreeForReference,
+            py::arg("surface_model_part"),
+            py::arg("vtk_filename"),
+            py::arg("refinement_depth"),
+            "Debug: writes the balanced octree leaves in the reference HybridOctree_Hex "
+            "ReadOctree format (coords = grid_index * 100/2^depth) for tiling comparison.")
         ;
 }
 

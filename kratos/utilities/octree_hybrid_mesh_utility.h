@@ -1099,6 +1099,76 @@ public:
         WriteDualHexVtk(*p_octree, rVtkFilename);
     }
 
+    /**
+     * @brief Debug/validation helper: writes the strongly-balanced octree leaves
+     *        in the exact VTK format the reference HybridOctree_Hex expects from
+     *        its `ReadOctree` (so its dual extraction can be run on the identical
+     *        octree and the two tilings compared).
+     *
+     * Vertex coordinates are written as (integer grid index) * (100 / 2^depth):
+     * the reference forces START_POINT = 0 and BOX_LENGTH_RATIO = 100/voxelSize
+     * with voxelSize = 2^depth, so `round(coord / RATIO)` recovers the integer
+     * grid index.  Corner order matches the reference (0 = min, 6 = max).
+     *
+     * The octree is built and balanced exactly as in BuildAndWriteVtk, so the
+     * leaves coincide with those used by the dual mesh written there.
+     */
+    static void WriteOctreeForReference(
+        ModelPart& rSurfaceMesh,
+        const std::string& rFilename,
+        std::size_t RefinementDepth)
+    {
+        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+        p_octree->StrongConstrain2To1();
+
+        std::vector<CellType*> leaves;
+        p_octree->GetAllLeavesVector(leaves);
+
+        const std::size_t depth = p_octree->GetDepth();
+        const std::size_t R   = std::size_t{1} << depth;
+        const std::size_t pts = R + 1;
+        const double sc = 100.0 / static_cast<double>(R);  // reference RATIO
+
+        static constexpr int dx[8] = {0,1,1,0,0,1,1,0};
+        static constexpr int dy[8] = {0,0,1,1,0,0,1,1};
+        static constexpr int dz[8] = {0,0,0,0,1,1,1,1};
+
+        std::unordered_map<std::size_t, std::size_t> node_map;
+        std::vector<std::array<double,3>> coords;
+        std::vector<std::array<std::size_t,8>> conn;
+        conn.reserve(leaves.size());
+
+        for (CellType* c : leaves) {
+            const int lv = c->GetLevel();
+            const int gx = c->GetGridX(), gy = c->GetGridY(), gz = c->GetGridZ();
+            const std::size_t stride = std::size_t{1} << (depth - static_cast<std::size_t>(lv));
+            std::array<std::size_t,8> e{};
+            for (int k = 0; k < 8; ++k) {
+                const std::size_t ix = static_cast<std::size_t>(gx+dx[k])*stride;
+                const std::size_t iy = static_cast<std::size_t>(gy+dy[k])*stride;
+                const std::size_t iz = static_cast<std::size_t>(gz+dz[k])*stride;
+                const std::size_t key = iz*pts*pts + iy*pts + ix;
+                auto [it, ins] = node_map.emplace(key, coords.size());
+                if (ins) coords.push_back({ ix*sc, iy*sc, iz*sc });
+                e[k] = it->second;
+            }
+            conn.push_back(e);
+        }
+
+        std::ofstream f(rFilename);
+        const std::size_t nc = conn.size();
+        f << "# vtk DataFile Version 2.0\nOctreeHybrid leaves (reference format)\nASCII\n"
+          << "DATASET UNSTRUCTURED_GRID\n"
+          << "POINTS " << coords.size() << " double\n";
+        f << std::scientific; f.precision(10);
+        for (auto& p : coords) f << p[0] << ' ' << p[1] << ' ' << p[2] << '\n';
+        f << "CELLS " << nc << ' ' << nc*9 << '\n';
+        for (auto& e : conn) f << "8 "<<e[0]<<' '<<e[1]<<' '<<e[2]<<' '<<e[3]
+                               <<' '<<e[4]<<' '<<e[5]<<' '<<e[6]<<' '<<e[7]<<'\n';
+        f << "CELL_TYPES " << nc << '\n';
+        for (std::size_t i = 0; i < nc; ++i) f << "12\n";
+    }
+
     ///@}
 };
 
