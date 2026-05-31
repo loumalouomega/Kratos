@@ -38,25 +38,47 @@ summary: Builds an adaptive OctreeHybrid from a surface and exports a conforming
 10. [Usage examples](#10-usage-examples)
 11. [Performance notes](#11-performance-notes)
 12. [Known limitations](#12-known-limitations)
+13. [The full reference pipeline and what is *not* ported](#13-the-full-reference-pipeline-and-what-is-not-ported)
+    - 13.1 [Reference stage 4 — `RemoveOutsideElement`](#131-reference-stage-4--removeoutsideelement)
+    - 13.2 [Reference stage 5 — `ProjectToIsoSurface`](#132-reference-stage-5--projecttoisosurface)
+    - 13.3 [Reproducing the diagnosis](#133-reproducing-the-diagnosis)
 
 ---
 
 ## 1. What this utility does
 
 `OctreeHybridMeshUtility` takes a closed, orientable triangular surface `ModelPart`
-and produces a **conforming all-hexahedral volumetric mesh** of the region enclosed
-by that surface, written to a VTK file.
+and produces an **adaptive all-hexahedral dual mesh** of the octree built around that
+surface, written to a VTK file.
 
 The mesh is **adaptive**: cells are smallest near the surface and grow larger away
 from it.  All-hex means every element is a hexahedron (no pyramids, prisms, or
-tetrahedra anywhere).  Conforming means adjacent elements share faces completely —
-there are no T-junctions or hanging nodes.
+tetrahedra anywhere).
 
 At refinement depth 8 on a typical CAD surface:
 
 - ~1.5 million hex elements
 - ~1.75 million nodes
 - Generated in ~25 seconds (single-threaded, ARM64)
+
+> ⚠️ **Scope of the current port — read this before opening the VTK.**
+> This utility implements **only the dual-hex extraction** of the HybridOctree_Hex
+> algorithm — the reference's intermediate `DualFullHexMeshExtraction` stage.  Its
+> output is therefore a hex mesh that **fills the entire octree bounding box** (a
+> solid block, fine near the surface and coarse in the interior), *not* a clean mesh
+> of the object's interior.  The two downstream reference stages that carve the
+> object out of the block and snap its boundary to the surface —
+> [`RemoveOutsideElement`](#13-the-full-reference-pipeline-and-what-is-not-ported)
+> and `ProjectToIsoSurface` — are **not ported**.
+>
+> **Symptom in Paraview ("holes inside"):** because the block is uncarved and still
+> carries the refinement-interface T-junctions/overlaps inherent to this stage, the
+> exposed internal transition faces render as internal surfaces that look like holes,
+> and the outer shape is the bounding box rather than the object.  Applying the
+> missing `RemoveOutsideElement` criterion to the Stanford-bunny output (depth 8)
+> reduces it from **1,567,546 hexes to 540,859 hexes (34.5 % kept)** — and the
+> survivor's bounding box matches the bunny surface exactly, i.e. the bunny is
+> carved out of the block.  See [§13](#13-the-full-reference-pipeline-and-what-is-not-ported).
 
 ---
 
@@ -172,8 +194,17 @@ Input: closed triangular surface ModelPart
 │     (level = -1 for template cells)  │
 └──────────────────────────────────────┘
 
-Output: conforming all-hex VTK file
+Output: all-hex VTK file covering the full octree bounding box
+        (the reference's intermediate DualFullHex mesh — NOT yet
+         carved to the object interior; see §13)
 ```
+
+> **Note on staging terminology.** Stages 0–5 above are the *internal* steps of this
+> port and all together correspond to **one** stage of the reference algorithm —
+> `DualFullHexMeshExtraction` (reference stage 3 of 5).  The reference's two
+> remaining stages, `RemoveOutsideElement` (stage 4) and `ProjectToIsoSurface`
+> (stage 5), are documented in [§13](#13-the-full-reference-pipeline-and-what-is-not-ported)
+> and are not implemented here.
 
 ---
 
@@ -902,18 +933,27 @@ approach reduced depth-8 sphere time from 693 s to seconds.
 
 ## 12. Known limitations
 
-1. **No interior filtering**: the output covers the full octree bounding box, not
-   just the interior of the input surface.  The reference's `RemoveOutsideElement`
-   (ray-cast inside/outside filtering) and `ProjectToIsoSurface` (Jacobian-controlled
-   surface projection) stages are not ported.  If an interior-only mesh is needed,
-   filter hexes by signed distance to the surface after export.
+1. **No interior filtering — the output is a solid bounding-box block, not the
+   object.** The dual mesh covers the full octree bounding box: a fine shell near the
+   surface plus a coarse interior filling the box.  The reference's
+   `RemoveOutsideElement` (ray-cast inside/outside filtering, stage 4) and
+   `ProjectToIsoSurface` (Jacobian-controlled surface projection, stage 5) are **not
+   ported** (see [§13](#13-the-full-reference-pipeline-and-what-is-not-ported)).  If
+   an interior-only mesh is needed, filter hexes by signed distance to the surface
+   after export.  *Measured on the depth-8 Stanford bunny: the block is 1,567,546
+   hexes filling a 110×88×109 box; applying the reference's stage-4 keep-criterion
+   carves it to 540,859 hexes whose bounding box matches the bunny surface.*
 
 2. **This output is the reference's intermediate `DualFullHex` stage**: the mesh is
    conforming in the node-sharing sense but carries a small number of T-junctions
    and template overlaps at the refinement interface (e.g. depth 4: 2 overlapping
-   faces, 827 open boundary edges).  The reference's own output has the *identical*
-   counts — they are resolved only by the downstream `RemoveOutsideElement` and
-   `ProjectToIsoSurface` stages.
+   faces, 827 open boundary edges; the depth-8 bunny block sums to ~1.26× the
+   bounding-box volume, i.e. it over-fills slightly because of those template
+   overlaps).  The reference's own output has the *identical* counts — they are
+   resolved only by the downstream `RemoveOutsideElement` and `ProjectToIsoSurface`
+   stages.  This — not a missing-hex defect — is what produces the "holes inside"
+   appearance when the uncarved block is viewed in Paraview: the exposed internal
+   transition faces render as internal surfaces.
 
 3. **Single-threaded**: the current implementation is single-threaded.  The main
    parallel opportunities are the octree subdivision loop and the template geometry
@@ -925,6 +965,125 @@ approach reduced depth-8 sphere time from 693 s to seconds.
 
 5. **`MAX_DEPTH = 10`**: dictated by `OctreeHybridKratosConfiguration`.  Finer
    meshes require increasing this constant.
+
+---
+
+## 13. The full reference pipeline and what is *not* ported
+
+The reference `HexGen` driver (`Main.cpp`) runs **five** stages.  The Kratos port
+covers stage 3 only.  To go from the uncarved bounding-box block to a clean,
+watertight mesh of the object you need stages 4 and 5 as well:
+
+| # | Reference method | Output file | Ported? | Role |
+|---|------------------|-------------|---------|------|
+| 0 | `InitializeOctree` | `modifiedTri.vtk` | ✅ (`BuildFromSurfaceMesh`) | read surface, set bounding box |
+| 1 | `ConstructOctree` | `octree.vtk` | ✅ | refine + 2:1 balance |
+| 2 | `InitiateElementValence` | — | ✅ (face-adjacency graph) | classify face valences |
+| 3 | `DualFullHexMeshExtraction` | `dualFullHex.vtk` | ✅ **(this is the port's output)** | dual hex block over the whole bbox |
+| 4 | `RemoveOutsideElement` | `dualHex.vtk` | ❌ | carve the object out of the block |
+| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ❌ | project boundary to surface, control Jacobian |
+
+The "holes inside" reported when viewing the depth-8 bunny come entirely from
+stopping after stage 3: the output is the **`dualFullHex` block** — solid, over the
+whole bounding box, and still carrying the refinement-interface T-junctions and
+template overlaps that this stage is *defined* to carry (the reference's own
+`dualFullHex.vtk` carries the identical artifacts).  Stages 4 and 5 are what turn
+that block into the clean object mesh.
+
+> Practical note: the reference is hardcoded for `VOXEL_SIZE = 10` and uses O(n²)
+> dual-vertex deduplication and O(n²·#triangles) inside/outside tests, so running its
+> own full bunny end-to-end is very slow (the 22 490-triangle bunny spends >15 min of
+> CPU just in the curvature pre-pass).  The diagnosis below was confirmed by applying
+> the reference's stage-4 *keep-criterion* directly to the port's depth-8 bunny
+> output.
+
+### 13.1 Reference stage 4 — `RemoveOutsideElement`
+
+Carves the object out of the bounding-box block and repairs non-manifold topology.
+Source: `HexGen.cpp::RemoveOutsideElement` (≈ line 2562); reference doc
+`doc/05_interior_extraction.md`.
+
+**Step 1 — signed distance per hex vertex.**
+For every vertex `v` of the block mesh:
+- *Inside/outside test (ray casting):* shoot a ray `v + t·dir` with a random
+  direction (components bounded away from zero to avoid axis-aligned degeneracies)
+  and count surface-triangle crossings with `α > 0`; an odd count ⇒ inside.  If any
+  triangle is hit edge-on (`Intersect` returns `-1`), regenerate `dir` and restart.
+- *Magnitude:* `deletePoint[v] = min over triangles of PointToTri(tri, v)`
+  (closest-point-on-triangle distance).
+- If `v` is outside, negate: `deletePoint[v] = -deletePoint[v]` ⇒ a **signed
+  distance**, negative outside.
+
+**Step 2 — keep/reject each hex.**
+For hex `e`, let `k` = number of corners with `deletePoint < 0`, `tmp[0]` = max
+positive signed distance, `tmp[1]` = min (most negative) signed distance.  Keep iff:
+
+```
+k < 3   AND   tmp[1] + OUT_IN_RATIO * tmp[0] >= 0          (OUT_IN_RATIO = 0.15)
+```
+
+i.e. accept hexes with at most two outside corners, and only if the outside
+excursion is small relative to how deep the deepest inside corner sits.  This admits
+straddling boundary hexes while discarding wholly-outside elements.
+
+> **Verified on the port's output.** Implementing exactly this criterion against the
+> depth-8 bunny block (`octree_hex_mesh.vtk`, 1,567,546 hexes) keeps **540,859 hexes
+> (34.5 %)**; the kept set's bounding box is `[-23.5, 83.8] × [-41.1, 45.0] ×
+> [5.5, 112.3]`, matching the bunny surface box `[-23.9, 84.2] × [-41.4, 45.2] ×
+> [5.3, 112.5]`.  The block really is the bunny embedded in its bounding box.
+
+**Step 3 — non-manifold element removal.**
+Boundary faces (faces owned by a single hex) are collected.  At each boundary vertex
+the outward normals of the incident boundary faces are tested against **146** probe
+directions sampled on the unit sphere (`pointOnSurf`); a vertex whose faces block
+*every* probe direction is a degenerate (non-manifold) configuration.  Degenerate
+hexes are removed fewest-neighbours-first, re-exposing their faces, until none
+remain.  This is what finally makes the boundary a clean 2-manifold (removing the
+T-junctions/overlaps the `dualFullHex` stage left behind).
+
+**Step 4 — re-index** the survivors (dedup vertices) and store back.
+
+### 13.2 Reference stage 5 — `ProjectToIsoSurface`
+
+The most expensive stage: it pushes the carved mesh's boundary onto the input
+triangular surface while keeping every scaled Jacobian above a target threshold.
+Source: `HexGen.cpp::ProjectToIsoSurface` (≈ line 2815); reference doc
+`doc/06_jacobian_projection.md`.
+
+- **Boundary-vertex split:** each boundary vertex is duplicated into an *inner* copy
+  (moved by interior smoothing) and a *surface* copy (projected to the nearest
+  triangle); a zero-thickness coupling hex links them.
+- **Gradient-descent loop:** accumulates (a) an analytical *Jacobian* gradient for
+  every evaluation point whose scaled Jacobian is `≤ 0` or below `ELEM_THRES`
+  (9 evaluation points per hex: centre + 8 corners), and (b) a *drag* gradient
+  pulling each surface copy toward its closest point on the surface; positions are
+  updated by `LEARNING_RATE · g`.
+- **Periodic Laplacian smoothing** (every `UPDATE_EVERY = 1000` iterations) with a
+  random blend factor to avoid oscillation, re-projecting surface vertices each pass.
+- **Progressive tightening:** `ELEM_THRES` starts at `0.01` (get everything positive
+  fast), then jumps to `0.53` and climbs `+0.01` per cycle once the mesh is fully
+  positive and all surface vertices are within `sqrt(1e-12)` of the surface — driving
+  the minimum scaled Jacobian up to the ~0.5+ values quoted in the paper's tables.
+- The worst surface vertex (`maxDistIdx`) gets periodic forced projection to escape
+  local minima.
+
+Output: the final watertight, Jacobian-controlled all-hex mesh (`projHex.vtk` /
+`finalMesh.vtk`).
+
+### 13.3 Reproducing the diagnosis
+
+The block → bunny carve used to confirm the above (no reference build required):
+
+1. Generate the port's mesh: `python3 kratos/tests/demo_octree_hybrid_mesh.py
+   kratos/tests/Bunny-LowPoly.stl 8` → `octree_hex_mesh.vtk`.
+2. For every vertex, compute the signed distance to the surface (ray-cast parity for
+   the sign, closest-point-on-triangle for the magnitude).
+3. Keep hexes satisfying `k < 3 && tmp[1] + 0.15*tmp[0] >= 0`; re-index and write.
+
+To run the **reference itself**, convert a surface to its `.raw` format (ASCII:
+`"#points #triangles"`, then point coords, then triangle indices), place it as
+`model.raw`, and build `Main.cpp + HexGen.cpp + Mesh.cpp` with `VOXEL_SIZE = 10`.
+Expect long runtimes on detailed surfaces.
 
 ---
 
