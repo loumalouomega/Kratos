@@ -209,6 +209,44 @@ def build_transition_surface(model):
     return mp
 
 
+def build_closed_box_surface(model, lo=0.3, hi=0.7):
+    """A closed axis-aligned cube [lo,hi]^3 (12 triangles) inside a unit box.
+
+    Two extra free nodes at (0,0,0) and (1,1,1) pin the octree bounding box to
+    the unit cube, so the cube surface sits well inside it and the dual block
+    has a clear exterior region for RemoveOutsideElement to carve away.
+    """
+    mp = model.CreateModelPart("ClosedSurface")
+    mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
+
+    corners = [
+        (lo, lo, lo), (hi, lo, lo), (hi, hi, lo), (lo, hi, lo),
+        (lo, lo, hi), (hi, lo, hi), (hi, hi, hi), (lo, hi, hi),
+    ]
+    for i, (x, y, z) in enumerate(corners, start=1):
+        mp.CreateNewNode(i, x, y, z)
+    mp.CreateNewNode(9,  0.0, 0.0, 0.0)   # bounding-box pins
+    mp.CreateNewNode(10, 1.0, 1.0, 1.0)
+
+    # 12 triangles (node ids are 1-based; corner c -> id c+1)
+    faces = [
+        (0, 1, 2), (0, 2, 3),   # z = lo
+        (4, 6, 5), (4, 7, 6),   # z = hi
+        (0, 5, 1), (0, 4, 5),   # y = lo
+        (3, 2, 6), (3, 6, 7),   # y = hi
+        (0, 3, 7), (0, 7, 4),   # x = lo
+        (1, 5, 6), (1, 6, 2),   # x = hi
+    ]
+    for gid, (a, b, c) in enumerate(faces, start=1):
+        mp.CreateNewGeometry("Triangle3D3", gid, [a + 1, b + 1, c + 1])
+    return mp
+
+
+def bbox(pts):
+    xs, ys, zs = zip(*pts)
+    return (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs))
+
+
 class TestOctreeHybridDualMesh(unittest.TestCase):
 
     # Exact hex counts of the reference HybridOctree_Hex DualFullHexMeshExtraction
@@ -269,6 +307,50 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
 
     def test_depth_7(self):
         self._run(7)
+
+    def _run_carve(self, depth):
+        """Carving (RemoveOutsideElement) must keep only the object interior."""
+        model = KM.Model()
+        mp = build_closed_box_surface(model)
+
+        full_out = os.path.join(script_dir, f"_full_test_d{depth}.vtk")
+        carved_out = os.path.join(script_dir, f"_carved_test_d{depth}.vtk")
+        KM.OctreeHybridMeshUtility.BuildAndWriteVtk(mp, full_out, depth)
+        KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(mp, carved_out, depth)
+
+        full_pts, full_cells, _ = read_vtk(full_out)
+        carved_pts, carved_cells, _ = read_vtk(carved_out)
+
+        degenerate, inverted = classify(carved_pts, carved_cells)
+        full_lo, full_hi = bbox(full_pts)
+        carved_lo, carved_hi = bbox(carved_pts)
+        print(f"\n[carve depth={depth}] full={len(full_cells)} carved={len(carved_cells)} "
+              f"({100*len(carved_cells)/len(full_cells):.1f}%) "
+              f"degenerate={len(degenerate)} inverted={len(inverted)}\n"
+              f"   full bbox   {tuple(round(v,3) for v in full_lo)}..{tuple(round(v,3) for v in full_hi)}\n"
+              f"   carved bbox {tuple(round(v,3) for v in carved_lo)}..{tuple(round(v,3) for v in carved_hi)}")
+
+        os.remove(full_out)
+        os.remove(carved_out)
+
+        # Carving keeps valid cells only, removes a substantial exterior region,
+        # and the result fits strictly inside the full bounding-box block.
+        self.assertGreater(len(carved_cells), 0, "carve removed everything")
+        self.assertLess(len(carved_cells), len(full_cells),
+                        "carve did not remove any hexes")
+        self.assertEqual(len(degenerate), 0, f"{len(degenerate)} degenerate carved hexes")
+        self.assertEqual(len(inverted), 0, f"{len(inverted)} inverted carved hexes")
+        for d in range(3):
+            self.assertGreater(carved_lo[d], full_lo[d] + 1e-6,
+                               "carved mesh still touches the bounding-box minimum")
+            self.assertLess(carved_hi[d], full_hi[d] - 1e-6,
+                            "carved mesh still touches the bounding-box maximum")
+
+    def test_carve_depth_4(self):
+        self._run_carve(4)
+
+    def test_carve_depth_5(self):
+        self._run_carve(5)
 
 
 if __name__ == "__main__":
