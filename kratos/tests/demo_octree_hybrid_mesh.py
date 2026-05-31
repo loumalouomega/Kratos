@@ -5,9 +5,12 @@ result to a legacy VTK file for visualisation in Paraview.
 Accepts both ASCII and binary STL files.
 
 Usage:
-    python3 demo_octree_hybrid_mesh.py [path/to/surface.stl] [refinement_depth]
+    python3 demo_octree_hybrid_mesh.py [path/to/surface.stl] [refinement_depth] [--carve]
 
-Defaults to Bunny-LowPoly.stl at depth 5 when no arguments are given.
+Defaults to Bunny-LowPoly.stl at depth 8 when no arguments are given.
+
+Pass --carve to also run the RemoveOutsideElement stage, which carves the dual
+block down to the object interior (instead of the full bounding-box block).
 
 Output:
     octree_hex_mesh.vtk  — adaptive hex mesh, colour by "level" in Paraview
@@ -71,11 +74,14 @@ def binary_stl_to_ascii(src: str, dst: str) -> None:
 # ---------------------------------------------------------------------------
 # 3. Parse arguments
 # ---------------------------------------------------------------------------
-stl_input = sys.argv[1] if len(sys.argv) > 1 else os.path.join(script_dir, "Bunny-LowPoly.stl")
-refinement_depth = int(sys.argv[2]) if len(sys.argv) > 2 else 8
+args = [a for a in sys.argv[1:] if a != "--carve"]
+carve = "--carve" in sys.argv
+stl_input = args[0] if len(args) > 0 else os.path.join(script_dir, "Bunny-LowPoly.stl")
+refinement_depth = int(args[1]) if len(args) > 1 else 8
 
 print(f"Input STL     : {stl_input}")
 print(f"Refinement    : depth {refinement_depth}")
+print(f"Carve         : {carve}")
 
 # ---------------------------------------------------------------------------
 # 4. Convert binary → ASCII if necessary
@@ -112,7 +118,10 @@ if tmp_ascii and os.path.exists(tmp_ascii):
 output_vtk = "octree_hex_mesh.vtk"
 
 print(f"\nBuilding OctreeHybrid and writing {output_vtk} …")
-KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, output_vtk, refinement_depth)
+if carve:
+    KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(surface_mp, output_vtk, refinement_depth)
+else:
+    KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, output_vtk, refinement_depth)
 
 # Report mesh stats from the VTK file
 with open(output_vtk) as f:
