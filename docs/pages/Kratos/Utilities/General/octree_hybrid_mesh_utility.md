@@ -61,24 +61,26 @@ At refinement depth 8 on a typical CAD surface:
 - ~1.75 million nodes
 - Generated in ~25 seconds (single-threaded, ARM64)
 
-> ⚠️ **Scope of the current port — read this before opening the VTK.**
-> This utility implements **only the dual-hex extraction** of the HybridOctree_Hex
-> algorithm — the reference's intermediate `DualFullHexMeshExtraction` stage.  Its
-> output is therefore a hex mesh that **fills the entire octree bounding box** (a
-> solid block, fine near the surface and coarse in the interior), *not* a clean mesh
-> of the object's interior.  The two downstream reference stages that carve the
-> object out of the block and snap its boundary to the surface —
-> [`RemoveOutsideElement`](#13-the-full-reference-pipeline-and-what-is-not-ported)
-> and `ProjectToIsoSurface` — are **not ported**.
+> ⚠️ **Which output do you want — block or carved object?**
+> Two entry points are available:
+> - **`BuildAndWriteVtk`** writes the dual-hex extraction directly — the reference's
+>   intermediate `DualFullHexMeshExtraction` stage.  Its output **fills the entire
+>   octree bounding box** (a solid block, fine near the surface and coarse in the
+>   interior), *not* the object interior.  Opened in Paraview this looks like a box,
+>   and the refinement-interface T-junctions/overlaps inherent to this stage render
+>   as internal faces that look like "holes inside".
+> - **`BuildCarveAndWriteVtk`** additionally runs
+>   [`RemoveOutsideElement`](#13-the-full-reference-pipeline-and-what-is-not-ported)
+>   (reference stage 4, inside/outside part), carving the object out of the block so
+>   the output is a hex mesh of the **object interior**.  On the depth-8 Stanford
+>   bunny this keeps **581,784 of 1,567,546 hexes (37 %)**, and the survivor's
+>   bounding box matches the bunny surface — i.e. the bunny is carved out of the box.
 >
-> **Symptom in Paraview ("holes inside"):** because the block is uncarved and still
-> carries the refinement-interface T-junctions/overlaps inherent to this stage, the
-> exposed internal transition faces render as internal surfaces that look like holes,
-> and the outer shape is the bounding box rather than the object.  Applying the
-> missing `RemoveOutsideElement` criterion to the Stanford-bunny output (depth 8)
-> reduces it from **1,567,546 hexes to 540,859 hexes (34.5 % kept)** — and the
-> survivor's bounding box matches the bunny surface exactly, i.e. the bunny is
-> carved out of the block.  See [§13](#13-the-full-reference-pipeline-and-what-is-not-ported).
+> The reference's non-manifold topology repair (the second half of
+> `RemoveOutsideElement`) and `ProjectToIsoSurface` (boundary projection + Jacobian
+> control) are still **not ported**: the carved boundary is blocky and may carry a
+> few non-manifold hexes at the refinement interface.  See
+> [§13](#13-the-full-reference-pipeline-and-what-is-not-ported).
 
 ---
 
@@ -622,7 +624,7 @@ The plain-dual pass (Stage 4) then skips any vertex `v` where `consumed[v] == tr
 | Vertex dedup | O(n²) linear scan (`DIST_THRES = 1e-12`) | 27-neighbour spatial hash (`1e-4*min_cell` tolerance) |
 | Node array | `hexMesh.v[]` flat C array | `std::vector<std::array<double,3>> nodes` |
 | Dual-hex emission | Separate loop over `collectNum` | Integrated into template loop; `consumed[]` flag |
-| Interior filtering | `RemoveOutsideElement` (ray-cast) | Not ported (full bounding-box mesh output) |
+| Interior filtering | `RemoveOutsideElement` (ray-cast + manifold repair) | Carve ported (`BuildCarveAndWriteVtk`); manifold-repair pass not ported |
 | Surface projection | `ProjectToIsoSurface` (gradient descent) | Not ported |
 | Coordinate system | Normalised to `[0,100]^3` | Normalised to `[0,1]^3` (world space mapped by bbox) |
 | Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
@@ -745,11 +747,17 @@ Returns a `std::unique_ptr<OctreeType>` owning the balanced octree.
 ### `WriteDualHexVtk`
 
 ```cpp
-static void WriteDualHexVtk(OctreeType& rOctree, const std::string& rFilename);
+static void WriteDualHexVtk(
+    OctreeType& rOctree,
+    const std::string& rFilename,
+    const TriangleSoup* pTriangles = nullptr);
 ```
 
 Runs Stages 1–5 on an already-built octree and writes the dual all-hex mesh to
-`rFilename` in VTK legacy ASCII format.
+`rFilename` in VTK legacy ASCII format.  When `pTriangles` is supplied (a flat list
+of surface triangles in world coordinates), the block is **carved** against that
+surface before writing (see `RemoveOutsideElement`); otherwise the full
+bounding-box block is written.
 
 ---
 
@@ -762,7 +770,31 @@ static void BuildAndWriteVtk(
     std::size_t RefinementDepth);
 ```
 
-Combines `BuildFromSurfaceMesh` and `WriteDualHexVtk` into a single call.
+Combines `BuildFromSurfaceMesh` and `WriteDualHexVtk` into a single call.  Writes the
+**uncarved** dual block covering the whole octree bounding box.
+
+---
+
+### `BuildCarveAndWriteVtk`
+
+```cpp
+static void BuildCarveAndWriteVtk(
+    ModelPart& rSurfaceMesh,
+    const std::string& rFilename,
+    std::size_t RefinementDepth);
+```
+
+Like `BuildAndWriteVtk`, but **carves** the dual block against the input surface
+(reference stage 4, `RemoveOutsideElement` — inside/outside part) so the output is a
+hex mesh of the object interior rather than its bounding box.  A hex is kept iff at
+most two corners are outside and the outside excursion is small relative to the
+deepest inside corner (`n_out < 3 && d_min_neg + 0.15·d_max_pos ≥ 0`).  The surface
+triangles are read from `rSurfaceMesh.Geometries()`.
+
+In Python:
+```python
+KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(surface_mp, "bunny.vtk", 8)
+```
 
 ---
 
@@ -872,12 +904,17 @@ surface_mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
 stl_io = KM.StlIO("my_surface.stl", KM.Parameters('{"open_mode": "read"}'))
 stl_io.ReadModelPart(surface_mp)
 
-# --- 2. Generate the dual hex mesh ---
-KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, "hex_mesh.vtk", 8)
+# --- 2a. Generate the dual hex mesh (full bounding-box block) ---
+KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, "hex_block.vtk", 8)
+
+# --- 2b. ...or carve it down to the object interior ---
+KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(surface_mp, "hex_object.vtk", 8)
 ```
 
-Open `hex_mesh.vtk` in Paraview and colour by the `level` scalar field to see the
-adaptive refinement.  Template cells have `level = -1`.
+Open the VTK in Paraview and colour by the `level` scalar field to see the adaptive
+refinement.  Template cells have `level = -1`.  `BuildAndWriteVtk` fills the whole
+bounding box; `BuildCarveAndWriteVtk` keeps only the hexes inside/straddling the
+surface (the object).
 
 ### Python — step-by-step (octree inspection)
 
@@ -896,11 +933,13 @@ KM.OctreeHybridMeshUtility.WriteDualHexVtk(octree, "dual.vtk")
 
 ```bash
 cd kratos/tests
-python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 8
+python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 8          # full block
+python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 8 --carve  # carved object
 ```
 
 This reads the STL (converting from binary if necessary), builds the octree, and
-writes `octree_hex_mesh.vtk` in the current directory.
+writes `octree_hex_mesh.vtk` in the current directory.  With `--carve` it runs
+`BuildCarveAndWriteVtk` (depth-8 bunny: 1,567,546 → 581,784 hexes).
 
 ### C++
 
@@ -908,7 +947,8 @@ writes `octree_hex_mesh.vtk` in the current directory.
 #include "utilities/octree_hybrid_mesh_utility.h"
 
 // surface_mp already populated with Triangle3D3 elements
-KM::OctreeHybridMeshUtility::BuildAndWriteVtk(surface_mp, "mesh.vtk", 8);
+KM::OctreeHybridMeshUtility::BuildAndWriteVtk(surface_mp, "block.vtk", 8);       // block
+KM::OctreeHybridMeshUtility::BuildCarveAndWriteVtk(surface_mp, "object.vtk", 8); // carved
 ```
 
 ---
@@ -933,16 +973,16 @@ approach reduced depth-8 sphere time from 693 s to seconds.
 
 ## 12. Known limitations
 
-1. **No interior filtering — the output is a solid bounding-box block, not the
-   object.** The dual mesh covers the full octree bounding box: a fine shell near the
-   surface plus a coarse interior filling the box.  The reference's
-   `RemoveOutsideElement` (ray-cast inside/outside filtering, stage 4) and
-   `ProjectToIsoSurface` (Jacobian-controlled surface projection, stage 5) are **not
-   ported** (see [§13](#13-the-full-reference-pipeline-and-what-is-not-ported)).  If
-   an interior-only mesh is needed, filter hexes by signed distance to the surface
-   after export.  *Measured on the depth-8 Stanford bunny: the block is 1,567,546
-   hexes filling a 110×88×109 box; applying the reference's stage-4 keep-criterion
-   carves it to 540,859 hexes whose bounding box matches the bunny surface.*
+1. **`BuildAndWriteVtk` outputs a solid bounding-box block, not the object.** The
+   dual mesh covers the full octree bounding box: a fine shell near the surface plus
+   a coarse interior filling the box.  Use **`BuildCarveAndWriteVtk`** to apply the
+   inside/outside carve (reference stage 4, `RemoveOutsideElement`) and obtain a mesh
+   of the object interior instead (see
+   [§13.1](#131-reference-stage-4--removeoutsideelement)).  *Measured on the depth-8
+   Stanford bunny: the block is 1,567,546 hexes filling a 110×88×109 box; the carve
+   keeps 581,784 hexes whose bounding box matches the bunny surface.*  Still **not
+   ported**: the manifold-repair half of `RemoveOutsideElement` and
+   `ProjectToIsoSurface` (Jacobian-controlled surface projection, stage 5).
 
 2. **This output is the reference's intermediate `DualFullHex` stage**: the mesh is
    conforming in the node-sharing sense but carries a small number of T-junctions
@@ -971,24 +1011,25 @@ approach reduced depth-8 sphere time from 693 s to seconds.
 ## 13. The full reference pipeline and what is *not* ported
 
 The reference `HexGen` driver (`Main.cpp`) runs **five** stages.  The Kratos port
-covers stage 3 only.  To go from the uncarved bounding-box block to a clean,
-watertight mesh of the object you need stages 4 and 5 as well:
+covers stages 0–3 in full and the **carve half of stage 4**; the manifold-repair
+half of stage 4 and all of stage 5 are not ported:
 
 | # | Reference method | Output file | Ported? | Role |
 |---|------------------|-------------|---------|------|
 | 0 | `InitializeOctree` | `modifiedTri.vtk` | ✅ (`BuildFromSurfaceMesh`) | read surface, set bounding box |
 | 1 | `ConstructOctree` | `octree.vtk` | ✅ | refine + 2:1 balance |
 | 2 | `InitiateElementValence` | — | ✅ (face-adjacency graph) | classify face valences |
-| 3 | `DualFullHexMeshExtraction` | `dualFullHex.vtk` | ✅ **(this is the port's output)** | dual hex block over the whole bbox |
-| 4 | `RemoveOutsideElement` | `dualHex.vtk` | ❌ | carve the object out of the block |
+| 3 | `DualFullHexMeshExtraction` | `dualFullHex.vtk` | ✅ (`BuildAndWriteVtk`) | dual hex block over the whole bbox |
+| 4 | `RemoveOutsideElement` | `dualHex.vtk` | ◑ carve ported (`BuildCarveAndWriteVtk`); manifold repair not | carve the object out of the block |
 | 5 | `ProjectToIsoSurface` | `projHex.vtk` | ❌ | project boundary to surface, control Jacobian |
 
-The "holes inside" reported when viewing the depth-8 bunny come entirely from
-stopping after stage 3: the output is the **`dualFullHex` block** — solid, over the
-whole bounding box, and still carrying the refinement-interface T-junctions and
-template overlaps that this stage is *defined* to carry (the reference's own
-`dualFullHex.vtk` carries the identical artifacts).  Stages 4 and 5 are what turn
-that block into the clean object mesh.
+The "holes inside" reported when viewing the depth-8 bunny come from stopping after
+stage 3: the **`dualFullHex` block** is solid, over the whole bounding box, and
+still carries the refinement-interface T-junctions and template overlaps that this
+stage is *defined* to carry (the reference's own `dualFullHex.vtk` carries the
+identical artifacts).  `BuildCarveAndWriteVtk` now runs the stage-4 carve to recover
+the object; the remaining stage-4 manifold repair and stage 5 would further clean and
+project the boundary.
 
 > Practical note: the reference is hardcoded for `VOXEL_SIZE = 10` and uses O(n²)
 > dual-vertex deduplication and O(n²·#triangles) inside/outside tests, so running its
@@ -1002,6 +1043,13 @@ that block into the clean object mesh.
 Carves the object out of the bounding-box block and repairs non-manifold topology.
 Source: `HexGen.cpp::RemoveOutsideElement` (≈ line 2562); reference doc
 `doc/05_interior_extraction.md`.
+
+> **Port status:** the **carve** (Steps 1–2 below) is ported as
+> `OctreeHybridMeshUtility::RemoveOutsideElement`, exposed through
+> `BuildCarveAndWriteVtk`.  The geometry kernels `Intersect` (ray/triangle) and
+> `PointToTri` (closest-point-on-triangle) are ported verbatim; the per-node signed
+> distance is computed in parallel (`IndexPartition`).  The **non-manifold repair**
+> (Step 3) is *not* ported.
 
 **Step 1 — signed distance per hex vertex.**
 For every vertex `v` of the block mesh:
