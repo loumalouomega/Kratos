@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <limits>
 #include <memory>
@@ -26,6 +27,7 @@
 // Project includes
 #include "includes/model_part.h"
 #include "geometries/point.h"
+#include "utilities/parallel_utilities.h"
 #include "spatial_containers/octree_hybrid.h"
 #include "spatial_containers/octree_hybrid_cell.h"
 #include "spatial_containers/octree_hybrid_configure.h"
@@ -123,6 +125,12 @@ public:
     using OctreeType        = OctreeHybrid<CellType>;
     using GeometryType      = Geometry<Node>;
 
+    /// A flat list of surface triangles in world coordinates: one entry per
+    /// triangle, each holding its 3 vertices (3 doubles each).  Used by the
+    /// carving stage (RemoveOutsideElement) to test hex vertices against the
+    /// input surface.
+    using TriangleSoup      = std::vector<std::array<std::array<double,3>,3>>;
+
     ///@}
     ///@name Static operations
     ///@{
@@ -208,10 +216,18 @@ public:
      * Cell data field "level" (in the VTK output) is the level of the cell
      * whose centre is at dual-hex node 0, useful for colouring in Paraview.
      *
-     * @param rOctree   Octree (bounding box must be set).
-     * @param rFilename Output .vtk path.
+     * @param rOctree     Octree (bounding box must be set).
+     * @param rFilename   Output .vtk path.
+     * @param pTriangles  Optional surface triangle soup.  When non-null and
+     *                    non-empty, the dual-hex block is carved against this
+     *                    surface (reference stage 4, `RemoveOutsideElement`):
+     *                    only hexes inside or straddling the surface are kept.
+     *                    When null, the full bounding-box block is written.
      */
-    static void WriteDualHexVtk(OctreeType& rOctree, const std::string& rFilename)
+    static void WriteDualHexVtk(
+        OctreeType& rOctree,
+        const std::string& rFilename,
+        const TriangleSoup* pTriangles = nullptr)
     {
         // ------------------------------------------------------------------ //
         // 1. Balance + collect leaves
@@ -1003,45 +1019,34 @@ public:
         }
 
         // ------------------------------------------------------------------ //
-        // 6. Write VTK.  All hexes index into the single merged `nodes` array
-        //    (dual node i == cell centre i == nodes[i]).
+        // 6. Combine, optionally carve, and write.  All hexes index into the
+        //    single merged `nodes` array (dual node i == cell centre i).
         // ------------------------------------------------------------------ //
-        std::ofstream f(rFilename);
-        KRATOS_ERROR_IF_NOT(f.is_open())
-            << "OctreeHybridMeshUtility::WriteDualHexVtk: cannot open '"
-            << rFilename << "'" << std::endl;
 
-        const std::size_t n_nodes = nodes.size();
-        const std::size_t n_cells = dual_cells.size() + tmpl_cells.size();
+        // Merge the plain-dual and template hexes into one element list, and
+        // record each cell's "level" for VTK colouring (the level of the leaf
+        // whose centre is node 0 for plain-dual hexes; -1 for template hexes).
+        // The level MUST be captured here, before any carving re-indexes the
+        // connectivity, because it is keyed by leaf index.
+        std::vector<std::array<int,8>> cells;
+        std::vector<int> cell_level;
+        cells.reserve(dual_cells.size() + tmpl_cells.size());
+        cell_level.reserve(dual_cells.size() + tmpl_cells.size());
+        for (const auto& h : dual_cells) {
+            cells.push_back(h);
+            cell_level.push_back(leaves[h[0]]->GetLevel());
+        }
+        for (const auto& h : tmpl_cells) {
+            cells.push_back(h);
+            cell_level.push_back(-1);
+        }
 
-        f << "# vtk DataFile Version 2.0\n"
-          << "OctreeHybrid dual hex mesh\n"
-          << "ASCII\n"
-          << "DATASET UNSTRUCTURED_GRID\n";
+        // Carve away hexes outside the input surface (reference stage 4,
+        // RemoveOutsideElement — inside/outside part).  Drops unused nodes.
+        if (pTriangles && !pTriangles->empty())
+            RemoveOutsideElement(*pTriangles, nodes, cells, cell_level);
 
-        f << "POINTS " << n_nodes << " double\n";
-        f << std::scientific; f.precision(10);
-        for (const auto& nd : nodes)
-            f << nd[0] << ' ' << nd[1] << ' ' << nd[2] << '\n';
-
-        f << "CELLS " << n_cells << ' ' << n_cells * 9 << '\n';
-        for (const auto& h : dual_cells)
-            f << "8 "<<h[0]<<' '<<h[1]<<' '<<h[2]<<' '<<h[3]
-              <<' '<<h[4]<<' '<<h[5]<<' '<<h[6]<<' '<<h[7]<<'\n';
-        for (const auto& h : tmpl_cells)
-            f << "8 "<<h[0]<<' '<<h[1]<<' '<<h[2]<<' '<<h[3]
-              <<' '<<h[4]<<' '<<h[5]<<' '<<h[6]<<' '<<h[7]<<'\n';
-
-        f << "CELL_TYPES " << n_cells << '\n';
-        for (std::size_t e = 0; e < n_cells; ++e) f << "12\n";
-
-        // Cell-data: level of the cell whose centre is node 0 of each dual hex
-        f << "CELL_DATA " << n_cells << '\n'
-          << "SCALARS level int 1\nLOOKUP_TABLE default\n";
-        for (const auto& h : dual_cells)
-            f << leaves[h[0]]->GetLevel() << '\n';
-        for (std::size_t e = 0; e < tmpl_cells.size(); ++e)
-            f << "-1\n";  // template cells get level -1
+        WriteHexVtk(rFilename, nodes, cells, cell_level);
     }
 
     /**
@@ -1123,6 +1128,56 @@ public:
     }
 
     /**
+     * @brief Builds the octree, extracts the dual hex mesh, and **carves** it
+     *        against the input surface before writing.
+     *
+     * This adds the reference's stage-4 `RemoveOutsideElement` (inside/outside
+     * part) on top of @ref BuildAndWriteVtk: the dual-hex block that fills the
+     * whole octree bounding box is reduced to the hexes inside or straddling
+     * the surface, so the output is a mesh of the *object* rather than of its
+     * bounding box.  A hex is kept iff it has at most two corners outside the
+     * surface and the outside excursion is small relative to the deepest inside
+     * corner (`k < 3 && d_min_neg + 0.15 * d_max_pos >= 0`).
+     *
+     * The surface triangles are read from `rSurfaceMesh.Geometries()` (in world
+     * coordinates), the same container @ref BuildFromSurfaceMesh refines around.
+     *
+     * @note Only the inside/outside carve is ported.  The reference's
+     *       subsequent non-manifold topology repair (146-direction probe) and
+     *       `ProjectToIsoSurface` (Jacobian-controlled surface projection) are
+     *       not included; the carved boundary is therefore blocky and may carry
+     *       a few non-manifold hexes at the refinement interface.
+     *
+     * @param rSurfaceMesh     Surface ModelPart (from StlIO).
+     * @param rVtkFilename     Output .vtk path.
+     * @param RefinementDepth  Maximum refinement depth (default 5).
+     */
+    static void BuildCarveAndWriteVtk(
+        ModelPart& rSurfaceMesh,
+        const std::string& rVtkFilename,
+        std::size_t RefinementDepth = 5)
+    {
+        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+
+        // Collect surface triangles in world coordinates.
+        TriangleSoup triangles;
+        triangles.reserve(rSurfaceMesh.NumberOfGeometries());
+        for (auto& r_geom : rSurfaceMesh.Geometries()) {
+            if (r_geom.PointsNumber() < 3) continue;
+            triangles.push_back({{
+                {{ r_geom[0].X(), r_geom[0].Y(), r_geom[0].Z() }},
+                {{ r_geom[1].X(), r_geom[1].Y(), r_geom[1].Z() }},
+                {{ r_geom[2].X(), r_geom[2].Y(), r_geom[2].Z() }}
+            }});
+        }
+        KRATOS_ERROR_IF(triangles.empty())
+            << "OctreeHybridMeshUtility::BuildCarveAndWriteVtk: the surface "
+            << "ModelPart has no triangles to carve against." << std::endl;
+
+        WriteDualHexVtk(*p_octree, rVtkFilename, &triangles);
+    }
+
+    /**
      * @brief Debug/validation helper: writes the strongly-balanced octree leaves
      *        in the exact VTK format the reference HybridOctree_Hex expects from
      *        its `ReadOctree` (so its dual extraction can be run on the identical
@@ -1190,6 +1245,259 @@ public:
                                <<' '<<e[4]<<' '<<e[5]<<' '<<e[6]<<' '<<e[7]<<'\n';
         f << "CELL_TYPES " << nc << '\n';
         for (std::size_t i = 0; i < nc; ++i) f << "12\n";
+    }
+
+    ///@}
+
+private:
+    ///@name Carving (reference RemoveOutsideElement) and VTK output
+    ///@{
+
+    /// Squared Euclidean distance between two points.
+    static double SqDist(const double a[3], const double b[3])
+    {
+        const double dx = a[0]-b[0], dy = a[1]-b[1], dz = a[2]-b[2];
+        return dx*dx + dy*dy + dz*dz;
+    }
+
+    /// Triangle area from its three edge lengths (Heron's formula, clamped ≥ 0).
+    static double TriArea(double a, double b, double c)
+    {
+        const double s = 0.5*(a+b+c);
+        const double area = s*(s-a)*(s-b)*(s-c);
+        return std::sqrt(area < 0.0 ? 0.0 : area);
+    }
+
+    /**
+     * @brief Ray/triangle intersection (port of HexGen.cpp::Intersect).
+     *
+     * Casts the ray from origin @p p along @p dir at triangle (@p a,@p b,@p c).
+     * @param[out] e      intersection point (when the return value is 1).
+     * @param[out] alpha  ray parameter at the intersection.
+     * @return 1 if the ray hits strictly inside the triangle; 0 if it misses;
+     *         -1 if the ray is parallel to the plane or grazes an edge/vertex
+     *         (the caller perturbs @p dir and retries to keep the parity robust).
+     */
+    static int TriRayIntersect(
+        const double a[3], const double b[3], const double c[3],
+        const double p[3], const double dir[3], double e[3], double& alpha)
+    {
+        constexpr double DIST_THRES = 1e-12;
+        const double A = (c[1]*b[2]-b[1]*c[2]+a[1]*c[2]-a[2]*c[1]-a[1]*b[2]+a[2]*b[1]);
+        const double B = (a[0]*(b[2]-c[2])-b[0]*(a[2]-c[2])+c[0]*(a[2]-b[2]));
+        const double C = (a[0]*(c[1]-b[1])-b[0]*(c[1]-a[1])+c[0]*(b[1]-a[1]));
+        const double D = a[0]*(b[1]*c[2]-c[1]*b[2])-b[0]*(a[1]*c[2]-a[2]*c[1])+c[0]*(a[1]*b[2]-a[2]*b[1]);
+        const double den = A*dir[0]+B*dir[1]+C*dir[2];
+        if (std::abs(den) < DIST_THRES) return -1;          // parallel to plane
+        alpha = (-A*p[0]-B*p[1]-C*p[2]-D)/den;
+        e[0]=p[0]+dir[0]*alpha; e[1]=p[1]+dir[1]*alpha; e[2]=p[2]+dir[2]*alpha;
+        const double AP[3]={e[0]-a[0],e[1]-a[1],e[2]-a[2]};
+        const double AC[3]={c[0]-a[0],c[1]-a[1],c[2]-a[2]};
+        const double AB[3]={b[0]-a[0],b[1]-a[1],b[2]-a[2]};
+        auto dot=[](const double u[3],const double v[3]){ return u[0]*v[0]+u[1]*v[1]+u[2]*v[2]; };
+        const double fI=dot(AP,AC)*dot(AB,AB)-dot(AP,AB)*dot(AC,AB);
+        const double fJ=dot(AP,AB)*dot(AC,AC)-dot(AP,AC)*dot(AB,AC);
+        const double fD=dot(AC,AC)*dot(AB,AB)-dot(AC,AB)*dot(AC,AB);
+        if (fI>0 && fJ>0 && fI+fJ<fD) return 1;             // inside
+        if (fI==0 || fJ==0 || fI+fJ==fD) return -1;         // on the boundary
+        return 0;                                            // outside
+    }
+
+    /**
+     * @brief Unsigned distance from point @p p to triangle (@p a,@p b,@p c)
+     *        (port of HexGen.cpp::PointToTri).
+     *
+     * Returns the perpendicular plane distance when the foot of the perpendicular
+     * lies inside the triangle, otherwise the distance to the nearest edge or
+     * vertex.  Early-outs (returning just the plane distance) when that already
+     * exceeds @p currMin, since the caller is tracking a running minimum.
+     */
+    static double PointToTri(
+        const double a[3], const double b[3], const double c[3],
+        const double p[3], double currMin)
+    {
+        const double A = (c[1]*b[2]-b[1]*c[2]+a[1]*c[2]-a[2]*c[1]-a[1]*b[2]+a[2]*b[1]);
+        const double B = (a[0]*(b[2]-c[2])-b[0]*(a[2]-c[2])+c[0]*(a[2]-b[2]));
+        const double C = (a[0]*(c[1]-b[1])-b[0]*(c[1]-a[1])+c[0]*(b[1]-a[1]));
+        const double D = a[0]*(b[1]*c[2]-c[1]*b[2])-b[0]*(a[1]*c[2]-a[2]*c[1])+c[0]*(a[1]*b[2]-a[2]*b[1]);
+        const double sum = A*A+B*B+C*C;
+        const double tmp = (-A*p[0]-B*p[1]-C*p[2]-D);
+        const double alpha = std::abs(tmp/std::sqrt(sum));      // |plane distance|
+        if (alpha >= currMin) return alpha;                     // early-out
+
+        const double q[3] = { p[0]+A*tmp/sum, p[1]+B*tmp/sum, p[2]+C*tmp/sum };
+        const double QA=std::sqrt(SqDist(q,a)), QB=std::sqrt(SqDist(q,b)), QC=std::sqrt(SqDist(q,c));
+        const double AB=std::sqrt(SqDist(a,b)), AC=std::sqrt(SqDist(a,c)), BC=std::sqrt(SqDist(b,c));
+        const double S1=TriArea(QA,QB,AB), S2=TriArea(QA,QC,AC), S3=TriArea(QB,QC,BC);
+
+        const double AP[3]={p[0]-a[0],p[1]-a[1],p[2]-a[2]};
+        const double ACl[3]={c[0]-a[0],c[1]-a[1],c[2]-a[2]};
+        const double ABl[3]={b[0]-a[0],b[1]-a[1],b[2]-a[2]};
+        auto dot=[](const double u[3],const double v[3]){ return u[0]*v[0]+u[1]*v[1]+u[2]*v[2]; };
+        const double fI=dot(AP,ACl)*dot(ABl,ABl)-dot(AP,ABl)*dot(ACl,ABl);
+        const double fJ=dot(AP,ABl)*dot(ACl,ACl)-dot(AP,ACl)*dot(ABl,ACl);
+        const double fD=dot(ACl,ACl)*dot(ABl,ABl)-dot(ACl,ABl)*dot(ACl,ABl);
+        if (fI>=0 && fJ>=0 && fI+fJ<=fD) return alpha;          // foot inside triangle
+
+        // Closest boundary feature: nearest of the 3 vertices or the 3 edge
+        // projections (only edges whose foot lies between the endpoints).
+        double beta = std::min({QA, QB, QC});
+        const double kAB=((b[0]-a[0])*(q[0]-a[0])+(b[1]-a[1])*(q[1]-a[1])+(b[2]-a[2])*(q[2]-a[2]))/SqDist(a,b);
+        const double kBC=((c[0]-b[0])*(q[0]-b[0])+(c[1]-b[1])*(q[1]-b[1])+(c[2]-b[2])*(q[2]-b[2]))/SqDist(b,c);
+        const double kCA=((a[0]-c[0])*(q[0]-c[0])+(a[1]-c[1])*(q[1]-c[1])+(a[2]-c[2])*(q[2]-c[2]))/SqDist(c,a);
+        if (kAB>0 && kAB<1) beta = std::min(beta, S1*2/AB);
+        if (kBC>0 && kBC<1) beta = std::min(beta, S3*2/BC);
+        if (kCA>0 && kCA<1) beta = std::min(beta, S2*2/AC);
+        return std::sqrt(alpha*alpha + beta*beta);
+    }
+
+    /**
+     * @brief Carves hexes lying outside the surface — reference stage 4
+     *        (`RemoveOutsideElement`), inside/outside part.
+     *
+     * For every node a signed distance to the surface is computed: the sign from
+     * ray-cast parity (odd crossings ⇒ inside) and the magnitude from the closest
+     * triangle.  A hex is kept iff at most two of its corners are outside and the
+     * outside excursion is small relative to the deepest inside corner:
+     * `n_out < 3 && d_min_neg + 0.15 * d_max_pos >= 0`.  Rejected hexes are
+     * dropped from @p rCells / @p rCellLevel in place.
+     *
+     * Cost is O(#nodes · #triangles); the per-node signed distance is computed in
+     * parallel.  The non-manifold topology-repair pass that follows in the
+     * reference is **not** ported.
+     */
+    static void RemoveOutsideElement(
+        const TriangleSoup& rTriangles,
+        const std::vector<std::array<double,3>>& rNodes,
+        std::vector<std::array<int,8>>& rCells,
+        std::vector<int>& rCellLevel)
+    {
+        constexpr double DIST_THRES   = 1e-12;
+        constexpr double OUT_IN_RATIO = 0.15;
+        const int NV = static_cast<int>(rNodes.size());
+        const int NT = static_cast<int>(rTriangles.size());
+
+        // --- Signed distance per node (negative outside) ---------------------
+        std::vector<double> signed_dist(NV);
+        IndexPartition<int>(NV).for_each([&](int i) {
+            const double p[3] = { rNodes[i][0], rNodes[i][1], rNodes[i][2] };
+
+            // Deterministic per-node RNG (so the carve is reproducible and the
+            // parallel loop is independent of scheduling).
+            std::uint32_t s = 2654435761u * static_cast<std::uint32_t>(i + 1) + 12345u;
+            auto nextf = [&s]() {
+                s = s*1664525u + 1013904223u;
+                return (s >> 8) * (1.0 / 16777216.0);   // uniform in [0, 1)
+            };
+
+            // Inside/outside via ray-cast crossing parity; perturb and retry if
+            // the ray grazes a triangle edge/vertex.
+            bool inside = false;
+            for (int attempt = 0; attempt < 64; ++attempt) {
+                inside = false;
+                bool clean = true;
+                double dir[3];
+                for (int d = 0; d < 3; ++d)
+                    dir[d] = (nextf() + DIST_THRES) * (nextf() - 0.5 > 0 ? -1.0 : 1.0);
+                double e[3], alpha;
+                for (int t = 0; t < NT; ++t) {
+                    const int k = TriRayIntersect(
+                        rTriangles[t][0].data(), rTriangles[t][1].data(),
+                        rTriangles[t][2].data(), p, dir, e, alpha);
+                    if (k == 1 && alpha > 0) inside = !inside;
+                    else if (k == -1) { clean = false; break; }
+                }
+                if (clean) break;
+            }
+
+            // Distance magnitude: closest of all triangles (with early-out).
+            double md = std::numeric_limits<double>::max();
+            for (int t = 0; t < NT; ++t) {
+                const double a = PointToTri(
+                    rTriangles[t][0].data(), rTriangles[t][1].data(),
+                    rTriangles[t][2].data(), p, md);
+                if (a < md) md = a;
+            }
+            signed_dist[i] = inside ? md : -md;
+        });
+
+        // --- Keep/reject each hex -------------------------------------------
+        std::vector<std::array<int,8>> kept_cells;
+        std::vector<int> kept_level;
+        kept_cells.reserve(rCells.size());
+        kept_level.reserve(rCells.size());
+        for (std::size_t c = 0; c < rCells.size(); ++c) {
+            double max_pos = 0.0, min_neg = 0.0;
+            int n_out = 0;
+            bool drop = false;
+            for (int j = 0; j < 8; ++j) {
+                const double dv = signed_dist[rCells[c][j]];
+                if (dv > max_pos) max_pos = dv;
+                else if (dv < 0.0) {
+                    if (++n_out > 2) { drop = true; break; }
+                    if (dv < min_neg) min_neg = dv;
+                }
+            }
+            if (!drop && min_neg + OUT_IN_RATIO * max_pos >= 0.0) {
+                kept_cells.push_back(rCells[c]);
+                kept_level.push_back(rCellLevel[c]);
+            }
+        }
+        rCells.swap(kept_cells);
+        rCellLevel.swap(kept_level);
+    }
+
+    /**
+     * @brief Writes a hex mesh to a legacy ASCII VTK file, compacting away any
+     *        nodes not referenced by a cell (so carving leaves no orphan points).
+     */
+    static void WriteHexVtk(
+        const std::string& rFilename,
+        const std::vector<std::array<double,3>>& rNodes,
+        const std::vector<std::array<int,8>>& rCells,
+        const std::vector<int>& rCellLevel)
+    {
+        std::ofstream f(rFilename);
+        KRATOS_ERROR_IF_NOT(f.is_open())
+            << "OctreeHybridMeshUtility::WriteHexVtk: cannot open '"
+            << rFilename << "'" << std::endl;
+
+        // Keep only the nodes that some cell references, remapping ids.
+        std::vector<int> remap(rNodes.size(), -1);
+        std::vector<std::array<double,3>> out_nodes;
+        out_nodes.reserve(rNodes.size());
+        for (const auto& h : rCells)
+            for (int k = 0; k < 8; ++k) {
+                int& r = remap[h[k]];
+                if (r < 0) { r = static_cast<int>(out_nodes.size()); out_nodes.push_back(rNodes[h[k]]); }
+            }
+
+        const std::size_t nn = out_nodes.size();
+        const std::size_t nc = rCells.size();
+
+        f << "# vtk DataFile Version 2.0\n"
+          << "OctreeHybrid dual hex mesh\n"
+          << "ASCII\n"
+          << "DATASET UNSTRUCTURED_GRID\n";
+
+        f << "POINTS " << nn << " double\n";
+        f << std::scientific; f.precision(10);
+        for (const auto& nd : out_nodes)
+            f << nd[0] << ' ' << nd[1] << ' ' << nd[2] << '\n';
+
+        f << "CELLS " << nc << ' ' << nc * 9 << '\n';
+        for (const auto& h : rCells)
+            f << "8 "<<remap[h[0]]<<' '<<remap[h[1]]<<' '<<remap[h[2]]<<' '<<remap[h[3]]
+              <<' '<<remap[h[4]]<<' '<<remap[h[5]]<<' '<<remap[h[6]]<<' '<<remap[h[7]]<<'\n';
+
+        f << "CELL_TYPES " << nc << '\n';
+        for (std::size_t e = 0; e < nc; ++e) f << "12\n";
+
+        if (nc > 0) {
+            f << "CELL_DATA " << nc << '\n'
+              << "SCALARS level int 1\nLOOKUP_TABLE default\n";
+            for (int lv : rCellLevel) f << lv << '\n';
+        }
     }
 
     ///@}
