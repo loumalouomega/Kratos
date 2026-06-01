@@ -75,11 +75,19 @@ At refinement depth 8 on a typical CAD surface:
 >   the output is a hex mesh of the **object interior**.  On the depth-8 Stanford
 >   bunny this keeps **581,784 of 1,567,546 hexes (37 %)**, and the survivor's
 >   bounding box matches the bunny surface — i.e. the bunny is carved out of the box.
+>   The carved boundary is **blocky** (it follows the octree grid, not the surface).
+> - **`BuildCarveProjectAndWriteVtk`** additionally runs the buffer-zone clearance
+>   (paper §2.3) and **`ProjectToIsoSurface`** (reference stage 5 / paper §2.4): it
+>   meshes the buffer zone out to the input triangles and runs a Jacobian-controlled
+>   optimiser, so the boundary **conforms to the object surface** instead of being a
+>   blocky carve.  This removes the exposed interface holes/overlaps of the raw dual
+>   block.  On the depth-5 bunny the result fits the surface with **0 inverted core
+>   hexes** and only a handful of residual buffer slivers (≈0.05 %).
 >
-> The reference's non-manifold topology repair (the second half of
-> `RemoveOutsideElement`) and `ProjectToIsoSurface` (boundary projection + Jacobian
-> control) are still **not ported**: the carved boundary is blocky and may carry a
-> few non-manifold hexes at the refinement interface.  See
+> The optimiser's *iteration budget* controls how high the scaled Jacobian is driven
+> (see [§13.2](#132-reference-stage-5--projecttoisosurface)); the default fits the
+> geometry but does not run to the reference's minimum-scaled-Jacobian > 0.5 target,
+> which needs many more iterations.  See
 > [§13](#13-the-full-reference-pipeline-and-what-is-not-ported).
 
 ---
@@ -624,9 +632,11 @@ The plain-dual pass (Stage 4) then skips any vertex `v` where `consumed[v] == tr
 | Vertex dedup | O(n²) linear scan (`DIST_THRES = 1e-12`) | 27-neighbour spatial hash (`1e-4*min_cell` tolerance) |
 | Node array | `hexMesh.v[]` flat C array | `std::vector<std::array<double,3>> nodes` |
 | Dual-hex emission | Separate loop over `collectNum` | Integrated into template loop; `consumed[]` flag |
-| Interior filtering | `RemoveOutsideElement` (ray-cast + manifold repair) | Carve ported (`BuildCarveAndWriteVtk`); manifold-repair pass not ported |
-| Surface projection | `ProjectToIsoSurface` (gradient descent) | Not ported |
-| Coordinate system | Normalised to `[0,100]^3` | Normalised to `[0,1]^3` (world space mapped by bbox) |
+| Refinement criterion | Curvature + thickness adaptive (features map to absolute levels 4–8) | Uniform: every cell the surface intersects is refined to `RefinementDepth` (see §6.5) |
+| Interior filtering | `RemoveOutsideElement` (ray-cast + manifold repair) | Carve ported (`BuildCarveAndWriteVtk`); non-manifold 146-probe repair replaced by the buffer-zone clearance (paper §2.3) in the project path |
+| Surface projection | `ProjectToIsoSurface` (analytic gradient descent) | Ported (`BuildCarveProjectAndWriteVtk`): buffer-zone meshing + numerical-gradient Jacobian control (§13.2) |
+| Coordinate system | Normalised to `[0,100]^3` | Octree in `[0,1]^3`; the projector renormalises to `[0,100]` internally so the reference's optimiser constants apply |
+| Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
 | Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
 
 ### 6.2 Node-merge spatial hash
@@ -719,6 +729,43 @@ to the wrong grid position once cells were large enough in finest-grid units.
 ptmp[d] = 0.5*(p[21][d] + p[26][d] + z[d] * 4.0/15.0);   // correct
 ```
 
+### 6.5 Generation difference — refinement criterion
+
+The port and the reference produce **different dual blocks** for the same model
+because they refine the octree by different criteria:
+
+- **Reference** refines adaptively from **curvature** (the per-vertex angle defect
+  `triMesh.r`) and **thickness** (a ray-cast measurement), mapping surface features
+  to *absolute* octree levels 4–8 (the hard-coded `level == 8 … 4` branches in
+  `ComputeCellValue`, thresholds `C_THRES` / `H_THRES`).
+- **Port** refines **uniformly**: every cell a triangle intersects is split down to
+  `RefinementDepth` (`BuildFromSurfaceMesh`).
+
+On the low-poly bunny at depth 5 the reference's `DualFullHexMeshExtraction` yields
+20 949 hexes / 22 508 points; the port yields 16 648 / 20 126.  Both are valid dual
+blocks with the same kind of refinement-interface T-junctions; they simply
+distribute cells differently.  Curvature/thickness-driven refinement is **not**
+ported.
+
+### 6.6 Modifications made to the reference code
+
+To cross-validate against the reference on the bunny, two small changes were made to
+`external_libraries/HybridOctree_Hex/` (each carries an inline `Kratos …` comment):
+
+1. **`Initialization.h` — `VOXEL_SIZE` is now overridable** at compile time
+   (`#ifndef VOXEL_SIZE … #define VOXEL_SIZE 10`).  `VOXEL_SIZE` is the octree depth
+   (`hexGen` ctor: `octreeDepth = depth`); it was hard-coded to 10.  Building with
+   `-DVOXEL_SIZE=5` lets the reference run at the same depth as the port.
+2. **`HexGen.cpp::InitializeOctree` — `getLevel` fill bound fixed** from
+   `i < octreeDepth` to `i <= octreeDepth`.  The original left the finest-level cells
+   with `getLevel == 0`; whenever refinement actually reaches the finest level (the
+   bunny refines almost everywhere) `StrongBalancedOctree` then computed a bogus grid
+   coordinate and indexed `preVecEightCell` out of bounds, **segfaulting**.  This
+   stayed latent for the shipped demos (at `VOXEL_SIZE=10` their features map to
+   levels ≤ 8 and never reach the finest level).  With the fix the reference runs
+   end-to-end on the bunny and produces `dualFullHex` / `dualHex` / `projHex`, which
+   were used as ground truth for the carve and projection ports.
+
 ---
 
 ## 7. API reference
@@ -794,6 +841,45 @@ triangles are read from `rSurfaceMesh.Geometries()`.
 In Python:
 ```python
 KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(surface_mp, "bunny.vtk", 8)
+```
+
+---
+
+### `BuildCarveProjectAndWriteVtk`
+
+```cpp
+static void BuildCarveProjectAndWriteVtk(
+    ModelPart& rSurfaceMesh,
+    const std::string& rFilename,
+    std::size_t RefinementDepth = 5,
+    int ProjIters = 20000,
+    int ProjSmooth = 1000);
+```
+
+Like `BuildCarveAndWriteVtk`, but after carving it **fits the mesh to the input
+surface with Jacobian control** (reference stage 5, `ProjectToIsoSurface` / paper
+§2.4).  The pipeline:
+
+1. **Buffer-zone clearance** (paper §2.3): boundary hexes where the carved surface
+   folds — detected as a boundary vertex whose incident face normals do not fit in
+   any open hemisphere — are removed so the extruded shell cannot self-intersect.
+2. **Buffer-layer meshing**: every boundary vertex is duplicated and connected to its
+   duplicate by a new hex (tagged `level = -2`); the duplicate shell will be pulled
+   onto the surface.
+3. **Jacobian-controlled optimisation**: a gradient method ascends each element's
+   quality (scaled Jacobian where valid, raw Jacobian where inverted) and, once the
+   shell is valid, pulls each duplicate onto its closest surface point; smart
+   Laplacian smoothing (accepted only when it keeps the scaled Jacobian above a
+   rising threshold) runs every `ProjSmooth` iterations, for `ProjIters` total.
+
+`ProjIters` trades runtime for quality.  The default fits the geometry with a valid
+core (0 inverted core hexes on the depth-5 bunny); driving the minimum scaled
+Jacobian up to the paper's > 0.5 target needs many more iterations (the reference
+runs tens of thousands).  See [§13.2](#132-reference-stage-5--projecttoisosurface).
+
+In Python:
+```python
+KM.OctreeHybridMeshUtility.BuildCarveProjectAndWriteVtk(surface_mp, "bunny.vtk", 5)
 ```
 
 ---
@@ -907,14 +993,19 @@ stl_io.ReadModelPart(surface_mp)
 # --- 2a. Generate the dual hex mesh (full bounding-box block) ---
 KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, "hex_block.vtk", 8)
 
-# --- 2b. ...or carve it down to the object interior ---
+# --- 2b. ...or carve it down to the object interior (blocky boundary) ---
 KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(surface_mp, "hex_object.vtk", 8)
+
+# --- 2c. ...or carve AND fit the boundary to the surface (Jacobian control) ---
+KM.OctreeHybridMeshUtility.BuildCarveProjectAndWriteVtk(surface_mp, "hex_fitted.vtk", 5)
 ```
 
 Open the VTK in Paraview and colour by the `level` scalar field to see the adaptive
-refinement.  Template cells have `level = -1`.  `BuildAndWriteVtk` fills the whole
-bounding box; `BuildCarveAndWriteVtk` keeps only the hexes inside/straddling the
-surface (the object).
+refinement.  Template cells have `level = -1`; buffer-layer cells (added by
+`BuildCarveProjectAndWriteVtk`) have `level = -2`.  `BuildAndWriteVtk` fills the
+whole bounding box; `BuildCarveAndWriteVtk` keeps only the hexes inside/straddling
+the surface (a blocky object); `BuildCarveProjectAndWriteVtk` additionally fits the
+boundary to the input surface.
 
 ### Python — step-by-step (octree inspection)
 
@@ -933,8 +1024,9 @@ KM.OctreeHybridMeshUtility.WriteDualHexVtk(octree, "dual.vtk")
 
 ```bash
 cd kratos/tests
-python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 8          # full block
-python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 8 --carve  # carved object
+python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 8            # full block
+python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 8 --carve    # carved object
+python3 demo_octree_hybrid_mesh.py Bunny-LowPoly.stl 5 --project  # carved + surface-fitted
 ```
 
 This reads the STL (converting from binary if necessary), builds the octree, and
@@ -980,9 +1072,12 @@ approach reduced depth-8 sphere time from 693 s to seconds.
    of the object interior instead (see
    [§13.1](#131-reference-stage-4--removeoutsideelement)).  *Measured on the depth-8
    Stanford bunny: the block is 1,567,546 hexes filling a 110×88×109 box; the carve
-   keeps 581,784 hexes whose bounding box matches the bunny surface.*  Still **not
-   ported**: the manifold-repair half of `RemoveOutsideElement` and
-   `ProjectToIsoSurface` (Jacobian-controlled surface projection, stage 5).
+   keeps 581,784 hexes whose bounding box matches the bunny surface.*  Use
+   **`BuildCarveProjectAndWriteVtk`** to additionally fit the boundary to the surface
+   (stage 5, [§13.2](#132-reference-stage-5--projecttoisosurface)).  Still **not
+   ported**: the reference's exact non-manifold 146-probe repair (a hemisphere-based
+   buffer-zone clearance is used instead) and the full minimum-scaled-Jacobian
+   convergence of stage 5 (the worst-point "drag" loop).
 
 2. **This output is the reference's intermediate `DualFullHex` stage**: the mesh is
    conforming in the node-sharing sense but carries a small number of T-junctions
@@ -999,11 +1094,18 @@ approach reduced depth-8 sphere time from 693 s to seconds.
    parallel opportunities are the octree subdivision loop and the template geometry
    computation.
 
-4. **Fixed refinement criterion**: cells are refined if any surface triangle corner
-   lands inside them.  The reference supports curvature- and thickness-driven
-   multi-level refinement (using `C_THRES` and `H_THRES`); this is not yet ported.
+4. **Fixed refinement criterion**: cells are refined if any surface triangle
+   intersects them, down to `RefinementDepth`.  The reference instead refines by
+   curvature and thickness (mapping features to absolute levels 4–8 via `C_THRES` /
+   `H_THRES`), so the two dual blocks differ cell-for-cell (§6.5).  This is not ported.
 
-5. **`MAX_DEPTH = 10`**: dictated by `OctreeHybridKratosConfiguration`.  Finer
+5. **Stage-5 quality vs the paper's target**: `BuildCarveProjectAndWriteVtk` fits the
+   geometry with a valid core, but the default iteration budget does not drive the
+   minimum scaled Jacobian to the paper's > 0.5 (the reference runs the optimiser far
+   longer, with a worst-point "drag" step not ported here).  Increase `ProjIters` for
+   higher quality (§13.2).
+
+6. **`MAX_DEPTH = 10`**: dictated by `OctreeHybridKratosConfiguration`.  Finer
    meshes require increasing this constant.
 
 ---
@@ -1011,32 +1113,35 @@ approach reduced depth-8 sphere time from 693 s to seconds.
 ## 13. The full reference pipeline and what is *not* ported
 
 The reference `HexGen` driver (`Main.cpp`) runs **five** stages.  The Kratos port
-covers stages 0–3 in full and the **carve half of stage 4**; the manifold-repair
-half of stage 4 and all of stage 5 are not ported:
+now covers stages 0–5; the only pieces not reproduced exactly are the reference's
+non-manifold 146-probe repair (replaced by a hemisphere-based buffer-zone clearance)
+and the worst-point "drag" convergence loop of stage 5:
 
 | # | Reference method | Output file | Ported? | Role |
 |---|------------------|-------------|---------|------|
 | 0 | `InitializeOctree` | `modifiedTri.vtk` | ✅ (`BuildFromSurfaceMesh`) | read surface, set bounding box |
-| 1 | `ConstructOctree` | `octree.vtk` | ✅ | refine + 2:1 balance |
+| 1 | `ConstructOctree` | `octree.vtk` | ✅ (uniform, not curvature/thickness — §6.5) | refine + 2:1 balance |
 | 2 | `InitiateElementValence` | — | ✅ (face-adjacency graph) | classify face valences |
 | 3 | `DualFullHexMeshExtraction` | `dualFullHex.vtk` | ✅ (`BuildAndWriteVtk`) | dual hex block over the whole bbox |
-| 4 | `RemoveOutsideElement` | `dualHex.vtk` | ◑ carve ported (`BuildCarveAndWriteVtk`); manifold repair not | carve the object out of the block |
-| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ❌ | project boundary to surface, control Jacobian |
+| 4 | `RemoveOutsideElement` | `dualHex.vtk` | ◑ carve ported (`BuildCarveAndWriteVtk`); 146-probe repair → hemisphere clearance | carve the object out of the block |
+| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ◑ ported (`BuildCarveProjectAndWriteVtk`); full SJ-convergence loop not | project boundary to surface, control Jacobian |
 
 The "holes inside" reported when viewing the depth-8 bunny come from stopping after
 stage 3: the **`dualFullHex` block** is solid, over the whole bounding box, and
-still carries the refinement-interface T-junctions and template overlaps that this
-stage is *defined* to carry (the reference's own `dualFullHex.vtk` carries the
-identical artifacts).  `BuildCarveAndWriteVtk` now runs the stage-4 carve to recover
-the object; the remaining stage-4 manifold repair and stage 5 would further clean and
-project the boundary.
+carries the refinement-interface T-junctions/template overlaps that this stage is
+*defined* to carry.  `BuildCarveAndWriteVtk` runs the stage-4 carve to recover the
+(blocky) object; **`BuildCarveProjectAndWriteVtk`** runs stage 5 to fit the boundary
+to the surface, which removes those exposed interface faces.
 
 > Practical note: the reference is hardcoded for `VOXEL_SIZE = 10` and uses O(n²)
 > dual-vertex deduplication and O(n²·#triangles) inside/outside tests, so running its
-> own full bunny end-to-end is very slow (the 22 490-triangle bunny spends >15 min of
-> CPU just in the curvature pre-pass).  The diagnosis below was confirmed by applying
-> the reference's stage-4 *keep-criterion* directly to the port's depth-8 bunny
-> output.
+> own *full* (22 490-triangle) bunny end-to-end is very slow.  After the two reference
+> fixes in §6.6 (configurable `VOXEL_SIZE` + the `getLevel` segfault fix), the
+> **low-poly** bunny (292 triangles) runs end-to-end at `VOXEL_SIZE=5` in ~20 s,
+> producing `dualFullHex.vtk` (20 949 hexes), `dualHex.vtk` (5 711) and `projHex.vtk`
+> (8 889).  `projHex` reaches **0 inverted, minimum scaled Jacobian ≈ 0.48, median
+> ≈ 0.89** — this is the ground truth the carve and projection ports were validated
+> against.
 
 ### 13.1 Reference stage 4 — `RemoveOutsideElement`
 
@@ -1117,6 +1222,37 @@ Source: `HexGen.cpp::ProjectToIsoSurface` (≈ line 2815); reference doc
 
 Output: the final watertight, Jacobian-controlled all-hex mesh (`projHex.vtk` /
 `finalMesh.vtk`).
+
+**What the Kratos port (`BuildCarveProjectAndWriteVtk`) does**, and how it differs:
+
+- **Buffer-zone clearance** (`ClearBufferZone`): the reference's 146-direction
+  `pointOnSurf` probe is reproduced as a hemisphere test on ~128 Fibonacci-sphere
+  directions.  A boundary vertex whose incident face normals fit in no open
+  hemisphere marks a fold; the most-exposed incident hex is removed and the boundary
+  re-extracted until clean.  This is the key step that stops the extruded shell from
+  self-intersecting — on the depth-5 bunny it cuts inverted buffer hexes from ~11 %
+  to ~0.05 %.
+- **Buffer-layer meshing** mirrors the reference: each boundary vertex is duplicated,
+  and a hex (`level = -2`) links the boundary quad to its duplicate quad, with the
+  winding chosen so a small outward extrusion gives a positive Jacobian.
+- **Quality metric** `ScaledJacobianMin` / `JacobianMin` are exact ports of
+  `HexGen.cpp::Sj` (min scaled Jacobian over the body centre + 8 corners; raw volume
+  variant for inverted elements).
+- **Optimisation** follows the same energy (geometry fitting − scaled Jacobian −
+  Jacobian) and update rule, but the per-element gradient is computed **numerically**
+  (central differences over the incident optimisable corners) rather than with the
+  reference's 1 200-line hand-expanded analytic gradient — same energy, far less code.
+  Smart Laplacian smoothing accepts a move only when it keeps the local scaled
+  Jacobian above the rising `eps_sj` threshold.
+- **Normalisation:** the mesh + triangles are rescaled to a 100-unit box on entry so
+  the reference's constants (`LEARNING_RATE = 5e-4`, the `0.01 → 0.53 → +0.01`
+  threshold schedule) apply unchanged, then rescaled back on exit.
+
+**Not reproduced:** the reference's worst-point "drag" loop and its very long run to
+minimum scaled Jacobian > 0.5.  With the default `ProjIters` the port fits the
+geometry with a fully valid core (depth-5 bunny: 0 inverted core hexes, the boundary
+on the surface) but a lower median scaled Jacobian (≈ 0.37 vs the reference's ≈ 0.89);
+raising `ProjIters` improves it at linear cost.
 
 ### 13.3 Reproducing the diagnosis
 
