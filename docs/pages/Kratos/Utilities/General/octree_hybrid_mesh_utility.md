@@ -1133,7 +1133,7 @@ and the worst-point "drag" convergence loop of stage 5:
 | 2 | `InitiateElementValence` | — | ✅ (face-adjacency graph) | classify face valences |
 | 3 | `DualFullHexMeshExtraction` | `dualFullHex.vtk` | ✅ (`BuildAndWriteVtk`) | dual hex block over the whole bbox |
 | 4 | `RemoveOutsideElement` | `dualHex.vtk` | ◑ carve ported (`BuildCarveAndWriteVtk`); 146-probe repair → hemisphere clearance | carve the object out of the block |
-| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ◑ ported (`BuildCarveProjectAndWriteVtk`); full SJ-convergence loop not | project boundary to surface, control Jacobian |
+| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ◑ ported (`BuildCarveProjectAndWriteVtk`); full SJ-threshold escalation not (analytic-gradient port attempted but unstable — see §13.2) | project boundary to surface, control Jacobian |
 
 The "holes inside" reported when viewing the depth-8 bunny come from stopping after
 stage 3: the **`dualFullHex` block** is solid, over the whole bounding box, and
@@ -1257,19 +1257,35 @@ Output: the final watertight, Jacobian-controlled all-hex mesh (`projHex.vtk` /
   the reference's constants (`LEARNING_RATE = 5e-4`, the `0.01 → 0.53 → +0.01`
   threshold schedule) apply unchanged, then rescaled back on exit.
 
-**Not reproduced:** the reference's worst-point "drag" loop and its long run to
-minimum scaled Jacobian > 0.5.  With the default `ProjIters` the port fits the
-geometry with a fully valid core (depth-5 bunny: 0 inverted core hexes, the boundary
-on the surface) but a lower median scaled Jacobian (≈ 0.37 vs the reference's ≈ 0.89).
-Crucially, **raising `ProjIters` does not help**: the only lever that raises the
-scaled Jacobian further is escalating the `eps_sj` threshold (the reference's
-`0.01 → 0.53 → …` schedule), and under this port's numerical gradient that escalation
-is unstable — it re-tangles cells faster than the gradient recovers.  Measured on the
-depth-5 bunny: 20 k iterations → 4 inverted (0.05 %), median 0.37; 120 k iterations
-(with threshold escalation + worst-point drag enabled) → 83 inverted (1.0 %), median
-0.33.  The port therefore deliberately keeps `eps_sj` at its stable initial value and
-converges to a valid, surface-fitted mesh; matching the reference's quality requires
-porting its analytic-gradient optimiser.
+**Quality ceiling and why it exists.** With the default `ProjIters` the port fits
+the geometry with a fully valid core (depth-5 bunny: 0 inverted core hexes, boundary
+on the surface) but a lower median scaled Jacobian (≈ 0.37 vs the reference's ≈
+0.89).  The gap comes from the quality-threshold escalation (`eps_sj` climbing from
+0.01 to 0.53+), which is what drives the scaled Jacobian up to the paper's > 0.5
+target.  That escalation is unstable under a numerical gradient.
+
+The analytic gradient (the chain-rule form `∂V/∂a = b×c`, `∂SJ/∂a = (b×c)/n −
+SJ·a/|a|²`, for each of the 9 evaluation points) was derived and **validated to
+machine precision** against finite differences, and shown to match the reference's
+`-4·(…)` body-centre expression exactly.  Per-point classification mirrors the
+reference: degenerate/inverted → raw-J gradient; `SJ < eps_sj` → scaled-J gradient;
+accumulate all bad points for smoothness.  However, swapping in the analytic gradient
+while keeping the surrounding control flow caused divergence: the geometry anchor
+(pulling dups to the surface) and the scaled-Jacobian gradient (inflating each hex
+to a cube) fight each other, pushing shared core vertices inward without bound.
+Stabilising the interaction requires the reference's complete update-and-gating block
+(the `=`-overwrite of duplicate gradients when `allPositive`, the exact
+smoothing/escalation interplay), not just a gradient swap.
+
+The port therefore uses the numerical gradient and holds `eps_sj` fixed, converging
+to a valid, surface-fitted mesh.  **Closing the quality gap to ≥ 0.5 median requires
+porting the reference's full update block verbatim**, treating it as one unit rather
+than a piecemeal substitution.
+
+Measured benchmarks:
+- 20 k iterations (stable, numerical gradient): 4 inverted (0.05 %), median 0.37
+- 120 k iterations + threshold escalation: 83 inverted (1.0 %), median 0.33
+- Reference `projHex` (ground truth): 0 inverted, median 0.89
 
 ### 13.3 Reproducing the diagnosis
 
