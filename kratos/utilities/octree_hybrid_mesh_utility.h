@@ -1938,7 +1938,7 @@ private:
         // --- 4. Optimisation --------------------------------------------------
         constexpr double LR  = 5.0e-4;
         constexpr double H   = 1.0e-4;     // finite-difference step
-        constexpr double TOL = 0.5;        // shell-on-surface tolerance (100-unit box)
+        constexpr double TOL = 1.0e-3;     // shell-on-surface tolerance (100-unit box)
         double eps_sj = 0.01;
         std::vector<std::array<double,3>> grad(NN);
 
@@ -2027,14 +2027,17 @@ private:
                     double p[8][3]; load_hex(c,p);
                     if (ScaledJacobianMin(p) <= eps_sj) ++still_bad;
                 }
-                // Once the shell is seated on the surface and all but a negligible
-                // fraction of elements are valid, demand higher quality.  The
-                // reference requires zero bad elements here, but a handful of
-                // buffer hexes in narrow concavities can stay stuck below the
-                // threshold and would otherwise freeze the whole mesh at the
-                // initial 0.01 quality; tolerating <=0.5% lets the bulk improve.
-                const int bad_budget = static_cast<int>(0.005 * affected.size());
-                if (still_bad <= bad_budget && max_dist < TOL)
+                // Once valid and seated on the surface, demand higher quality.
+                // NOTE: escalating eps_sj toward the paper's >0.5 target with this
+                // numerical-gradient optimiser is unstable — the aggressive jump to
+                // 0.53 re-tangles cells faster than the gradient can recover, so
+                // more iterations *degrade* the mesh rather than improve it.  We
+                // therefore keep the reference's strict gate (which only fires once
+                // the shell is essentially exactly on the surface and nothing is
+                // bad); in practice it stays at 0.01 and the mesh converges to a
+                // valid, surface-fitted state.  Reaching the reference's median
+                // scaled Jacobian (~0.89) needs its analytic-gradient optimiser.
+                if (still_bad == 0 && max_dist < TOL)
                     eps_sj = (eps_sj==0.01) ? 0.53 : eps_sj+0.01;
             }
         }
