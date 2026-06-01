@@ -84,11 +84,13 @@ At refinement depth 8 on a typical CAD surface:
 >   block.  On the depth-5 bunny the result fits the surface with **0 inverted core
 >   hexes** and only a handful of residual buffer slivers (≈0.05 %).
 >
-> The optimiser's *iteration budget* controls how high the scaled Jacobian is driven
-> (see [§13.2](#132-reference-stage-5--projecttoisosurface)); the default fits the
-> geometry but does not run to the reference's minimum-scaled-Jacobian > 0.5 target,
-> which needs many more iterations.  See
-> [§13](#13-the-full-reference-pipeline-and-what-is-not-ported).
+> The default fits the geometry with a valid core but at a lower mesh quality than
+> the reference (median scaled Jacobian ≈ 0.37 vs ≈ 0.89).  **Note:** simply raising
+> `ProjIters` does *not* close that gap — with this numerical-gradient optimiser the
+> threshold escalation needed to push the scaled Jacobian higher is unstable and
+> *degrades* the mesh; reaching the reference's quality needs its analytic-gradient
+> optimiser, which is not ported.  See
+> [§13.2](#132-reference-stage-5--projecttoisosurface).
 
 ---
 
@@ -872,10 +874,13 @@ surface with Jacobian control** (reference stage 5, `ProjectToIsoSurface` / pape
    Laplacian smoothing (accepted only when it keeps the scaled Jacobian above a
    rising threshold) runs every `ProjSmooth` iterations, for `ProjIters` total.
 
-`ProjIters` trades runtime for quality.  The default fits the geometry with a valid
-core (0 inverted core hexes on the depth-5 bunny); driving the minimum scaled
-Jacobian up to the paper's > 0.5 target needs many more iterations (the reference
-runs tens of thousands).  See [§13.2](#132-reference-stage-5--projecttoisosurface).
+`ProjIters`/`ProjSmooth` control the run length.  The default fits the geometry with
+a valid core (0 inverted core hexes on the depth-5 bunny).  Driving the *minimum
+scaled Jacobian* up to the paper's > 0.5 is **not** achievable just by increasing
+`ProjIters`: it requires escalating the scaled-Jacobian threshold, which this
+numerical-gradient optimiser cannot do stably (it re-tangles cells), so extra
+iterations plateau or regress quality.  See
+[§13.2](#132-reference-stage-5--projecttoisosurface).
 
 In Python:
 ```python
@@ -1100,10 +1105,14 @@ approach reduced depth-8 sphere time from 693 s to seconds.
    `H_THRES`), so the two dual blocks differ cell-for-cell (§6.5).  This is not ported.
 
 5. **Stage-5 quality vs the paper's target**: `BuildCarveProjectAndWriteVtk` fits the
-   geometry with a valid core, but the default iteration budget does not drive the
-   minimum scaled Jacobian to the paper's > 0.5 (the reference runs the optimiser far
-   longer, with a worst-point "drag" step not ported here).  Increase `ProjIters` for
-   higher quality (§13.2).
+   geometry with a valid core (depth-5 bunny: 0 inverted core hexes, median scaled
+   Jacobian ≈ 0.37), but does **not** reach the reference's minimum-scaled-Jacobian
+   > 0.5 / median ≈ 0.89.  This is *not* an iteration-budget issue — increasing
+   `ProjIters` plateaus or regresses quality, because the threshold escalation that
+   would raise the scaled Jacobian is unstable under this port's numerical gradient
+   (verified: 120 k iterations gave 1.0 % inverted vs 0.05 % at 20 k).  Closing the
+   gap needs the reference's analytic-gradient optimiser and its worst-point "drag"
+   convergence loop, which are not ported (§13.2).
 
 6. **`MAX_DEPTH = 10`**: dictated by `OctreeHybridKratosConfiguration`.  Finer
    meshes require increasing this constant.
@@ -1248,11 +1257,19 @@ Output: the final watertight, Jacobian-controlled all-hex mesh (`projHex.vtk` /
   the reference's constants (`LEARNING_RATE = 5e-4`, the `0.01 → 0.53 → +0.01`
   threshold schedule) apply unchanged, then rescaled back on exit.
 
-**Not reproduced:** the reference's worst-point "drag" loop and its very long run to
+**Not reproduced:** the reference's worst-point "drag" loop and its long run to
 minimum scaled Jacobian > 0.5.  With the default `ProjIters` the port fits the
 geometry with a fully valid core (depth-5 bunny: 0 inverted core hexes, the boundary
-on the surface) but a lower median scaled Jacobian (≈ 0.37 vs the reference's ≈ 0.89);
-raising `ProjIters` improves it at linear cost.
+on the surface) but a lower median scaled Jacobian (≈ 0.37 vs the reference's ≈ 0.89).
+Crucially, **raising `ProjIters` does not help**: the only lever that raises the
+scaled Jacobian further is escalating the `eps_sj` threshold (the reference's
+`0.01 → 0.53 → …` schedule), and under this port's numerical gradient that escalation
+is unstable — it re-tangles cells faster than the gradient recovers.  Measured on the
+depth-5 bunny: 20 k iterations → 4 inverted (0.05 %), median 0.37; 120 k iterations
+(with threshold escalation + worst-point drag enabled) → 83 inverted (1.0 %), median
+0.33.  The port therefore deliberately keeps `eps_sj` at its stable initial value and
+converges to a valid, surface-fitted mesh; matching the reference's quality requires
+porting its analytic-gradient optimiser.
 
 ### 13.3 Reproducing the diagnosis
 
