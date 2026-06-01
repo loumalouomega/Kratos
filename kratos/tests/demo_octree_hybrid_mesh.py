@@ -5,12 +5,16 @@ result to a legacy VTK file for visualisation in Paraview.
 Accepts both ASCII and binary STL files.
 
 Usage:
-    python3 demo_octree_hybrid_mesh.py [path/to/surface.stl] [refinement_depth] [--carve]
+    python3 demo_octree_hybrid_mesh.py [path/to/surface.stl] [refinement_depth] [--carve|--project]
 
 Defaults to Bunny-LowPoly.stl at depth 8 when no arguments are given.
 
 Pass --carve to also run the RemoveOutsideElement stage, which carves the dual
 block down to the object interior (instead of the full bounding-box block).
+
+Pass --project to additionally run the ProjectToIsoSurface stage (reference
+stage 5), which meshes the buffer zone and fits the carved mesh to the input
+surface with Jacobian control, removing the blocky carve's interface artifacts.
 
 Output:
     octree_hex_mesh.vtk  — adaptive hex mesh, colour by "level" in Paraview
@@ -74,14 +78,16 @@ def binary_stl_to_ascii(src: str, dst: str) -> None:
 # ---------------------------------------------------------------------------
 # 3. Parse arguments
 # ---------------------------------------------------------------------------
-args = [a for a in sys.argv[1:] if a != "--carve"]
+args = [a for a in sys.argv[1:] if a not in ("--carve", "--project")]
 carve = "--carve" in sys.argv
+project = "--project" in sys.argv
 stl_input = args[0] if len(args) > 0 else os.path.join(script_dir, "Bunny-LowPoly.stl")
 refinement_depth = int(args[1]) if len(args) > 1 else 8
 
 print(f"Input STL     : {stl_input}")
 print(f"Refinement    : depth {refinement_depth}")
 print(f"Carve         : {carve}")
+print(f"Project       : {project}")
 
 # ---------------------------------------------------------------------------
 # 4. Convert binary → ASCII if necessary
@@ -118,7 +124,9 @@ if tmp_ascii and os.path.exists(tmp_ascii):
 output_vtk = "octree_hex_mesh.vtk"
 
 print(f"\nBuilding OctreeHybrid and writing {output_vtk} …")
-if carve:
+if project:
+    KM.OctreeHybridMeshUtility.BuildCarveProjectAndWriteVtk(surface_mp, output_vtk, refinement_depth)
+elif carve:
     KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(surface_mp, output_vtk, refinement_depth)
 else:
     KM.OctreeHybridMeshUtility.BuildAndWriteVtk(surface_mp, output_vtk, refinement_depth)
