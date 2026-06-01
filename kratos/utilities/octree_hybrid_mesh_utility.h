@@ -1599,6 +1599,66 @@ private:
         return mn;
     }
 
+    /// Sign of each corner in the body-centre edge vectors a/b/c (the ξ/η/ζ
+    /// face-centre differences of HexEdgeTriple(·,8,·)).
+    static constexpr int SJ_SA[8] = {-1, 1, 1,-1,-1, 1, 1,-1};
+    static constexpr int SJ_SB[8] = {-1,-1, 1, 1,-1,-1, 1, 1};
+    static constexpr int SJ_SC[8] = {-1,-1,-1,-1, 1, 1, 1, 1};
+
+    /**
+     * @brief Closed-form gradient of evaluation point @p k's quality metric,
+     *        scattered onto the 8 corner gradients @p g8 (ascent direction).
+     *
+     * This replaces the reference's ~1200-line hand-expanded gradient with the
+     * chain rule.  With edge vectors @f$a,b,c@f$ at the point and
+     * @f$V=\det(a,b,c)@f$, @f$n=|a||b||c|@f$:
+     *   - raw Jacobian (`Mode==0`):  @f$\partial V/\partial a = b\times c@f$, etc.;
+     *   - scaled Jacobian (`Mode==1`): @f$\partial(V/n)/\partial a =
+     *     (b\times c)/n - (V/n)\,a/|a|^2@f$, etc.
+     * The per-edge gradients are mapped to corner gradients: corner points add
+     * `∂/∂a,∂/∂b,∂/∂c` with the corner being `-(sum)`; the body centre (`k==0`)
+     * uses the ±1 sign tables above.  Validated to machine precision against
+     * finite differences of `Sj`/the raw volume for all 9 evaluation points.
+     */
+    static void AccumulatePointGrad(const double p[8][3], int k, int Mode, double g8[8][3])
+    {
+        double a[3], b[3], c[3];
+        HexEdgeTriple(p, k, a, b, c);
+        double bc[3], ca[3], ab[3];
+        bc[0]=b[1]*c[2]-b[2]*c[1]; bc[1]=b[2]*c[0]-b[0]*c[2]; bc[2]=b[0]*c[1]-b[1]*c[0];
+        ca[0]=c[1]*a[2]-c[2]*a[1]; ca[1]=c[2]*a[0]-c[0]*a[2]; ca[2]=c[0]*a[1]-c[1]*a[0];
+        ab[0]=a[1]*b[2]-a[2]*b[1]; ab[1]=a[2]*b[0]-a[0]*b[2]; ab[2]=a[0]*b[1]-a[1]*b[0];
+        double gA[3], gB[3], gC[3];
+        if (Mode == 0) {                         // ∂V/∂{a,b,c}
+            for (int d=0;d<3;++d) { gA[d]=bc[d]; gB[d]=ca[d]; gC[d]=ab[d]; }
+        } else {                                 // ∂SJ/∂{a,b,c}
+            const double l0=a[0]*a[0]+a[1]*a[1]+a[2]*a[2];
+            const double l1=b[0]*b[0]+b[1]*b[1]+b[2]*b[2];
+            const double l2=c[0]*c[0]+c[1]*c[1]+c[2]*c[2];
+            const double n=std::sqrt(l0*l1*l2);
+            const double V=a[0]*bc[0]+a[1]*bc[1]+a[2]*bc[2];
+            const double SJ=V/n;
+            for (int d=0;d<3;++d) {
+                gA[d]=bc[d]/n - SJ*a[d]/l0;
+                gB[d]=ca[d]/n - SJ*b[d]/l1;
+                gC[d]=ab[d]/n - SJ*c[d]/l2;
+            }
+        }
+        if (k == 0) {
+            for (int i=0;i<8;++i)
+                for (int d=0;d<3;++d)
+                    g8[i][d] += SJ_SA[i]*gA[d] + SJ_SB[i]*gB[d] + SJ_SC[i]*gC[d];
+        } else {
+            const int cc=k-1;
+            for (int d=0;d<3;++d) {
+                g8[SJ_ADJ[cc][0]][d] += gA[d];
+                g8[SJ_ADJ[cc][1]][d] += gB[d];
+                g8[SJ_ADJ[cc][2]][d] += gC[d];
+                g8[cc][d]            -= (gA[d]+gB[d]+gC[d]);
+            }
+        }
+    }
+
     /// Closest point @p q on triangle (@p a,@p b,@p c) to @p p (Ericson, RTCD).
     static void ClosestPointOnTriangle(
         const double a[3], const double b[3], const double c[3],
@@ -1937,27 +1997,51 @@ private:
 
         // --- 4. Optimisation --------------------------------------------------
         constexpr double LR  = 5.0e-4;
-        constexpr double H   = 1.0e-4;     // finite-difference step
         constexpr double TOL = 1.0e-3;     // shell-on-surface tolerance (100-unit box)
         double eps_sj = 0.01;
         std::vector<std::array<double,3>> grad(NN);
 
-        // Per-node gradient of an element's quality metric (scaled Jacobian when
-        // the element is non-inverted, raw Jacobian when inverted), accumulated
-        // for every optimisable corner via central differences.
+        // Squared-length degeneracy threshold (the reference's DIST_THRES3 ≈
+        // 0.0064·cellsize²).  An edge below this marks an evaluation point as
+        // degenerate, so it uses the bounded raw-Jacobian gradient instead of the
+        // scaled-Jacobian gradient, whose 1/(|a||b||c|) factor would otherwise blow
+        // up on a thin/near-collapsed buffer hex.  cellsize is estimated from the
+        // shortest edge of the (finest) core cells in the normalised box.
+        double cell2 = std::numeric_limits<double>::max();
+        for (int c=0; c<n_core_cells; ++c) {
+            static constexpr int E[3][2] = {{0,1},{1,2},{0,4}};
+            for (auto& e : E) {
+                double d2=0; for (int d=0;d<3;++d){ const double t=rNodes[rCells[c][e[0]]][d]-rNodes[rCells[c][e[1]]][d]; d2+=t*t; }
+                if (d2>1e-18) cell2 = std::min(cell2, d2);
+            }
+        }
+        if (!(cell2 < std::numeric_limits<double>::max())) cell2 = 1.0;
+        const double DEG = 0.0064 * cell2;
+
+        // Analytic quality gradient (reference's `iSj` + hand-expanded gradient).
+        // For every one of a hex's 9 evaluation points (body centre + 8 corners),
+        // if the point is inverted/degenerate ascend the raw Jacobian, else if its
+        // scaled Jacobian is below the current threshold ascend the scaled
+        // Jacobian.  Summing every bad point (not just the element minimum) makes
+        // the objective smooth — no `min()` kink — which is what keeps the quality
+        // threshold escalation stable.
         auto accumulate_quality_grad = [&](int c) {
             double p[8][3]; load_hex(c, p);
-            const bool inverted = JacobianMin(p) <= 0.0;
+            double g8[8][3] = {};
+            for (int k=0;k<=8;++k) {
+                double a[3],b[3],cc[3]; HexEdgeTriple(p,k,a,b,cc);
+                const double l0=a[0]*a[0]+a[1]*a[1]+a[2]*a[2];
+                const double l1=b[0]*b[0]+b[1]*b[1]+b[2]*b[2];
+                const double l2=cc[0]*cc[0]+cc[1]*cc[1]+cc[2]*cc[2];
+                const double V=TripleProduct(a,b,cc);
+                if (l0<=DEG || l1<=DEG || l2<=DEG || V<=0.0)
+                    AccumulatePointGrad(p, k, 0, g8);                       // raw-J ascent
+                else if (V <= eps_sj*std::sqrt(l0*l1*l2))
+                    AccumulatePointGrad(p, k, 1, g8);                       // scaled-J ascent
+            }
             for (int k=0;k<8;++k) {
                 const int v=rCells[c][k];
-                if (!optimizable[v]) continue;
-                for (int d=0; d<3; ++d) {
-                    const double save=p[k][d];
-                    p[k][d]=save+H; const double fp = inverted ? JacobianMin(p) : ScaledJacobianMin(p);
-                    p[k][d]=save-H; const double fm = inverted ? JacobianMin(p) : ScaledJacobianMin(p);
-                    p[k][d]=save;
-                    grad[v][d] += (fp-fm)/(2*H);   // ascent on quality
-                }
+                if (optimizable[v]) for (int d=0;d<3;++d) grad[v][d] += g8[k][d];
             }
         };
 
@@ -1970,19 +2054,36 @@ private:
                 double p[8][3]; load_hex(c, p);
                 if (ScaledJacobianMin(p) <= eps_sj) { ++bad; accumulate_quality_grad(c); }
             }
-            const bool all_positive = (bad == 0);
+            (void)bad;
 
-            if (all_positive) {                       // geometry fitting term
-                for (int i=0;i<NN;++i) if (is_dup[i]) {
-                    double q[3];
-                    ClosestPointOnTriangle(rTri[dup_tri[i]][0].data(),
-                        rTri[dup_tri[i]][1].data(), rTri[dup_tri[i]][2].data(),
-                        rNodes[i].data(), q);
-                    for (int d=0;d<3;++d) grad[i][d] += -3.0*(rNodes[i][d]-q[d]);
-                }
+            // Geometry-fitting term (paper's E_GF), applied to every duplicate
+            // (surface) vertex every iteration: it pulls the vertex toward its
+            // closest point on the assigned surface triangle.  Unlike the
+            // reference, which gates this on the mesh being fully valid, we keep it
+            // always on — the pull grows linearly with the distance to the surface,
+            // so it anchors the shell and dominates any quality-driven inflation,
+            // which is what makes the analytic optimiser converge instead of
+            // drifting the buffer layer outward without bound.
+            for (int i=0;i<NN;++i) if (is_dup[i]) {
+                double q[3];
+                ClosestPointOnTriangle(rTri[dup_tri[i]][0].data(),
+                    rTri[dup_tri[i]][1].data(), rTri[dup_tri[i]][2].data(),
+                    rNodes[i].data(), q);
+                for (int d=0;d<3;++d) grad[i][d] += -3.0*(rNodes[i][d]-q[d]);
             }
-            for (int i=0;i<NN;++i) if (optimizable[i])
-                for (int d=0;d<3;++d) rNodes[i][d] += LR*grad[i][d];
+            // Apply the gradient step, clamping each node's displacement to a
+            // fraction of a cell.  The raw-Jacobian ascent on a pair of adjacent
+            // collapsed buffer hexes is an unbounded tug-of-war (both want more
+            // volume, so they push their shared vertices apart without limit); the
+            // clamp keeps the direction but caps the magnitude, which makes the
+            // optimiser unconditionally stable without changing its fixed points.
+            const double max_step = 0.3 * std::sqrt(cell2);
+            for (int i=0;i<NN;++i) if (optimizable[i]) {
+                double s[3] = { LR*grad[i][0], LR*grad[i][1], LR*grad[i][2] };
+                const double sn = std::sqrt(s[0]*s[0]+s[1]*s[1]+s[2]*s[2]);
+                if (sn > max_step) { const double f=max_step/sn; s[0]*=f; s[1]*=f; s[2]*=f; }
+                for (int d=0;d<3;++d) rNodes[i][d] += s[d];
+            }
 
             if (it % SmoothEvery == 0) {
                 // Smart Laplacian: accept a Laplacian move only if it keeps every
