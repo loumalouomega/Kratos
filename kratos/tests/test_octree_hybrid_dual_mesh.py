@@ -352,6 +352,52 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
     def test_carve_depth_5(self):
         self._run_carve(5)
 
+    def _run_project(self, depth, lo=0.3, hi=0.7):
+        """Projection (ProjectToIsoSurface) must mesh the buffer zone and pull the
+        carved shell onto the input surface with a valid (positive-Jacobian) mesh."""
+        model = KM.Model()
+        mp = build_closed_box_surface(model, lo=lo, hi=hi)
+
+        carved_out = os.path.join(script_dir, f"_carved_p_d{depth}.vtk")
+        proj_out = os.path.join(script_dir, f"_proj_test_d{depth}.vtk")
+        KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(mp, carved_out, depth)
+        # Modest iteration budget keeps the test fast; the box surface is simple.
+        KM.OctreeHybridMeshUtility.BuildCarveProjectAndWriteVtk(
+            mp, proj_out, depth, 12000, 600)
+
+        carved_pts, carved_cells, _ = read_vtk(carved_out)
+        proj_pts, proj_cells, proj_levels = read_vtk(proj_out)
+
+        degenerate, inverted = classify(proj_pts, proj_cells)
+        plo, phi = bbox(proj_pts)
+        n_buffer = sum(1 for lv in proj_levels if lv == -2) if proj_levels else 0
+        print(f"\n[project depth={depth}] carved={len(carved_cells)} "
+              f"projected={len(proj_cells)} (buffer={n_buffer}) "
+              f"degenerate={len(degenerate)} inverted={len(inverted)}\n"
+              f"   target box [{lo},{hi}]^3   projected bbox "
+              f"{tuple(round(v,3) for v in plo)}..{tuple(round(v,3) for v in phi)}")
+
+        os.remove(carved_out)
+        os.remove(proj_out)
+
+        # The buffer layer adds hexes on top of the carved core.
+        self.assertGreater(len(proj_cells), len(carved_cells),
+                           "projection added no buffer-layer hexes")
+        self.assertGreater(n_buffer, 0, "no buffer hexes were tagged")
+        # The projected shell sits on the input box surface (geometry fitting):
+        # the bounding box matches [lo,hi]^3 within roughly one coarse cell.
+        tol = 1.0 / (1 << depth) + 1e-3
+        for d in range(3):
+            self.assertLess(abs(plo[d] - lo), tol,
+                            f"projected min[{d}]={plo[d]:.3f} far from surface {lo}")
+            self.assertLess(abs(phi[d] - hi), tol,
+                            f"projected max[{d}]={phi[d]:.3f} far from surface {hi}")
+        # No collapsed cells should survive in the fitted mesh.
+        self.assertEqual(len(degenerate), 0, f"{len(degenerate)} degenerate projected hexes")
+
+    def test_project_depth_4(self):
+        self._run_project(4)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
