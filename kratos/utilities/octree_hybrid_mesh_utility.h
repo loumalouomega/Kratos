@@ -19,7 +19,9 @@
 #include <cstdint>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -223,11 +225,20 @@ public:
      *                    surface (reference stage 4, `RemoveOutsideElement`):
      *                    only hexes inside or straddling the surface are kept.
      *                    When null, the full bounding-box block is written.
+     * @param Project     When true (requires @p pTriangles), after carving the
+     *                    core mesh is fitted to the surface with the Jacobian-
+     *                    controlled buffer-zone meshing of reference stage 5
+     *                    (`ProjectToIsoSurface`).
+     * @param ProjIters   Total projection/optimisation iterations.
+     * @param ProjSmooth  Iterations between smart-Laplacian/threshold updates.
      */
     static void WriteDualHexVtk(
         OctreeType& rOctree,
         const std::string& rFilename,
-        const TriangleSoup* pTriangles = nullptr)
+        const TriangleSoup* pTriangles = nullptr,
+        bool Project = false,
+        int ProjIters = 20000,
+        int ProjSmooth = 1000)
     {
         // ------------------------------------------------------------------ //
         // 1. Balance + collect leaves
@@ -1046,6 +1057,15 @@ public:
         if (pTriangles && !pTriangles->empty())
             RemoveOutsideElement(*pTriangles, nodes, cells, cell_level);
 
+        // Fit the carved core mesh to the surface and mesh the buffer zone with
+        // Jacobian control (reference stage 5, ProjectToIsoSurface).  First clear
+        // the buffer zone (paper Section 2.3): drop boundary hexes where the
+        // carved surface folds, so the extruded shell does not self-intersect.
+        if (Project && pTriangles && !pTriangles->empty()) {
+            ClearBufferZone(nodes, cells, cell_level);
+            ProjectToIsoSurface(*pTriangles, nodes, cells, cell_level, ProjIters, ProjSmooth);
+        }
+
         WriteHexVtk(rFilename, nodes, cells, cell_level);
     }
 
@@ -1175,6 +1195,54 @@ public:
             << "ModelPart has no triangles to carve against." << std::endl;
 
         WriteDualHexVtk(*p_octree, rVtkFilename, &triangles);
+    }
+
+    /**
+     * @brief Builds the octree, carves the dual block, and then **fits it to the
+     *        input surface with Jacobian control** before writing.
+     *
+     * This adds the reference's stage-5 `ProjectToIsoSurface` (the paper's
+     * Section 2.4 buffer-zone meshing and quality improvement) on top of
+     * @ref BuildCarveAndWriteVtk.  After carving, the boundary of the core mesh
+     * is duplicated and connected to the surface by a layer of buffer hexes; a
+     * gradient-based optimiser then pulls the duplicated shell onto the input
+     * triangles (geometry fitting) while keeping every element's scaled Jacobian
+     * positive (Jacobian control), with smart Laplacian smoothing and a rising
+     * quality threshold.  The result conforms to the object surface instead of
+     * being a blocky carve, removing the exposed interface holes/overlaps of the
+     * raw dual block.
+     *
+     * @param rSurfaceMesh     Surface ModelPart (from StlIO).
+     * @param rVtkFilename     Output .vtk path.
+     * @param RefinementDepth  Maximum refinement depth (default 5).
+     * @param ProjIters        Total projection/optimisation iterations (default 20000).
+     * @param ProjSmooth       Iterations between smoothing/threshold updates (default 1000).
+     */
+    static void BuildCarveProjectAndWriteVtk(
+        ModelPart& rSurfaceMesh,
+        const std::string& rVtkFilename,
+        std::size_t RefinementDepth = 5,
+        int ProjIters = 20000,
+        int ProjSmooth = 1000)
+    {
+        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+
+        TriangleSoup triangles;
+        triangles.reserve(rSurfaceMesh.NumberOfGeometries());
+        for (auto& r_geom : rSurfaceMesh.Geometries()) {
+            if (r_geom.PointsNumber() < 3) continue;
+            triangles.push_back({{
+                {{ r_geom[0].X(), r_geom[0].Y(), r_geom[0].Z() }},
+                {{ r_geom[1].X(), r_geom[1].Y(), r_geom[1].Z() }},
+                {{ r_geom[2].X(), r_geom[2].Y(), r_geom[2].Z() }}
+            }});
+        }
+        KRATOS_ERROR_IF(triangles.empty())
+            << "OctreeHybridMeshUtility::BuildCarveProjectAndWriteVtk: the surface "
+            << "ModelPart has no triangles to fit against." << std::endl;
+
+        WriteDualHexVtk(*p_octree, rVtkFilename, &triangles, /*Project=*/true,
+                        ProjIters, ProjSmooth);
     }
 
     /**
@@ -1445,6 +1513,535 @@ private:
         }
         rCells.swap(kept_cells);
         rCellLevel.swap(kept_level);
+    }
+
+    ///@}
+    ///@name Surface projection with Jacobian control (reference ProjectToIsoSurface)
+    ///@{
+
+    /// The three edge vectors meeting at each of the 8 hex corners, in the order
+    /// that makes the determinant positive for a well-oriented hex (the corner
+    /// ordering hard-coded in HexGen.cpp::Sj).
+    static constexpr int SJ_ADJ[8][3] =
+        {{1,3,4},{2,0,5},{3,1,6},{0,2,7},{7,5,0},{4,6,1},{5,7,2},{6,4,3}};
+
+    /// Determinant (signed volume) of the three edge vectors @p e0,@p e1,@p e2.
+    static double TripleProduct(const double e0[3], const double e1[3], const double e2[3])
+    {
+        return e0[0]*(e1[1]*e2[2]-e1[2]*e2[1])
+             + e0[1]*(e1[2]*e2[0]-e1[0]*e2[2])
+             + e0[2]*(e1[0]*e2[1]-e1[1]*e2[0]);
+    }
+
+    /// Builds the body-centre (i=8) or corner (i=0..7) edge triple of a hex.
+    static void HexEdgeTriple(const double p[8][3], int corner,
+                              double e0[3], double e1[3], double e2[3])
+    {
+        if (corner == 8) {  // body centre: opposite face-centre differences
+            for (int d = 0; d < 3; ++d) {
+                e0[d] = p[1][d]+p[2][d]+p[5][d]+p[6][d]-p[0][d]-p[3][d]-p[4][d]-p[7][d];
+                e1[d] = p[2][d]+p[3][d]+p[6][d]+p[7][d]-p[0][d]-p[1][d]-p[4][d]-p[5][d];
+                e2[d] = p[4][d]+p[5][d]+p[6][d]+p[7][d]-p[0][d]-p[1][d]-p[2][d]-p[3][d];
+            }
+        } else {
+            for (int d = 0; d < 3; ++d) {
+                e0[d] = p[SJ_ADJ[corner][0]][d]-p[corner][d];
+                e1[d] = p[SJ_ADJ[corner][1]][d]-p[corner][d];
+                e2[d] = p[SJ_ADJ[corner][2]][d]-p[corner][d];
+            }
+        }
+    }
+
+    /**
+     * @brief Minimum scaled Jacobian over a hex's body centre and 8 corners
+     *        (port of HexGen.cpp::Sj).
+     *
+     * The scaled Jacobian at a corner is det(e0,e1,e2)/(|e0||e1||e2|).  Returns a
+     * large negative value if any edge collapses (degenerate element), matching
+     * the reference's `-MAX_NUM2` sentinel.
+     */
+    static double ScaledJacobianMin(const double p[8][3])
+    {
+        constexpr double DIST_THRES = 1e-12;
+        double mn = std::numeric_limits<double>::max();
+        for (int c = 0; c <= 8; ++c) {
+            double e0[3], e1[3], e2[3];
+            HexEdgeTriple(p, c, e0, e1, e2);
+            const double l0=e0[0]*e0[0]+e0[1]*e0[1]+e0[2]*e0[2];
+            const double l1=e1[0]*e1[0]+e1[1]*e1[1]+e1[2]*e1[2];
+            const double l2=e2[0]*e2[0]+e2[1]*e2[1]+e2[2]*e2[2];
+            if (l0<=DIST_THRES || l1<=DIST_THRES || l2<=DIST_THRES)
+                return -std::numeric_limits<double>::max();
+            const double s = TripleProduct(e0,e1,e2)/std::sqrt(l0*l1*l2);
+            if (s < mn) mn = s;
+        }
+        return mn;
+    }
+
+    /**
+     * @brief Minimum raw Jacobian (signed volume) over a hex's body centre and 8
+     *        corners.
+     *
+     * Unlike the scaled Jacobian this is a smooth polynomial of the corner
+     * positions even through degeneracy, so its gradient is used to inflate /
+     * untangle inverted elements (the paper's @f$E_J@f$ term, applied where the
+     * element has a non-positive Jacobian).
+     */
+    static double JacobianMin(const double p[8][3])
+    {
+        double mn = std::numeric_limits<double>::max();
+        for (int c = 0; c <= 8; ++c) {
+            double e0[3], e1[3], e2[3];
+            HexEdgeTriple(p, c, e0, e1, e2);
+            const double v = TripleProduct(e0,e1,e2);
+            if (v < mn) mn = v;
+        }
+        return mn;
+    }
+
+    /// Closest point @p q on triangle (@p a,@p b,@p c) to @p p (Ericson, RTCD).
+    static void ClosestPointOnTriangle(
+        const double a[3], const double b[3], const double c[3],
+        const double p[3], double q[3])
+    {
+        auto sub=[](const double u[3],const double v[3],double r[3]){ r[0]=u[0]-v[0]; r[1]=u[1]-v[1]; r[2]=u[2]-v[2]; };
+        auto dot=[](const double u[3],const double v[3]){ return u[0]*v[0]+u[1]*v[1]+u[2]*v[2]; };
+        double ab[3],ac[3],ap[3]; sub(b,a,ab); sub(c,a,ac); sub(p,a,ap);
+        const double d1=dot(ab,ap), d2=dot(ac,ap);
+        if (d1<=0 && d2<=0) { q[0]=a[0]; q[1]=a[1]; q[2]=a[2]; return; }
+        double bp[3]; sub(p,b,bp);
+        const double d3=dot(ab,bp), d4=dot(ac,bp);
+        if (d3>=0 && d4<=d3) { q[0]=b[0]; q[1]=b[1]; q[2]=b[2]; return; }
+        const double vc=d1*d4-d3*d2;
+        if (vc<=0 && d1>=0 && d3<=0) { const double v=d1/(d1-d3);
+            for(int d=0;d<3;++d) q[d]=a[d]+v*ab[d]; return; }
+        double cp[3]; sub(p,c,cp);
+        const double d5=dot(ab,cp), d6=dot(ac,cp);
+        if (d6>=0 && d5<=d6) { q[0]=c[0]; q[1]=c[1]; q[2]=c[2]; return; }
+        const double vb=d5*d2-d1*d6;
+        if (vb<=0 && d2>=0 && d6<=0) { const double w=d2/(d2-d6);
+            for(int d=0;d<3;++d) q[d]=a[d]+w*ac[d]; return; }
+        const double va=d3*d6-d5*d4;
+        if (va<=0 && (d4-d3)>=0 && (d5-d6)>=0) { const double w=(d4-d3)/((d4-d3)+(d5-d6));
+            for(int d=0;d<3;++d) q[d]=b[d]+w*(c[d]-b[d]); return; }
+        const double denom=1.0/(va+vb+vc);
+        const double v=vb*denom, w=vc*denom;
+        for(int d=0;d<3;++d) q[d]=a[d]+ab[d]*v+ac[d]*w;
+    }
+
+    /// Closest point on the whole triangle soup to @p p; returns squared distance
+    /// and writes the closest point to @p q (and the winning triangle to @p tri).
+    static double ClosestPointOnSoup(
+        const TriangleSoup& rTri, const double p[3], double q[3], int& tri)
+    {
+        double best = std::numeric_limits<double>::max();
+        for (int t = 0; t < static_cast<int>(rTri.size()); ++t) {
+            double cand[3];
+            ClosestPointOnTriangle(rTri[t][0].data(), rTri[t][1].data(),
+                                   rTri[t][2].data(), p, cand);
+            const double dx=cand[0]-p[0], dy=cand[1]-p[1], dz=cand[2]-p[2];
+            const double d2=dx*dx+dy*dy+dz*dz;
+            if (d2 < best) { best=d2; q[0]=cand[0]; q[1]=cand[1]; q[2]=cand[2]; tri=t; }
+        }
+        return best;
+    }
+
+    /// The 6 oriented quad faces of a hex (outward winding); shared by the
+    /// boundary extractor, the buffer-zone clearance and the projection.
+    static constexpr int FACE_FIDC[6][4] =
+        {{0,1,2,3},{4,5,1,0},{4,0,3,7},{5,6,2,1},{6,7,3,2},{7,6,5,4}};
+
+    /// Boundary quad faces of a hex set (faces owned by exactly one hex), each
+    /// returned as {n0,n1,n2,n3, owning-cell} with the owner's outward winding.
+    static std::vector<std::array<int,5>> ExtractBoundaryFaces(
+        const std::vector<std::array<int,8>>& rCells)
+    {
+        std::map<std::array<int,4>, int> count;
+        std::map<std::array<int,4>, std::array<int,5>> first;
+        for (int c = 0; c < static_cast<int>(rCells.size()); ++c)
+            for (int f = 0; f < 6; ++f) {
+                std::array<int,4> q = { rCells[c][FACE_FIDC[f][0]], rCells[c][FACE_FIDC[f][1]],
+                                        rCells[c][FACE_FIDC[f][2]], rCells[c][FACE_FIDC[f][3]] };
+                std::array<int,4> key = q; std::sort(key.begin(), key.end());
+                if (++count[key] == 1) first[key] = {q[0],q[1],q[2],q[3],c};
+            }
+        std::vector<std::array<int,5>> bfaces;
+        for (const auto& kv : count) if (kv.second == 1) bfaces.push_back(first[kv.first]);
+        return bfaces;
+    }
+
+    /**
+     * @brief Buffer-zone clearance — port of the paper's Section 2.3 restriction
+     *        (reference RemoveOutsideElement, second half).
+     *
+     * The buffer layer is built by extruding every boundary point outward to the
+     * surface.  Where the carved boundary folds back on itself (a concave notch
+     * or a one-cell-thick sliver) that extrusion self-intersects and produces
+     * inverted buffer hexes that no smoothing can repair.  Such a fold shows up
+     * as a boundary vertex whose incident boundary-face normals do **not** fit in
+     * any open hemisphere (no single direction has a positive dot product with
+     * all of them).  This routine repeatedly deletes, at each offending vertex,
+     * the incident hex that carries the most boundary faces (the most exposed
+     * one), re-extracts the boundary, and stops when every boundary vertex passes
+     * the hemisphere test (or a safety cap is hit).
+     */
+    static void ClearBufferZone(
+        const std::vector<std::array<double,3>>& rNodes,
+        std::vector<std::array<int,8>>& rCells,
+        std::vector<int>& rCellLevel,
+        int MaxRounds = 50)
+    {
+        // ~128 unit probe directions on a Fibonacci sphere.
+        constexpr int ND = 128;
+        std::array<std::array<double,3>,ND> dir;
+        const double ga = 3.39996322972865332;  // golden angle
+        for (int i=0;i<ND;++i) {
+            const double z = 1.0 - 2.0*(i+0.5)/ND;
+            const double r = std::sqrt(std::max(0.0,1.0-z*z));
+            const double a = ga*i;
+            dir[i] = { r*std::cos(a), r*std::sin(a), z };
+        }
+
+        for (int round=0; round<MaxRounds; ++round) {
+            auto bfaces = ExtractBoundaryFaces(rCells);
+            if (bfaces.empty()) return;
+
+            // Outward normal of each boundary face, and the faces / cells at each
+            // boundary vertex.
+            const int NN = static_cast<int>(rNodes.size());
+            std::vector<std::vector<std::array<double,3>>> vnormals(NN);
+            std::vector<std::map<int,int>> vcell_bfaces(NN);  // vertex -> (cell -> #boundary faces)
+            for (const auto& bf : bfaces) {
+                const int c0=bf[0],c1=bf[1],c2=bf[2],c3=bf[3], cell=bf[4];
+                double cen[3]={0,0,0};
+                for (int k=0;k<8;++k) for (int d=0;d<3;++d) cen[d]+=rNodes[rCells[cell][k]][d];
+                for (int d=0;d<3;++d) cen[d]/=8.0;
+                double fc[3],e1[3],e2[3],n[3];
+                for (int d=0;d<3;++d){ fc[d]=0.25*(rNodes[c0][d]+rNodes[c1][d]+rNodes[c2][d]+rNodes[c3][d]);
+                    e1[d]=rNodes[c1][d]-rNodes[c0][d]; e2[d]=rNodes[c3][d]-rNodes[c0][d]; }
+                n[0]=e1[1]*e2[2]-e1[2]*e2[1]; n[1]=e1[2]*e2[0]-e1[0]*e2[2]; n[2]=e1[0]*e2[1]-e1[1]*e2[0];
+                const double L=std::sqrt(n[0]*n[0]+n[1]*n[1]+n[2]*n[2])+1e-300;
+                for (int d=0;d<3;++d) n[d]/=L;
+                if (n[0]*(fc[0]-cen[0])+n[1]*(fc[1]-cen[1])+n[2]*(fc[2]-cen[2]) < 0)
+                    for (int d=0;d<3;++d) n[d]=-n[d];
+                for (int j=0;j<4;++j) {
+                    vnormals[bf[j]].push_back({n[0],n[1],n[2]});
+                    vcell_bfaces[bf[j]][cell]++;
+                }
+            }
+
+            // A vertex is folded if no probe direction is positive against all of
+            // its boundary-face normals.  At each folded vertex pick its most
+            // exposed incident cell for deletion.
+            std::set<int> to_delete;
+            for (int v=0; v<NN; ++v) {
+                if (vnormals[v].size() < 2) continue;
+                bool ok=false;
+                for (int i=0;i<ND && !ok;++i) {
+                    bool all=true;
+                    for (const auto& n : vnormals[v])
+                        if (dir[i][0]*n[0]+dir[i][1]*n[1]+dir[i][2]*n[2] <= 1e-3) { all=false; break; }
+                    if (all) ok=true;
+                }
+                if (ok) continue;
+                int best_cell=-1, best_cnt=-1;
+                for (const auto& cb : vcell_bfaces[v])
+                    if (cb.second > best_cnt) { best_cnt=cb.second; best_cell=cb.first; }
+                if (best_cell>=0) to_delete.insert(best_cell);
+            }
+            if (to_delete.empty()) return;
+
+            std::vector<std::array<int,8>> kept; std::vector<int> kept_lv;
+            kept.reserve(rCells.size());
+            for (int c=0;c<static_cast<int>(rCells.size());++c)
+                if (!to_delete.count(c)) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); }
+            rCells.swap(kept); rCellLevel.swap(kept_lv);
+        }
+    }
+
+    /**
+     * @brief Meshes the buffer zone and fits the carved core mesh to the input
+     *        surface with Jacobian control — port of HexGen.cpp::ProjectToIsoSurface
+     *        (reference stage 5) and the paper's Section 2.4.
+     *
+     * Pipeline:
+     *  1. Extract the boundary quad faces of the carved core mesh (faces owned by
+     *     a single hex).
+     *  2. Duplicate every boundary vertex and connect each boundary quad to its
+     *     duplicate quad with a new "buffer" hex, so the duplicates form an outer
+     *     shell that will be pulled onto the surface.
+     *  3. Gradient-ascend the per-element quality (scaled Jacobian where the
+     *     element is non-inverted, raw Jacobian where it is inverted) on every
+     *     vertex of an affected element; once all affected elements are valid,
+     *     additionally pull each duplicate vertex onto its closest surface point
+     *     (the geometry-fitting term @f$E_{GF}@f$).
+     *  4. Every @p SmoothEvery iterations apply smart Laplacian smoothing (a move
+     *     is accepted only if it keeps the local minimum scaled Jacobian above the
+     *     current threshold) and, once the shell sits on the surface, raise the
+     *     scaled-Jacobian threshold (0.01 → 0.53 → +0.01) to keep improving.
+     *
+     * @param rTriangles   Input surface triangles (world coordinates).
+     * @param rNodes       Core-mesh nodes; duplicate shell nodes are appended.
+     * @param rCells       Core hexes; buffer hexes are appended.
+     * @param rCellLevel   Per-cell level tag; buffer hexes are tagged -2.
+     * @param TotalIters   Total gradient iterations (across all smoothing epochs).
+     * @param SmoothEvery  Iterations between smart-Laplacian/threshold updates.
+     */
+    static void ProjectToIsoSurface(
+        const TriangleSoup& rTriangles,
+        std::vector<std::array<double,3>>& rNodes,
+        std::vector<std::array<int,8>>& rCells,
+        std::vector<int>& rCellLevel,
+        int TotalIters,
+        int SmoothEvery)
+    {
+        const int n_core_cells = static_cast<int>(rCells.size());
+        if (n_core_cells == 0 || rTriangles.empty()) return;
+
+        // --- 0. Normalise to the reference's 100-unit box --------------------
+        // All of the optimisation constants below (learning rate, fitting weight,
+        // scaled-Jacobian thresholds, tolerances) are the reference's, which runs
+        // on a model rescaled so its largest extent is 100.  Working in the input
+        // (e.g. unit) coordinates would make the scale-dependent gradients blow up,
+        // so we rescale on entry and undo it on exit.
+        double lo[3]={ 1e300, 1e300, 1e300}, hi[3]={-1e300,-1e300,-1e300};
+        for (const auto& nd : rNodes)
+            for (int d=0; d<3; ++d) { lo[d]=std::min(lo[d],nd[d]); hi[d]=std::max(hi[d],nd[d]); }
+        double extent = std::max({hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2], 1e-300});
+        const double S = 100.0 / extent;
+        for (auto& nd : rNodes) for (int d=0;d<3;++d) nd[d]=(nd[d]-lo[d])*S;
+        TriangleSoup tri = rTriangles;             // local, normalised copy
+        for (auto& t : tri) for (auto& v : t) for (int d=0;d<3;++d) v[d]=(v[d]-lo[d])*S;
+        const TriangleSoup& rTri = tri;            // shadow the argument below
+
+        // --- 1. Boundary quad faces (owned by exactly one hex) ----------------
+        static constexpr int FIDC[6][4] =
+            {{0,1,2,3},{4,5,1,0},{4,0,3,7},{5,6,2,1},{6,7,3,2},{7,6,5,4}};
+        std::map<std::array<int,4>, int>            face_count;
+        std::map<std::array<int,4>, std::array<int,5>> face_first; // key -> {n0..n3, cell}
+        for (int c = 0; c < n_core_cells; ++c)
+            for (int f = 0; f < 6; ++f) {
+                std::array<int,4> q = { rCells[c][FIDC[f][0]], rCells[c][FIDC[f][1]],
+                                        rCells[c][FIDC[f][2]], rCells[c][FIDC[f][3]] };
+                std::array<int,4> key = q; std::sort(key.begin(), key.end());
+                if (++face_count[key] == 1) face_first[key] = {q[0],q[1],q[2],q[3],c};
+            }
+        std::vector<std::array<int,5>> bfaces;  // {n0,n1,n2,n3, owning cell}
+        for (const auto& kv : face_count)
+            if (kv.second == 1) bfaces.push_back(face_first[kv.first]);
+        if (bfaces.empty()) return;
+
+        // --- 2. Duplicate boundary vertices, build the buffer shell -----------
+        std::unordered_map<int,int> dup_of;     // core boundary node -> dup node id
+        for (const auto& bf : bfaces)
+            for (int j = 0; j < 4; ++j)
+                if (dup_of.find(bf[j]) == dup_of.end()) {
+                    const int id = static_cast<int>(rNodes.size());
+                    dup_of.emplace(bf[j], id);
+                    rNodes.push_back(rNodes[bf[j]]);   // duplicate starts coincident
+                }
+
+        // Cell centroid helper (to orient buffer hexes outward).
+        auto centroid = [&](int c, double o[3]) {
+            o[0]=o[1]=o[2]=0;
+            for (int k=0;k<8;++k) for (int d=0;d<3;++d) o[d]+=rNodes[rCells[c][k]][d];
+            for (int d=0;d<3;++d) o[d]/=8.0;
+        };
+
+        const int n_buffer_start = static_cast<int>(rCells.size());
+        for (const auto& bf : bfaces) {
+            const int c0=bf[0], c1=bf[1], c2=bf[2], c3=bf[3];
+            const int d0=dup_of[c0], d1=dup_of[c1], d2=dup_of[c2], d3=dup_of[c3];
+            // Outward normal of the quad (away from the owning cell centroid).
+            double cen[3]; centroid(bf[4], cen);
+            double fc[3]={0,0,0};
+            for (int d=0;d<3;++d) fc[d]=0.25*(rNodes[c0][d]+rNodes[c1][d]+rNodes[c2][d]+rNodes[c3][d]);
+            double e1[3],e2[3],nrm[3];
+            for (int d=0;d<3;++d){ e1[d]=rNodes[c1][d]-rNodes[c0][d]; e2[d]=rNodes[c3][d]-rNodes[c0][d]; }
+            nrm[0]=e1[1]*e2[2]-e1[2]*e2[1]; nrm[1]=e1[2]*e2[0]-e1[0]*e2[2]; nrm[2]=e1[0]*e2[1]-e1[1]*e2[0];
+            double out[3]={fc[0]-cen[0],fc[1]-cen[1],fc[2]-cen[2]};
+            const double nlen=std::sqrt(nrm[0]*nrm[0]+nrm[1]*nrm[1]+nrm[2]*nrm[2])+1e-300;
+            for (int d=0;d<3;++d) nrm[d]/=nlen;
+            if (nrm[0]*out[0]+nrm[1]*out[1]+nrm[2]*out[2] < 0)
+                for (int d=0;d<3;++d) nrm[d]=-nrm[d];
+            // Build the buffer hex (duplicates on the outward side, core on the
+            // inner side); choose the winding that gives a positive test volume
+            // when the duplicates are nudged a unit outward.
+            double test[8][3];
+            auto fill_test = [&](const std::array<int,8>& e){
+                for (int k=0;k<8;++k) for (int d=0;d<3;++d) test[k][d]=rNodes[e[k]][d];
+                for (int k=0;k<4;++k) for (int d=0;d<3;++d) test[k][d]+=nrm[d]; // nudge dups out
+            };
+            std::array<int,8> hexA = { d0,d1,d2,d3, c0,c1,c2,c3 };
+            fill_test(hexA);
+            std::array<int,8> hex = hexA;
+            if (JacobianMin(test) <= 0) hex = { d0,d3,d2,d1, c0,c3,c2,c1 };
+            rCells.push_back(hex);
+            rCellLevel.push_back(-2);   // buffer-layer marker
+        }
+
+        // --- 3. Affected elements, optimizable vertices, adjacency ------------
+        const int NN = static_cast<int>(rNodes.size());
+        std::vector<std::vector<int>> node_cells(NN);     // node -> incident cells
+        for (int c = 0; c < static_cast<int>(rCells.size()); ++c)
+            for (int k = 0; k < 8; ++k) node_cells[rCells[c][k]].push_back(c);
+
+        std::vector<char> is_dup(NN, 0), is_boundary(NN, 0);
+        for (const auto& kv : dup_of) { is_boundary[kv.first]=1; is_dup[kv.second]=1; }
+
+        std::vector<char> affected_cell(rCells.size(), 0);
+        for (int c = n_buffer_start; c < static_cast<int>(rCells.size()); ++c) affected_cell[c]=1;
+        for (int c = 0; c < n_core_cells; ++c)
+            for (int k = 0; k < 8; ++k)
+                if (is_boundary[rCells[c][k]]) { affected_cell[c]=1; break; }
+        std::vector<int> affected;
+        for (int c = 0; c < static_cast<int>(rCells.size()); ++c)
+            if (affected_cell[c]) affected.push_back(c);
+
+        std::vector<char> optimizable(NN, 0);
+        for (int c : affected) for (int k=0;k<8;++k) optimizable[rCells[c][k]]=1;
+
+        // Smoothing neighbours: core-boundary points average their core
+        // neighbours; duplicate points average their duplicate-ring neighbours.
+        std::vector<std::vector<int>> smooth_nbr(NN);
+        {
+            std::vector<std::set<int>> s(NN);
+            for (const auto& bf : bfaces) {
+                for (int j=0;j<4;++j) {
+                    const int dj=dup_of[bf[j]];
+                    s[dj].insert(dup_of[bf[(j+1)%4]]);
+                    s[dj].insert(dup_of[bf[(j+3)%4]]);
+                }
+            }
+            static constexpr int ADJ[8][3] =
+                {{1,3,4},{0,2,5},{1,3,6},{0,2,7},{0,5,7},{1,4,6},{2,5,7},{3,4,6}};
+            for (int c=0;c<n_core_cells;++c)
+                for (int k=0;k<8;++k) {
+                    const int v=rCells[c][k];
+                    if (!is_boundary[v]) continue;
+                    for (int a=0;a<3;++a) s[v].insert(rCells[c][ADJ[k][a]]);
+                }
+            for (int i=0;i<NN;++i) smooth_nbr[i].assign(s[i].begin(), s[i].end());
+        }
+
+        // Closest triangle / projection target for each duplicate node.
+        std::vector<int> dup_tri(NN, -1);
+        auto load_hex = [&](int c, double p[8][3]) {
+            for (int k=0;k<8;++k) for (int d=0;d<3;++d) p[k][d]=rNodes[rCells[c][k]][d];
+        };
+        for (int i=0;i<NN;++i) if (is_dup[i]) {
+            double q[3]={0,0,0}; int tri=-1;
+            ClosestPointOnSoup(rTri, rNodes[i].data(), q, tri);
+            dup_tri[i]=tri;
+        }
+
+        // --- 4. Optimisation --------------------------------------------------
+        constexpr double LR  = 5.0e-4;
+        constexpr double H   = 1.0e-4;     // finite-difference step
+        constexpr double TOL = 0.5;        // shell-on-surface tolerance (100-unit box)
+        double eps_sj = 0.01;
+        std::vector<std::array<double,3>> grad(NN);
+
+        // Per-node gradient of an element's quality metric (scaled Jacobian when
+        // the element is non-inverted, raw Jacobian when inverted), accumulated
+        // for every optimisable corner via central differences.
+        auto accumulate_quality_grad = [&](int c) {
+            double p[8][3]; load_hex(c, p);
+            const bool inverted = JacobianMin(p) <= 0.0;
+            for (int k=0;k<8;++k) {
+                const int v=rCells[c][k];
+                if (!optimizable[v]) continue;
+                for (int d=0; d<3; ++d) {
+                    const double save=p[k][d];
+                    p[k][d]=save+H; const double fp = inverted ? JacobianMin(p) : ScaledJacobianMin(p);
+                    p[k][d]=save-H; const double fm = inverted ? JacobianMin(p) : ScaledJacobianMin(p);
+                    p[k][d]=save;
+                    grad[v][d] += (fp-fm)/(2*H);   // ascent on quality
+                }
+            }
+        };
+
+        int max_dist_node = -1;
+        for (int it = 1; it <= TotalIters; ++it) {
+            for (int i=0;i<NN;++i) grad[i]={0,0,0};
+
+            int bad = 0;
+            for (int c : affected) {
+                double p[8][3]; load_hex(c, p);
+                if (ScaledJacobianMin(p) <= eps_sj) { ++bad; accumulate_quality_grad(c); }
+            }
+            const bool all_positive = (bad == 0);
+
+            if (all_positive) {                       // geometry fitting term
+                for (int i=0;i<NN;++i) if (is_dup[i]) {
+                    double q[3];
+                    ClosestPointOnTriangle(rTri[dup_tri[i]][0].data(),
+                        rTri[dup_tri[i]][1].data(), rTri[dup_tri[i]][2].data(),
+                        rNodes[i].data(), q);
+                    for (int d=0;d<3;++d) grad[i][d] += -3.0*(rNodes[i][d]-q[d]);
+                }
+            }
+            for (int i=0;i<NN;++i) if (optimizable[i])
+                for (int d=0;d<3;++d) rNodes[i][d] += LR*grad[i][d];
+
+            if (it % SmoothEvery == 0) {
+                // Smart Laplacian: accept a Laplacian move only if it keeps every
+                // incident element's scaled Jacobian above the threshold.
+                auto try_move = [&](int v, const double tgt[3]) {
+                    std::array<double,3> old = rNodes[v];
+                    rNodes[v] = {tgt[0],tgt[1],tgt[2]};
+                    bool ok=true;
+                    for (int c : node_cells[v]) {
+                        if (!affected_cell[c]) continue;
+                        double p[8][3]; load_hex(c,p);
+                        if (ScaledJacobianMin(p) <= eps_sj) { ok=false; break; }
+                    }
+                    if (!ok) rNodes[v]=old;
+                };
+                for (int v=0; v<NN; ++v) {
+                    if (!optimizable[v] || smooth_nbr[v].empty()) continue;
+                    double avg[3]={0,0,0};
+                    for (int nb : smooth_nbr[v]) for (int d=0;d<3;++d) avg[d]+=rNodes[nb][d];
+                    for (int d=0;d<3;++d) avg[d]/=smooth_nbr[v].size();
+                    if (is_dup[v]) {                  // surface points: project the average
+                        double q[3]={0,0,0}; int tri=-1;
+                        ClosestPointOnSoup(rTri, avg, q, tri);
+                        try_move(v, q);
+                    } else if (is_boundary[v]) {      // inner boundary points
+                        try_move(v, avg);
+                    }
+                }
+
+                // Refresh closest triangles and measure how far the shell sits
+                // from the surface.
+                double max_dist = 0.0; max_dist_node=-1;
+                for (int i=0;i<NN;++i) if (is_dup[i]) {
+                    double q[3]={0,0,0}; int tri=-1;
+                    const double d2 = ClosestPointOnSoup(rTri, rNodes[i].data(), q, tri);
+                    dup_tri[i]=tri;
+                    const double dd=std::sqrt(d2);
+                    if (dd>max_dist) { max_dist=dd; max_dist_node=i; }
+                }
+                int still_bad=0;
+                for (int c : affected) {
+                    double p[8][3]; load_hex(c,p);
+                    if (ScaledJacobianMin(p) <= eps_sj) ++still_bad;
+                }
+                // Once the shell is seated on the surface and all but a negligible
+                // fraction of elements are valid, demand higher quality.  The
+                // reference requires zero bad elements here, but a handful of
+                // buffer hexes in narrow concavities can stay stuck below the
+                // threshold and would otherwise freeze the whole mesh at the
+                // initial 0.01 quality; tolerating <=0.5% lets the bulk improve.
+                const int bad_budget = static_cast<int>(0.005 * affected.size());
+                if (still_bad <= bad_budget && max_dist < TOL)
+                    eps_sj = (eps_sj==0.01) ? 0.53 : eps_sj+0.01;
+            }
+        }
+        (void)max_dist_node;
+
+        // --- 5. Undo the normalisation --------------------------------------
+        for (auto& nd : rNodes) for (int d=0; d<3; ++d) nd[d] = nd[d]/S + lo[d];
     }
 
     /**

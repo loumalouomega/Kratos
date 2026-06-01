@@ -887,6 +887,18 @@ void AddOtherUtilitiesToPython(pybind11::module &m)
             "Like BuildAndWriteVtk, but carves the dual block against the input "
             "surface (reference stage 4, RemoveOutsideElement) so the output is a "
             "hex mesh of the object interior rather than its bounding box.")
+        .def_static("BuildCarveProjectAndWriteVtk",
+            &OctreeHybridMeshUtility::BuildCarveProjectAndWriteVtk,
+            py::arg("surface_model_part"),
+            py::arg("vtk_filename"),
+            py::arg("refinement_depth") = 5,
+            py::arg("proj_iters") = 20000,
+            py::arg("proj_smooth") = 1000,
+            "Like BuildCarveAndWriteVtk, but also fits the carved core mesh to the "
+            "input surface with the Jacobian-controlled buffer-zone meshing of "
+            "reference stage 5 (ProjectToIsoSurface / paper Section 2.4): the "
+            "boundary is meshed out to the surface and optimised to keep a positive "
+            "scaled Jacobian, removing the blocky carve's interface holes/overlaps.")
         .def_static("WriteOctreeForReference",
             &OctreeHybridMeshUtility::WriteOctreeForReference,
             py::arg("surface_model_part"),
