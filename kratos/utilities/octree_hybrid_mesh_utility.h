@@ -17,6 +17,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -147,13 +148,23 @@ public:
      */
     static std::unique_ptr<OctreeType> BuildFromSurfaceMesh(
         ModelPart& rSurfaceMesh,
-        std::size_t RefinementDepth)
+        std::size_t RefinementDepth,
+        bool Adaptive = true)
     {
         KRATOS_ERROR_IF(RefinementDepth < 1 || RefinementDepth > ConfigurationType::MAX_DEPTH)
             << "OctreeHybridMeshUtility: RefinementDepth must be in [1, "
             << ConfigurationType::MAX_DEPTH << "], got " << RefinementDepth << std::endl;
 
-        // --- Bounding box (1 % padding) ---
+        if (Adaptive)
+            return BuildAdaptiveFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+
+        // ----------------------------------------------------------------- //
+        //  Uniform refinement (legacy path): every leaf whose box intersects
+        //  any triangle is split to RefinementDepth.  Domain is the 1 %-padded
+        //  axis-aligned bounding box.  Kept for the transition-template unit
+        //  tests, whose synthetic flat patches carry no curvature and so would
+        //  not refine under the adaptive criterion.
+        // ----------------------------------------------------------------- //
         double lo[3] = { std::numeric_limits<double>::max(),
                          std::numeric_limits<double>::max(),
                          std::numeric_limits<double>::max() };
@@ -180,7 +191,6 @@ public:
         triangles.reserve(rSurfaceMesh.NumberOfGeometries());
         for (auto& r_geom : rSurfaceMesh.Geometries()) triangles.push_back(&r_geom);
 
-        // --- Adaptive refinement ---
         for (std::size_t iter = 0; iter < RefinementDepth; ++iter) {
             std::vector<CellType*> leaves;
             p_octree->GetAllLeavesVector(leaves);
@@ -203,6 +213,151 @@ public:
                 }
             }
             if (!any_split) break;
+        }
+        return p_octree;
+    }
+
+    /**
+     * @brief Builds the octree with the reference HybridOctree_Hex **adaptive**
+     *        refinement criterion (curvature + feature thickness), so the leaf
+     *        set matches the reference for a real geometry such as the bunny.
+     *
+     * Mirrors `hexGen::ConstructOctree`:
+     *  - the domain is the reference's **cube** (centred, side = the surface's
+     *    largest extent, no padding — `START_POINT`/`BOX_LENGTH`), so the integer
+     *    leaf grid coincides with the reference's;
+     *  - per-vertex curvature (sum of squared dihedral-angle deviations) and
+     *    per-triangle feature thickness (normal-ray cast to the opposite sheet)
+     *    are thresholded against `C_THRES`/`H_THRES` on the surface normalised to
+     *    a 100-unit cube, producing five nested refine-triangle sets for octree
+     *    levels 4..8;
+     *  - a cell at level L subdivides iff its `CELL_DETECT`-expanded box meets a
+     *    refine triangle for that level (refine-everything below level 4), exactly
+     *    as `ComputeCellValue`.  The reference's box-vertex-inside and 12
+     *    triangle-face tests are subsumed by one robust triangle/AABB
+     *    `HasIntersection` per candidate triangle.
+     *
+     * The 2:1 balance (`StrongBalancedOctree`) is applied later by
+     * @ref WriteDualHexVtk, as in the reference pipeline.
+     */
+    static std::unique_ptr<OctreeType> BuildAdaptiveFromSurfaceMesh(
+        ModelPart& rSurfaceMesh,
+        std::size_t RefinementDepth)
+    {
+        const AdaptiveRefineData data = BuildRefineSets(rSurfaceMesh);
+        KRATOS_ERROR_IF(data.tri_geom.empty())
+            << "OctreeHybridMeshUtility: surface ModelPart has no triangles." << std::endl;
+
+        const bool dbg = std::getenv("OCTREE_DEBUG") != nullptr;
+        if (dbg) {
+            std::cerr << "[adapt] nTri=" << data.tri_geom.size()
+                      << " cube_side=" << data.cube_side
+                      << " refine_tri sizes:";
+            for (int s = 0; s < 5; ++s) std::cerr << " R" << s << "=" << data.refine_tri[s].size();
+            std::cerr << std::endl;
+        }
+        std::array<int,32> sub_per_level{};
+
+        const double clo[3] = { data.cube_lo[0], data.cube_lo[1], data.cube_lo[2] };
+        const double chi[3] = { data.cube_lo[0] + data.cube_side,
+                                data.cube_lo[1] + data.cube_side,
+                                data.cube_lo[2] + data.cube_side };
+        auto p_octree = std::make_unique<OctreeType>(RefinementDepth);
+        p_octree->SetBoundingBox(clo, chi);
+
+        // --- Level-3 "refine everything near the surface" grid (8^3) --------
+        // pass3[i][j][k] = a level-3 cell that the reference would subdivide;
+        // its ancestors at levels 0..2 are subdivided iff their subtree holds one
+        // (the reference's bottom-up "child marked -> parent marked" rule).
+        const double cs3 = data.cube_side / 8.0;
+        std::array<bool, 8*8*8> pass3{};
+        for (int i = 0; i < 8; ++i)
+            for (int j = 0; j < 8; ++j)
+                for (int k = 0; k < 8; ++k) {
+                    const double cen[3] = { clo[0]+(i+0.5)*cs3, clo[1]+(j+0.5)*cs3, clo[2]+(k+0.5)*cs3 };
+                    const Point blo(cen[0]-CELL_DETECT*cs3, cen[1]-CELL_DETECT*cs3, cen[2]-CELL_DETECT*cs3);
+                    const Point bhi(cen[0]+CELL_DETECT*cs3, cen[1]+CELL_DETECT*cs3, cen[2]+CELL_DETECT*cs3);
+                    bool hit = false;
+                    for (GeometryType* g : data.tri_geom)
+                        if (g->HasIntersection(blo, bhi)) { hit = true; break; }
+                    pass3[(i*8+j)*8+k] = hit;
+                }
+
+        auto any_pass3_in_block = [&](int gi, int gj, int gk, int L) -> bool {
+            const int span = 1 << (3 - L);                 // L < 3
+            const int i0 = gi*span, j0 = gj*span, k0 = gk*span;
+            for (int i = i0; i < i0+span && i < 8; ++i)
+                for (int j = j0; j < j0+span && j < 8; ++j)
+                    for (int k = k0; k < k0+span && k < 8; ++k)
+                        if (pass3[(i*8+j)*8+k]) return true;
+            return false;
+        };
+
+        // Per-cell refinement test (reference ComputeCellValue geometry branch).
+        auto should_sub = [&](CellType* p_cell, int L, int gi, int gj, int gk) -> bool {
+            if (L >= 4) {
+                const int idx = L - 4;
+                if (idx > 4) return false;
+                double n_lo2[3], n_hi[3], w_lo[3], w_hi[3];
+                p_cell->GetMinPointNormalized(n_lo2);
+                p_cell->GetMaxPointNormalized(n_hi);
+                p_octree->ScaleBackToOriginalCoordinate(n_lo2, w_lo);
+                p_octree->ScaleBackToOriginalCoordinate(n_hi, w_hi);
+                const double cs = w_hi[0] - w_lo[0];
+                const double cen[3] = { 0.5*(w_lo[0]+w_hi[0]), 0.5*(w_lo[1]+w_hi[1]), 0.5*(w_lo[2]+w_hi[2]) };
+                const Point blo(cen[0]-CELL_DETECT*cs, cen[1]-CELL_DETECT*cs, cen[2]-CELL_DETECT*cs);
+                const Point bhi(cen[0]+CELL_DETECT*cs, cen[1]+CELL_DETECT*cs, cen[2]+CELL_DETECT*cs);
+                for (int t : data.refine_tri[idx])
+                    if (data.tri_geom[t]->HasIntersection(blo, bhi)) return true;
+                return false;
+            }
+            if (L == 3) return pass3[(gi*8+gj)*8+gk];
+            return any_pass3_in_block(gi, gj, gk, L);
+        };
+
+        // --- Refinement passes (top-down, one octree level per pass) --------
+        // The reference refines in complete sibling octets: ComputeCellValue marks
+        // all eight children of a cell subdivided as soon as any one of them is.
+        // So a parent octet is refined iff any of its members would be, and then
+        // every member subdivides.
+        for (std::size_t iter = 0; iter < RefinementDepth; ++iter) {
+            std::vector<CellType*> leaves;
+            p_octree->GetAllLeavesVector(leaves);
+
+            std::set<std::array<int,4>> octet_refine;       // (level, parent gi,gj,gk)
+            std::vector<std::pair<CellType*,std::array<int,4>>> cand;
+            cand.reserve(leaves.size());
+            for (CellType* p_cell : leaves) {
+                const int L = p_cell->GetLevel();
+                if (static_cast<std::size_t>(L) >= RefinementDepth) continue;
+                double n_lo[3];
+                p_cell->GetMinPointNormalized(n_lo);
+                const int gi = static_cast<int>(std::llround(n_lo[0] * (1 << L)));
+                const int gj = static_cast<int>(std::llround(n_lo[1] * (1 << L)));
+                const int gk = static_cast<int>(std::llround(n_lo[2] * (1 << L)));
+                const std::array<int,4> key{ L, gi>>1, gj>>1, gk>>1 };
+                cand.emplace_back(p_cell, key);
+                if (should_sub(p_cell, L, gi, gj, gk)) octet_refine.insert(key);
+            }
+
+            bool any_split = false;
+            for (auto& pc : cand) {
+                if (!octet_refine.count(pc.second)) continue;
+                p_octree->SubdivideCellByIdAndLevel(pc.first->GetId(), pc.second[0]);
+                any_split = true;
+                if (dbg && pc.second[0] < 32) ++sub_per_level[pc.second[0]];
+            }
+            if (!any_split) break;
+        }
+        if (dbg) {
+            std::vector<CellType*> lv; p_octree->GetAllLeavesVector(lv);
+            std::array<int,32> leaf_per_level{};
+            for (CellType* c : lv) { int L=c->GetLevel(); if (L<32) ++leaf_per_level[L]; }
+            std::cerr << "[adapt] subdivisions per level:";
+            for (int L=0; L<=(int)RefinementDepth; ++L) if (sub_per_level[L]) std::cerr << " L"<<L<<"->"<<sub_per_level[L];
+            std::cerr << "\n[adapt] pre-balance leaves per level:";
+            for (int L=0; L<=(int)RefinementDepth; ++L) if (leaf_per_level[L]) std::cerr << " L"<<L<<"="<<leaf_per_level[L];
+            std::cerr << " total=" << lv.size() << std::endl;
         }
         return p_octree;
     }
@@ -1141,9 +1296,10 @@ public:
     static void BuildAndWriteVtk(
         ModelPart& rSurfaceMesh,
         const std::string& rVtkFilename,
-        std::size_t RefinementDepth = 5)
+        std::size_t RefinementDepth = 5,
+        bool Adaptive = true)
     {
-        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
         WriteDualHexVtk(*p_octree, rVtkFilename);
     }
 
@@ -1175,9 +1331,10 @@ public:
     static void BuildCarveAndWriteVtk(
         ModelPart& rSurfaceMesh,
         const std::string& rVtkFilename,
-        std::size_t RefinementDepth = 5)
+        std::size_t RefinementDepth = 5,
+        bool Adaptive = true)
     {
-        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
 
         // Collect surface triangles in world coordinates.
         TriangleSoup triangles;
@@ -1223,9 +1380,10 @@ public:
         const std::string& rVtkFilename,
         std::size_t RefinementDepth = 5,
         int ProjIters = 20000,
-        int ProjSmooth = 1000)
+        int ProjSmooth = 1000,
+        bool Adaptive = true)
     {
-        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+        auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
 
         TriangleSoup triangles;
         triangles.reserve(rSurfaceMesh.NumberOfGeometries());
@@ -1318,6 +1476,171 @@ public:
     ///@}
 
 private:
+    ///@name Adaptive refinement (reference ConstructOctree)
+    ///@{
+
+    /// Reference adaptive-refinement thresholds (HybridOctree_Hex Initialization.h),
+    /// evaluated on the surface normalised into a 100-unit cube.  Index L maps to
+    /// octree level L+4: a surface vertex refines level L+4 if its curvature exceeds
+    /// C_THRES[L]; a thin feature refines it if its thickness is below H_THRES[L].
+    static constexpr double C_THRES[5] = { 0.0, 0.0, 0.4, 0.8, 1.6 };
+    static constexpr double H_THRES[5] = { 16.0, 8.0, 4.0, 2.0, 1.0 };
+    /// Detection-box half-width in cell sizes (reference CELL_DETECT): a cell is
+    /// tested for refinement against a box twice its size, centred on it.
+    static constexpr double CELL_DETECT = 1.0;
+
+    /// Output of @ref BuildRefineSets: the reference cube domain plus, for each of
+    /// the five refinement levels (4..8), the subset of surface triangles whose
+    /// curvature/thickness demands that level.  `tri_geom[t]` is the world-space
+    /// triangle geometry for triangle index `t`.
+    struct AdaptiveRefineData {
+        double cube_lo[3] = {0,0,0};
+        double cube_side  = 0.0;
+        std::vector<GeometryType*> tri_geom;
+        std::array<std::vector<int>,5> refine_tri;
+    };
+
+    /**
+     * @brief Computes the reference cube domain and the per-level refine-triangle
+     *        sets from surface curvature and feature thickness.
+     *
+     * Verbatim port of `hexGen::ReadRawData` (curvature) and `hexGen::GetCellValue`
+     * (thresholding), operating on a merged, 100-unit-normalised copy of the
+     * surface triangles so the dimensionless thresholds carry over unchanged.
+     */
+    static AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
+    {
+        constexpr double PI = 3.1415926535897932384626433;
+        AdaptiveRefineData data;
+
+        // --- Gather triangle corners (world coords) and the bounding box ------
+        std::vector<std::array<double,3>> corners;       // 3 per triangle
+        corners.reserve(rSurfaceMesh.NumberOfGeometries() * 3);
+        double lo[3] = { std::numeric_limits<double>::max(),
+                         std::numeric_limits<double>::max(),
+                         std::numeric_limits<double>::max() };
+        double hi[3] = { std::numeric_limits<double>::lowest(),
+                         std::numeric_limits<double>::lowest(),
+                         std::numeric_limits<double>::lowest() };
+        for (auto& g : rSurfaceMesh.Geometries()) {
+            if (g.PointsNumber() < 3) continue;
+            for (int k = 0; k < 3; ++k) {
+                const double x = g[k].X(), y = g[k].Y(), z = g[k].Z();
+                corners.push_back({x,y,z});
+                lo[0]=std::min(lo[0],x); hi[0]=std::max(hi[0],x);
+                lo[1]=std::min(lo[1],y); hi[1]=std::max(hi[1],y);
+                lo[2]=std::min(lo[2],z); hi[2]=std::max(hi[2],z);
+            }
+            data.tri_geom.push_back(&g);
+        }
+        const int nTri = static_cast<int>(data.tri_geom.size());
+        if (nTri == 0) return data;
+
+        // --- Reference cube: centred, side = largest extent (START_POINT/BOX_LENGTH)
+        double L = hi[0]-lo[0];
+        L = std::max(L, hi[1]-lo[1]);
+        L = std::max(L, hi[2]-lo[2]);
+        for (int d = 0; d < 3; ++d) data.cube_lo[d] = 0.5*(lo[d]+hi[d]-L);
+        data.cube_side = L;
+
+        // --- Merge coincident corners into unique vertices (100-unit space) ---
+        const double tol = 1e-6 * (L > 0.0 ? L : 1.0);
+        std::map<std::array<long long,3>, int> vmap;
+        std::vector<std::array<double,3>> v;             // merged, normalised
+        std::vector<std::array<int,3>> e(nTri);          // triangle -> vertex ids
+        for (int i = 0; i < nTri; ++i)
+            for (int k = 0; k < 3; ++k) {
+                const auto& c = corners[3*i + k];
+                const std::array<long long,3> key{
+                    std::llround(c[0]/tol), std::llround(c[1]/tol), std::llround(c[2]/tol) };
+                auto it = vmap.find(key);
+                int idx;
+                if (it == vmap.end()) {
+                    idx = static_cast<int>(v.size());
+                    vmap.emplace(key, idx);
+                    v.push_back({ (c[0]-data.cube_lo[0])*100.0/L,
+                                  (c[1]-data.cube_lo[1])*100.0/L,
+                                  (c[2]-data.cube_lo[2])*100.0/L });
+                } else idx = it->second;
+                e[i][k] = idx;
+            }
+        const int nV = static_cast<int>(v.size());
+
+        auto cross = [](const double a[3], const double b[3], double o[3]) {
+            o[0]=a[1]*b[2]-a[2]*b[1]; o[1]=a[2]*b[0]-a[0]*b[2]; o[2]=a[0]*b[1]-a[1]*b[0];
+        };
+        auto dot = [](const double a[3], const double b[3]) {
+            return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+        };
+
+        // --- Per-vertex curvature: sum of squared dihedral-angle deviations ----
+        std::vector<double> r(nV, 0.0);
+        int pub[2];
+        for (int j = 0; j < nTri-1; ++j)
+          for (int k = 0; k < 3; ++k)
+            for (int l = j+1; l < nTri; ++l)
+              for (int m = 0; m < 3; ++m)
+                if (e[l][m] == e[j][k]) {
+                    if      (e[j][(k+1)%3]==e[l][(m+1)%3]) { pub[0]=1; pub[1]=1; }
+                    else if (e[j][(k+1)%3]==e[l][(m+2)%3]) { pub[0]=1; pub[1]=2; }
+                    else if (e[j][(k+2)%3]==e[l][(m+1)%3]) { pub[0]=2; pub[1]=1; }
+                    else if (e[j][(k+2)%3]==e[l][(m+2)%3]) { pub[0]=2; pub[1]=2; }
+                    else continue;
+                    const auto& P  = v[e[j][k]];
+                    const auto& Q1 = v[e[j][(k+3-pub[0])%3]];
+                    const auto& Q2 = v[e[l][(m+3-pub[1])%3]];
+                    const auto& Pe = v[e[j][(k+pub[0])%3]];
+                    const double l1[3]={Q1[0]-P[0],Q1[1]-P[1],Q1[2]-P[2]};
+                    const double l2[3]={Q2[0]-P[0],Q2[1]-P[1],Q2[2]-P[2]};
+                    const double lp[3]={Pe[0]-P[0],Pe[1]-P[1],Pe[2]-P[2]};
+                    double c1[3], c2[3]; cross(l1,lp,c1); cross(l2,lp,c2);
+                    double ang = dot(c1,c2)/std::sqrt(dot(c1,c1)*dot(c2,c2));
+                    ang = (ang >= -1) ? ang : -1;
+                    ang = (ang <=  1) ? std::acos(ang) : 0;
+                    r[e[j][k]] += (ang-PI)*(ang-PI);
+                    break;
+                }
+
+        // --- Build the five nested refine-triangle sets -----------------------
+        auto& R = data.refine_tri;
+        for (int i = 0; i < nTri; ++i) {
+            // curvature criterion (per vertex of the triangle)
+            for (int j = 0; j < 3; ++j) {
+                const double cv = r[e[i][j]];
+                if (cv > C_THRES[0]) { R[0].push_back(i);
+                  if (cv > C_THRES[1]) { R[1].push_back(i);
+                    if (cv > C_THRES[2]) { R[2].push_back(i);
+                      if (cv > C_THRES[3]) { R[3].push_back(i);
+                        if (cv > C_THRES[4]) { R[4].push_back(i); }}}}}
+            }
+            // thickness criterion (normal-ray cast to the opposite sheet)
+            const auto& A = v[e[i][0]]; const auto& B = v[e[i][1]]; const auto& C = v[e[i][2]];
+            const double ab[3]={B[0]-A[0],B[1]-A[1],B[2]-A[2]};
+            const double ac[3]={C[0]-A[0],C[1]-A[1],C[2]-A[2]};
+            double dir[3]; cross(ab,ac,dir);
+            const double nl = std::sqrt(dot(dir,dir));
+            if (nl <= 0.0) continue;
+            dir[0]/=nl; dir[1]/=nl; dir[2]/=nl;
+            const double cen[3]={ (A[0]+B[0]+C[0])/3, (A[1]+B[1]+C[1])/3, (A[2]+B[2]+C[2])/3 };
+            const double mc = std::max(std::max(std::abs(dir[0]),std::abs(dir[1])),std::abs(dir[2]));
+            for (int j = i+1; j < nTri; ++j) {
+                double hitp[3], alpha = 0.0;
+                const int hit = TriRayIntersect(v[e[j][0]].data(), v[e[j][1]].data(), v[e[j][2]].data(),
+                                                cen, dir, hitp, alpha);
+                if (hit != 1) continue;
+                const double len = mc * std::abs(alpha);
+                if (len < H_THRES[0]) { R[0].push_back(i); R[0].push_back(j);
+                  if (len < H_THRES[1]) { R[1].push_back(i); R[1].push_back(j);
+                    if (len < H_THRES[2]) { R[2].push_back(i); R[2].push_back(j);
+                      if (len < H_THRES[3]) { R[3].push_back(i); R[3].push_back(j);
+                        if (len < H_THRES[4]) { R[4].push_back(i); R[4].push_back(j); }}}}}
+            }
+        }
+        for (auto& s : R) { std::sort(s.begin(), s.end()); s.erase(std::unique(s.begin(), s.end()), s.end()); }
+        return data;
+    }
+
+    ///@}
     ///@name Carving (reference RemoveOutsideElement) and VTK output
     ///@{
 
@@ -1961,7 +2284,48 @@ private:
             }
         };
 
-        int max_dist_node = -1;
+        // Smart-Laplacian gated move: accept a Laplacian move only if it keeps
+        // every incident affected element's scaled Jacobian above the threshold.
+        auto try_move = [&](int v, const double tgt[3]) {
+            std::array<double,3> old = rNodes[v];
+            rNodes[v] = {tgt[0],tgt[1],tgt[2]};
+            for (int c : node_cells[v]) {
+                if (!affected_cell[c]) continue;
+                double p[8][3]; load_hex(c,p);
+                if (ScaledJacobianMin(p) <= eps_sj) { rNodes[v]=old; return; }
+            }
+        };
+        // One smoothing sweep: surface (duplicate) points smooth toward their ring
+        // and project onto the surface; inner boundary points smooth toward the
+        // core.  Both moves are scaled-Jacobian-gated at the current threshold.
+        auto smoothing_sweep = [&]() {
+            for (int v=0; v<NN; ++v) {
+                if (!optimizable[v] || smooth_nbr[v].empty()) continue;
+                double avg[3]={0,0,0};
+                for (int nb : smooth_nbr[v]) for (int d=0;d<3;++d) avg[d]+=rNodes[nb][d];
+                for (int d=0;d<3;++d) avg[d]/=smooth_nbr[v].size();
+                if (is_dup[v]) {
+                    double q[3]={0,0,0}; int tri=-1;
+                    ClosestPointOnSoup(rTri, avg, q, tri);
+                    try_move(v, q);
+                } else if (is_boundary[v]) {
+                    try_move(v, avg);
+                }
+            }
+        };
+
+        // The reference runs ProjectToIsoSurface to convergence (an endless loop
+        // that periodically dumps the mesh), escalating the quality threshold once
+        // the shell is valid and seated on the surface.  The quality it reaches is
+        // driven mostly by the volume of gated smoothing (its median scaled
+        // Jacobian climbs the longer it runs) plus, where the gate fires, the
+        // rising eps_sj that lifts the worst-element floor.  We reproduce that:
+        // TotalIters is the convergence/safety budget, and once escalation can no
+        // longer make progress for a long stretch we stop early.
+        int drag_count = 0;
+        int stall = 0;
+        const int stall_limit = std::max(50, TotalIters / std::max(1,SmoothEvery) / 4);
+
         for (int it = 1; it <= TotalIters; ++it) {
             for (int i=0;i<NN;++i) grad[i]={0,0,0};
 
@@ -1970,9 +2334,7 @@ private:
                 double p[8][3]; load_hex(c, p);
                 if (ScaledJacobianMin(p) <= eps_sj) { ++bad; accumulate_quality_grad(c); }
             }
-            const bool all_positive = (bad == 0);
-
-            if (all_positive) {                       // geometry fitting term
+            if (bad == 0) {                           // geometry-fitting attractor
                 for (int i=0;i<NN;++i) if (is_dup[i]) {
                     double q[3];
                     ClosestPointOnTriangle(rTri[dup_tri[i]][0].data(),
@@ -1985,36 +2347,11 @@ private:
                 for (int d=0;d<3;++d) rNodes[i][d] += LR*grad[i][d];
 
             if (it % SmoothEvery == 0) {
-                // Smart Laplacian: accept a Laplacian move only if it keeps every
-                // incident element's scaled Jacobian above the threshold.
-                auto try_move = [&](int v, const double tgt[3]) {
-                    std::array<double,3> old = rNodes[v];
-                    rNodes[v] = {tgt[0],tgt[1],tgt[2]};
-                    bool ok=true;
-                    for (int c : node_cells[v]) {
-                        if (!affected_cell[c]) continue;
-                        double p[8][3]; load_hex(c,p);
-                        if (ScaledJacobianMin(p) <= eps_sj) { ok=false; break; }
-                    }
-                    if (!ok) rNodes[v]=old;
-                };
-                for (int v=0; v<NN; ++v) {
-                    if (!optimizable[v] || smooth_nbr[v].empty()) continue;
-                    double avg[3]={0,0,0};
-                    for (int nb : smooth_nbr[v]) for (int d=0;d<3;++d) avg[d]+=rNodes[nb][d];
-                    for (int d=0;d<3;++d) avg[d]/=smooth_nbr[v].size();
-                    if (is_dup[v]) {                  // surface points: project the average
-                        double q[3]={0,0,0}; int tri=-1;
-                        ClosestPointOnSoup(rTri, avg, q, tri);
-                        try_move(v, q);
-                    } else if (is_boundary[v]) {      // inner boundary points
-                        try_move(v, avg);
-                    }
-                }
+                smoothing_sweep();
 
-                // Refresh closest triangles and measure how far the shell sits
-                // from the surface.
-                double max_dist = 0.0; max_dist_node=-1;
+                // Refresh closest triangles, find how far the shell sits from the
+                // surface and which duplicate is worst.
+                double max_dist = 0.0; int max_dist_node = -1;
                 for (int i=0;i<NN;++i) if (is_dup[i]) {
                     double q[3]={0,0,0}; int tri=-1;
                     const double d2 = ClosestPointOnSoup(rTri, rNodes[i].data(), q, tri);
@@ -2027,21 +2364,28 @@ private:
                     double p[8][3]; load_hex(c,p);
                     if (ScaledJacobianMin(p) <= eps_sj) ++still_bad;
                 }
-                // Once valid and seated on the surface, demand higher quality.
-                // NOTE: escalating eps_sj toward the paper's >0.5 target with this
-                // numerical-gradient optimiser is unstable — the aggressive jump to
-                // 0.53 re-tangles cells faster than the gradient can recover, so
-                // more iterations *degrade* the mesh rather than improve it.  We
-                // therefore keep the reference's strict gate (which only fires once
-                // the shell is essentially exactly on the surface and nothing is
-                // bad); in practice it stays at 0.01 and the mesh converges to a
-                // valid, surface-fitted state.  Reaching the reference's median
-                // scaled Jacobian (~0.89) needs its analytic-gradient optimiser.
-                if (still_bad == 0 && max_dist < TOL)
-                    eps_sj = (eps_sj==0.01) ? 0.53 : eps_sj+0.01;
+
+                if (still_bad == 0 && max_dist < TOL) {
+                    // Valid and on the surface: demand higher quality, then run a
+                    // few gated smoothing sweeps to settle at the new threshold
+                    // (the reference's escalate-then-repair).
+                    eps_sj = (eps_sj == 0.01) ? 0.53 : eps_sj + 0.01;
+                    for (int r = 0; r < 20; ++r) smoothing_sweep();
+                    stall = 0;
+                } else {
+                    // Force the single worst duplicate onto the surface (ungated)
+                    // so max_dist can fall and the gate can eventually fire — the
+                    // reference's maxDistIdx drag.  One node per window keeps it
+                    // safe; the gradient repairs any element it briefly spoils.
+                    if (max_dist_node >= 0 && (drag_count++ % 4 == 0)) {
+                        double q[3]={0,0,0}; int tri=-1;
+                        ClosestPointOnSoup(rTri, rNodes[max_dist_node].data(), q, tri);
+                        for (int d=0;d<3;++d) rNodes[max_dist_node][d] = q[d];
+                    }
+                    if (++stall > stall_limit && eps_sj > 0.5) break;   // converged
+                }
             }
         }
-        (void)max_dist_node;
 
         // --- 5. Undo the normalisation --------------------------------------
         for (auto& nd : rNodes) for (int d=0; d<3; ++d) nd[d] = nd[d]/S + lo[d];

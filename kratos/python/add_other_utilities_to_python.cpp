@@ -876,14 +876,18 @@ void AddOtherUtilitiesToPython(pybind11::module &m)
             py::arg("surface_model_part"),
             py::arg("vtk_filename"),
             py::arg("refinement_depth") = 5,
+            py::arg("adaptive") = true,
             "Reads triangles from surface_model_part (populated by StlIO), builds an "
-            "adaptive OctreeHybrid, and writes the resulting hex mesh (the full "
-            "bounding-box dual block) to a legacy VTK file.")
+            "OctreeHybrid, and writes the resulting hex mesh (the full bounding-box "
+            "dual block) to a legacy VTK file.  adaptive=True (default) uses the "
+            "reference curvature/thickness refinement criterion; adaptive=False uses "
+            "uniform refinement to refinement_depth near the surface.")
         .def_static("BuildCarveAndWriteVtk",
             &OctreeHybridMeshUtility::BuildCarveAndWriteVtk,
             py::arg("surface_model_part"),
             py::arg("vtk_filename"),
             py::arg("refinement_depth") = 5,
+            py::arg("adaptive") = true,
             "Like BuildAndWriteVtk, but carves the dual block against the input "
             "surface (reference stage 4, RemoveOutsideElement) so the output is a "
             "hex mesh of the object interior rather than its bounding box.")
@@ -894,6 +898,7 @@ void AddOtherUtilitiesToPython(pybind11::module &m)
             py::arg("refinement_depth") = 5,
             py::arg("proj_iters") = 20000,
             py::arg("proj_smooth") = 1000,
+            py::arg("adaptive") = true,
             "Like BuildCarveAndWriteVtk, but also fits the carved core mesh to the "
             "input surface with the Jacobian-controlled buffer-zone meshing of "
             "reference stage 5 (ProjectToIsoSurface / paper Section 2.4): the "
