@@ -491,18 +491,23 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
             sj = sorted(cell_min_sj([pts[v] for v in c]) for c in cells)
             n = len(sj)
             inverted = sum(1 for v in sj if v <= 0.0)
+            worst = sj[0]
             median = sj[n // 2]
             n_buffer = sum(1 for lv in levels if lv == -2) if levels else 0
             print(f"\n[bunny project depth={depth}] cells={n} buffer={n_buffer} "
-                  f"inverted={inverted} medianSJ={median:.3f}")
+                  f"inverted={inverted} minSJ={worst:.3f} medianSJ={median:.3f}")
 
             # Valid mesh, buffer layer present, and quality in the reference's
-            # ballpark (reference projHex median at depth 4 is ~0.85).
+            # ballpark (reference projHex at depth 4 is median ~0.85, minSJ ~0.57).
             self.assertGreater(n, 0, "projection produced no cells")
             self.assertGreater(n_buffer, 0, "no buffer-layer hexes were tagged")
             self.assertEqual(inverted, 0, f"{inverted} inverted projected hexes")
             self.assertGreater(median, 0.75,
                                f"median scaled Jacobian {median:.3f} below 0.75")
+            # The threshold-escalation optimiser lifts the worst element well above
+            # the eps_sj = 0.01 untangling gate (climbs further with more iterations).
+            self.assertGreater(worst, 0.2,
+                               f"worst scaled Jacobian {worst:.3f} below 0.2")
         finally:
             os.remove(stl)
 
