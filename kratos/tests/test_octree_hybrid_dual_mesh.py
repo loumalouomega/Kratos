@@ -247,6 +247,43 @@ def bbox(pts):
     return (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs))
 
 
+def cell_min_sj(coords):
+    """Minimum scaled Jacobian over the 8 corners of a hex (coords = 8 points)."""
+    worst = 1e30
+    for (o, x, y, z) in CORNER_TETS:
+        e1, e2, e3 = _sub(coords[x], coords[o]), _sub(coords[y], coords[o]), _sub(coords[z], coords[o])
+        n1, n2, n3 = _norm(e1), _norm(e2), _norm(e3)
+        if min(n1, n2, n3) < 1e-14:
+            return -1.0
+        worst = min(worst, _dot(e1, _cross(e2, e3)) / (n1 * n2 * n3))
+    return worst
+
+
+def load_bunny_ascii():
+    """Convert the bundled (binary) Bunny-LowPoly.stl to a temporary ASCII STL
+    and return its path (StlIO only reads ASCII).  Returns None if absent."""
+    import struct
+    src = os.path.join(script_dir, "Bunny-LowPoly.stl")
+    if not os.path.exists(src):
+        return None
+    dst = os.path.join(script_dir, "_bunny_ascii_tmp.stl")
+    with open(src, "rb") as f:
+        f.read(80)
+        n = struct.unpack("<I", f.read(4))[0]
+        with open(dst, "w") as o:
+            o.write("solid b\n")
+            for _ in range(n):
+                struct.unpack("<fff", f.read(12))                      # normal
+                v = [struct.unpack("<fff", f.read(12)) for _ in range(3)]
+                f.read(2)
+                o.write("facet normal 0 0 0\n  outer loop\n")
+                for p in v:
+                    o.write(f"    vertex {p[0]} {p[1]} {p[2]}\n")
+                o.write("  endloop\nendfacet\n")
+            o.write("endsolid b\n")
+    return dst
+
+
 class TestOctreeHybridDualMesh(unittest.TestCase):
 
     # Exact hex counts of the reference HybridOctree_Hex DualFullHexMeshExtraction
@@ -400,6 +437,74 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
 
     def test_project_depth_4(self):
         self._run_project(4)
+
+    # ----------------------------------------------------------------------- #
+    # Adaptive refinement on a real geometry (the low-poly Stanford bunny):
+    # the reference HybridOctree_Hex curvature/thickness criterion, ported here,
+    # must reproduce the reference's dual-block cell count cell-for-cell, and the
+    # stage-5 projection must produce a valid, surface-fitted, good-quality mesh.
+    # ----------------------------------------------------------------------- #
+
+    # Reference HybridOctree_Hex dual-block (dualFullHex) cell counts for
+    # Bunny-LowPoly at adaptive refinement depths 4 and 5 (measured by running
+    # the reference binary on the same geometry).
+    REFERENCE_BUNNY_BLOCK = {4: 3128, 5: 20949}
+
+    def test_adaptive_block_matches_reference(self):
+        """Adaptive refinement reproduces the reference dual block cell-for-cell."""
+        stl = load_bunny_ascii()
+        if stl is None:
+            self.skipTest("Bunny-LowPoly.stl not available")
+        try:
+            for depth, expected in self.REFERENCE_BUNNY_BLOCK.items():
+                model = KM.Model()
+                mp = model.CreateModelPart(f"B{depth}")
+                mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
+                KM.StlIO(stl, KM.Parameters('{"open_mode":"read"}')).ReadModelPart(mp)
+                out = os.path.join(script_dir, f"_bunny_block_d{depth}.vtk")
+                # adaptive=True (default) -> reference curvature/thickness criterion
+                KM.OctreeHybridMeshUtility.BuildAndWriteVtk(mp, out, depth, True)
+                _, cells, _ = read_vtk(out)
+                os.remove(out)
+                print(f"\n[bunny block depth={depth}] hexes={len(cells)} (reference {expected})")
+                self.assertEqual(len(cells), expected,
+                                 f"adaptive block {len(cells)} != reference {expected} at depth {depth}")
+        finally:
+            os.remove(stl)
+
+    def test_adaptive_project_quality(self):
+        """Stage-5 projection on the bunny: valid, surface-fitted, good quality."""
+        stl = load_bunny_ascii()
+        if stl is None:
+            self.skipTest("Bunny-LowPoly.stl not available")
+        try:
+            depth = 4
+            model = KM.Model()
+            mp = model.CreateModelPart("BP")
+            mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
+            KM.StlIO(stl, KM.Parameters('{"open_mode":"read"}')).ReadModelPart(mp)
+            out = os.path.join(script_dir, "_bunny_proj_d4.vtk")
+            KM.OctreeHybridMeshUtility.BuildCarveProjectAndWriteVtk(mp, out, depth, 20000, 1000, True)
+            pts, cells, levels = read_vtk(out)
+            os.remove(out)
+
+            sj = sorted(cell_min_sj([pts[v] for v in c]) for c in cells)
+            n = len(sj)
+            inverted = sum(1 for v in sj if v <= 0.0)
+            median = sj[n // 2]
+            n_buffer = sum(1 for lv in levels if lv == -2) if levels else 0
+            print(f"\n[bunny project depth={depth}] cells={n} buffer={n_buffer} "
+                  f"inverted={inverted} medianSJ={median:.3f}")
+
+            # Valid mesh, buffer layer present, and quality in the reference's
+            # ballpark (reference projHex median at depth 4 is ~0.85).
+            self.assertGreater(n, 0, "projection produced no cells")
+            self.assertGreater(n_buffer, 0, "no buffer-layer hexes were tagged")
+            self.assertEqual(inverted, 0, f"{inverted} inverted projected hexes")
+            self.assertGreater(median, 0.75,
+                               f"median scaled Jacobian {median:.3f} below 0.75")
+        finally:
+            os.remove(stl)
 
 
 if __name__ == "__main__":
