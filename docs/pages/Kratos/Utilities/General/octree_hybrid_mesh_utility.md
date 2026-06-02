@@ -85,15 +85,13 @@ At refinement depth 8 on a typical CAD surface:
 >   hexes** and only a handful of residual buffer slivers (≈0.05 %).
 >
 > The projection reproduces the reference's scaled-Jacobian **distribution** closely:
-> median ≈ 0.85 / 0.90 / 0.91 at depths 4 / 5 / 6 (reference ≈ 0.85 / 0.89 / 0.99),
-> with the 10th-percentile quality matching or beating the reference and **0 inverted
-> elements**.  The remaining gap is the worst-element *floor*: the reference's
-> threshold-escalation lifts its minimum scaled Jacobian to ≈ 0.5 on small meshes,
-> whereas the port holds the threshold at the reference's base value (escalation is
-> unstable under the finite-difference gradient — see
-> [§13.2](#132-reference-stage-5--projecttoisosurface)).  Running more iterations does
-> not help: the gated smoothing converges at the default budget and over-smooths
-> beyond it.
+> median ≈ 0.85 / 0.89 at depths 4 / 5 (reference ≈ 0.85 / 0.89), with the
+> 10th-percentile quality matching or beating the reference and **0 inverted
+> elements**.  The worst-element *floor* is lifted by a **gradual threshold
+> escalation** (see [§13.2](#132-reference-stage-5--projecttoisosurface)): the minimum
+> scaled Jacobian climbs from the `eps_sj = 0.01` untangling gate to ≈ 0.3 at the
+> default budget and ≈ 0.46 with a larger one (reference ≈ 0.5–0.57), and keeps
+> climbing with iterations — `proj_iters` is the convergence budget, not a fixed cap.
 
 ---
 
@@ -639,7 +637,7 @@ The plain-dual pass (Stage 4) then skips any vertex `v` where `consumed[v] == tr
 | Dual-hex emission | Separate loop over `collectNum` | Integrated into template loop; `consumed[]` flag |
 | Refinement criterion | Curvature + thickness adaptive (features map to absolute levels 4–8) | **Ported** (`adaptive=True`, default): same curvature + thickness criterion, `CELL_DETECT` halo and complete-octet refinement, so the dual block matches the reference **cell-for-cell** on the bunny (see §6.5).  A `adaptive=False` uniform path is kept for the synthetic template tests |
 | Interior filtering | `RemoveOutsideElement` (ray-cast + manifold repair) | Carve ported (`BuildCarveAndWriteVtk`); non-manifold 146-probe repair replaced by the buffer-zone clearance (paper §2.3) in the project path |
-| Surface projection | `ProjectToIsoSurface` (analytic gradient descent) | Ported (`BuildCarveProjectAndWriteVtk`): buffer-zone meshing + finite-difference Jacobian control + gated smoothing; reproduces the reference's quality distribution (§13.2) |
+| Surface projection | `ProjectToIsoSurface` (analytic gradient descent) | Ported (`BuildCarveProjectAndWriteVtk`): buffer-zone meshing + finite-difference Jacobian control + gated smoothing + gradual threshold escalation; reproduces the reference's quality distribution and lifts the worst element off the untangling gate (§13.2) |
 | Coordinate system | Normalised to `[0,100]^3` | Octree in `[0,1]^3`; the projector renormalises to `[0,100]` internally so the reference's optimiser constants apply |
 | Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
 | Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
@@ -899,13 +897,12 @@ surface with Jacobian control** (reference stage 5, `ProjectToIsoSurface` / pape
    rising threshold) runs every `ProjSmooth` iterations, for `ProjIters` total.
 
 `ProjIters`/`ProjSmooth` control the run length.  The default reproduces the
-reference's scaled-Jacobian **distribution** (median ≈ 0.85 / 0.90 / 0.91 and 0
-inverted at depths 4 / 5 / 6).  Driving the *minimum* scaled Jacobian up to the
-paper's > 0.5 floor is **not** achievable by increasing `ProjIters`: it requires
-escalating the scaled-Jacobian threshold, which the finite-difference gradient cannot
-do stably (the jump to 0.53 pulls the shell off the surface faster than it recovers,
-*lowering* the median), so the threshold is held fixed and extra iterations
-over-smooth.  See [§13.2](#132-reference-stage-5--projecttoisosurface).
+reference's scaled-Jacobian **distribution** (median ≈ 0.85 / 0.89 and 0 inverted at
+depths 4 / 5).  The *minimum* scaled Jacobian is driven up by a **gradual threshold
+escalation** (a small per-window ramp with a best-valid snapshot, [§13.2](#132-reference-stage-5--projecttoisosurface)):
+it climbs from the `eps_sj = 0.01` untangling gate toward the paper's > 0.5 floor and
+**continues to climb with more `ProjIters`** (≈ 0.3 at the 20 000-iteration default,
+≈ 0.46 at 300 000), so `ProjIters` is the convergence budget rather than a fixed cap.
 
 In Python:
 ```python
@@ -1132,13 +1129,14 @@ approach reduced depth-8 sphere time from 693 s to seconds.
    re-meshes that band regardless.
 
 5. **Stage-5 worst-element floor**: `BuildCarveProjectAndWriteVtk` reproduces the
-   reference's scaled-Jacobian *distribution* (median ≈ 0.85 / 0.90 / 0.91 and 0
-   inverted at depths 4 / 5 / 6, with p10 matching or beating the reference) but holds
-   the quality threshold fixed at the reference's base value, so it does not lift the
-   *minimum* scaled Jacobian to the paper's > 0.5 floor on small meshes.  Escalating
-   the threshold is unstable under the finite-difference gradient (the 0.53 jump pulls
-   the shell off the surface and *lowers* the median), and more iterations over-smooth
-   rather than improve, so escalation is left off (§13.2).
+   reference's scaled-Jacobian *distribution* (median ≈ 0.85 / 0.89 and 0 inverted at
+   depths 4 / 5, with p10 matching or beating the reference).  A gradual threshold
+   escalation lifts the *minimum* scaled Jacobian off the `eps_sj = 0.01` untangling
+   gate toward the paper's > 0.5 floor (≈ 0.3 at the default budget, ≈ 0.46 at
+   300 000 iterations and still climbing), but reaching the reference's ≈ 0.57 on the
+   single worst sliver can need a large budget — and the carve set differs slightly
+   from the reference (limitation 4 above), so the worst cell is not the same element
+   (§13.2).
 
 6. **`MAX_DEPTH = 10`**: dictated by `OctreeHybridKratosConfiguration`.  Finer
    meshes require increasing this constant.
@@ -1159,7 +1157,7 @@ and the worst-point "drag" convergence loop of stage 5:
 | 2 | `InitiateElementValence` | — | ✅ (face-adjacency graph) | classify face valences |
 | 3 | `DualFullHexMeshExtraction` | `dualFullHex.vtk` | ✅ (`BuildAndWriteVtk`) | dual hex block over the whole bbox |
 | 4 | `RemoveOutsideElement` | `dualHex.vtk` | ◑ carve ported (`BuildCarveAndWriteVtk`); 146-probe repair → hemisphere clearance; ~5–10 % fewer cells (RNG ray order, §6.5) | carve the object out of the block |
-| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ◑ ported (`BuildCarveProjectAndWriteVtk`); matches the SJ distribution at fixed threshold, escalation held off (§13.2) | project boundary to surface, control Jacobian |
+| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ◑ ported (`BuildCarveProjectAndWriteVtk`); matches the SJ distribution, gradual threshold escalation lifts the worst element off the gate (§13.2) | project boundary to surface, control Jacobian |
 
 The "holes inside" reported when viewing the depth-8 bunny come from stopping after
 stage 3: the **`dualFullHex` block** is solid, over the whole bounding box, and
@@ -1298,27 +1296,39 @@ to core cells (an earlier port bug) left the buffer hexes at median ≈ 0.69 wit
 inverted; fixing it lifts the buffer to ≈ 0.81 and the whole mesh to the figures
 below.
 
-**Worst-element floor and escalation.** The reference also escalates `eps_sj`
+**Worst-element floor and escalation.** The reference escalates `eps_sj`
 (`0.01 → 0.53 → +0.01`) once the shell is valid and seated on the surface, which lifts
-the *minimum* scaled Jacobian to ≈ 0.5 on small meshes.  Under the finite-difference
-gradient that escalation is unstable: the 0.53 jump makes the gated smoothing pull the
-duplicates back off the surface (to satisfy `SJ > 0.53`) faster than the gradient can
-recover, so `max_dist` explodes and the median *drops* (gentle steps and an always-on
-geometry anchor were both tried — same result).  The port therefore holds `eps_sj`
-fixed at the reference's base value, which exactly reproduces the reference's own
-depth-6 regime (its logs show `eps_sj` never escalates there either: minimum ≈ 0.007).
-The analytic gradient (chain-rule `∂SJ/∂a = (b×c)/n − SJ·a/|a|²`, validated to machine
-precision in an earlier experiment) would be the route to a stable escalation, but it
-is not required to match the distribution and is not used.
+the *minimum* scaled Jacobian to ≈ 0.5 on small meshes.  A single 0.01→0.53 jump
+diverges under the finite-difference gradient (it makes dozens of cells bad at once and
+the gated smoothing drags the duplicates off the surface to satisfy `SJ > 0.53` faster
+than the gradient recovers).  The port reaches the same regime with a **gradual
+escalation** built from three stabilisers:
 
-Measured benchmarks (port vs reference `projHex`, median / p10 / inverted):
-- depth 4: **0.85 / 0.58 / 0** &nbsp; (reference 0.85 / 0.57 / 0)
-- depth 5: **0.90 / 0.54 / 0** &nbsp; (reference 0.89 / 0.54 / 0)
-- depth 6: **0.91 / 0.51 / 0** &nbsp; (reference 0.99 / 0.43 / 0)
+1. a *gradual ramp* — `eps_sj` rises by `EPS_STEP = 0.03` only on a window with no
+   sub-threshold cell, toward `EPS_TARGET = 0.5`; a window that cannot regain validity
+   counts toward a stall budget (`STALL_MAX = 8`), after which the gate backs off a
+   step, so it hovers at the best reachable threshold instead of jumping past it;
+2. an *always-on surface attractor* on the duplicates (full strength when valid,
+   attenuated while untangling) so escalation can never strand the shell off the
+   geometry;
+3. a *best-valid snapshot*, restored on exit, so escalation can only ever raise the
+   worst element, never degrade the converged mesh.
 
-Median and p10 match (the port's p10 even edges ahead); the residual depth-6 median
-gap is the reference's escalation lifting its bulk quality, which the fixed-threshold
-port trades for a simpler, monotonic convergence.
+The untangling gradient also gets its own larger learning rate (`LRQ = 2e-3` vs the
+attractor's `LR = 5e-4`) so it lifts the worst sliver fast enough to keep up with the
+ramp.  Together these climb the minimum scaled Jacobian from the `eps_sj = 0.01` gate
+to ≈ 0.3 at the default budget and ≈ 0.46 at 300 000 iterations, still climbing.
+Reaching the reference's ≈ 0.57 on the single worst cell can need a large budget, and
+because the carve set differs slightly (§12 limitation 4) the worst cell is not the
+same element as the reference's.
+
+Measured benchmarks (port vs reference `projHex`, median / p10 / minSJ / inverted):
+- depth 4, default budget: **0.85 / 0.58 / 0.30 / 0** &nbsp; (reference 0.85 / 0.57 / 0.57 / 0)
+- depth 4, 300 000 iters: &nbsp;**0.85 / 0.58 / 0.46 / 0**
+- depth 5, default budget: **0.89 / 0.53 / 0.28 / 0** &nbsp; (reference 0.89 / 0.54 / 0.53 / 0)
+
+Median and p10 match the reference (the port's p10 even edges ahead) with 0 inverted;
+the worst element climbs monotonically with the iteration budget.
 
 ### 13.3 Reproducing the diagnosis
 
