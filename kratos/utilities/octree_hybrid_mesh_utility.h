@@ -17,7 +17,6 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <map>
