@@ -258,7 +258,10 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
         model = KM.Model()
         mp = build_transition_surface(model)
         out = os.path.join(script_dir, f"_dual_test_d{depth}.vtk")
-        KM.OctreeHybridMeshUtility.BuildAndWriteVtk(mp, out, depth)
+        # Uniform refinement: the synthetic patch is flat (zero curvature) so the
+        # adaptive criterion would not refine it; this test exercises the
+        # transition templates, which need the forced deep refinement.
+        KM.OctreeHybridMeshUtility.BuildAndWriteVtk(mp, out, depth, adaptive=False)
         pts, cells, levels = read_vtk(out)
         self.assertGreater(len(cells), 0, "no hexes generated")
         degenerate, inverted = classify(pts, cells)
@@ -315,8 +318,8 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
 
         full_out = os.path.join(script_dir, f"_full_test_d{depth}.vtk")
         carved_out = os.path.join(script_dir, f"_carved_test_d{depth}.vtk")
-        KM.OctreeHybridMeshUtility.BuildAndWriteVtk(mp, full_out, depth)
-        KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(mp, carved_out, depth)
+        KM.OctreeHybridMeshUtility.BuildAndWriteVtk(mp, full_out, depth, adaptive=False)
+        KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(mp, carved_out, depth, adaptive=False)
 
         full_pts, full_cells, _ = read_vtk(full_out)
         carved_pts, carved_cells, _ = read_vtk(carved_out)
@@ -360,10 +363,10 @@ class TestOctreeHybridDualMesh(unittest.TestCase):
 
         carved_out = os.path.join(script_dir, f"_carved_p_d{depth}.vtk")
         proj_out = os.path.join(script_dir, f"_proj_test_d{depth}.vtk")
-        KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(mp, carved_out, depth)
+        KM.OctreeHybridMeshUtility.BuildCarveAndWriteVtk(mp, carved_out, depth, adaptive=False)
         # Modest iteration budget keeps the test fast; the box surface is simple.
         KM.OctreeHybridMeshUtility.BuildCarveProjectAndWriteVtk(
-            mp, proj_out, depth, 12000, 600)
+            mp, proj_out, depth, 12000, 600, adaptive=False)
 
         carved_pts, carved_cells, _ = read_vtk(carved_out)
         proj_pts, proj_cells, proj_levels = read_vtk(proj_out)
