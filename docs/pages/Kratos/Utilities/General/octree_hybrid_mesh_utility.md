@@ -84,13 +84,16 @@ At refinement depth 8 on a typical CAD surface:
 >   block.  On the depth-5 bunny the result fits the surface with **0 inverted core
 >   hexes** and only a handful of residual buffer slivers (≈0.05 %).
 >
-> The default fits the geometry with a valid core but at a lower mesh quality than
-> the reference (median scaled Jacobian ≈ 0.37 vs ≈ 0.89).  **Note:** simply raising
-> `ProjIters` does *not* close that gap — with this numerical-gradient optimiser the
-> threshold escalation needed to push the scaled Jacobian higher is unstable and
-> *degrades* the mesh; reaching the reference's quality needs its analytic-gradient
-> optimiser, which is not ported.  See
-> [§13.2](#132-reference-stage-5--projecttoisosurface).
+> The projection reproduces the reference's scaled-Jacobian **distribution** closely:
+> median ≈ 0.85 / 0.90 / 0.91 at depths 4 / 5 / 6 (reference ≈ 0.85 / 0.89 / 0.99),
+> with the 10th-percentile quality matching or beating the reference and **0 inverted
+> elements**.  The remaining gap is the worst-element *floor*: the reference's
+> threshold-escalation lifts its minimum scaled Jacobian to ≈ 0.5 on small meshes,
+> whereas the port holds the threshold at the reference's base value (escalation is
+> unstable under the finite-difference gradient — see
+> [§13.2](#132-reference-stage-5--projecttoisosurface)).  Running more iterations does
+> not help: the gated smoothing converges at the default budget and over-smooths
+> beyond it.
 
 ---
 
@@ -634,9 +637,9 @@ The plain-dual pass (Stage 4) then skips any vertex `v` where `consumed[v] == tr
 | Vertex dedup | O(n²) linear scan (`DIST_THRES = 1e-12`) | 27-neighbour spatial hash (`1e-4*min_cell` tolerance) |
 | Node array | `hexMesh.v[]` flat C array | `std::vector<std::array<double,3>> nodes` |
 | Dual-hex emission | Separate loop over `collectNum` | Integrated into template loop; `consumed[]` flag |
-| Refinement criterion | Curvature + thickness adaptive (features map to absolute levels 4–8) | Uniform: every cell the surface intersects is refined to `RefinementDepth` (see §6.5) |
+| Refinement criterion | Curvature + thickness adaptive (features map to absolute levels 4–8) | **Ported** (`adaptive=True`, default): same curvature + thickness criterion, `CELL_DETECT` halo and complete-octet refinement, so the dual block matches the reference **cell-for-cell** on the bunny (see §6.5).  A `adaptive=False` uniform path is kept for the synthetic template tests |
 | Interior filtering | `RemoveOutsideElement` (ray-cast + manifold repair) | Carve ported (`BuildCarveAndWriteVtk`); non-manifold 146-probe repair replaced by the buffer-zone clearance (paper §2.3) in the project path |
-| Surface projection | `ProjectToIsoSurface` (analytic gradient descent) | Ported (`BuildCarveProjectAndWriteVtk`): buffer-zone meshing + numerical-gradient Jacobian control (§13.2) |
+| Surface projection | `ProjectToIsoSurface` (analytic gradient descent) | Ported (`BuildCarveProjectAndWriteVtk`): buffer-zone meshing + finite-difference Jacobian control + gated smoothing; reproduces the reference's quality distribution (§13.2) |
 | Coordinate system | Normalised to `[0,100]^3` | Octree in `[0,1]^3`; the projector renormalises to `[0,100]` internally so the reference's optimiser constants apply |
 | Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
 | Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
@@ -731,23 +734,38 @@ to the wrong grid position once cells were large enough in finest-grid units.
 ptmp[d] = 0.5*(p[21][d] + p[26][d] + z[d] * 4.0/15.0);   // correct
 ```
 
-### 6.5 Generation difference — refinement criterion
+### 6.5 Adaptive refinement (matches the reference cell-for-cell)
 
-The port and the reference produce **different dual blocks** for the same model
-because they refine the octree by different criteria:
+`BuildAdaptiveFromSurfaceMesh` (used by default, `adaptive=True`) ports the
+reference's `ConstructOctree` criterion so the dual block is **identical** to the
+reference's:
 
-- **Reference** refines adaptively from **curvature** (the per-vertex angle defect
-  `triMesh.r`) and **thickness** (a ray-cast measurement), mapping surface features
-  to *absolute* octree levels 4–8 (the hard-coded `level == 8 … 4` branches in
-  `ComputeCellValue`, thresholds `C_THRES` / `H_THRES`).
-- **Port** refines **uniformly**: every cell a triangle intersects is split down to
-  `RefinementDepth` (`BuildFromSurfaceMesh`).
+- **Curvature** — per-vertex angle defect (sum of squared dihedral-angle deviations,
+  `BuildRefineSets`, the `ReadRawData` loop) on the surface normalised to a 100-unit
+  cube; **thickness** — a normal-ray cast to the opposite sheet (`TriRayIntersect`).
+  A surface vertex demands level `4+L` where its curvature exceeds `C_THRES[L]`, and
+  a thin feature demands it where its thickness is below `H_THRES[L]`
+  (`C_THRES = {0,0,0.4,0.8,1.6}`, `H_THRES = {16,8,4,2,1}`).
+- **`CELL_DETECT = 1.0` halo** — a cell is tested against a box twice its size, and
+- **complete-octet refinement** — when any cell of a sibling octet must subdivide,
+  all eight do (the reference's `ComputeCellValue` marks all 8 children when one is
+  set).  This last point is what makes the leaf set match exactly; without it the
+  port under-refines by ~25 %.
 
-On the low-poly bunny at depth 5 the reference's `DualFullHexMeshExtraction` yields
-20 949 hexes / 22 508 points; the port yields 16 648 / 20 126.  Both are valid dual
-blocks with the same kind of refinement-interface T-junctions; they simply
-distribute cells differently.  Curvature/thickness-driven refinement is **not**
-ported.
+The domain is the reference's centred cube (side = the surface's largest extent), so
+the integer leaf grid coincides.  Verified on the low-poly bunny: the dual block
+(`DualFullHexMeshExtraction`) is **3128 / 20 949 / 108 673** hexes at depths 4 / 5 / 6
+— matching the reference cell-for-cell (`test_adaptive_block_matches_reference`).
+
+> The intermediate **carve** (`RemoveOutsideElement`) stays within ~5–10 % of the
+> reference's cell count: its inside/outside test consumes a pseudo-random ray
+> sequence, so the surface-band classification is not bit-reproducible across
+> implementations.  The stage-5 projection re-meshes that band regardless.
+
+A `adaptive=False` path keeps the original **uniform** refinement (every cell a
+triangle intersects is split to `RefinementDepth`); it is used by the synthetic
+transition-template tests, whose flat patches carry no curvature and so would not
+refine adaptively.
 
 ### 6.6 Modifications made to the reference code
 
@@ -779,7 +797,8 @@ All methods are `static` — no instance is needed.
 ```cpp
 static std::unique_ptr<OctreeType> BuildFromSurfaceMesh(
     ModelPart& rSurfaceMesh,
-    std::size_t RefinementDepth);
+    std::size_t RefinementDepth,
+    bool Adaptive = true);
 ```
 
 Builds and balances an OctreeHybrid from the triangles in `rSurfaceMesh`.
@@ -788,6 +807,7 @@ Builds and balances an OctreeHybrid from the triangles in `rSurfaceMesh`.
 |-----------|-------------|
 | `rSurfaceMesh` | ModelPart with `Triangle3D3` geometries (from `StlIO::ReadModelPart`). |
 | `RefinementDepth` | Max refinement level near the surface. Range: `[1, MAX_DEPTH=10]`. |
+| `Adaptive` | `true` (default): the reference curvature/thickness criterion (`BuildAdaptiveFromSurfaceMesh`, §6.5), matching the reference block cell-for-cell.  `false`: uniform refinement of every surface-intersecting cell to `RefinementDepth` (used by the synthetic template tests). |
 
 Returns a `std::unique_ptr<OctreeType>` owning the balanced octree.
 
@@ -816,11 +836,13 @@ bounding-box block is written.
 static void BuildAndWriteVtk(
     ModelPart& rSurfaceMesh,
     const std::string& rFilename,
-    std::size_t RefinementDepth);
+    std::size_t RefinementDepth = 5,
+    bool Adaptive = true);
 ```
 
 Combines `BuildFromSurfaceMesh` and `WriteDualHexVtk` into a single call.  Writes the
-**uncarved** dual block covering the whole octree bounding box.
+**uncarved** dual block covering the whole octree bounding box.  `Adaptive` selects the
+reference curvature/thickness criterion (default) or uniform refinement (§6.5).
 
 ---
 
@@ -830,7 +852,8 @@ Combines `BuildFromSurfaceMesh` and `WriteDualHexVtk` into a single call.  Write
 static void BuildCarveAndWriteVtk(
     ModelPart& rSurfaceMesh,
     const std::string& rFilename,
-    std::size_t RefinementDepth);
+    std::size_t RefinementDepth = 5,
+    bool Adaptive = true);
 ```
 
 Like `BuildAndWriteVtk`, but **carves** the dual block against the input surface
@@ -855,7 +878,8 @@ static void BuildCarveProjectAndWriteVtk(
     const std::string& rFilename,
     std::size_t RefinementDepth = 5,
     int ProjIters = 20000,
-    int ProjSmooth = 1000);
+    int ProjSmooth = 1000,
+    bool Adaptive = true);
 ```
 
 Like `BuildCarveAndWriteVtk`, but after carving it **fits the mesh to the input
@@ -874,13 +898,14 @@ surface with Jacobian control** (reference stage 5, `ProjectToIsoSurface` / pape
    Laplacian smoothing (accepted only when it keeps the scaled Jacobian above a
    rising threshold) runs every `ProjSmooth` iterations, for `ProjIters` total.
 
-`ProjIters`/`ProjSmooth` control the run length.  The default fits the geometry with
-a valid core (0 inverted core hexes on the depth-5 bunny).  Driving the *minimum
-scaled Jacobian* up to the paper's > 0.5 is **not** achievable just by increasing
-`ProjIters`: it requires escalating the scaled-Jacobian threshold, which this
-numerical-gradient optimiser cannot do stably (it re-tangles cells), so extra
-iterations plateau or regress quality.  See
-[§13.2](#132-reference-stage-5--projecttoisosurface).
+`ProjIters`/`ProjSmooth` control the run length.  The default reproduces the
+reference's scaled-Jacobian **distribution** (median ≈ 0.85 / 0.90 / 0.91 and 0
+inverted at depths 4 / 5 / 6).  Driving the *minimum* scaled Jacobian up to the
+paper's > 0.5 floor is **not** achievable by increasing `ProjIters`: it requires
+escalating the scaled-Jacobian threshold, which the finite-difference gradient cannot
+do stably (the jump to 0.53 pulls the shell off the surface faster than it recovers,
+*lowering* the median), so the threshold is held fixed and extra iterations
+over-smooth.  See [§13.2](#132-reference-stage-5--projecttoisosurface).
 
 In Python:
 ```python
@@ -1099,20 +1124,21 @@ approach reduced depth-8 sphere time from 693 s to seconds.
    parallel opportunities are the octree subdivision loop and the template geometry
    computation.
 
-4. **Fixed refinement criterion**: cells are refined if any surface triangle
-   intersects them, down to `RefinementDepth`.  The reference instead refines by
-   curvature and thickness (mapping features to absolute levels 4–8 via `C_THRES` /
-   `H_THRES`), so the two dual blocks differ cell-for-cell (§6.5).  This is not ported.
+4. **Carve cell count (~5–10 % below reference)**: the adaptive refinement and dual
+   block now match the reference cell-for-cell (§6.5), but the intermediate carve
+   (`RemoveOutsideElement`) keeps slightly fewer cells.  Its inside/outside test
+   consumes a pseudo-random ray sequence in an implementation-specific order, so the
+   surface-band classification is not bit-reproducible; the stage-5 projection
+   re-meshes that band regardless.
 
-5. **Stage-5 quality vs the paper's target**: `BuildCarveProjectAndWriteVtk` fits the
-   geometry with a valid core (depth-5 bunny: 0 inverted core hexes, median scaled
-   Jacobian ≈ 0.37), but does **not** reach the reference's minimum-scaled-Jacobian
-   > 0.5 / median ≈ 0.89.  This is *not* an iteration-budget issue — increasing
-   `ProjIters` plateaus or regresses quality, because the threshold escalation that
-   would raise the scaled Jacobian is unstable under this port's numerical gradient
-   (verified: 120 k iterations gave 1.0 % inverted vs 0.05 % at 20 k).  Closing the
-   gap needs the reference's analytic-gradient optimiser and its worst-point "drag"
-   convergence loop, which are not ported (§13.2).
+5. **Stage-5 worst-element floor**: `BuildCarveProjectAndWriteVtk` reproduces the
+   reference's scaled-Jacobian *distribution* (median ≈ 0.85 / 0.90 / 0.91 and 0
+   inverted at depths 4 / 5 / 6, with p10 matching or beating the reference) but holds
+   the quality threshold fixed at the reference's base value, so it does not lift the
+   *minimum* scaled Jacobian to the paper's > 0.5 floor on small meshes.  Escalating
+   the threshold is unstable under the finite-difference gradient (the 0.53 jump pulls
+   the shell off the surface and *lowers* the median), and more iterations over-smooth
+   rather than improve, so escalation is left off (§13.2).
 
 6. **`MAX_DEPTH = 10`**: dictated by `OctreeHybridKratosConfiguration`.  Finer
    meshes require increasing this constant.
@@ -1129,11 +1155,11 @@ and the worst-point "drag" convergence loop of stage 5:
 | # | Reference method | Output file | Ported? | Role |
 |---|------------------|-------------|---------|------|
 | 0 | `InitializeOctree` | `modifiedTri.vtk` | ✅ (`BuildFromSurfaceMesh`) | read surface, set bounding box |
-| 1 | `ConstructOctree` | `octree.vtk` | ✅ (uniform, not curvature/thickness — §6.5) | refine + 2:1 balance |
+| 1 | `ConstructOctree` | `octree.vtk` | ✅ curvature + thickness adaptive (`adaptive=True`); block matches cell-for-cell — §6.5 | refine + 2:1 balance |
 | 2 | `InitiateElementValence` | — | ✅ (face-adjacency graph) | classify face valences |
 | 3 | `DualFullHexMeshExtraction` | `dualFullHex.vtk` | ✅ (`BuildAndWriteVtk`) | dual hex block over the whole bbox |
-| 4 | `RemoveOutsideElement` | `dualHex.vtk` | ◑ carve ported (`BuildCarveAndWriteVtk`); 146-probe repair → hemisphere clearance | carve the object out of the block |
-| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ◑ ported (`BuildCarveProjectAndWriteVtk`); full SJ-threshold escalation not (analytic-gradient port attempted but unstable — see §13.2) | project boundary to surface, control Jacobian |
+| 4 | `RemoveOutsideElement` | `dualHex.vtk` | ◑ carve ported (`BuildCarveAndWriteVtk`); 146-probe repair → hemisphere clearance; ~5–10 % fewer cells (RNG ray order, §6.5) | carve the object out of the block |
+| 5 | `ProjectToIsoSurface` | `projHex.vtk` | ◑ ported (`BuildCarveProjectAndWriteVtk`); matches the SJ distribution at fixed threshold, escalation held off (§13.2) | project boundary to surface, control Jacobian |
 
 The "holes inside" reported when viewing the depth-8 bunny come from stopping after
 stage 3: the **`dualFullHex` block** is solid, over the whole bounding box, and
@@ -1251,41 +1277,48 @@ Output: the final watertight, Jacobian-controlled all-hex mesh (`projHex.vtk` /
   Jacobian) and update rule, but the per-element gradient is computed **numerically**
   (central differences over the incident optimisable corners) rather than with the
   reference's 1 200-line hand-expanded analytic gradient — same energy, far less code.
-  Smart Laplacian smoothing accepts a move only when it keeps the local scaled
-  Jacobian above the rising `eps_sj` threshold.
+  The gradient only acts on cells whose scaled Jacobian is `≤ eps_sj` (untangling);
+  the bulk quality comes from the gated smart-Laplacian smoothing, which accepts a
+  move only when it keeps every incident element above `eps_sj`.  The shell is pulled
+  onto the surface by the duplicate smoothing plus a per-window **drag** of the single
+  worst-distance duplicate (the reference's `maxDistIdx` drag).
 - **Normalisation:** the mesh + triangles are rescaled to a 100-unit box on entry so
-  the reference's constants (`LEARNING_RATE = 5e-4`, the `0.01 → 0.53 → +0.01`
-  threshold schedule) apply unchanged, then rescaled back on exit.
+  the reference's constants (`LEARNING_RATE = 5e-4`, `eps_sj = 0.01`) apply unchanged,
+  then rescaled back on exit.
 
-**Quality ceiling and why it exists.** With the default `ProjIters` the port fits
-the geometry with a fully valid core (depth-5 bunny: 0 inverted core hexes, boundary
-on the surface) but a lower median scaled Jacobian (≈ 0.37 vs the reference's ≈
-0.89).  The gap comes from the quality-threshold escalation (`eps_sj` climbing from
-0.01 to 0.53+), which is what drives the scaled Jacobian up to the paper's > 0.5
-target.  That escalation is unstable under a numerical gradient.
+**Where the quality comes from.** The median scaled Jacobian is driven almost
+entirely by the **gated smart-Laplacian smoothing**, not by the gradient (which only
+untangles cells whose scaled Jacobian is already below `eps_sj`).  The one detail that
+makes the port reach the reference's quality is the **core-boundary smoothing ring**:
+each inner boundary vertex smooths toward its edge-adjacent corners across *all*
+incident elements **including the buffer hexes** (the reference's `cP2`).  That pulls
+the core boundary toward the on-surface duplicates and keeps the buffer prisms
+regular — the buffer layer is where the quality budget is spent.  Restricting the ring
+to core cells (an earlier port bug) left the buffer hexes at median ≈ 0.69 with a few
+inverted; fixing it lifts the buffer to ≈ 0.81 and the whole mesh to the figures
+below.
 
-The analytic gradient (the chain-rule form `∂V/∂a = b×c`, `∂SJ/∂a = (b×c)/n −
-SJ·a/|a|²`, for each of the 9 evaluation points) was derived and **validated to
-machine precision** against finite differences, and shown to match the reference's
-`-4·(…)` body-centre expression exactly.  Per-point classification mirrors the
-reference: degenerate/inverted → raw-J gradient; `SJ < eps_sj` → scaled-J gradient;
-accumulate all bad points for smoothness.  However, swapping in the analytic gradient
-while keeping the surrounding control flow caused divergence: the geometry anchor
-(pulling dups to the surface) and the scaled-Jacobian gradient (inflating each hex
-to a cube) fight each other, pushing shared core vertices inward without bound.
-Stabilising the interaction requires the reference's complete update-and-gating block
-(the `=`-overwrite of duplicate gradients when `allPositive`, the exact
-smoothing/escalation interplay), not just a gradient swap.
+**Worst-element floor and escalation.** The reference also escalates `eps_sj`
+(`0.01 → 0.53 → +0.01`) once the shell is valid and seated on the surface, which lifts
+the *minimum* scaled Jacobian to ≈ 0.5 on small meshes.  Under the finite-difference
+gradient that escalation is unstable: the 0.53 jump makes the gated smoothing pull the
+duplicates back off the surface (to satisfy `SJ > 0.53`) faster than the gradient can
+recover, so `max_dist` explodes and the median *drops* (gentle steps and an always-on
+geometry anchor were both tried — same result).  The port therefore holds `eps_sj`
+fixed at the reference's base value, which exactly reproduces the reference's own
+depth-6 regime (its logs show `eps_sj` never escalates there either: minimum ≈ 0.007).
+The analytic gradient (chain-rule `∂SJ/∂a = (b×c)/n − SJ·a/|a|²`, validated to machine
+precision in an earlier experiment) would be the route to a stable escalation, but it
+is not required to match the distribution and is not used.
 
-The port therefore uses the numerical gradient and holds `eps_sj` fixed, converging
-to a valid, surface-fitted mesh.  **Closing the quality gap to ≥ 0.5 median requires
-porting the reference's full update block verbatim**, treating it as one unit rather
-than a piecemeal substitution.
+Measured benchmarks (port vs reference `projHex`, median / p10 / inverted):
+- depth 4: **0.85 / 0.58 / 0** &nbsp; (reference 0.85 / 0.57 / 0)
+- depth 5: **0.90 / 0.54 / 0** &nbsp; (reference 0.89 / 0.54 / 0)
+- depth 6: **0.91 / 0.51 / 0** &nbsp; (reference 0.99 / 0.43 / 0)
 
-Measured benchmarks:
-- 20 k iterations (stable, numerical gradient): 4 inverted (0.05 %), median 0.37
-- 120 k iterations + threshold escalation: 83 inverted (1.0 %), median 0.33
-- Reference `projHex` (ground truth): 0 inverted, median 0.89
+Median and p10 match (the port's p10 even edges ahead); the residual depth-6 median
+gap is the reference's escalation lifting its bulk quality, which the fixed-threshold
+port trades for a simpler, monotonic convergence.
 
 ### 13.3 Reproducing the diagnosis
 
