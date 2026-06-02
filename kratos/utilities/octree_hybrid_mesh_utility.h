@@ -2242,11 +2242,16 @@ private:
         }
 
         // --- 4. Optimisation --------------------------------------------------
-        constexpr double LR  = 5.0e-4;
+        constexpr double LR  = 5.0e-4;     // learning rate for the surface attractor
+        constexpr double LRQ = 2.0e-3;     // learning rate for the quality (untangling) gradient
         constexpr double H   = 1.0e-4;     // finite-difference step
         constexpr double TOL = 1.0e-3;     // shell-on-surface tolerance (100-unit box)
-        constexpr double eps_sj = 0.01;    // scaled-Jacobian gate (reference ELEM_THRES)
-        std::vector<std::array<double,3>> grad(NN);
+        double eps_sj = 0.01;              // scaled-Jacobian gate (reference ELEM_THRES)
+        constexpr double EPS_TARGET = 0.50;// escalation ceiling (reference drives toward >0.5)
+        constexpr double EPS_STEP   = 0.03;// per-window escalation increment
+        constexpr int    STALL_MAX  = 8;   // windows allowed to recover before freezing eps
+        std::vector<std::array<double,3>> grad(NN);   // surface attractor
+        std::vector<std::array<double,3>> gq(NN);     // quality / untangling gradient
 
         // Per-node gradient of an element's quality metric (scaled Jacobian when
         // the element is non-inverted, raw Jacobian when inverted), accumulated
@@ -2262,7 +2267,7 @@ private:
                     p[k][d]=save+H; const double fp = inverted ? JacobianMin(p) : ScaledJacobianMin(p);
                     p[k][d]=save-H; const double fm = inverted ? JacobianMin(p) : ScaledJacobianMin(p);
                     p[k][d]=save;
-                    grad[v][d] += (fp-fm)/(2*H);   // ascent on quality
+                    gq[v][d] += (fp-fm)/(2*H);   // ascent on quality
                 }
             }
         };
@@ -2300,42 +2305,51 @@ private:
             }
         };
 
-        // The reference runs ProjectToIsoSurface as an endless loop, but its
-        // quality comes almost entirely from the gated smoothing: the threshold
-        // escalation it also carries only fires once the whole shell sits within
-        // 1e-6 of the surface, which (per its own logs) essentially never happens
-        // on an organic mesh, so it runs the bulk of the time at eps_sj = 0.01.
-        // We reproduce that regime: gradient untangling of any sub-threshold cell,
-        // a geometry-fitting attractor on the duplicates, and gated smoothing.
-        // The shell is pulled onto the surface by the duplicate smoothing plus a
-        // per-window drag of the single worst duplicate (the reference's
-        // maxDistIdx drag).  Escalating eps_sj toward the paper's >0.5 target is
-        // *not* attempted: with the finite-difference gradient the 0.53 jump pulls
-        // the duplicates back off the surface faster than it can recover and the
-        // median quality drops, whereas the eps_sj = 0.01 regime reproduces the
-        // reference's median/p10 scaled-Jacobian distribution closely.  More
-        // sweeps than the budget below over-smooth and slowly degrade quality, so
-        // TotalIters is the convergence point rather than a floor.
+        // The reference runs ProjectToIsoSurface as an endless loop whose quality
+        // comes from the Sj-gated smoothing plus a threshold escalation that drives
+        // the worst element up toward the paper's >0.5 target.  A single 0.01->0.53
+        // jump diverges under the finite-difference gradient (it makes dozens of
+        // cells bad at once and strands the duplicates off the surface), so we climb
+        // the gate with three stabilisers:
+        //   * a *gradual* ramp of eps_sj (small steps, only while the mesh is valid
+        //     at the current gate) rather than one discrete jump;
+        //   * an *always-on* surface attractor on the duplicates (full strength when
+        //     valid, attenuated while untangling) so the shell never drifts off the
+        //     geometry during a ramp window;
+        //   * a best-valid snapshot, restored on exit, so escalation can only ever
+        //     raise the worst element, never degrade the converged mesh.
+        auto global_min_sj = [&]() {
+            double m = 1.0e30;
+            for (int c : affected) { double p[8][3]; load_hex(c, p); m = std::min(m, ScaledJacobianMin(p)); }
+            return m;
+        };
+
+        std::vector<std::array<double,3>> best_nodes = rNodes;
+        double best_min_sj = global_min_sj();
         int drag_count = 0;
+        int stall = 0;
         for (int it = 1; it <= TotalIters; ++it) {
-            for (int i=0;i<NN;++i) grad[i]={0,0,0};
+            for (int i=0;i<NN;++i) { grad[i]={0,0,0}; gq[i]={0,0,0}; }
 
             int bad = 0;
             for (int c : affected) {
                 double p[8][3]; load_hex(c, p);
                 if (ScaledJacobianMin(p) <= eps_sj) { ++bad; accumulate_quality_grad(c); }
             }
-            if (bad == 0) {                           // geometry-fitting attractor
-                for (int i=0;i<NN;++i) if (is_dup[i]) {
-                    double q[3];
-                    ClosestPointOnTriangle(rTri[dup_tri[i]][0].data(),
-                        rTri[dup_tri[i]][1].data(), rTri[dup_tri[i]][2].data(),
-                        rNodes[i].data(), q);
-                    for (int d=0;d<3;++d) grad[i][d] += -3.0*(rNodes[i][d]-q[d]);
-                }
+            // Geometry-fitting attractor: always pull the duplicated shell onto the
+            // input surface so escalation cannot strand it off the geometry.  Full
+            // strength once the mesh is valid at the current gate, attenuated while
+            // sub-threshold cells remain (so untangling leads).
+            const double w_attr = (bad == 0) ? 3.0 : 1.0;
+            for (int i=0;i<NN;++i) if (is_dup[i]) {
+                double q[3];
+                ClosestPointOnTriangle(rTri[dup_tri[i]][0].data(),
+                    rTri[dup_tri[i]][1].data(), rTri[dup_tri[i]][2].data(),
+                    rNodes[i].data(), q);
+                for (int d=0;d<3;++d) grad[i][d] += -w_attr*(rNodes[i][d]-q[d]);
             }
             for (int i=0;i<NN;++i) if (optimizable[i])
-                for (int d=0;d<3;++d) rNodes[i][d] += LR*grad[i][d];
+                for (int d=0;d<3;++d) rNodes[i][d] += LR*grad[i][d] + LRQ*gq[i][d];
 
             if (it % SmoothEvery == 0) {
                 smoothing_sweep();
@@ -2356,8 +2370,31 @@ private:
                     ClosestPointOnSoup(rTri, rNodes[max_dist_node].data(), q, tri);
                     for (int d=0;d<3;++d) rNodes[max_dist_node][d] = q[d];
                 }
+
+                // Snapshot the best valid mesh (worst element highest), then ramp
+                // the gate: a valid window raises eps_sj one step; a window that
+                // cannot regain validity counts toward a stall budget, after which
+                // the gate backs off one step so the remaining iterations settle at
+                // the best reachable worst element.
+                const double gmin = global_min_sj();
+                if (gmin > best_min_sj) { best_min_sj = gmin; best_nodes = rNodes; }
+                int bad_now = 0;
+                for (int c : affected) {
+                    double p[8][3]; load_hex(c,p);
+                    if (ScaledJacobianMin(p) <= eps_sj) { bad_now = 1; break; }
+                }
+                if (bad_now == 0) {
+                    stall = 0;
+                    if (eps_sj < EPS_TARGET) eps_sj = std::min(EPS_TARGET, eps_sj + EPS_STEP);
+                } else if (++stall >= STALL_MAX) {
+                    eps_sj = std::max(0.01, eps_sj - EPS_STEP);  // back off one step
+                    stall = 0;
+                }
             }
         }
+
+        // Restore the best valid mesh found during escalation.
+        if (global_min_sj() < best_min_sj) rNodes = best_nodes;
 
         // --- 5. Undo the normalisation --------------------------------------
         for (auto& nd : rNodes) for (int d=0; d<3; ++d) nd[d] = nd[d]/S + lo[d];
