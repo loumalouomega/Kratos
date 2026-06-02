@@ -248,15 +248,6 @@ public:
         KRATOS_ERROR_IF(data.tri_geom.empty())
             << "OctreeHybridMeshUtility: surface ModelPart has no triangles." << std::endl;
 
-        const bool dbg = std::getenv("OCTREE_DEBUG") != nullptr;
-        if (dbg) {
-            std::cerr << "[adapt] nTri=" << data.tri_geom.size()
-                      << " cube_side=" << data.cube_side
-                      << " refine_tri sizes:";
-            for (int s = 0; s < 5; ++s) std::cerr << " R" << s << "=" << data.refine_tri[s].size();
-            std::cerr << std::endl;
-        }
-        std::array<int,32> sub_per_level{};
 
         const double clo[3] = { data.cube_lo[0], data.cube_lo[1], data.cube_lo[2] };
         const double chi[3] = { data.cube_lo[0] + data.cube_side,
@@ -345,19 +336,8 @@ public:
                 if (!octet_refine.count(pc.second)) continue;
                 p_octree->SubdivideCellByIdAndLevel(pc.first->GetId(), pc.second[0]);
                 any_split = true;
-                if (dbg && pc.second[0] < 32) ++sub_per_level[pc.second[0]];
             }
             if (!any_split) break;
-        }
-        if (dbg) {
-            std::vector<CellType*> lv; p_octree->GetAllLeavesVector(lv);
-            std::array<int,32> leaf_per_level{};
-            for (CellType* c : lv) { int L=c->GetLevel(); if (L<32) ++leaf_per_level[L]; }
-            std::cerr << "[adapt] subdivisions per level:";
-            for (int L=0; L<=(int)RefinementDepth; ++L) if (sub_per_level[L]) std::cerr << " L"<<L<<"->"<<sub_per_level[L];
-            std::cerr << "\n[adapt] pre-balance leaves per level:";
-            for (int L=0; L<=(int)RefinementDepth; ++L) if (leaf_per_level[L]) std::cerr << " L"<<L<<"="<<leaf_per_level[L];
-            std::cerr << " total=" << lv.size() << std::endl;
         }
         return p_octree;
     }
@@ -2238,7 +2218,11 @@ private:
             }
             static constexpr int ADJ[8][3] =
                 {{1,3,4},{0,2,5},{1,3,6},{0,2,7},{0,5,7},{1,4,6},{2,5,7},{3,4,6}};
-            for (int c=0;c<n_core_cells;++c)
+            // Core-boundary points smooth toward their edge-adjacent corners in
+            // ALL incident elements, *including the buffer hexes* (reference cP2):
+            // this pulls the core boundary toward the on-surface duplicates and so
+            // straightens the buffer prisms, which dominate the quality budget.
+            for (int c=0;c<static_cast<int>(rCells.size());++c)
                 for (int k=0;k<8;++k) {
                     const int v=rCells[c][k];
                     if (!is_boundary[v]) continue;
@@ -2262,7 +2246,7 @@ private:
         constexpr double LR  = 5.0e-4;
         constexpr double H   = 1.0e-4;     // finite-difference step
         constexpr double TOL = 1.0e-3;     // shell-on-surface tolerance (100-unit box)
-        double eps_sj = 0.01;
+        constexpr double eps_sj = 0.01;    // scaled-Jacobian gate (reference ELEM_THRES)
         std::vector<std::array<double,3>> grad(NN);
 
         // Per-node gradient of an element's quality metric (scaled Jacobian when
@@ -2295,9 +2279,12 @@ private:
                 if (ScaledJacobianMin(p) <= eps_sj) { rNodes[v]=old; return; }
             }
         };
-        // One smoothing sweep: surface (duplicate) points smooth toward their ring
-        // and project onto the surface; inner boundary points smooth toward the
-        // core.  Both moves are scaled-Jacobian-gated at the current threshold.
+        // One smoothing sweep: surface (duplicate) points smooth toward their
+        // surface ring and re-project onto the input surface; inner boundary
+        // points smooth toward their incident-corner ring — which, crucially,
+        // spans the buffer hexes too (see smooth_nbr), so the core boundary
+        // follows the on-surface duplicates and the buffer prisms stay regular.
+        // Every move is scaled-Jacobian-gated, so smoothing never tangles a cell.
         auto smoothing_sweep = [&]() {
             for (int v=0; v<NN; ++v) {
                 if (!optimizable[v] || smooth_nbr[v].empty()) continue;
@@ -2314,18 +2301,23 @@ private:
             }
         };
 
-        // The reference runs ProjectToIsoSurface to convergence (an endless loop
-        // that periodically dumps the mesh), escalating the quality threshold once
-        // the shell is valid and seated on the surface.  The quality it reaches is
-        // driven mostly by the volume of gated smoothing (its median scaled
-        // Jacobian climbs the longer it runs) plus, where the gate fires, the
-        // rising eps_sj that lifts the worst-element floor.  We reproduce that:
-        // TotalIters is the convergence/safety budget, and once escalation can no
-        // longer make progress for a long stretch we stop early.
+        // The reference runs ProjectToIsoSurface as an endless loop, but its
+        // quality comes almost entirely from the gated smoothing: the threshold
+        // escalation it also carries only fires once the whole shell sits within
+        // 1e-6 of the surface, which (per its own logs) essentially never happens
+        // on an organic mesh, so it runs the bulk of the time at eps_sj = 0.01.
+        // We reproduce that regime: gradient untangling of any sub-threshold cell,
+        // a geometry-fitting attractor on the duplicates, and gated smoothing.
+        // The shell is pulled onto the surface by the duplicate smoothing plus a
+        // per-window drag of the single worst duplicate (the reference's
+        // maxDistIdx drag).  Escalating eps_sj toward the paper's >0.5 target is
+        // *not* attempted: with the finite-difference gradient the 0.53 jump pulls
+        // the duplicates back off the surface faster than it can recover and the
+        // median quality drops, whereas the eps_sj = 0.01 regime reproduces the
+        // reference's median/p10 scaled-Jacobian distribution closely.  More
+        // sweeps than the budget below over-smooth and slowly degrade quality, so
+        // TotalIters is the convergence point rather than a floor.
         int drag_count = 0;
-        int stall = 0;
-        const int stall_limit = std::max(50, TotalIters / std::max(1,SmoothEvery) / 4);
-
         for (int it = 1; it <= TotalIters; ++it) {
             for (int i=0;i<NN;++i) grad[i]={0,0,0};
 
@@ -2349,8 +2341,9 @@ private:
             if (it % SmoothEvery == 0) {
                 smoothing_sweep();
 
-                // Refresh closest triangles, find how far the shell sits from the
-                // surface and which duplicate is worst.
+                // Refresh closest triangles, find the duplicate sitting furthest
+                // from the surface, and drag it on (ungated) so the shell keeps
+                // closing onto the geometry where smoothing alone cannot.
                 double max_dist = 0.0; int max_dist_node = -1;
                 for (int i=0;i<NN;++i) if (is_dup[i]) {
                     double q[3]={0,0,0}; int tri=-1;
@@ -2359,30 +2352,10 @@ private:
                     const double dd=std::sqrt(d2);
                     if (dd>max_dist) { max_dist=dd; max_dist_node=i; }
                 }
-                int still_bad=0;
-                for (int c : affected) {
-                    double p[8][3]; load_hex(c,p);
-                    if (ScaledJacobianMin(p) <= eps_sj) ++still_bad;
-                }
-
-                if (still_bad == 0 && max_dist < TOL) {
-                    // Valid and on the surface: demand higher quality, then run a
-                    // few gated smoothing sweeps to settle at the new threshold
-                    // (the reference's escalate-then-repair).
-                    eps_sj = (eps_sj == 0.01) ? 0.53 : eps_sj + 0.01;
-                    for (int r = 0; r < 20; ++r) smoothing_sweep();
-                    stall = 0;
-                } else {
-                    // Force the single worst duplicate onto the surface (ungated)
-                    // so max_dist can fall and the gate can eventually fire — the
-                    // reference's maxDistIdx drag.  One node per window keeps it
-                    // safe; the gradient repairs any element it briefly spoils.
-                    if (max_dist_node >= 0 && (drag_count++ % 4 == 0)) {
-                        double q[3]={0,0,0}; int tri=-1;
-                        ClosestPointOnSoup(rTri, rNodes[max_dist_node].data(), q, tri);
-                        for (int d=0;d<3;++d) rNodes[max_dist_node][d] = q[d];
-                    }
-                    if (++stall > stall_limit && eps_sj > 0.5) break;   // converged
+                if (max_dist_node >= 0 && max_dist >= TOL && (drag_count++ % 4 == 0)) {
+                    double q[3]={0,0,0}; int tri=-1;
+                    ClosestPointOnSoup(rTri, rNodes[max_dist_node].data(), q, tri);
+                    for (int d=0;d<3;++d) rNodes[max_dist_node][d] = q[d];
                 }
             }
         }
