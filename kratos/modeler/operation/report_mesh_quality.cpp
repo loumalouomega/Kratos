@@ -23,6 +23,13 @@
 
 namespace Kratos {
 
+/**
+ * @brief Returns the default parameter schema for @ref ReportMeshQuality.
+ * @details The schema contains:
+ * - `"type"` — the Registry lookup key, fixed to `"ReportMeshQuality"`.
+ * - `"model_part_name"` — name of the ModelPart to evaluate; must be set by the caller.
+ * @return Parameters with both keys and their default values.
+ */
 const Parameters ReportMeshQuality::GetDefaultParameters() const
 {
     return Parameters(R"({
@@ -31,6 +38,30 @@ const Parameters ReportMeshQuality::GetDefaultParameters() const
     })");
 }
 
+/**
+ * @brief Computes per-element minimum scaled Jacobian and logs aggregate statistics.
+ * @details Implementation notes:
+ * 1. The target ModelPart is retrieved from the modeler's Model using the
+ *    `"model_part_name"` parameter.
+ * 2. If the part has no elements a short info message is emitted and the method returns.
+ * 3. For every element whose geometry has exactly 8 nodes the 8 corner coordinates are
+ *    copied into a plain `double[8][3]` array and passed to
+ *    `OctreeHybridMeshUtility::ScaledJacobianMin`, which evaluates the scaled Jacobian
+ *    at all 8 corners and the body centre using the `SJ_ADJ` edge-triple table, then
+ *    returns the minimum value.
+ * 4. Global minimum (`sj_min`), running sum (`sj_sum`), and inverted-element count
+ *    (`n_inverted`, i.e. elements with scaled Jacobian <= 0) are accumulated.
+ * 5. After the loop the statistics — minimum, mean, and inverted count with percentage
+ *    — are logged via `KRATOS_INFO("ReportMeshQuality")`.
+ *
+ * Elements with a number of nodes other than 8 are silently skipped so that mixed
+ * ModelParts (e.g. containing surfaces or lower-order elements) do not cause errors.
+ *
+ * @param rModeler            Provides access to the Model that contains the target
+ *                            ModelPart.  Not modified.
+ * @param OperationParameters Validated JSON parameters; must contain `"model_part_name"`
+ *                            with the name of an existing ModelPart.
+ */
 void ReportMeshQuality::Execute(OctreeMesherModeler& rModeler, Parameters OperationParameters) const
 {
     ModelPart& r_mp = rModeler.GetModel().GetModelPart(
