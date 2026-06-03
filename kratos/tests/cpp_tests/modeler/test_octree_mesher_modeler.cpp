@@ -1,0 +1,759 @@
+//    |  /           |
+//    ' /   __| _` | __|  _ \   __|
+//    . \  |   (   | |   (   |\__ `
+//   _|\_\_|  \__,_|\__|\___/ ____/
+//                   Multi-Physics
+//
+//  License:         BSD License
+//                   Kratos default license: kratos/license.txt
+//
+//  Main authors:    Vicente Mataix Ferrandiz
+//
+
+// System includes
+#include <cmath>
+
+// External includes
+
+// Project includes
+#include "testing/testing.h"
+#include "includes/kratos_application.h"
+#include "includes/kernel.h"
+#include "includes/variables.h"
+#include "includes/registry.h"
+
+#include "modeler/octree_mesher_modeler.h"
+
+namespace Kratos::Testing {
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// Shared surface-builder helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Builds a closed cube skin [lo, hi]^3 (12 triangles) with two extra
+ *        bounding-box-pin nodes, as expected by the octree engine.
+ *
+ * The surface lives in @p rSurfaceMesh which must already exist in @p rModel.
+ */
+void BuildClosedBoxSurface(ModelPart& rSurfaceMesh, double Lo = 0.3, double Hi = 0.7)
+{
+    rSurfaceMesh.SetBufferSize(1);
+    rSurfaceMesh.GetProcessInfo()[DOMAIN_SIZE] = 3;
+
+    const std::array<std::array<double,3>, 8> corners = {{
+        {Lo,Lo,Lo}, {Hi,Lo,Lo}, {Hi,Hi,Lo}, {Lo,Hi,Lo},
+        {Lo,Lo,Hi}, {Hi,Lo,Hi}, {Hi,Hi,Hi}, {Lo,Hi,Hi}
+    }};
+    IndexType nid = 1;
+    for (const auto& c : corners)
+        rSurfaceMesh.CreateNewNode(nid++, c[0], c[1], c[2]);
+    rSurfaceMesh.CreateNewNode(nid++, 0.0, 0.0, 0.0); // bbox pin
+    rSurfaceMesh.CreateNewNode(nid,   1.0, 1.0, 1.0); // bbox pin
+
+    const std::array<std::array<IndexType,3>, 12> faces = {{
+        {1,2,3},{1,3,4},{5,7,6},{5,8,7},
+        {1,6,2},{1,5,6},{4,3,7},{4,7,8},
+        {1,4,8},{1,8,5},{2,6,7},{2,7,3}
+    }};
+    IndexType gid = 1;
+    for (const auto& f : faces) {
+        rSurfaceMesh.CreateNewGeometry(
+            "Triangle3D3", gid++,
+            std::vector<IndexType>{f[0], f[1], f[2]});
+    }
+}
+
+/**
+ * @brief Builds a small inclined triangular patch near one corner of the unit
+ *        cube — guarantees 2:1 transitions in the adaptive octree.
+ */
+void BuildTransitionSurface(ModelPart& rSurfaceMesh)
+{
+    rSurfaceMesh.SetBufferSize(1);
+    rSurfaceMesh.GetProcessInfo()[DOMAIN_SIZE] = 3;
+
+    const std::array<std::array<double,3>, 6> pts = {{
+        {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0},
+        {0.15, 0.15, 0.30}, {0.45, 0.15, 0.30},
+        {0.45, 0.45, 0.36}, {0.15, 0.45, 0.36}
+    }};
+    IndexType nid = 1;
+    for (const auto& p : pts)
+        rSurfaceMesh.CreateNewNode(nid++, p[0], p[1], p[2]);
+
+    rSurfaceMesh.CreateNewGeometry("Triangle3D3", 1,
+        std::vector<IndexType>{3, 4, 5});
+    rSurfaceMesh.CreateNewGeometry("Triangle3D3", 2,
+        std::vector<IndexType>{3, 5, 6});
+}
+
+/**
+ * @brief Runs OctreeMesherModeler::SetupModelPart with the given JSON settings
+ *        string, then returns the named output ModelPart.
+ */
+ModelPart& RunModeler(Model& rModel, const std::string& rSettingsJson)
+{
+    Parameters settings(rSettingsJson);
+    OctreeMesherModeler modeler(rModel, settings);
+    modeler.SetupModelPart();
+    return rModel.GetModelPart(settings["output_model_part_name"].GetString());
+}
+
+/**
+ * @brief Computes the minimum scaled Jacobian of a hexahedral element using the
+ *        SJ_ADJ corner-triple convention matching the engine's Sj function.
+ */
+double MinScaledJacobian(const Element& rElement)
+{
+    static constexpr int SJ_ADJ[8][3] =
+        {{1,3,4},{2,0,5},{3,1,6},{0,2,7},{7,5,0},{4,6,1},{5,7,2},{6,4,3}};
+    const auto& r_geom = rElement.GetGeometry();
+    double worst = 1.0e30;
+    for (int o = 0; o < 8; ++o) {
+        const double ox = r_geom[o].X(), oy = r_geom[o].Y(), oz = r_geom[o].Z();
+        double e[3][3];
+        for (int k = 0; k < 3; ++k) {
+            e[k][0] = r_geom[SJ_ADJ[o][k]].X() - ox;
+            e[k][1] = r_geom[SJ_ADJ[o][k]].Y() - oy;
+            e[k][2] = r_geom[SJ_ADJ[o][k]].Z() - oz;
+        }
+        const double det = e[0][0]*(e[1][1]*e[2][2]-e[1][2]*e[2][1])
+                         - e[0][1]*(e[1][0]*e[2][2]-e[1][2]*e[2][0])
+                         + e[0][2]*(e[1][0]*e[2][1]-e[1][1]*e[2][0]);
+        const auto nrm = [](const double v[3]){
+            return std::sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]); };
+        const double n0 = nrm(e[0]), n1 = nrm(e[1]), n2 = nrm(e[2]);
+        if (n0 < 1e-14 || n1 < 1e-14 || n2 < 1e-14) return -1.0;
+        worst = std::min(worst, det / (n0 * n1 * n2));
+    }
+    return worst;
+}
+
+} // anonymous namespace
+
+// ===========================================================================
+// OctreeMesherModeler — top-level modeler tests
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualElementsCreated, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "octree_generator" : { "refinement_depth": 4, "adaptive": false },
+        "coloring_settings_list" : [{ "type": "ClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "GenerateHexesByCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
+        "model_part_operations"  : []
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualZeroInverted, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "octree_generator" : { "refinement_depth": 4, "adaptive": false },
+        "coloring_settings_list" : [{ "type": "ClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "GenerateHexesByCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
+        "model_part_operations"  : []
+    })");
+
+    int n_inv = 0;
+    for (const auto& r_el : out.Elements())
+        if (MinScaledJacobian(r_el) <= 0.0) ++n_inv;
+
+    KRATOS_EXPECT_EQ(n_inv, 0);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualCarveBbox, KratosCoreFastSuite)
+{
+    constexpr double lo = 0.3, hi = 0.7;
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"), lo, hi);
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "octree_generator" : { "refinement_depth": 4, "adaptive": false },
+        "coloring_settings_list" : [{ "type": "ClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "GenerateHexesByCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
+        "model_part_operations"  : []
+    })");
+
+    // All output nodes must lie within the (surface + one-half-cell) bounding box.
+    const double margin = 0.07;  // half-cell at depth 4 in a unit box ≈ 0.0625
+    for (const auto& r_node : out.Nodes()) {
+        KRATOS_EXPECT_GT(r_node.X(), lo - margin);
+        KRATOS_EXPECT_LT(r_node.X(), hi + margin);
+        KRATOS_EXPECT_GT(r_node.Y(), lo - margin);
+        KRATOS_EXPECT_LT(r_node.Y(), hi + margin);
+        KRATOS_EXPECT_GT(r_node.Z(), lo - margin);
+        KRATOS_EXPECT_LT(r_node.Z(), hi + margin);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDefaultParametersValid, KratosCoreFastSuite)
+{
+    OctreeMesherModeler m;
+    const Parameters defaults = m.GetDefaultParameters();
+
+    // Check that the mandatory keys are present with correct types
+    KRATOS_EXPECT_TRUE(defaults.Has("input_model_part_name"));
+    KRATOS_EXPECT_TRUE(defaults.Has("output_model_part_name"));
+    KRATOS_EXPECT_TRUE(defaults.Has("octree_generator"));
+    KRATOS_EXPECT_TRUE(defaults.Has("coloring_settings_list"));
+    KRATOS_EXPECT_TRUE(defaults.Has("entities_generator_list"));
+    KRATOS_EXPECT_TRUE(defaults.Has("model_part_operations"));
+
+    const Parameters gen = defaults["octree_generator"];
+    KRATOS_EXPECT_TRUE(gen.Has("refinement_depth"));
+    KRATOS_EXPECT_TRUE(gen.Has("adaptive"));
+    KRATOS_EXPECT_TRUE(gen.Has("mesh_type"));
+    KRATOS_EXPECT_TRUE(gen.Has("project_to_surface"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerInfoString, KratosCoreFastSuite)
+{
+    OctreeMesherModeler m;
+    KRATOS_EXPECT_EQ(m.Info(), "OctreeMesherModeler");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerUnknownOperationThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "octree_generator" : { "refinement_depth": 3, "adaptive": false },
+        "coloring_settings_list" : [],
+        "entities_generator_list": [],
+        "model_part_operations"  : [{ "type": "NonExistentOperationType_XYZ" }]
+    })");
+    OctreeMesherModeler modeler(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
+}
+
+// ===========================================================================
+// ClassifyCellsInsideOutside colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherClassifyReducesCellCount, KratosCoreFastSuite)
+{
+    // Without colouring the hex generator sees all cells (color=1 default matches
+    // everything since mCellColor is empty). With colouring the set must be smaller.
+    Model m1, m2;
+    BuildClosedBoxSurface(m1.CreateModelPart("S"));
+    BuildClosedBoxSurface(m2.CreateModelPart("S"));
+
+    const char* settings_no_classify = R"({
+        "input_model_part_name":"S","output_model_part_name":"O",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"O","color":1}],
+        "model_part_operations":[]
+    })";
+    const char* settings_classify = R"({
+        "input_model_part_name":"S","output_model_part_name":"O",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"O","color":1}],
+        "model_part_operations":[]
+    })";
+
+    ModelPart& out_all    = RunModeler(m1, settings_no_classify);
+    ModelPart& out_carved = RunModeler(m2, settings_classify);
+
+    KRATOS_EXPECT_GT(out_all.NumberOfElements(), out_carved.NumberOfElements());
+    KRATOS_EXPECT_GT(out_carved.NumberOfElements(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherClassifyRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"));
+}
+
+// ===========================================================================
+// GenerateHexesByCellColor entity generator
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesNodeDeduplication, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    // In a conforming mesh, nodes are shared: node count << 8 × element count
+    const std::size_t n_nodes = out.NumberOfNodes();
+    const std::size_t n_elems = out.NumberOfElements();
+    KRATOS_EXPECT_LT(n_nodes, 8 * n_elems);
+    KRATOS_EXPECT_GT(n_nodes, 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesRefinementLevelTagged, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"Output","color":1,"tag_refinement_level":true}],
+        "model_part_operations":[]
+    })");
+
+    bool has_positive_level = false;
+    for (const auto& r_el : out.Elements()) {
+        const int lv = r_el.GetValue(REFINEMENT_LEVEL);
+        // Template hexes get -1; regular ones get the octree level (> 0)
+        KRATOS_EXPECT_TRUE(lv == -1 || lv > 0);
+        if (lv > 0) has_positive_level = true;
+    }
+    KRATOS_EXPECT_TRUE(has_positive_level);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesNoLevelWhenDisabled, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"Output","color":1,"tag_refinement_level":false}],
+        "model_part_operations":[]
+    })");
+
+    for (const auto& r_el : out.Elements()) {
+        // Without tagging every element carries the default int value of 0
+        KRATOS_EXPECT_EQ(r_el.GetValue(REFINEMENT_LEVEL), 0);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesUniqueIds, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    // All node ids must be unique and all element ids must be unique
+    std::set<IndexType> node_ids, elem_ids;
+    for (const auto& r_nd : out.Nodes()) {
+        KRATOS_EXPECT_EQ(node_ids.count(r_nd.Id()), 0u);
+        node_ids.insert(r_nd.Id());
+    }
+    for (const auto& r_el : out.Elements()) {
+        KRATOS_EXPECT_EQ(elem_ids.count(r_el.Id()), 0u);
+        elem_ids.insert(r_el.Id());
+    }
+}
+
+// ===========================================================================
+// GenerateBoundaryConditionsByFace entity generator
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsCreated, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Volume",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateBoundaryConditionsByFace","model_part_name":"Boundary","color":1}
+        ],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& bnd = model.GetModelPart("Boundary");
+    KRATOS_EXPECT_GT(bnd.NumberOfConditions(), 0u);
+    KRATOS_EXPECT_GT(bnd.NumberOfNodes(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsQuadNodes, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Volume",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateBoundaryConditionsByFace","model_part_name":"Boundary","color":1}
+        ],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& bnd = model.GetModelPart("Boundary");
+    for (const auto& r_cond : bnd.Conditions())
+        KRATOS_EXPECT_EQ(r_cond.GetGeometry().size(), 4u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsFewerthanSixTimesElements, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Volume",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateBoundaryConditionsByFace","model_part_name":"Boundary","color":1}
+        ],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& vol = model.GetModelPart("Volume");
+    ModelPart& bnd = model.GetModelPart("Boundary");
+    KRATOS_EXPECT_LT(bnd.NumberOfConditions(), 6 * vol.NumberOfElements());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryNodesSubsetOfVolume, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Volume",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateBoundaryConditionsByFace","model_part_name":"Boundary","color":1}
+        ],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& vol = model.GetModelPart("Volume");
+    ModelPart& bnd = model.GetModelPart("Boundary");
+
+    std::set<IndexType> vol_ids;
+    for (const auto& r_nd : vol.Nodes()) vol_ids.insert(r_nd.Id());
+
+    for (const auto& r_nd : bnd.Nodes())
+        KRATOS_EXPECT_GT(vol_ids.count(r_nd.Id()), 0u);
+}
+
+// ===========================================================================
+// GenerateHangingNodeConstraints entity generator
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherHangingNodeConstraintsRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalMeshConstraintsGenerated, KratosCoreFastSuite)
+{
+    Model model;
+    BuildTransitionSurface(model.CreateModelPart("Surface"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Surface","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":true,"mesh_type":"primal"},
+        "coloring_settings_list":[],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"Output","color":1},
+            {"type":"GenerateHangingNodeConstraints","model_part_name":"Output",
+             "variables":["DISPLACEMENT_X"]}
+        ],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfMasterSlaveConstraints(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalConstraintsPartitionOfUnity, KratosCoreFastSuite)
+{
+    Model model;
+    BuildTransitionSurface(model.CreateModelPart("Surface"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Surface","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":true,"mesh_type":"primal"},
+        "coloring_settings_list":[],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"Output","color":1},
+            {"type":"GenerateHangingNodeConstraints","model_part_name":"Output",
+             "variables":["DISPLACEMENT_X"]}
+        ],
+        "model_part_operations":[]
+    })");
+
+    for (const auto& r_constraint : out.MasterSlaveConstraints()) {
+        MasterSlaveConstraint::MatrixType T;
+        MasterSlaveConstraint::VectorType b;
+        r_constraint.CalculateLocalSystem(T, b, out.GetProcessInfo());
+
+        const IndexType nm = T.size2();
+        KRATOS_EXPECT_TRUE(nm == 2u || nm == 4u);
+
+        double row_sum = 0.0;
+        for (IndexType j = 0; j < nm; ++j) row_sum += T(0, j);
+        KRATOS_EXPECT_NEAR(row_sum, 1.0, 1e-10);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalConstraintsMasterCountsValid, KratosCoreFastSuite)
+{
+    Model model;
+    BuildTransitionSurface(model.CreateModelPart("Surface"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Surface","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":true,"mesh_type":"primal"},
+        "coloring_settings_list":[],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"Output","color":1},
+            {"type":"GenerateHangingNodeConstraints","model_part_name":"Output",
+             "variables":["DISPLACEMENT_X"]}
+        ],
+        "model_part_operations":[]
+    })");
+
+    bool found_4_master = false;
+    for (const auto& r_constraint : out.MasterSlaveConstraints()) {
+        const IndexType nm = r_constraint.GetMasterDofsVector().size();
+        KRATOS_EXPECT_TRUE(nm == 2u || nm == 4u);
+        if (nm == 4u) found_4_master = true;
+    }
+    KRATOS_EXPECT_TRUE(found_4_master);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalMultiVariableConstraints, KratosCoreFastSuite)
+{
+    Model m1, m2;
+    BuildTransitionSurface(m1.CreateModelPart("S"));
+    BuildTransitionSurface(m2.CreateModelPart("S"));
+
+    const char* s1 = R"({
+        "input_model_part_name":"S","output_model_part_name":"O",
+        "octree_generator":{"refinement_depth":4,"adaptive":true,"mesh_type":"primal"},
+        "coloring_settings_list":[],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"O","color":1},
+            {"type":"GenerateHangingNodeConstraints","model_part_name":"O",
+             "variables":["DISPLACEMENT_X"]}
+        ],"model_part_operations":[]
+    })";
+    const char* s3 = R"({
+        "input_model_part_name":"S","output_model_part_name":"O",
+        "octree_generator":{"refinement_depth":4,"adaptive":true,"mesh_type":"primal"},
+        "coloring_settings_list":[],
+        "entities_generator_list":[
+            {"type":"GenerateHexesByCellColor","model_part_name":"O","color":1},
+            {"type":"GenerateHangingNodeConstraints","model_part_name":"O",
+             "variables":["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]}
+        ],"model_part_operations":[]
+    })";
+
+    ModelPart& out1 = RunModeler(m1, s1);
+    ModelPart& out3 = RunModeler(m2, s3);
+
+    KRATOS_EXPECT_EQ(out3.NumberOfMasterSlaveConstraints(),
+                     3 * out1.NumberOfMasterSlaveConstraints());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherDualMeshNoHangingConstraints, KratosCoreFastSuite)
+{
+    Model model;
+    BuildTransitionSurface(model.CreateModelPart("Surface"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Surface","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":true,"mesh_type":"dual"},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_EQ(out.NumberOfMasterSlaveConstraints(), 0u);
+}
+
+// ===========================================================================
+// ReportMeshQuality operation
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherOperation.All.ReportMeshQuality.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityRunsWithoutError, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    // The operation just logs — verify it does not throw
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":4,"adaptive":false},
+        "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[{"type":"ReportMeshQuality",
+            "model_part_name":"Output"}]
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityEmptyModelPart, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    // Create the output part explicitly so the quality-report operation can reach it.
+    model.CreateModelPart("Empty");
+
+    Parameters settings(R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Empty",
+        "octree_generator":{"refinement_depth":3,"adaptive":false},
+        "coloring_settings_list":[],
+        "entities_generator_list":[],
+        "model_part_operations":[{"type":"ReportMeshQuality","model_part_name":"Empty"}]
+    })");
+    // SetupModelPart on an empty entity list should not throw
+    OctreeMesherModeler modeler(model, settings);
+    modeler.SetupModelPart();
+    KRATOS_EXPECT_EQ(model.GetModelPart("Empty").NumberOfElements(), 0u);
+}
+
+// ===========================================================================
+// Registry dispatch mechanism
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBasePrototypesPresent, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherColoring.All.OctreeMesherColoring.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherEntityGeneration.All.OctreeMesherEntityGeneration.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherOperation.All.OctreeMesherOperation.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryKratosMultiphysicsPaths, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherColoring.KratosMultiphysics.ClassifyCellsInsideOutside.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherEntityGeneration.KratosMultiphysics.GenerateHexesByCellColor.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeMesherOperation.KratosMultiphysics.ReportMeshQuality.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryFullPathDispatchWorks, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    // A four-segment full path must be accepted directly by the Dispatch method
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":3,"adaptive":false},
+        "coloring_settings_list":[{
+            "type":"OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
+        }],
+        "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBaseColoringInvocationThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":3,"adaptive":false},
+        "coloring_settings_list":[{
+            "type":"OctreeMesherColoring.All.OctreeMesherColoring.Prototype"
+        }],
+        "entities_generator_list":[],"model_part_operations":[]
+    })");
+    OctreeMesherModeler m(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBaseOperationInvocationThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "octree_generator":{"refinement_depth":3,"adaptive":false},
+        "coloring_settings_list":[],
+        "entities_generator_list":[],
+        "model_part_operations":[{
+            "type":"OctreeMesherOperation.All.OctreeMesherOperation.Prototype"
+        }]
+    })");
+    OctreeMesherModeler m(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
+}
+
+} // namespace Kratos::Testing
