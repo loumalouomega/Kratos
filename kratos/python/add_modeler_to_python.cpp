@@ -28,6 +28,7 @@
 #include "modeler/combine_model_part_modeler.h"
 #include "modeler/voxel_mesh_generator_modeler.h"
 #include "modeler/clean_up_problematic_triangles_modeler.h"
+#include "modeler/octree_mesher_modeler.h"
 
 namespace Kratos::Python
 {
@@ -120,6 +121,10 @@ void  AddModelerToPython(pybind11::module& m)
     ;
 
     py::class_<CleanUpProblematicTrianglesModeler, CleanUpProblematicTrianglesModeler::Pointer, Modeler>(m, "CleanUpProblematicTrianglesModeler")
+        .def(py::init<Model&, Parameters>())
+    ;
+
+    py::class_<OctreeMesherModeler, OctreeMesherModeler::Pointer, Modeler>(m, "OctreeMesherModeler")
         .def(py::init<Model&, Parameters>())
     ;
 }
