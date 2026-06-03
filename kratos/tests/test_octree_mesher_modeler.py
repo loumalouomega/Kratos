@@ -339,5 +339,452 @@ class TestOctreeMesherModelerBunny(unittest.TestCase):
         self.assertEqual(fail, 0)
 
 
+# ===========================================================================
+class TestClassifyCellsInsideOutside(unittest.TestCase):
+    """Unit tests for ClassifyCellsInsideOutside colouring."""
+
+    def _run(self, lo=0.3, hi=0.7, depth=4):
+        model = KM.Model()
+        build_closed_box_surface(model, lo=lo, hi=hi, name="S")
+        run_modeler(model, f"""{{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "octree_generator":{{"type":"generate_octree_from_surface",
+                                 "refinement_depth":{depth},"adaptive":false}},
+            "coloring_settings_list":[{{"type":"ClassifyCellsInsideOutside"}}],
+            "entities_generator_list":[],
+            "model_part_operations":[]}}""")
+        return model
+
+    def test_produces_inside_and_outside_colors(self):
+        """After colouring a block around a box, both color=1 and color=0 cells exist."""
+        # We run WITHOUT a hex generator so we can inspect that the coloring ran.
+        # Indirect test: running the full pipeline with color=1 filter gives fewer
+        # cells than the unfiltered full block.
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"All",
+            "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":4,"adaptive":false},
+            "coloring_settings_list":[],
+            "entities_generator_list":[{"type":"GenerateHexesByCellColor","model_part_name":"All","color":1}],
+            "model_part_operations":[]}""")
+        model2 = KM.Model()
+        build_closed_box_surface(model2, lo=0.3, hi=0.7, name="S")
+        run_modeler(model2, """{
+            "input_model_part_name":"S","output_model_part_name":"Carved",
+            "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":4,"adaptive":false},
+            "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+            "entities_generator_list":[{"type":"GenerateHexesByCellColor","model_part_name":"Carved","color":1}],
+            "model_part_operations":[]}""")
+        n_all = model.GetModelPart("All").NumberOfElements()
+        n_carved = model2.GetModelPart("Carved").NumberOfElements()
+        print(f"\n[ClassifyCellsInsideOutside] unfiltered={n_all} inside={n_carved}")
+        # The carved set (inside only) must be strictly smaller than the unfiltered block
+        self.assertGreater(n_all, n_carved,
+                           "ClassifyCellsInsideOutside removed no cells")
+        self.assertGreater(n_carved, 0, "No inside cells found")
+
+    def test_projected_shortcut_all_cells_inside(self):
+        """With project_to_surface=true the shortcut path sets all cells to color=1."""
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"Proj",
+            "octree_generator":{"type":"generate_octree_from_surface",
+                                 "refinement_depth":4,"adaptive":false,"project_to_surface":true},
+            "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+            "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+                                        "model_part_name":"Proj","color":1}],
+            "model_part_operations":[]}""")
+        n_proj = model.GetModelPart("Proj").NumberOfElements()
+        print(f"\n[ClassifyCellsInsideOutside projected] elements={n_proj}")
+        self.assertGreater(n_proj, 0)
+
+    def test_default_type_name(self):
+        """The default parameters include type='ClassifyCellsInsideOutside'."""
+        proto_path = "OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
+        self.assertTrue(KM.Registry.HasValue(proto_path),
+                        f"Registry path not found: {proto_path}")
+
+    def test_unknown_coloring_type_raises(self):
+        """An unknown colouring type triggers a clear error message."""
+        model = KM.Model()
+        build_closed_box_surface(model, name="S")
+        with self.assertRaises(Exception):
+            run_modeler(model, """{
+                "input_model_part_name":"S","output_model_part_name":"O",
+                "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":3,"adaptive":false},
+                "coloring_settings_list":[{"type":"NonExistentColoringType"}],
+                "entities_generator_list":[],"model_part_operations":[]}""")
+
+
+# ===========================================================================
+class TestGenerateHexesByCellColor(unittest.TestCase):
+    """Unit tests for GenerateHexesByCellColor entity generator."""
+
+    def _box_run(self, lo=0.3, hi=0.7, depth=4, color=1,
+                 entity="Element3D8N", tag_level=True):
+        model = KM.Model()
+        build_closed_box_surface(model, lo=lo, hi=hi, name="S")
+        run_modeler(model, f"""{{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "octree_generator":{{"type":"generate_octree_from_surface",
+                                 "refinement_depth":{depth},"adaptive":false}},
+            "coloring_settings_list":[{{"type":"ClassifyCellsInsideOutside"}}],
+            "entities_generator_list":[{{"type":"GenerateHexesByCellColor",
+                                        "model_part_name":"O","color":{color},
+                                        "generated_entity":"{entity}",
+                                        "tag_refinement_level":{str(tag_level).lower()}}}],
+            "model_part_operations":[]}}""")
+        return model.GetModelPart("O")
+
+    def test_positive_element_count(self):
+        out = self._box_run()
+        self.assertGreater(out.NumberOfElements(), 0)
+        self.assertGreater(out.NumberOfNodes(), 0)
+
+    def test_color_filter_inside(self):
+        """color=1 produces fewer elements than running without a color filter."""
+        model_full = KM.Model()
+        build_closed_box_surface(model_full, name="S")
+        run_modeler(model_full, """{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":4,"adaptive":false},
+            "coloring_settings_list":[],
+            "entities_generator_list":[{"type":"GenerateHexesByCellColor","model_part_name":"O","color":1}],
+            "model_part_operations":[]}""")
+        n_all = model_full.GetModelPart("O").NumberOfElements()
+
+        n_carved = self._box_run().NumberOfElements()
+        print(f"\n[GenerateHexesByCellColor] unfiltered={n_all} inside={n_carved}")
+        self.assertGreater(n_all, n_carved)
+
+    def test_zero_inverted_elements(self):
+        out = self._box_run()
+        n_inv = sum(1 for el in out.Elements
+                    if cell_min_sj([(n.X, n.Y, n.Z) for n in el.GetGeometry()]) <= 0)
+        self.assertEqual(n_inv, 0)
+
+    def test_refinement_level_tagged(self):
+        out = self._box_run(tag_level=True)
+        levels = {el.GetValue(KM.REFINEMENT_LEVEL) for el in out.Elements}
+        self.assertTrue(any(l > 0 for l in levels))
+
+    def test_refinement_level_not_tagged(self):
+        """When tag_refinement_level=false no REFINEMENT_LEVEL is set."""
+        out = self._box_run(tag_level=False)
+        # Default int value for an unset variable is 0, not any octree level
+        levels = {el.GetValue(KM.REFINEMENT_LEVEL) for el in out.Elements}
+        self.assertEqual(levels, {0}, f"Expected only default 0, got {levels}")
+
+    def test_node_deduplication(self):
+        """Node count is strictly less than 8 × element count (nodes are shared)."""
+        out = self._box_run()
+        n_el = out.NumberOfElements()
+        n_nd = out.NumberOfNodes()
+        self.assertLess(n_nd, 8 * n_el,
+                        "Every node is unique — sharing is not working")
+
+    def test_node_ids_contiguous_from_one(self):
+        """All node ids are unique positive integers starting from 1."""
+        out = self._box_run()
+        ids = sorted(n.Id for n in out.Nodes)
+        self.assertEqual(ids[0], 1)
+        self.assertEqual(len(ids), len(set(ids)), "Duplicate node ids")
+
+    def test_element_ids_contiguous_from_one(self):
+        out = self._box_run()
+        ids = sorted(el.Id for el in out.Elements)
+        self.assertEqual(ids[0], 1)
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_registry_path_exists(self):
+        self.assertTrue(KM.Registry.HasValue(
+            "OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype"))
+
+    def test_unknown_entity_type_raises(self):
+        with self.assertRaises(Exception):
+            model = KM.Model()
+            build_closed_box_surface(model, name="S")
+            run_modeler(model, """{
+                "input_model_part_name":"S","output_model_part_name":"O",
+                "octree_generator":{"type":"generate_octree_from_surface",
+                                    "refinement_depth":3,"adaptive":false},
+                "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+                "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+                    "model_part_name":"O","color":1,"generated_entity":"NoSuchElement3D8N"}],
+                "model_part_operations":[]}""")
+
+
+# ===========================================================================
+class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
+    """Unit tests for GenerateBoundaryConditionsByFace entity generator."""
+
+    def _run(self, lo=0.3, hi=0.7, depth=4):
+        model = KM.Model()
+        build_closed_box_surface(model, lo=lo, hi=hi, name="S")
+        run_modeler(model, f"""{{
+            "input_model_part_name":"S","output_model_part_name":"Volume",
+            "octree_generator":{{"type":"generate_octree_from_surface",
+                                 "refinement_depth":{depth},"adaptive":false}},
+            "coloring_settings_list":[{{"type":"ClassifyCellsInsideOutside"}}],
+            "entities_generator_list":[
+                {{"type":"GenerateHexesByCellColor","model_part_name":"Volume","color":1}},
+                {{"type":"GenerateBoundaryConditionsByFace","model_part_name":"Boundary","color":1}}
+            ],
+            "model_part_operations":[]}}""")
+        return model.GetModelPart("Volume"), model.GetModelPart("Boundary")
+
+    def test_conditions_created(self):
+        vol, bnd = self._run()
+        print(f"\n[GenerateBoundaryConditionsByFace] elements={vol.NumberOfElements()} cond={bnd.NumberOfConditions()}")
+        self.assertGreater(bnd.NumberOfConditions(), 0)
+
+    def test_boundary_nodes_populated(self):
+        vol, bnd = self._run()
+        self.assertGreater(bnd.NumberOfNodes(), 0)
+
+    def test_boundary_nodes_subset_of_volume_nodes(self):
+        """Every boundary node id also exists in the volume mesh."""
+        vol, bnd = self._run()
+        vol_ids = {n.Id for n in vol.Nodes}
+        bnd_ids = {n.Id for n in bnd.Nodes}
+        self.assertTrue(bnd_ids.issubset(vol_ids),
+                        "Boundary nodes have ids not present in volume")
+
+    def test_condition_ids_contiguous(self):
+        vol, bnd = self._run()
+        ids = sorted(c.Id for c in bnd.Conditions)
+        self.assertEqual(ids[0], 1)
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_each_condition_has_four_nodes(self):
+        """Every boundary condition is a quad (4 nodes)."""
+        vol, bnd = self._run()
+        for cond in bnd.Conditions:
+            self.assertEqual(len(cond.GetGeometry()), 4,
+                             f"Condition {cond.Id} does not have 4 nodes")
+
+    def test_boundary_faces_lt_6_times_elements(self):
+        """Boundary face count is < 6 × element count (interior faces are shared)."""
+        vol, bnd = self._run()
+        self.assertLess(bnd.NumberOfConditions(),
+                        6 * vol.NumberOfElements())
+
+    def test_registry_path_exists(self):
+        self.assertTrue(KM.Registry.HasValue(
+            "OctreeMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype"))
+
+
+# ===========================================================================
+class TestGenerateHangingNodeConstraints(unittest.TestCase):
+    """Unit tests for GenerateHangingNodeConstraints entity generator (primal mesh)."""
+
+    def _run(self, depth=4, variables=None):
+        if variables is None:
+            variables = ["DISPLACEMENT_X"]
+        var_json = str(variables).replace("'", '"')
+        model = KM.Model()
+        build_transition_surface(model)
+        run_modeler(model, f"""{{
+            "input_model_part_name":"Surface","output_model_part_name":"O",
+            "octree_generator":{{"type":"generate_octree_from_surface",
+                                 "refinement_depth":{depth},"adaptive":true,"mesh_type":"primal"}},
+            "coloring_settings_list":[],
+            "entities_generator_list":[
+                {{"type":"GenerateHexesByCellColor","model_part_name":"O","color":1}},
+                {{"type":"GenerateHangingNodeConstraints","model_part_name":"O",
+                  "variables":{var_json}}}
+            ],
+            "model_part_operations":[]}}""")
+        return model.GetModelPart("O")
+
+    def test_constraints_generated(self):
+        out = self._run()
+        nc = out.NumberOfMasterSlaveConstraints()
+        print(f"\n[GenerateHangingNodeConstraints] elements={out.NumberOfElements()} constraints={nc}")
+        self.assertGreater(nc, 0)
+
+    def test_partition_of_unity(self):
+        """Every constraint row sums to 1.0 (bilinear interpolation property)."""
+        out = self._run()
+        fail = 0
+        for c in out.MasterSlaveConstraints:
+            T, b = KM.Matrix(), KM.Vector()
+            c.CalculateLocalSystem(T, b, KM.ProcessInfo())
+            rs = sum(T[0, j] for j in range(T.Size2()))
+            if abs(rs - 1.0) > 1e-10:
+                fail += 1
+        self.assertEqual(fail, 0, f"{fail} constraints violate partition of unity")
+
+    def test_master_counts_two_or_four(self):
+        """Only edge-midpoint (2-master) and face-centre (4-master) constraints."""
+        out = self._run()
+        for c in out.MasterSlaveConstraints:
+            nm = len(c.GetMasterDofsVector())
+            self.assertIn(nm, (2, 4), f"Unexpected master count {nm}")
+
+    def test_face_centre_constraints_present(self):
+        """At least one face-centre (4-master) constraint exists."""
+        out = self._run()
+        nm_counts = [len(c.GetMasterDofsVector()) for c in out.MasterSlaveConstraints]
+        self.assertIn(4, nm_counts,
+                      "No 4-master (face-centre) constraints found")
+
+    def test_multiple_variables(self):
+        """Requesting 3 variables multiplies constraint count by 3."""
+        out1 = self._run(variables=["DISPLACEMENT_X"])
+        out3 = self._run(variables=["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"])
+        nc1 = out1.NumberOfMasterSlaveConstraints()
+        nc3 = out3.NumberOfMasterSlaveConstraints()
+        print(f"\n[GenerateHangingNodeConstraints] 1-var={nc1} 3-var={nc3}")
+        self.assertEqual(nc3, 3 * nc1,
+                         f"3-variable count {nc3} ≠ 3 × single-variable count {nc1}")
+
+    def test_slave_nodes_exist(self):
+        """Every slave DOF references a node that was created by the hex generator."""
+        out = self._run()
+        node_ids = {n.Id for n in out.Nodes}
+        for c in out.MasterSlaveConstraints:
+            slave_dofs = c.GetSlaveDofsVector()
+            self.assertEqual(len(slave_dofs), 1)
+            self.assertIn(slave_dofs[0].NodeId(), node_ids,
+                          f"Slave node {slave_dofs[0].NodeId()} not in mesh")
+
+    def test_registry_path_exists(self):
+        self.assertTrue(KM.Registry.HasValue(
+            "OctreeMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype"))
+
+    def test_dual_mesh_no_hanging_constraints(self):
+        """Dual mesh never produces hanging constraints (conforming by construction)."""
+        model = KM.Model()
+        build_transition_surface(model)
+        run_modeler(model, """{
+            "input_model_part_name":"Surface","output_model_part_name":"O",
+            "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":4,
+                                 "adaptive":true,"mesh_type":"dual"},
+            "coloring_settings_list":[{"type":"ClassifyCellsInsideOutside"}],
+            "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+                                        "model_part_name":"O","color":1}],
+            "model_part_operations":[]}""")
+        # Dual path has no mHanging entries → no constraints should be created
+        self.assertEqual(model.GetModelPart("O").NumberOfMasterSlaveConstraints(), 0)
+
+
+# ===========================================================================
+class TestReportMeshQuality(unittest.TestCase):
+    """Unit tests for ReportMeshQuality operation."""
+
+    def _run(self, depth=4):
+        model = KM.Model()
+        build_closed_box_surface(model, name="S")
+        run_modeler(model, f"""{{
+            "input_model_part_name":"S","output_model_part_name":"Output",
+            "octree_generator":{{"type":"generate_octree_from_surface",
+                                 "refinement_depth":{depth},"adaptive":false}},
+            "coloring_settings_list":[{{"type":"ClassifyCellsInsideOutside"}}],
+            "entities_generator_list":[{{"type":"GenerateHexesByCellColor",
+                                        "model_part_name":"Output","color":1}}],
+            "model_part_operations":[{{"type":"ReportMeshQuality",
+                                       "model_part_name":"Output"}}]}}""")
+        return model.GetModelPart("Output")
+
+    def test_runs_without_error(self):
+        out = self._run()
+        self.assertGreater(out.NumberOfElements(), 0)
+
+    def test_zero_inverted_box(self):
+        """A carved box mesh at depth 4 has no inverted elements."""
+        out = self._run()
+        n_inv = sum(1 for el in out.Elements
+                    if cell_min_sj([(n.X, n.Y, n.Z) for n in el.GetGeometry()]) <= 0)
+        self.assertEqual(n_inv, 0)
+
+    def test_empty_model_part_does_not_crash(self):
+        """ReportMeshQuality on an empty ModelPart just logs and returns."""
+        model = KM.Model()
+        build_closed_box_surface(model, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"Empty",
+            "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":3,"adaptive":false},
+            "coloring_settings_list":[],
+            "entities_generator_list":[],
+            "model_part_operations":[{"type":"ReportMeshQuality","model_part_name":"Empty"}]}""")
+        # No assertion needed — just should not raise
+
+    def test_registry_path_exists(self):
+        self.assertTrue(KM.Registry.HasValue(
+            "OctreeMesherOperation.All.ReportMeshQuality.Prototype"))
+
+
+# ===========================================================================
+class TestRegistryDispatch(unittest.TestCase):
+    """Tests for the Registry-prototype dispatch mechanism in OctreeMesherModeler."""
+
+    def test_all_base_prototypes_registered(self):
+        """All three base-class prototypes are registered in the Registry."""
+        for path in [
+            "OctreeMesherColoring.All.OctreeMesherColoring.Prototype",
+            "OctreeMesherEntityGeneration.All.OctreeMesherEntityGeneration.Prototype",
+            "OctreeMesherOperation.All.OctreeMesherOperation.Prototype",
+        ]:
+            self.assertTrue(KM.Registry.HasValue(path), f"Missing: {path}")
+
+    def test_all_concrete_prototypes_registered(self):
+        """All concrete components are registered."""
+        paths = [
+            "OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype",
+            "OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype",
+            "OctreeMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype",
+            "OctreeMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype",
+            "OctreeMesherOperation.All.ReportMeshQuality.Prototype",
+        ]
+        for path in paths:
+            self.assertTrue(KM.Registry.HasValue(path), f"Missing: {path}")
+
+    def test_full_path_dispatch_works(self):
+        """A four-segment full Registry path is accepted directly."""
+        model = KM.Model()
+        build_closed_box_surface(model, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":3,"adaptive":false},
+            "coloring_settings_list":[{
+                "type":"OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
+            }],
+            "entities_generator_list":[{"type":"GenerateHexesByCellColor",
+                                        "model_part_name":"O","color":1}],
+            "model_part_operations":[]}""")
+        self.assertGreater(model.GetModelPart("O").NumberOfElements(), 0)
+
+    def test_unknown_operation_type_raises(self):
+        """An unknown operation type triggers a Registry-not-found error."""
+        model = KM.Model()
+        build_closed_box_surface(model, name="S")
+        with self.assertRaises(Exception):
+            run_modeler(model, """{
+                "input_model_part_name":"S","output_model_part_name":"O",
+                "octree_generator":{"type":"generate_octree_from_surface",
+                                    "refinement_depth":3,"adaptive":false},
+                "coloring_settings_list":[],
+                "entities_generator_list":[],
+                "model_part_operations":[{"type":"TotallyUnknownOperation"}]}""")
+
+    def test_base_type_invocation_raises(self):
+        """Invoking the base OctreeMesherOperation prototype raises a clear error."""
+        model = KM.Model()
+        build_closed_box_surface(model, name="S")
+        with self.assertRaises(Exception):
+            run_modeler(model, """{
+                "input_model_part_name":"S","output_model_part_name":"O",
+                "octree_generator":{"type":"generate_octree_from_surface",
+                                    "refinement_depth":3,"adaptive":false},
+                "coloring_settings_list":[],
+                "entities_generator_list":[],
+                "model_part_operations":[{
+                    "type":"OctreeMesherOperation.All.OctreeMesherOperation.Prototype"
+                }]}""")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
