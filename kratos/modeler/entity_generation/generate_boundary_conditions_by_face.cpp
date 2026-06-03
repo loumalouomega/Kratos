@@ -25,6 +25,16 @@
 
 namespace Kratos {
 
+/**
+ * @brief Returns the default parameter schema for @ref GenerateBoundaryConditionsByFace.
+ * @details The schema contains:
+ * - `"type"` — the Registry lookup key, fixed to `"GenerateBoundaryConditionsByFace"`.
+ * - `"model_part_name"` — name of the ModelPart in which conditions are created.
+ * - `"color"` — integer cell-colour label identifying inside cells (default `1`).
+ * - `"properties_id"` — ID of the Properties object assigned to each new condition.
+ * - `"generated_entity"` — registered Condition type name to instantiate per face.
+ * @return Parameters with all accepted keys and their default values.
+ */
 const Parameters GenerateBoundaryConditionsByFace::GetDefaultParameters() const
 {
     return Parameters(R"({
@@ -36,6 +46,48 @@ const Parameters GenerateBoundaryConditionsByFace::GetDefaultParameters() const
     })");
 }
 
+/**
+ * @brief Generates quadrilateral boundary conditions on the outer surface of the hex mesh.
+ * @details Detailed algorithm:
+ *
+ * 1. **Prerequisite check** — raises an error if `mData.mCells` is empty, which means
+ *    the hex-extraction step has not yet been run.
+ *
+ * 2. **ModelPart setup** — calls `OctreeMesherModeler::CreateAndGetModelPart` to create
+ *    (or retrieve) the target ModelPart, then initialises its entity-ID counters via
+ *    `OctreeMesherModeler::SetStartIds`.
+ *
+ * 3. **Cell filtering** — iterates `mData.mCells` and keeps only those cells whose
+ *    entry in `mData.mCellColor` matches `want_color`.  If `mCellColor` is empty all
+ *    cells pass the filter.  The connectivity of the filtered cells is copied into
+ *    `active_cells` (indices reference the same `mData.mNodes` array as the full mesh).
+ *
+ * 4. **Boundary face extraction** — passes `active_cells` to
+ *    `OctreeHybridMeshUtility::ExtractBoundaryFaces`, which returns every quad face
+ *    (as a 4-element node-index array) that is shared by exactly one hex.  These faces
+ *    form the closed exterior boundary of the carved mesh.
+ *
+ * 5. **Node and condition creation** — for each boundary quad:
+ *    - The four corner node pointers are obtained via
+ *      `OctreeMesherModeler::GenerateOrRetrieveNode`.  This call creates a new ModelPart
+ *      node the first time a mesh-node index is seen, or returns the existing pointer
+ *      from `mData.mNodePtrs` on subsequent references (de-duplication).
+ *    - Each pointer is pushed into `new_nodes` regardless of creation order, so nodes
+ *      produced by prior generators (e.g. the hex generator) are also registered in the
+ *      boundary ModelPart.
+ *    - A new Condition is created from the registered prototype using
+ *      `OctreeMesherModeler::NextConditionId()` for the ID.
+ *
+ * 6. **Finalisation** — `new_nodes` is de-duplicated with `Unique()`, then added to the
+ *    ModelPart along with all new conditions via `ModelPartUtils::AddNodesFromOrderedContainer`
+ *    and `ModelPart::AddConditions`.
+ *
+ * @param rModeler              The owning @ref OctreeMesherModeler.  Provides the Model,
+ *                              `OctreeMesherData`, the node de-duplication map, and the
+ *                              entity-ID counters.
+ * @param GenerationParameters  Validated JSON parameters; see @ref GetDefaultParameters
+ *                              for the full schema.
+ */
 void GenerateBoundaryConditionsByFace::Generate(
     OctreeMesherModeler& rModeler,
     Parameters GenerationParameters) const

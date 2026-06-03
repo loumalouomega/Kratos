@@ -28,17 +28,37 @@ namespace Kratos {
 ///@name Kratos Classes
 ///@{
 
-class OctreeMesherModeler; // forward declaration (breaks the include cycle)
+/// Forward declaration — avoids pulling the heavy octree header into every translation unit.
+class OctreeMesherModeler;
 
 /**
  * @class OctreeMesherEntityGeneration
  * @ingroup KratosCore
- * @brief Base class of an entity-generation component of the @ref OctreeMesherModeler.
- * @details Entity generators turn the extracted hex mesh into ModelPart entities:
- * hexahedral elements by cell colour, boundary conditions by face, and hanging-node
- * master-slave constraints at 2:1 transitions (primal mesh).  Components are Registry
- * prototypes (`KRATOS_REGISTRY_ADD_PROTOTYPE`); the do-work method @ref Generate is
- * `const` and receives the modeler and parameters as arguments.
+ * @brief Abstract base class for entity-generation stages of the @ref OctreeMesherModeler pipeline.
+ * @details Entity-generation stages transform the in-memory hex mesh stored in
+ * `OctreeMesherData` into Kratos ModelPart entities:
+ *
+ *   - **Hexahedral elements** — one `Element3D8N` (or a user-chosen type) per cell
+ *     whose colour matches the requested value (@ref GenerateHexesByCellColor).
+ *   - **Boundary conditions** — conditions on boundary faces (future extensions).
+ *   - **Hanging-node constraints** — master–slave `MasterSlaveConstraint` objects at
+ *     2:1 refinement transitions in the primal mesh.
+ *
+ * The class follows the *Registry prototype* pattern: concrete sub-classes register
+ * themselves through `KRATOS_REGISTRY_ADD_PROTOTYPE` so that
+ * `OctreeMesherModeler::Dispatch` can instantiate them by name at run time.  The
+ * do-work method @ref Generate is `const` and stateless — all mutable state lives in
+ * the @ref OctreeMesherModeler passed as argument.
+ *
+ * ### Typical pipeline position
+ * 1. `SetupModelPart` builds + balances the octree and extracts the hex mesh.
+ * 2. Colouring assigns per-cell labels.
+ * 3. **Entity generation** (this class) emits ModelPart nodes, elements and constraints.
+ * 4. Optional post-processing operations.
+ *
+ * @see GenerateHexesByCellColor
+ * @see OctreeMesherColoring
+ * @see OctreeMesherModeler
  * @author Vicente Mataix Ferrandiz
  */
 class KRATOS_API(KRATOS_CORE) OctreeMesherEntityGeneration
@@ -47,35 +67,68 @@ public:
     ///@name Type Definitions
     ///@{
 
+    /// Pointer definition of OctreeMesherEntityGeneration.
     KRATOS_CLASS_POINTER_DEFINITION(OctreeMesherEntityGeneration);
 
     ///@}
     ///@name Life Cycle
     ///@{
 
+    /// Default constructor.
     OctreeMesherEntityGeneration() = default;
 
-    OctreeMesherEntityGeneration(OctreeMesherEntityGeneration const&) {}
+    /**
+     * @brief Copy constructor (no-op body — derived classes carry no state).
+     * @param rOther Source instance; no data is copied.
+     */
+    OctreeMesherEntityGeneration(OctreeMesherEntityGeneration const& rOther) {}
 
+    /// Destructor.
     virtual ~OctreeMesherEntityGeneration() = default;
 
     ///@}
     ///@name Operations
     ///@{
 
-    /// Generates the entities. Override in derived classes.
+    /**
+     * @brief Executes the entity-generation stage on the given modeler.
+     * @details Derived classes must override this method to create Kratos entities
+     * (nodes, elements, conditions, constraints) inside the relevant ModelPart.  The
+     * base implementation unconditionally raises a `KRATOS_ERROR` to prevent
+     * accidental calls through the prototype.
+     *
+     * The method is intentionally `const` so that a single Registry prototype object
+     * can be shared across many modeler invocations without data races.  All mutable
+     * state must be read from / written to @p rModeler.
+     *
+     * @param rModeler              The owning modeler; its shared data and ModelParts
+     *                              are modified in-place.
+     * @param GenerationParameters  Validated and default-merged JSON parameters for
+     *                              this specific generation step (see
+     *                              @ref GetDefaultParameters for the schema).
+     */
     virtual void Generate(OctreeMesherModeler& rModeler, Parameters GenerationParameters) const
     {
         KRATOS_ERROR << "Calling base OctreeMesherEntityGeneration::Generate. Please override it in the derived class." << std::endl;
     }
 
-    /// Validates @p rGenerationParameters against @ref GetDefaultParameters (assigning defaults).
+    /**
+     * @brief Validates @p rGenerationParameters against the schema returned by
+     *        @ref GetDefaultParameters, filling in missing keys with their defaults.
+     * @param rGenerationParameters Parameters object to validate and complete in-place.
+     */
     void ValidateParameters(Parameters& rGenerationParameters) const
     {
         rGenerationParameters.ValidateAndAssignDefaults(GetDefaultParameters());
     }
 
-    /// The default parameters (schema) of the generator.
+    /**
+     * @brief Returns the default parameter schema for this entity-generation stage.
+     * @details The base class schema only requires the `"type"` key (empty string).
+     * Derived classes should override this and add their specific keys.  The returned
+     * object is used by @ref ValidateParameters to assign defaults.
+     * @return A @ref Parameters object describing the accepted keys and their defaults.
+     */
     virtual const Parameters GetDefaultParameters() const
     {
         return Parameters(R"({"type" : ""})");
@@ -85,6 +138,10 @@ public:
     ///@name Input and output
     ///@{
 
+    /**
+     * @brief Returns a string identifying this component.
+     * @return Human-readable name; derived classes should override to return their own name.
+     */
     virtual std::string Info() const { return "OctreeMesherEntityGeneration"; }
 
     ///@}
@@ -92,7 +149,9 @@ private:
     ///@name Registry
     ///@{
 
+    /// Registers the base prototype at path "OctreeMesherEntityGeneration.KratosMultiphysics.OctreeMesherEntityGeneration.Prototype".
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.KratosMultiphysics", OctreeMesherEntityGeneration, OctreeMesherEntityGeneration)
+    /// Registers the base prototype at path "OctreeMesherEntityGeneration.All.OctreeMesherEntityGeneration.Prototype".
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.All", OctreeMesherEntityGeneration, OctreeMesherEntityGeneration)
 
     ///@}
@@ -102,6 +161,12 @@ private:
 ///@name Input and output
 ///@{
 
+/**
+ * @brief Stream insertion operator for @ref OctreeMesherEntityGeneration.
+ * @param rOStream Output stream.
+ * @param rThis    Instance to print (delegates to @ref OctreeMesherEntityGeneration::Info).
+ * @return Reference to @p rOStream for chaining.
+ */
 inline std::ostream& operator<<(std::ostream& rOStream, const OctreeMesherEntityGeneration& rThis)
 {
     rOStream << rThis.Info();
