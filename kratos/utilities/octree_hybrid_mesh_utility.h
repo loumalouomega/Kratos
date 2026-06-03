@@ -24,6 +24,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Project includes
@@ -132,6 +133,19 @@ public:
     /// carving stage (RemoveOutsideElement) to test hex vertices against the
     /// input surface.
     using TriangleSoup      = std::vector<std::array<std::array<double,3>,3>>;
+
+    /// A hanging-node multipoint constraint at a 2:1 transition of the primal
+    /// (leaf-hex) mesh: the slave node lies on a coarse hex face and is the
+    /// bilinear interpolation of that face's master corners.  Node fields are
+    /// indices into the primal node array; @ref NumMasters slots of
+    /// @ref MasterNodes / @ref Weights are used (2 for an edge-midpoint slave,
+    /// 4 for a face-centre slave) and the weights sum to one.
+    struct HangingConstraint {
+        int SlaveNode = -1;
+        std::array<int, 4> MasterNodes{ -1, -1, -1, -1 };
+        std::array<double, 4> Weights{ 0.0, 0.0, 0.0, 0.0 };
+        int NumMasters = 0;
+    };
 
     ///@}
     ///@name Static operations
@@ -342,43 +356,31 @@ public:
     }
 
     /**
-     * @brief Writes the **dual hex mesh** (the proper HybridOctree_Hex output).
+     * @brief Extracts the **dual hex mesh** (the proper HybridOctree_Hex output)
+     *        into in-memory node/cell arrays.
      *
-     * The octree is first strongly 2:1-balanced, then the dual mesh is extracted
-     * as described in the class documentation.  Every interior primal vertex
-     * contributes exactly one conforming hexahedron.  The 13-element template
+     * The octree must already be strongly 2:1-balanced (call
+     * @ref OctreeHybrid::StrongConstrain2To1 first).  The dual mesh is extracted
+     * as described in the class documentation: every interior primal vertex
+     * contributes exactly one conforming hexahedron, and the 13-element template
      * additionally fills face-transition regions with higher-quality elements.
      *
-     * Cell data field "level" (in the VTK output) is the level of the cell
-     * whose centre is at dual-hex node 0, useful for colouring in Paraview.
-     *
-     * @param rOctree     Octree (bounding box must be set).
-     * @param rFilename   Output .vtk path.
-     * @param pTriangles  Optional surface triangle soup.  When non-null and
-     *                    non-empty, the dual-hex block is carved against this
-     *                    surface (reference stage 4, `RemoveOutsideElement`):
-     *                    only hexes inside or straddling the surface are kept.
-     *                    When null, the full bounding-box block is written.
-     * @param Project     When true (requires @p pTriangles), after carving the
-     *                    core mesh is fitted to the surface with the Jacobian-
-     *                    controlled buffer-zone meshing of reference stage 5
-     *                    (`ProjectToIsoSurface`).
-     * @param ProjIters   Total projection/optimisation iterations.
-     * @param ProjSmooth  Iterations between smart-Laplacian/threshold updates.
+     * @param rOctree     Octree (bounding box must be set, already 2:1-balanced).
+     * @param rNodes      [out] Dual-hex node coordinates (world space).
+     * @param rCells      [out] Hexahedra connectivity (indices into @p rNodes).
+     * @param rCellLevel  [out] Per-cell refinement level (level of the leaf whose
+     *                    centre is node 0 for plain-dual hexes; -1 for template
+     *                    hexes), useful for colouring.
      */
-    static void WriteDualHexVtk(
+    static void ExtractDualHexMesh(
         OctreeType& rOctree,
-        const std::string& rFilename,
-        const TriangleSoup* pTriangles = nullptr,
-        bool Project = false,
-        int ProjIters = 20000,
-        int ProjSmooth = 1000)
+        std::vector<std::array<double,3>>& rNodes,
+        std::vector<std::array<int,8>>& rCells,
+        std::vector<int>& rCellLevel)
     {
         // ------------------------------------------------------------------ //
-        // 1. Balance + collect leaves
+        // 1. Collect leaves (the octree must already be 2:1-balanced)
         // ------------------------------------------------------------------ //
-        rOctree.StrongConstrain2To1();
-
         std::vector<CellType*> leaves;
         rOctree.GetAllLeavesVector(leaves);
         const int N = static_cast<int>(leaves.size());
@@ -1186,6 +1188,307 @@ public:
             cell_level.push_back(-1);
         }
 
+        rNodes     = std::move(nodes);
+        rCells     = std::move(cells);
+        rCellLevel = std::move(cell_level);
+    }
+
+    /**
+     * @brief Collects the surface triangles of @p rSurfaceMesh as a world-space
+     *        @ref TriangleSoup (the container carving/projection test against).
+     *
+     * Reads `rSurfaceMesh.Geometries()` (the same container
+     * @ref BuildFromSurfaceMesh refines around); geometries with fewer than three
+     * points are skipped.
+     */
+    static TriangleSoup ExtractTriangleSoup(const ModelPart& rSurfaceMesh)
+    {
+        TriangleSoup triangles;
+        triangles.reserve(rSurfaceMesh.NumberOfGeometries());
+        for (const auto& r_geom : rSurfaceMesh.Geometries()) {
+            if (r_geom.PointsNumber() < 3) continue;
+            triangles.push_back({{
+                {{ r_geom[0].X(), r_geom[0].Y(), r_geom[0].Z() }},
+                {{ r_geom[1].X(), r_geom[1].Y(), r_geom[1].Z() }},
+                {{ r_geom[2].X(), r_geom[2].Y(), r_geom[2].Z() }}
+            }});
+        }
+        return triangles;
+    }
+
+    /**
+     * @brief Extracts the **primal (leaf-hex) mesh** plus the hanging-node
+     *        master-slave constraints at 2:1 transitions.
+     *
+     * The primal mesh has one hexahedron per octree leaf, with shared
+     * finest-grid corner nodes.  It is **non-conforming** at every 2:1
+     * interface where a coarse face touches four finer faces.  The hanging
+     * nodes that lie on those coarse faces are tied to the face's four
+     * master corners by bilinear weights (0.5/0.5 for edge-midpoint slaves,
+     * 0.25×4 for face-centre slaves) and reported in @p rHanging.
+     *
+     * The octree must already be 2:1-balanced (call
+     * @ref OctreeHybrid::StrongConstrain2To1 first).
+     *
+     * @param rOctree    Octree (bounding box set, already 2:1-balanced).
+     * @param rNodes     [out] Primal node coordinates (world space).
+     * @param rCells     [out] Hexahedra connectivity (indices into @p rNodes).
+     * @param rCellLevel [out] Per-cell refinement level (leaf level).
+     * @param rHanging   [out] Hanging-node constraints (one per slave node at
+     *                   each 2:1 transition face).
+     */
+    static void ExtractPrimalHexMesh(
+        OctreeType& rOctree,
+        std::vector<std::array<double,3>>& rNodes,
+        std::vector<std::array<int,8>>&   rCells,
+        std::vector<int>&                 rCellLevel,
+        std::vector<HangingConstraint>&   rHanging)
+    {
+        // ------------------------------------------------------------------ //
+        // 1. Collect leaves (already 2:1-balanced)
+        // ------------------------------------------------------------------ //
+        std::vector<CellType*> leaves;
+        rOctree.GetAllLeavesVector(leaves);
+        const int N = static_cast<int>(leaves.size());
+        const std::size_t depth = rOctree.GetDepth();
+        const std::size_t R = std::size_t{1} << depth;
+        const std::size_t pts = R + 1;
+
+        static constexpr int PCX[8] = {0,1,1,0,0,1,1,0};
+        static constexpr int PCY[8] = {0,0,1,1,0,0,1,1};
+        static constexpr int PCZ[8] = {0,0,0,0,1,1,1,1};
+
+        // ------------------------------------------------------------------ //
+        // 2. Build primal vertex map and world-space positions
+        // ------------------------------------------------------------------ //
+        std::unordered_map<std::size_t,int> vid_map;
+        vid_map.reserve(N * 4);
+        std::vector<std::array<double,3>> primal_nodes;
+        primal_nodes.reserve(N * 2);
+        std::vector<std::array<int,8>> primal_elem(N);
+
+        for (int i = 0; i < N; ++i) {
+            const auto* p = leaves[i];
+            const int lv = p->GetLevel();
+            const int gx = p->GetGridX(), gy = p->GetGridY(), gz = p->GetGridZ();
+            const std::size_t stride = std::size_t{1} << (depth - static_cast<std::size_t>(lv));
+            for (int c = 0; c < 8; ++c) {
+                const std::size_t ix = static_cast<std::size_t>(gx + PCX[c]) * stride;
+                const std::size_t iy = static_cast<std::size_t>(gy + PCY[c]) * stride;
+                const std::size_t iz = static_cast<std::size_t>(gz + PCZ[c]) * stride;
+                const std::size_t key = iz * pts * pts + iy * pts + ix;
+                auto [it, ins] = vid_map.emplace(key, static_cast<int>(primal_nodes.size()));
+                if (ins) {
+                    double npt[3] = { static_cast<double>(ix) / static_cast<double>(R),
+                                      static_cast<double>(iy) / static_cast<double>(R),
+                                      static_cast<double>(iz) / static_cast<double>(R) };
+                    std::array<double,3> w;
+                    rOctree.ScaleBackToOriginalCoordinate(npt, w.data());
+                    primal_nodes.push_back(w);
+                }
+                primal_elem[i][c] = it->second;
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        // 3. Face adjacency (2:1 transition detection) — same algorithm as in
+        //    ExtractDualHexMesh (see inline comments there).
+        // ------------------------------------------------------------------ //
+        std::unordered_map<int,int> id_to_idx;
+        id_to_idx.reserve(N);
+        for (int i = 0; i < N; ++i) id_to_idx[leaves[i]->GetId()] = i;
+
+        static constexpr int P_FACE_FIXED[6] = {2,1,0,0,1,2};
+        static constexpr bool P_FACE_HI[6]   = {false,false,false,true,true,true};
+        static constexpr int P_FACE_FREE1[6] = {0,0,1,1,0,0};
+        static constexpr int P_FACE_FREE2[6] = {1,2,2,2,2,1};
+        static constexpr double PEPS = 1e-9;
+        static constexpr double PQ[2] = {0.25, 0.75};
+
+        struct PFaceAdj { int count; std::array<int,4> ids; };
+        std::vector<std::array<PFaceAdj,6>> adj(N);
+        for (auto& a : adj) for (auto& f : a) { f.count = 0; f.ids.fill(-1); }
+
+        for (int i = 0; i < N; ++i) {
+            double n_lo[3], n_hi[3];
+            leaves[i]->GetMinPointNormalized(n_lo);
+            leaves[i]->GetMaxPointNormalized(n_hi);
+            for (int j = 0; j < 6; ++j) {
+                if (adj[i][j].count != 0) continue;
+                const int fa = P_FACE_FIXED[j];
+                const int f1 = P_FACE_FREE1[j];
+                const int f2 = P_FACE_FREE2[j];
+                const double fc = P_FACE_HI[j] ? n_hi[fa]+PEPS : n_lo[fa]-PEPS;
+                if (fc < 0.0 || fc > 1.0) continue;
+                const int opp = 5 - j;
+                int found[4] = {-1,-1,-1,-1};
+                for (int q = 0; q < 4; ++q) {
+                    const int qi = q & 1, qj = (q >> 1) & 1;
+                    double pt[3];
+                    pt[fa] = fc;
+                    pt[f1] = n_lo[f1] + PQ[qi]*(n_hi[f1]-n_lo[f1]);
+                    pt[f2] = n_lo[f2] + PQ[qj]*(n_hi[f2]-n_lo[f2]);
+                    if (pt[0]<0||pt[0]>1||pt[1]<0||pt[1]>1||pt[2]<0||pt[2]>1) continue;
+                    CellType* nb = rOctree.pGetCellNormalized(pt);
+                    if (!nb || nb == leaves[i]) continue;
+                    auto it = id_to_idx.find(nb->GetId());
+                    if (it == id_to_idx.end()) continue;
+                    found[q] = it->second;
+                }
+                int first = -1;
+                for (int q = 0; q < 4; ++q) if (found[q] >= 0) { first = found[q]; break; }
+                if (first < 0) continue;
+                const bool all_same = (found[0]==first&&found[1]==first&&
+                                       found[2]==first&&found[3]==first);
+                if (all_same) {
+                    adj[i][j].count = 1; adj[i][j].ids[0] = first;
+                    if (leaves[i]->GetLevel()==leaves[first]->GetLevel()&&
+                        adj[first][opp].count==0) {
+                        adj[first][opp].count = 1; adj[first][opp].ids[0] = i;
+                    }
+                } else {
+                    adj[i][j].count = 0;
+                    for (int q = 0; q < 4; ++q) {
+                        adj[i][j].ids[q] = found[q];
+                        if (found[q] >= 0) {
+                            adj[i][j].count++;
+                            if (adj[found[q]][opp].count==0) {
+                                adj[found[q]][opp].count = 1;
+                                adj[found[q]][opp].ids[0] = i;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------ //
+        // 4. Output primal hexes (one per leaf)
+        // ------------------------------------------------------------------ //
+        rNodes     = std::move(primal_nodes);
+        rCells.clear();  rCells.reserve(N);
+        rCellLevel.clear(); rCellLevel.reserve(N);
+        for (int i = 0; i < N; ++i) {
+            rCells.push_back(primal_elem[i]);
+            rCellLevel.push_back(leaves[i]->GetLevel());
+        }
+
+        // ------------------------------------------------------------------ //
+        // 5. Hanging-node constraints at 2:1 transitions
+        //
+        // For each coarse face j of leaf i with 4 finer neighbours (count==4):
+        //   Masters: the 4 coarse corners on face j, ordered (LL,HL,HH,LH).
+        //   Slaves:  4 edge midpoints (2 masters, w=0.5) + 1 face centre
+        //            (4 masters, w=0.25) lying on the coarse face but not being
+        //            coarse corners — identified from the fine cells' primal_elem.
+        //
+        // Sub-quadrant ordering q=0→(f1-lo,f2-lo), 1→(f1-hi,f2-lo),
+        //   2→(f1-hi,f2-hi), 3→(f1-lo,f2-hi).  For sub-quadrant q at
+        //   offset (qi,qj), fine-cell corner index c_pos ∈ {0,1,2,3}
+        //   (mapped by FFCT[j]) maps to coarse-face position
+        //   (qi+c_pos_f1_offset, qj+c_pos_f2_offset)*half:
+        //     c_pos=0 → (qi, qj)*half   = LL of fine
+        //     c_pos=1 → (qi+1,qj)*half  = HL of fine
+        //     c_pos=2 → (qi+1,qj+1)*half = HH of fine
+        //     c_pos=3 → (qi, qj+1)*half = LH of fine
+        // ------------------------------------------------------------------ //
+
+        // coarse face corner indices in (LL,HL,HH,LH) order per face j
+        static constexpr int CFCT[6][4] = {
+            {0,1,2,3}, {0,1,5,4}, {0,3,7,4},
+            {1,2,6,5}, {3,2,6,7}, {4,5,6,7}
+        };
+        // fine face corner indices (those on the coarse face plane) in (LL,HL,HH,LH) order per face j
+        static constexpr int FFCT[6][4] = {
+            {4,5,6,7}, {3,2,6,7}, {1,2,6,5},
+            {0,3,7,4}, {0,1,5,4}, {0,1,2,3}
+        };
+
+        // Collect the best (highest NumMasters) constraint per slave node.
+        // A face-centre node (4 masters) may be seen first as an edge-midpoint
+        // (2 masters) from an adjacent coarse face; the 4-master version is the
+        // correct interpolation so it wins by replacing any weaker registration.
+        rHanging.clear();
+        std::unordered_map<int, HangingConstraint> best;
+
+        auto maybe_add = [&](int slave, int nm,
+                             std::array<int,4> masters,
+                             std::array<double,4> weights) {
+            if (slave < 0) return;
+            auto it = best.find(slave);
+            if (it == best.end() || it->second.NumMasters < nm) {
+                HangingConstraint hc;
+                hc.SlaveNode = slave; hc.NumMasters = nm;
+                hc.MasterNodes = masters; hc.Weights = weights;
+                best[slave] = hc;
+            }
+        };
+
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < 6; ++j) {
+                if (adj[i][j].count != 4) continue;
+                const auto& ids = adj[i][j].ids;
+                const int M0 = primal_elem[i][CFCT[j][0]]; // LL master
+                const int M1 = primal_elem[i][CFCT[j][1]]; // HL master
+                const int M2 = primal_elem[i][CFCT[j][2]]; // HH master
+                const int M3 = primal_elem[i][CFCT[j][3]]; // LH master
+
+                auto gfc = [&](int q, int c) {
+                    return (ids[q] >= 0) ? primal_elem[ids[q]][FFCT[j][c]] : -1;
+                };
+
+                // Edge midpoints (2 masters, w=0.5):
+                maybe_add(gfc(0,1), 2, {M0,M1,-1,-1}, {0.5,0.5,0.0,0.0}); // bottom (m,a)
+                maybe_add(gfc(1,2), 2, {M1,M2,-1,-1}, {0.5,0.5,0.0,0.0}); // right  (b,m)
+                maybe_add(gfc(2,3), 2, {M2,M3,-1,-1}, {0.5,0.5,0.0,0.0}); // top    (m,b)
+                maybe_add(gfc(3,0), 2, {M3,M0,-1,-1}, {0.5,0.5,0.0,0.0}); // left   (a,m)
+                // Face centre (4 masters, w=0.25):
+                maybe_add(gfc(0,2), 4, {M0,M1,M2,M3}, {0.25,0.25,0.25,0.25});
+            }
+        }
+
+        rHanging.reserve(best.size());
+        for (auto& [k, hc] : best) rHanging.push_back(hc);
+    }
+
+    /**
+     * @brief Writes the **dual hex mesh** (the proper HybridOctree_Hex output)
+     *        to a legacy VTK file, optionally carving and projecting.
+     *
+     * Thin wrapper around @ref ExtractDualHexMesh: 2:1-balances the octree,
+     * extracts the dual mesh, then optionally carves (@ref RemoveOutsideElement)
+     * and projects to the surface (@ref ClearBufferZone + @ref ProjectToIsoSurface)
+     * before writing.
+     *
+     * @param rOctree     Octree (bounding box must be set).
+     * @param rFilename   Output .vtk path.
+     * @param pTriangles  Optional surface triangle soup.  When non-null and
+     *                    non-empty, the dual-hex block is carved against this
+     *                    surface (reference stage 4, `RemoveOutsideElement`):
+     *                    only hexes inside or straddling the surface are kept.
+     *                    When null, the full bounding-box block is written.
+     * @param Project     When true (requires @p pTriangles), after carving the
+     *                    core mesh is fitted to the surface with the Jacobian-
+     *                    controlled buffer-zone meshing of reference stage 5
+     *                    (`ProjectToIsoSurface`).
+     * @param ProjIters   Total projection/optimisation iterations.
+     * @param ProjSmooth  Iterations between smart-Laplacian/threshold updates.
+     */
+    static void WriteDualHexVtk(
+        OctreeType& rOctree,
+        const std::string& rFilename,
+        const TriangleSoup* pTriangles = nullptr,
+        bool Project = false,
+        int ProjIters = 20000,
+        int ProjSmooth = 1000)
+    {
+        rOctree.StrongConstrain2To1();
+
+        std::vector<std::array<double,3>> nodes;
+        std::vector<std::array<int,8>> cells;
+        std::vector<int> cell_level;
+        ExtractDualHexMesh(rOctree, nodes, cells, cell_level);
+
         // Carve away hexes outside the input surface (reference stage 4,
         // RemoveOutsideElement — inside/outside part).  Drops unused nodes.
         if (pTriangles && !pTriangles->empty())
@@ -1316,16 +1619,7 @@ public:
         auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
 
         // Collect surface triangles in world coordinates.
-        TriangleSoup triangles;
-        triangles.reserve(rSurfaceMesh.NumberOfGeometries());
-        for (auto& r_geom : rSurfaceMesh.Geometries()) {
-            if (r_geom.PointsNumber() < 3) continue;
-            triangles.push_back({{
-                {{ r_geom[0].X(), r_geom[0].Y(), r_geom[0].Z() }},
-                {{ r_geom[1].X(), r_geom[1].Y(), r_geom[1].Z() }},
-                {{ r_geom[2].X(), r_geom[2].Y(), r_geom[2].Z() }}
-            }});
-        }
+        TriangleSoup triangles = ExtractTriangleSoup(rSurfaceMesh);
         KRATOS_ERROR_IF(triangles.empty())
             << "OctreeHybridMeshUtility::BuildCarveAndWriteVtk: the surface "
             << "ModelPart has no triangles to carve against." << std::endl;
@@ -1364,16 +1658,7 @@ public:
     {
         auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
 
-        TriangleSoup triangles;
-        triangles.reserve(rSurfaceMesh.NumberOfGeometries());
-        for (auto& r_geom : rSurfaceMesh.Geometries()) {
-            if (r_geom.PointsNumber() < 3) continue;
-            triangles.push_back({{
-                {{ r_geom[0].X(), r_geom[0].Y(), r_geom[0].Z() }},
-                {{ r_geom[1].X(), r_geom[1].Y(), r_geom[1].Z() }},
-                {{ r_geom[2].X(), r_geom[2].Y(), r_geom[2].Z() }}
-            }});
-        }
+        TriangleSoup triangles = ExtractTriangleSoup(rSurfaceMesh);
         KRATOS_ERROR_IF(triangles.empty())
             << "OctreeHybridMeshUtility::BuildCarveProjectAndWriteVtk: the surface "
             << "ModelPart has no triangles to fit against." << std::endl;
@@ -1620,8 +1905,13 @@ private:
     }
 
     ///@}
-    ///@name Carving (reference RemoveOutsideElement) and VTK output
+
+public:
+    ///@name Carving, projection and mesh extraction (reusable by callers)
     ///@{
+    // These stateless static helpers operate on the in-memory node/cell arrays
+    // produced by @ref ExtractDualHexMesh, so external drivers (e.g. the octree
+    // mesher modeler) can run the carve / projection / quality phases directly.
 
     /// Squared Euclidean distance between two points.
     static double SqDist(const double a[3], const double b[3])
@@ -1742,12 +2032,59 @@ private:
         std::vector<std::array<int,8>>& rCells,
         std::vector<int>& rCellLevel)
     {
-        constexpr double DIST_THRES   = 1e-12;
-        constexpr double OUT_IN_RATIO = 0.15;
+        const std::vector<double> signed_dist = ComputeNodeSignedDistance(rTriangles, rNodes);
+
+        std::vector<std::array<int,8>> kept_cells;
+        std::vector<int> kept_level;
+        kept_cells.reserve(rCells.size());
+        kept_level.reserve(rCells.size());
+        for (std::size_t c = 0; c < rCells.size(); ++c) {
+            if (KeepCarvedCell(rCells[c], signed_dist)) {
+                kept_cells.push_back(rCells[c]);
+                kept_level.push_back(rCellLevel[c]);
+            }
+        }
+        rCells.swap(kept_cells);
+        rCellLevel.swap(kept_level);
+    }
+
+    /**
+     * @brief Per-cell inside(1)/outside(0) classification against the surface.
+     *
+     * Uses the identical signed-distance and keep test as
+     * @ref RemoveOutsideElement, but mutates nothing — it is the carve *decision*
+     * without the removal (so a modeler stage can colour cells and a later stage
+     * skip the outside ones).  @p rCellColor is resized to @p rCells.size().
+     */
+    static void ClassifyInsideOutside(
+        const TriangleSoup& rTriangles,
+        const std::vector<std::array<double,3>>& rNodes,
+        const std::vector<std::array<int,8>>& rCells,
+        std::vector<int>& rCellColor)
+    {
+        const std::vector<double> signed_dist = ComputeNodeSignedDistance(rTriangles, rNodes);
+        rCellColor.assign(rCells.size(), 0);
+        for (std::size_t c = 0; c < rCells.size(); ++c)
+            rCellColor[c] = KeepCarvedCell(rCells[c], signed_dist) ? 1 : 0;
+    }
+
+    /**
+     * @brief Per-node signed distance to the surface (negative outside).
+     *
+     * Sign from ray-cast crossing parity (odd crossings ⇒ inside), magnitude from
+     * the closest triangle.  Shared by @ref RemoveOutsideElement and
+     * @ref ClassifyInsideOutside so both make the identical inside/outside
+     * decision.  Cost O(#nodes · #triangles); computed in parallel with a
+     * deterministic per-node RNG so the result is reproducible.
+     */
+    static std::vector<double> ComputeNodeSignedDistance(
+        const TriangleSoup& rTriangles,
+        const std::vector<std::array<double,3>>& rNodes)
+    {
+        constexpr double DIST_THRES = 1e-12;
         const int NV = static_cast<int>(rNodes.size());
         const int NT = static_cast<int>(rTriangles.size());
 
-        // --- Signed distance per node (negative outside) ---------------------
         std::vector<double> signed_dist(NV);
         IndexPartition<int>(NV).for_each([&](int i) {
             const double p[3] = { rNodes[i][0], rNodes[i][1], rNodes[i][2] };
@@ -1790,31 +2127,30 @@ private:
             }
             signed_dist[i] = inside ? md : -md;
         });
+        return signed_dist;
+    }
 
-        // --- Keep/reject each hex -------------------------------------------
-        std::vector<std::array<int,8>> kept_cells;
-        std::vector<int> kept_level;
-        kept_cells.reserve(rCells.size());
-        kept_level.reserve(rCells.size());
-        for (std::size_t c = 0; c < rCells.size(); ++c) {
-            double max_pos = 0.0, min_neg = 0.0;
-            int n_out = 0;
-            bool drop = false;
-            for (int j = 0; j < 8; ++j) {
-                const double dv = signed_dist[rCells[c][j]];
-                if (dv > max_pos) max_pos = dv;
-                else if (dv < 0.0) {
-                    if (++n_out > 2) { drop = true; break; }
-                    if (dv < min_neg) min_neg = dv;
-                }
-            }
-            if (!drop && min_neg + OUT_IN_RATIO * max_pos >= 0.0) {
-                kept_cells.push_back(rCells[c]);
-                kept_level.push_back(rCellLevel[c]);
+    /**
+     * @brief Keep test for a carved hex: at most two outside corners and a small
+     *        outside excursion relative to the deepest inside corner
+     *        (`n_out < 3 && d_min_neg + 0.15 * d_max_pos >= 0`).
+     */
+    static bool KeepCarvedCell(
+        const std::array<int,8>& rCell,
+        const std::vector<double>& rSignedDist)
+    {
+        constexpr double OUT_IN_RATIO = 0.15;
+        double max_pos = 0.0, min_neg = 0.0;
+        int n_out = 0;
+        for (int j = 0; j < 8; ++j) {
+            const double dv = rSignedDist[rCell[j]];
+            if (dv > max_pos) max_pos = dv;
+            else if (dv < 0.0) {
+                if (++n_out > 2) return false;
+                if (dv < min_neg) min_neg = dv;
             }
         }
-        rCells.swap(kept_cells);
-        rCellLevel.swap(kept_level);
+        return min_neg + OUT_IN_RATIO * max_pos >= 0.0;
     }
 
     ///@}
