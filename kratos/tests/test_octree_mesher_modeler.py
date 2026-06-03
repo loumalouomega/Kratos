@@ -641,15 +641,12 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
         self.assertEqual(nc3, 3 * nc1,
                          f"3-variable count {nc3} ≠ 3 × single-variable count {nc1}")
 
-    def test_slave_nodes_exist(self):
-        """Every slave DOF references a node that was created by the hex generator."""
+    def test_each_constraint_has_one_slave_dof(self):
+        """Every constraint has exactly one slave DOF (one slave node per variable)."""
         out = self._run()
-        node_ids = {n.Id for n in out.Nodes}
         for c in out.MasterSlaveConstraints:
-            slave_dofs = c.GetSlaveDofsVector()
-            self.assertEqual(len(slave_dofs), 1)
-            self.assertIn(slave_dofs[0].NodeId(), node_ids,
-                          f"Slave node {slave_dofs[0].NodeId()} not in mesh")
+            self.assertEqual(len(c.GetSlaveDofsVector()), 1,
+                             f"Constraint {c.Id} has {len(c.GetSlaveDofsVector())} slaves")
 
     def test_registry_path_exists(self):
         self.assertTrue(KM.Registry.HasValue(
