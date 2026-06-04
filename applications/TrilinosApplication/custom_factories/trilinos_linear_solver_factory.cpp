@@ -37,6 +37,10 @@
 #include "external_includes/amgcl_mpi_schur_complement_solver.h"
 #include "external_includes/trilinos_monotonicity_preserving_solver.h"
 
+#ifdef KRATOS_TRILINOS_USE_MUMPS_DIRECTLY
+#include "custom_solvers/trilinos_mumps_solver.h"
+#endif
+
 namespace Kratos {
 
 void RegisterTrilinosLinearSolvers()
@@ -121,6 +125,16 @@ void RegisterTrilinosLinearSolvers()
         TrilinosLocalSpaceType,
         TrilinosMonotonicityPreservingSolverType>();
     KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("monotonicity_preserving", TrilinosMonotonicityPreservingSolverFactory);
+
+#ifdef KRATOS_TRILINOS_USE_MUMPS_DIRECTLY
+    using TrilinosMumpsSolverType = TrilinosMumpsSolver<TrilinosSparseSpaceType,
+        TrilinosLocalSpaceType >;
+    static auto TrilinosMumpsSolverFactory = TrilinosLinearSolverFactory<
+        TrilinosSparseSpaceType,
+        TrilinosLocalSpaceType,
+        TrilinosMumpsSolverType>();
+    KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("mumps_direct", TrilinosMumpsSolverFactory);
+#endif
 }
 
 template class KratosComponents<TrilinosLinearSolverFactoryType>;
