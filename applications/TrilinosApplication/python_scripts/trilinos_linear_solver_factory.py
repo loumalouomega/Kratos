@@ -108,10 +108,18 @@ def _CheckIfSolverIsCompiled(solver_type):
             return False
         return True
 
-    # --- 4. Check Amesos (Direct) Solvers ---
+    # --- 4. Check direct MUMPS (native, bypassing Amesos) ---
+    if solver_type == "mumps_direct":
+        if not hasattr(KratosTrilinos, 'TrilinosMumpsSolver'):
+            KM.Logger.PrintWarning("Trilinos-Linear-Solver-Factory",
+                "Trying to use mumps_direct, which requires TRILINOS_APPLICATION_USE_MUMPS_DIRECTLY=ON at build time!")
+            return False
+        return True
+
+    # --- 5. Check Amesos (Direct) Solvers ---
     amesos_solvers = {
-        "amesos", "amesos2", "klu", "klu2", 
-        "super_lu_dist", "super_lu_dist2", 
+        "amesos", "amesos2", "klu", "klu2",
+        "super_lu_dist", "super_lu_dist2",
         "mumps", "mumps2", "basker"
     }
 
