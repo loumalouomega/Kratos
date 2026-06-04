@@ -12,6 +12,7 @@ import test_trilinos_linear_solvers
 import test_trilinos_matrix
 import test_trilinos_redistance
 import test_trilinos_levelset_convection
+import test_mumps_solver
 
 def AssembleTestSuites():
     ''' Populates the test suites to run.
@@ -36,6 +37,7 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([test_trilinos_linear_solvers.TestAztecLinearSolvers]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([test_trilinos_linear_solvers.TestMLLinearSolvers]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([test_trilinos_linear_solvers.TestAMGCLMPILinearSolvers]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([test_mumps_solver.TestMumpsDirectLinearSolvers]))
 
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([test_trilinos_matrix.TestTrilinosMatrix]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([test_trilinos_redistance.TestTrilinosRedistance]))
