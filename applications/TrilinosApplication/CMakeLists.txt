@@ -118,8 +118,10 @@ endif()
 add_library( KratosTrilinosCore SHARED ${KRATOS_TRILINOS_APPLICATION_CORE_SOURCES} )
 target_link_libraries(KratosTrilinosCore PUBLIC ${TRILINOS_LINK_LIBS})
 if(TRILINOS_APPLICATION_USE_MUMPS_DIRECTLY)
-    target_include_directories(KratosTrilinosCore SYSTEM PRIVATE ${MUMPS_INCLUDE_DIRS})
-    target_link_libraries(KratosTrilinosCore PRIVATE ${MUMPS_LIBRARIES})
+    # PUBLIC so any TU that instantiates TrilinosMumpsSolver (header-only template)
+    # can resolve dmumps_c at link time without repeating the MUMPS dependency.
+    target_include_directories(KratosTrilinosCore SYSTEM PUBLIC ${MUMPS_INCLUDE_DIRS})
+    target_link_libraries(KratosTrilinosCore PUBLIC ${MUMPS_LIBRARIES})
 endif()
 set_target_properties( KratosTrilinosCore PROPERTIES COMPILE_DEFINITIONS "TRILINOS_APPLICATION=EXPORT,API")
 
