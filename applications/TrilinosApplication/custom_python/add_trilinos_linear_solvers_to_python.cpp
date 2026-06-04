@@ -49,6 +49,10 @@
 #include "external_includes/amgcl_mpi_solver.h"
 #include "external_includes/amgcl_mpi_schur_complement_solver.h"
 
+#ifdef KRATOS_TRILINOS_USE_MUMPS_DIRECTLY
+#include "custom_solvers/trilinos_mumps_solver.h"
+#endif
+
 namespace Kratos::Python
 {
 
@@ -159,6 +163,21 @@ void  AddLinearSolvers(pybind11::module& m)
         .def( py::init<Parameters>())
         .def("__str__", PrintObject<AmgclMPISchurComplementSolverType>)
         ;
+
+#ifdef KRATOS_TRILINOS_USE_MUMPS_DIRECTLY
+    using TrilinosMumpsSolverType = TrilinosMumpsSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType>;
+    py::class_<TrilinosMumpsSolverType, typename TrilinosMumpsSolverType::Pointer, TrilinosLinearSolverType>(m, "TrilinosMumpsSolver")
+        .def(py::init<Parameters>())
+        .def("Solve", [](TrilinosMumpsSolverType& rSelf,
+                         TrilinosSparseSpaceType::MatrixType& rA,
+                         TrilinosSparseSpaceType::VectorType& rX,
+                         TrilinosSparseSpaceType::VectorType& rB) { return rSelf.Solve(rA, rX, rB); })
+        .def("PrintInfo", [](const TrilinosMumpsSolverType& rSelf) {
+            rSelf.PrintInfo(std::cout);
+        })
+        .def("__str__", PrintObject<TrilinosMumpsSolverType>)
+        ;
+#endif
 
     typedef LinearSolverFactory< TrilinosSparseSpaceType, TrilinosLocalSpaceType > TrilinosLinearSolverFactoryType;
 
