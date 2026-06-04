@@ -32,6 +32,17 @@ OPTION ( TRILINOS_EXCLUDE_AMESOS2_SOLVER "Exclude Amesos2 Solver" ON )
 # If manually compiling some dependencies like MUMPS, linking to Fortran may be required
 OPTION ( TRILINOS_APPLICATION_LINK_GFORTRAN "Not linking Trilinos application with GFortran" OFF )
 
+# Option to link TrilinosApplication directly against MUMPS (bypassing Amesos/Amesos2)
+option(TRILINOS_APPLICATION_USE_MUMPS_DIRECTLY
+    "Link TrilinosApplication directly against MUMPS (bypassing Amesos2)"
+    OFF)
+
+if(TRILINOS_APPLICATION_USE_MUMPS_DIRECTLY)
+    find_package(MUMPS REQUIRED)
+    message(STATUS "TrilinosApplication: direct MUMPS enabled (${MUMPS_VERSION})")
+    add_definitions(-DKRATOS_TRILINOS_USE_MUMPS_DIRECTLY)
+endif()
+
 if(${TRILINOS_EXCLUDE_AMESOS2_SOLVER} MATCHES ON)
     add_definitions(-DTRILINOS_EXCLUDE_AMESOS2_SOLVER)
     message("**** WARNING: Manually disabled Amesos2-Solver ****")
@@ -106,6 +117,10 @@ if (${TRILINOS_APPLICATION_LINK_GFORTRAN})
 endif()
 add_library( KratosTrilinosCore SHARED ${KRATOS_TRILINOS_APPLICATION_CORE_SOURCES} )
 target_link_libraries(KratosTrilinosCore PUBLIC ${TRILINOS_LINK_LIBS})
+if(TRILINOS_APPLICATION_USE_MUMPS_DIRECTLY)
+    target_include_directories(KratosTrilinosCore SYSTEM PRIVATE ${MUMPS_INCLUDE_DIRS})
+    target_link_libraries(KratosTrilinosCore PRIVATE ${MUMPS_LIBRARIES})
+endif()
 set_target_properties( KratosTrilinosCore PROPERTIES COMPILE_DEFINITIONS "TRILINOS_APPLICATION=EXPORT,API")
 
 target_include_directories(KratosTrilinosCore SYSTEM PUBLIC ${TRILINOS_INCLUDE_DIR})
