@@ -21,14 +21,8 @@
 #include <vector>
 
 // External includes
-#include <Epetra_FECrsMatrix.h>
-#include <Epetra_FEVector.h>
-#include <Epetra_Import.h>
-#include <Epetra_Map.h>
-#include <Epetra_MpiComm.h>
-#include <Epetra_Vector.h>
-#include <mpi.h>
-#include <dmumps_c.h>
+#include <mpi.h>       ///< MPI_Comm, MPI_Comm_c2f
+#include <dmumps_c.h>  ///< DMUMPS_STRUC_C, dmumps_c, MUMPS_INT, DMUMPS_COMPLEX
 
 // Project includes
 #include "includes/define.h"
@@ -37,14 +31,67 @@
 
 namespace Kratos
 {
+
+///@addtogroup TrilinosApplication
+///@{
+
 ///@name Kratos Classes
 ///@{
 
-/// Direct solver that calls MUMPS via its native C API, bypassing Amesos/Amesos2.
-/** The Epetra_FECrsMatrix entries are extracted in COO format using distributed
- *  assembled input (ICNTL(18)=3), so no global gather of the matrix is required.
- *  The right-hand side is gathered to rank 0 before the solve and the solution
- *  is scattered back to all ranks afterwards.
+/**
+ * @class TrilinosMumpsSolver
+ * @ingroup TrilinosApplication
+ * @brief Direct linear solver that calls MUMPS via its native C API.
+ *
+ * @details
+ * This solver bypasses the Amesos/Amesos2 Trilinos wrappers and drives MUMPS
+ * directly, which gives full control over all MUMPS integer and real controls
+ * (ICNTL/CNTL arrays) and post-solve diagnostics (INFOG/RINFOG arrays).
+ *
+ * ### Matrix input
+ * The distributed matrix entries are extracted in COO format using MUMPS
+ * *distributed assembled input* (`ICNTL(18) = 3`): every MPI rank contributes
+ * its locally owned rows via `irn_loc`/`jcn_loc`/`a_loc`, so no global gather
+ * of the matrix is ever required.
+ *
+ * ### RHS / solution handling
+ * The right-hand side is gathered to rank 0 before the solve (using
+ * `TSparseSpaceType::GatherToBuffer`) and the solution is scattered back to all
+ * ranks afterwards (using `TSparseSpaceType::ScatterFromBuffer`).  The calls are
+ * collective so every rank participates even though only rank 0 drives MUMPS'
+ * dense RHS phase.
+ *
+ * ### Parameters (constructor)
+ * All knobs are exposed through the `Parameters` object passed at construction.
+ * An *escape hatch* (`additional_icntl` / `additional_cntl`) lets the user set
+ * any ICNTL/CNTL index that does not have a friendly named parameter.
+ * Named parameters are applied first; the escape hatch is applied last and
+ * therefore overrides them.
+ *
+ * See `GetDefaultParameters()` and the `README_mumps.md` for the full parameter
+ * table.
+ *
+ * ### Symbolic analysis caching
+ * The first `Solve` call performs the full MUMPS pipeline:
+ *   - JOB = −1 (initialize)
+ *   - JOB =  1 (symbolic analysis)
+ *   - JOB =  2 (numeric factorization)
+ *   - JOB =  3 (back substitution)
+ *
+ * Subsequent calls on a matrix with the **same sparsity pattern** skip the
+ * analysis phase (JOB = 1) so that the expensive fill-reducing ordering is
+ * reused.  The internal flag `mReanalyze` is set to `false` after the first
+ * successful analysis.
+ *
+ * MUMPS is finalized (JOB = −2) in the destructor.
+ *
+ * @tparam TSparseSpaceType Distributed sparse-space type (e.g. `TrilinosSpace<…>`).
+ *         Must provide: `GetCommunicator`, `GetMpiComm`, `GetRank`, `Size1`,
+ *         `GetLocalCOO`, `GatherToBuffer`, `ScatterFromBuffer`.
+ * @tparam TDenseSpaceType  Dense (local) space type.
+ * @tparam TReordererType   Reorderer (default `Reorderer<…>`).
+ *
+ * @author Vicente Mataix Ferrandiz
  */
 template<class TSparseSpaceType, class TDenseSpaceType,
          class TReordererType = Reorderer<TSparseSpaceType, TDenseSpaceType>>
@@ -55,22 +102,44 @@ public:
     ///@name Type Definitions
     ///@{
 
-    using BaseType         = LinearSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>;
-    using SparseMatrixType = typename TSparseSpaceType::MatrixType;   // Epetra_FECrsMatrix
-    using VectorType       = typename TSparseSpaceType::VectorType;   // Epetra_FEVector
-    using DenseMatrixType  = typename TDenseSpaceType::MatrixType;
+    /// Base class alias.
+    using BaseType = LinearSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>;
 
+    /// Distributed sparse matrix type (e.g. `Epetra_FECrsMatrix`).
+    using SparseMatrixType = typename TSparseSpaceType::MatrixType;
+
+    /// Distributed vector type (e.g. `Epetra_FEVector`).
+    using VectorType = typename TSparseSpaceType::VectorType;
+
+    /// Dense matrix type (local).
+    using DenseMatrixType = typename TDenseSpaceType::MatrixType;
+
+    /// Space index type.
+    using IndexType = typename TSparseSpaceType::IndexType;
+
+    /// Pointer definition following Kratos conventions.
     KRATOS_CLASS_POINTER_DEFINITION(TrilinosMumpsSolver);
 
     ///@}
     ///@name Life Cycle
     ///@{
 
+    /**
+     * @brief Constructs the solver from a JSON-backed Parameters object.
+     *
+     * @details All unrecognised keys are rejected by `ValidateAndAssignDefaults`.
+     *          The raw ICNTL/CNTL escape hatches (`additional_icntl` and
+     *          `additional_cntl`) are parsed into internal vectors during
+     *          construction and applied in `InitializeMumps`.
+     *
+     * @param settings JSON Parameters.  Use `GetDefaultParameters()` to obtain
+     *                 the full schema with documented defaults.
+     */
     explicit TrilinosMumpsSolver(Parameters settings = Parameters(R"({})"))
     {
         settings.ValidateAndAssignDefaults(GetDefaultParameters());
 
-        // Existing controls
+        // Existing core controls
         mSym                 = settings["sym"].GetInt();
         mVerbosity           = settings["verbosity"].GetInt();
         mOrdering            = settings["ordering"].GetInt();
@@ -100,18 +169,27 @@ public:
         mErrorAnalysis       = settings["error_analysis"].GetInt();
         mComputeDeterminant  = settings["compute_determinant"].GetInt();
 
-        // Escape hatch: parse free-form override maps (index -> value, 1-based)
-        for (auto it = settings["additional_icntl"].begin(); it != settings["additional_icntl"].end(); ++it) {
+        // Escape hatches: map "1-based_index" → value
+        for (auto it = settings["additional_icntl"].begin();
+                  it != settings["additional_icntl"].end(); ++it) {
             mAdditionalIcntl.emplace_back(std::stoi(it.name()), it->GetInt());
         }
-        for (auto it = settings["additional_cntl"].begin(); it != settings["additional_cntl"].end(); ++it) {
+        for (auto it = settings["additional_cntl"].begin();
+                  it != settings["additional_cntl"].end(); ++it) {
             mAdditionalCntl.emplace_back(std::stoi(it.name()), it->GetDouble());
         }
     }
 
+    /// Not copyable.
     TrilinosMumpsSolver(const TrilinosMumpsSolver&) = delete;
+
+    /// Not copy-assignable.
     TrilinosMumpsSolver& operator=(const TrilinosMumpsSolver&) = delete;
 
+    /**
+     * @brief Destructor.  Finalizes the MUMPS instance (JOB = −2) if it was
+     *        previously initialized.
+     */
     ~TrilinosMumpsSolver() override
     {
         if (mInitialized) {
@@ -120,23 +198,37 @@ public:
     }
 
     ///@}
-    ///@name Operations
+    ///@name LinearSolver interface
     ///@{
 
     /**
-     * Solves the linear system Ax=b using MUMPS directly.
-     * @param rA Distributed sparse system matrix (Epetra_FECrsMatrix).
-     * @param rX Solution vector (distributed). Overwritten with the solution.
-     * @param rB Right-hand side vector (distributed). Not modified.
+     * @brief Solves the linear system @f$ A x = b @f$ in-place using MUMPS.
+     *
+     * @details The solve pipeline for the first call:
+     *   1. Extract local COO data from @p rA via `TSparseSpaceType::GetLocalCOO`.
+     *   2. Initialize MUMPS (JOB = −1) and set all ICNTL/CNTL controls.
+     *   3. Symbolic analysis (JOB = 1, skipped on subsequent calls).
+     *   4. Numeric factorization (JOB = 2).
+     *   5. Gather @p rB to rank 0 via `TSparseSpaceType::GatherToBuffer`.
+     *   6. Back-substitution (JOB = 3) on rank 0.
+     *   7. Scatter solution to @p rX via `TSparseSpaceType::ScatterFromBuffer`.
+     *
+     * @p rA and @p rB are **not modified**.
+     *
+     * @param rA Distributed sparse system matrix.
+     * @param rX Solution vector (distributed).  Overwritten with the result.
+     * @param rB Right-hand side vector (distributed).  Not modified.
+     * @return @c true on success (MUMPS INFOG(1) == 0 for each phase).
+     * @throws Kratos::Exception if any MUMPS phase reports a non-zero error code.
      */
     bool Solve(SparseMatrixType& rA, VectorType& rX, VectorType& rB) override
     {
         KRATOS_TRY
 
-        const auto& r_epetra_comm = dynamic_cast<const Epetra_MpiComm&>(rA.Comm());
-        MPI_Comm mpi_comm         = r_epetra_comm.Comm();
-        const int rank            = r_epetra_comm.MyPID();
-        const int n_global        = rA.NumGlobalRows();
+        const auto& r_comm    = TSparseSpaceType::GetCommunicator(rA);
+        MPI_Comm mpi_comm     = TSparseSpaceType::GetMpiComm(r_comm);
+        const int rank        = TSparseSpaceType::GetRank(r_comm);
+        const int n_global    = static_cast<int>(TSparseSpaceType::Size1(rA));
 
         if (!mInitialized) {
             InitializeMumps(mpi_comm);
@@ -144,18 +236,26 @@ public:
 
         mId.n = n_global;
 
-        // Extract local COO data (no copy of the full sparsity pattern)
-        std::vector<MUMPS_INT> irn_loc, jcn_loc;
+        // --- 1. Extract local COO data (0-based global indices) ---
+        std::vector<IndexType> row_0based, col_0based;
         std::vector<double>    a_loc;
-        ExtractCOO(rA, irn_loc, jcn_loc, a_loc);
+        TSparseSpaceType::GetLocalCOO(rA, row_0based, col_0based, a_loc, mSym > 0);
+
+        // Convert to MUMPS 1-based MUMPS_INT
+        const std::size_t nnz_loc = row_0based.size();
+        std::vector<MUMPS_INT> irn_loc(nnz_loc), jcn_loc(nnz_loc);
+        for (std::size_t k = 0; k < nnz_loc; ++k) {
+            irn_loc[k] = static_cast<MUMPS_INT>(row_0based[k]) + 1;
+            jcn_loc[k] = static_cast<MUMPS_INT>(col_0based[k]) + 1;
+        }
 
         // Distributed assembled matrix input (ICNTL(18) = 3)
-        mId.nz_loc  = static_cast<MUMPS_INT>(irn_loc.size());
+        mId.nz_loc  = static_cast<MUMPS_INT>(nnz_loc);
         mId.irn_loc = irn_loc.data();
         mId.jcn_loc = jcn_loc.data();
         mId.a_loc   = a_loc.data();
 
-        // Symbolic analysis — only on first call or when forced
+        // --- 2. Symbolic analysis (first call only, or when forced) ---
         if (mReanalyze) {
             mId.job = 1;
             dmumps_c(&mId);
@@ -165,69 +265,139 @@ public:
             mReanalyze = false;
         }
 
-        // Numeric factorization
+        // --- 3. Numeric factorization ---
         mId.job = 2;
         dmumps_c(&mId);
         KRATOS_ERROR_IF(mId.infog[0] != 0)
             << "MUMPS factorization phase failed with error code " << mId.infog[0]
             << " (infog[1] = " << mId.infog[1] << ")" << std::endl;
 
-        // Gather RHS to rank 0 via a serial (all-on-root) map
-        // Serial map: rank 0 owns all n_global elements, others own none
-        Epetra_Map serial_map(n_global, rank == 0 ? n_global : 0, 0, r_epetra_comm);
-        Epetra_Vector b_serial(serial_map);
-        {
-            Epetra_Import rhs_importer(serial_map, rB.Map());
-            b_serial.Import(rB, rhs_importer, Insert);
-        }
+        // --- 4. Gather RHS to rank 0 as a flat buffer ---
+        std::vector<double> rhs_buffer;
+        TSparseSpaceType::GatherToBuffer(rB, r_comm, rhs_buffer);
 
-        // Solve — rank 0 provides the dense RHS; solution overwrites it in-place
+        // --- 5. Back-substitution (RHS is centralized on rank 0) ---
         mId.job  = 3;
         mId.nrhs = 1;
         mId.lrhs = n_global;
-        mId.rhs  = (rank == 0) ? b_serial.Values() : nullptr;
+        mId.rhs  = (rank == 0) ? rhs_buffer.data() : nullptr;
         dmumps_c(&mId);
         KRATOS_ERROR_IF(mId.infog[0] != 0)
             << "MUMPS solve phase failed with error code " << mId.infog[0]
             << " (infog[1] = " << mId.infog[1] << ")" << std::endl;
 
-        // Scatter solution (now in b_serial on rank 0) back to distributed rX
-        {
-            Epetra_Import x_importer(rX.Map(), serial_map);
-            rX.Import(b_serial, x_importer, Insert);
-        }
+        // --- 6. Scatter solution (now in rhs_buffer on rank 0) to rX ---
+        TSparseSpaceType::ScatterFromBuffer(r_comm, rhs_buffer, rX);
 
         return true;
 
         KRATOS_CATCH("")
     }
 
+    /**
+     * @brief Dense multi-RHS overload — not supported; always returns @c false.
+     */
     bool Solve(SparseMatrixType& rA, DenseMatrixType& rX, DenseMatrixType& rB) override
     {
         return false;
     }
 
     ///@}
+    ///@name Post-solve diagnostics
+    ///@{
+
+    /**
+     * @brief Returns INFOG(@p Index) from the last solve (1-based index, range 1–80).
+     * @param Index MUMPS 1-based INFOG index.
+     * @return Integer value of INFOG(Index).
+     * @throws Kratos::Exception if @p Index is out of range.
+     */
+    int GetInfog(int Index) const
+    {
+        KRATOS_ERROR_IF(Index < 1 || Index > 80)
+            << "INFOG index " << Index << " out of valid range [1, 80]" << std::endl;
+        return mId.infog[Index - 1];
+    }
+
+    /**
+     * @brief Returns RINFOG(@p Index) from the last solve (1-based index, range 1–40).
+     * @param Index MUMPS 1-based RINFOG index.
+     * @return Real value of RINFOG(Index).
+     * @throws Kratos::Exception if @p Index is out of range.
+     */
+    double GetRinfog(int Index) const
+    {
+        KRATOS_ERROR_IF(Index < 1 || Index > 40)
+            << "RINFOG index " << Index << " out of valid range [1, 40]" << std::endl;
+        return mId.rinfog[Index - 1];
+    }
+
+    /**
+     * @brief Returns the determinant of the factored matrix.
+     * @details Only meaningful when `compute_determinant = 1` was set.
+     *          MUMPS returns det = RINFOG(12) × 2^INFOG(34).
+     * @return The determinant.
+     */
+    double GetDeterminant() const
+    {
+        return mId.rinfog[11] * std::ldexp(1.0, mId.infog[33]);
+    }
+
+    /**
+     * @brief Returns the estimated condition number RINFOG(11).
+     * @details Only meaningful when `error_analysis = 1` was set.
+     * @return Estimated condition number.
+     */
+    double GetEstimatedConditionNumber() const
+    {
+        return mId.rinfog[10];
+    }
+
+    /**
+     * @brief Returns the scaled backward error max(RINFOG(7), RINFOG(8)).
+     * @details Only meaningful when `error_analysis >= 1` was set.
+     * @return Scaled backward error.
+     */
+    double GetBackwardError() const
+    {
+        return std::max(mId.rinfog[6], mId.rinfog[7]);
+    }
+
+    /**
+     * @brief Returns the count of null pivots detected INFOG(28).
+     * @details Only meaningful when `null_pivot_detection = 1` was set.
+     * @return Number of null (near-zero) pivots encountered during factorization.
+     */
+    int GetNumNullPivots() const
+    {
+        return mId.infog[27];
+    }
+
+    ///@}
     ///@name Input and Output
     ///@{
 
+    /**
+     * @brief Prints solver configuration and (when enabled) post-solve diagnostics.
+     * @param rOStream Output stream to write to.
+     */
     void PrintInfo(std::ostream& rOStream) const override
     {
         rOStream << "TrilinosMumpsSolver"
-                 << " [sym=" << mSym
-                 << ", ordering=" << mOrdering
-                 << ", iterative_refinement=" << mIterativeRefinement
-                 << ", out_of_core=" << mOutOfCore
-                 << ", scaling=" << mScaling
-                 << ", null_pivot_detection=" << mNullPivotDetection
-                 << ", memory_relaxation_percent=" << mMemoryRelaxation
-                 << ", max_working_memory_mb=" << mMaxWorkingMemoryMB
-                 << ", analysis_type=" << mAnalysisType
-                 << ", parallel_ordering=" << mParallelOrdering
-                 << ", block_low_rank=" << mBlockLowRank
-                 << ", error_analysis=" << mErrorAnalysis
-                 << ", compute_determinant=" << mComputeDeterminant
-                 << ", verbosity=" << mVerbosity << "]";
+                 << " [sym="                     << mSym
+                 << ", ordering="                << mOrdering
+                 << ", iterative_refinement="    << mIterativeRefinement
+                 << ", out_of_core="             << mOutOfCore
+                 << ", scaling="                 << mScaling
+                 << ", null_pivot_detection="    << mNullPivotDetection
+                 << ", memory_relaxation_pct="   << mMemoryRelaxation
+                 << ", max_working_memory_mb="   << mMaxWorkingMemoryMB
+                 << ", analysis_type="           << mAnalysisType
+                 << ", parallel_ordering="       << mParallelOrdering
+                 << ", block_low_rank="          << mBlockLowRank
+                 << ", error_analysis="          << mErrorAnalysis
+                 << ", compute_determinant="     << mComputeDeterminant
+                 << ", verbosity="               << mVerbosity << "]";
 
         KRATOS_INFO("TrilinosMumpsSolver")
             << "sym=" << mSym
@@ -236,7 +406,7 @@ public:
             << " out_of_core=" << mOutOfCore
             << " scaling=" << mScaling
             << " null_pivot_detection=" << mNullPivotDetection
-            << " memory_relaxation_percent=" << mMemoryRelaxation
+            << " memory_relaxation_pct=" << mMemoryRelaxation
             << " max_working_memory_mb=" << mMaxWorkingMemoryMB
             << " analysis_type=" << mAnalysisType
             << " parallel_ordering=" << mParallelOrdering
@@ -245,71 +415,58 @@ public:
             << " compute_determinant=" << mComputeDeterminant
             << " verbosity=" << mVerbosity << std::endl;
 
-        // Report diagnostics gathered during the last solve (when enabled)
         if (mInitialized) {
             if (mComputeDeterminant) {
-                KRATOS_INFO("TrilinosMumpsSolver") << "determinant=" << GetDeterminant() << std::endl;
+                KRATOS_INFO("TrilinosMumpsSolver")
+                    << "determinant=" << GetDeterminant() << std::endl;
             }
             if (mNullPivotDetection) {
-                KRATOS_INFO("TrilinosMumpsSolver") << "num_null_pivots=" << GetNumNullPivots() << std::endl;
+                KRATOS_INFO("TrilinosMumpsSolver")
+                    << "num_null_pivots=" << GetNumNullPivots() << std::endl;
             }
             if (mErrorAnalysis == 1) {
                 KRATOS_INFO("TrilinosMumpsSolver")
                     << "estimated_condition_number=" << GetEstimatedConditionNumber() << std::endl;
             }
-            if (mErrorAnalysis == 1 || mErrorAnalysis == 2) {
-                KRATOS_INFO("TrilinosMumpsSolver") << "backward_error=" << GetBackwardError() << std::endl;
+            if (mErrorAnalysis >= 1) {
+                KRATOS_INFO("TrilinosMumpsSolver")
+                    << "backward_error=" << GetBackwardError() << std::endl;
             }
         }
     }
 
     ///@}
-    ///@name Inquiry (diagnostics from the last solve)
+    ///@name Static Utilities
     ///@{
 
-    /// Raw access to MUMPS global integer info: returns INFOG(Index) (1-based, as in the MUMPS docs).
-    int GetInfog(int Index) const
-    {
-        KRATOS_ERROR_IF(Index < 1 || Index > 80) << "INFOG index out of range [1, 80]: " << Index << std::endl;
-        return mId.infog[Index - 1];
-    }
-
-    /// Raw access to MUMPS global real info: returns RINFOG(Index) (1-based, as in the MUMPS docs).
-    double GetRinfog(int Index) const
-    {
-        KRATOS_ERROR_IF(Index < 1 || Index > 40) << "RINFOG index out of range [1, 40]: " << Index << std::endl;
-        return mId.rinfog[Index - 1];
-    }
-
-    /// Determinant of the matrix. Only meaningful when "compute_determinant" was enabled.
-    /// MUMPS returns it as det = RINFOG(12) * 2^INFOG(34).
-    double GetDeterminant() const
-    {
-        return mId.rinfog[11] * std::ldexp(1.0, mId.infog[33]); // RINFOG(12) * 2^INFOG(34)
-    }
-
-    /// Estimated condition number RINFOG(11). Only meaningful when "error_analysis" == 1.
-    double GetEstimatedConditionNumber() const
-    {
-        return mId.rinfog[10]; // RINFOG(11)
-    }
-
-    /// Scaled backward error max(RINFOG(7), RINFOG(8)). Only meaningful when "error_analysis" >= 1.
-    double GetBackwardError() const
-    {
-        return std::max(mId.rinfog[6], mId.rinfog[7]); // max(RINFOG(7), RINFOG(8))
-    }
-
-    /// Number of null pivots detected INFOG(28). Only meaningful when "null_pivot_detection" was enabled.
-    int GetNumNullPivots() const
-    {
-        return mId.infog[27]; // INFOG(28)
-    }
-
-    ///@}
-    ///@name Static Methods
-    ///@{
-
+    /**
+     * @brief Returns a Parameters object containing all recognised keys with their
+     *        default values.
+     *
+     * @details The schema is also used by the constructor to validate input through
+     *          `ValidateAndAssignDefaults`.
+     *
+     * @par Parameter table (subset)
+     * | Key | MUMPS control | Default | Notes |
+     * |-----|---------------|---------|-------|
+     * | `sym` | `id.sym` | 0 | 0=unsymmetric, 1=symmetric, 2=SPD |
+     * | `ordering` | ICNTL(7) | 0 | 0=auto, 1=Scotch, 2=METIS, … |
+     * | `scaling` | ICNTL(8) | 77 | 77=auto |
+     * | `iterative_refinement_steps` | ICNTL(10) | 0 | 0=disabled |
+     * | `null_pivot_detection` | ICNTL(24) | 0 | 1=enabled |
+     * | `out_of_core` | ICNTL(22) | 0 | 1=out-of-core |
+     * | `memory_relaxation_percent` | ICNTL(14) | -1 | <0=keep MUMPS default |
+     * | `max_working_memory_mb` | ICNTL(23) | 0 | 0=MUMPS decides |
+     * | `analysis_type` | ICNTL(28) | 0 | 0=auto, 1=seq, 2=parallel |
+     * | `parallel_ordering` | ICNTL(29) | 0 | 0=auto, 1=PT-Scotch, 2=ParMETIS |
+     * | `block_low_rank` | ICNTL(35) | 0 | 0=off, 1/2/3=BLR variants |
+     * | `error_analysis` | ICNTL(11) | 0 | 1=full, 2=backward error only |
+     * | `compute_determinant` | ICNTL(33) | 0 | 1=compute det |
+     * | `additional_icntl` | `{}` | — | raw overrides: `{"14": 35}` |
+     * | `additional_cntl` | `{}` | — | raw overrides: `{"1": 0.001}` |
+     *
+     * @return Default Parameters object.
+     */
     static Parameters GetDefaultParameters()
     {
         return Parameters(R"({
@@ -343,33 +500,48 @@ private:
     ///@name Private Operations
     ///@{
 
+    /**
+     * @brief Initializes the MUMPS instance (JOB = −1) and applies all ICNTL/CNTL
+     *        settings from the constructor parameters.
+     *
+     * @details Called once on the first `Solve` invocation.  The MPI communicator
+     *          is obtained from the matrix via `TSparseSpaceType::GetMpiComm` and
+     *          passed to MUMPS as a Fortran handle via `MPI_Comm_c2f`.
+     *
+     *          All controls that affect the analysis phase (ordering, BLR, input
+     *          format) must be set *before* JOB = 1; they are set here so that the
+     *          subsequent analysis call in `Solve` picks them up correctly.
+     *
+     * @param mpi_comm The MPI communicator to pass to MUMPS.
+     */
     void InitializeMumps(MPI_Comm mpi_comm)
     {
         mId.comm_fortran = (MUMPS_INT)MPI_Comm_c2f(mpi_comm);
-        mId.job = -1;   // initialize
-        mId.par = 1;    // host processor participates in factorization
+        mId.job = -1;  // MUMPS initialize
+        mId.par = 1;   // host participates in factorization
         mId.sym = mSym;
         dmumps_c(&mId);
 
         // ICNTL(18) = 3: distributed assembled input — must be set before analysis
         mId.icntl[17] = 3;
 
+        // Verbosity (ICNTL(1–4))
         if (mVerbosity == 0) {
-            mId.icntl[0] = -1;  // error messages: suppressed
-            mId.icntl[1] = -1;  // diagnostic messages: suppressed
-            mId.icntl[2] = -1;  // global information: suppressed
-            mId.icntl[3] = 0;   // no printing level
+            mId.icntl[0] = -1;  // suppress error stream
+            mId.icntl[1] = -1;  // suppress diagnostic stream
+            mId.icntl[2] = -1;  // suppress global information stream
+            mId.icntl[3] = 0;   // no statistics
         } else {
-            mId.icntl[0] = 6;   // errors to stdout
-            mId.icntl[1] = 6;   // diagnostics to stdout
-            mId.icntl[2] = 6;   // global info to stdout
+            mId.icntl[0] = 6;   // errors → stdout
+            mId.icntl[1] = 6;   // diagnostics → stdout
+            mId.icntl[2] = 6;   // global info → stdout
             mId.icntl[3] = (mVerbosity > 1) ? 2 : 1;
         }
 
-        // Ordering / analysis (must be set before the analysis phase, job=1)
-        mId.icntl[6]  = mOrdering;            // ICNTL(7):  sequential ordering
-        mId.icntl[27] = mAnalysisType;        // ICNTL(28): sequential vs parallel analysis
-        mId.icntl[28] = mParallelOrdering;    // ICNTL(29): parallel ordering tool
+        // Ordering / analysis (must precede JOB = 1)
+        mId.icntl[6]  = mOrdering;         // ICNTL(7):  sequential fill-reducing ordering
+        mId.icntl[27] = mAnalysisType;     // ICNTL(28): sequential vs parallel analysis
+        mId.icntl[28] = mParallelOrdering; // ICNTL(29): parallel ordering tool
 
         // Numerical robustness
         mId.icntl[7]  = mScaling;             // ICNTL(8):  scaling strategy
@@ -377,28 +549,28 @@ private:
         if (mPivotingThreshold >= 0.0) {
             mId.cntl[0] = mPivotingThreshold; // CNTL(1): relative pivoting threshold
         }
-        mId.cntl[2] = mNullPivotThreshold;    // CNTL(3): null pivot threshold
+        mId.cntl[2] = mNullPivotThreshold;    // CNTL(3): null pivot detection threshold
 
         // Solve-time controls
         mId.icntl[9]  = mIterativeRefinement; // ICNTL(10): iterative refinement steps
-        mId.icntl[10] = mErrorAnalysis;       // ICNTL(11): error analysis
-        mId.icntl[21] = mOutOfCore;           // ICNTL(22): out-of-core
+        mId.icntl[10] = mErrorAnalysis;       // ICNTL(11): error analysis / condition number
+        mId.icntl[21] = mOutOfCore;           // ICNTL(22): out-of-core factorization
         mId.icntl[32] = mComputeDeterminant;  // ICNTL(33): compute determinant
 
         // Memory controls
         if (mMemoryRelaxation >= 0) {
-            mId.icntl[13] = mMemoryRelaxation; // ICNTL(14): memory relaxation (%)
+            mId.icntl[13] = mMemoryRelaxation; // ICNTL(14): workspace relaxation (%)
         }
-        mId.icntl[22] = mMaxWorkingMemoryMB;  // ICNTL(23): max working memory per MPI process (MB)
+        mId.icntl[22] = mMaxWorkingMemoryMB;  // ICNTL(23): per-process max working memory (MB)
 
-        // Block Low-Rank (must be set before the analysis phase)
-        mId.icntl[34] = mBlockLowRank;        // ICNTL(35): BLR activation
+        // Block Low-Rank (must be set before analysis)
+        mId.icntl[34] = mBlockLowRank;        // ICNTL(35): BLR activation level
         mId.icntl[35] = mBlrVariant;          // ICNTL(36): BLR variant
-        mId.cntl[6]   = mBlrThreshold;        // CNTL(7):  BLR compression threshold
+        mId.cntl[6]   = mBlrThreshold;        // CNTL(7):   BLR compression threshold
 
         // Escape hatch: user overrides applied last so they win over named controls
         for (const auto& r_pair : mAdditionalIcntl) {
-            mId.icntl[r_pair.first - 1] = r_pair.second;
+            mId.icntl[r_pair.first - 1] = r_pair.second; // convert 1-based → 0-based
         }
         for (const auto& r_pair : mAdditionalCntl) {
             mId.cntl[r_pair.first - 1] = r_pair.second;
@@ -407,6 +579,10 @@ private:
         mInitialized = true;
     }
 
+    /**
+     * @brief Finalizes the MUMPS instance (JOB = −2), releasing all internal memory.
+     * @details Called from the destructor when `mInitialized` is @c true.
+     */
     void FinalizeMumps()
     {
         mId.job = -2;
@@ -414,105 +590,68 @@ private:
         mInitialized = false;
     }
 
-    /// Extracts the matrix entries from rA in COO format with 1-based global indices.
-    /// For symmetric matrices (mSym > 0) only the lower triangular part is stored.
-    void ExtractCOO(const SparseMatrixType& rA,
-                    std::vector<MUMPS_INT>& rIRN,
-                    std::vector<MUMPS_INT>& rJCN,
-                    std::vector<double>&    rVals)
-    {
-        const int n_local_rows    = rA.NumMyRows();
-        const Epetra_Map& row_map = rA.RowMap();
-        const Epetra_Map& col_map = rA.ColMap();
-
-        rIRN.clear();
-        rJCN.clear();
-        rVals.clear();
-
-        for (int i_local = 0; i_local < n_local_rows; ++i_local) {
-            // Convert to 1-based global index for MUMPS
-            const MUMPS_INT global_row = static_cast<MUMPS_INT>(row_map.GID(i_local)) + 1;
-
-            int     num_entries;
-            double* values;
-            int*    col_inds;
-            rA.ExtractMyRowView(i_local, num_entries, values, col_inds);
-
-            for (int k = 0; k < num_entries; ++k) {
-                const MUMPS_INT global_col = static_cast<MUMPS_INT>(col_map.GID(col_inds[k])) + 1;
-
-                if (mSym > 0) {
-                    // Lower triangular only for symmetric matrices
-                    if (global_row >= global_col) {
-                        rIRN.push_back(global_row);
-                        rJCN.push_back(global_col);
-                        rVals.push_back(values[k]);
-                    }
-                } else {
-                    rIRN.push_back(global_row);
-                    rJCN.push_back(global_col);
-                    rVals.push_back(values[k]);
-                }
-            }
-        }
-    }
-
     ///@}
     ///@name Member Variables
     ///@{
 
+    /// MUMPS internal data structure; holds all control arrays and output info.
     DMUMPS_STRUC_C mId;
-    bool           mInitialized         = false;
-    bool           mReanalyze           = true;
 
-    // Existing controls
-    int            mSym                 = 0;
-    int            mVerbosity           = 0;
-    int            mOrdering            = 0;
-    int            mIterativeRefinement = 0;
-    int            mOutOfCore           = 0;
+    /// True after JOB = −1 has been called; false before or after JOB = −2.
+    bool mInitialized = false;
 
-    // Numerical robustness
-    int            mScaling             = 77;
-    double         mPivotingThreshold   = -1.0;
-    int            mNullPivotDetection  = 0;
-    double         mNullPivotThreshold  = 0.0;
+    /**
+     * @brief When @c true the symbolic analysis (JOB = 1) is (re-)run on the next
+     *        `Solve` call.  Set to @c false after the first successful analysis and
+     *        kept @c false for subsequent calls with the same sparsity pattern.
+     */
+    bool mReanalyze = true;
 
-    // Memory controls
-    int            mMemoryRelaxation    = -1;
-    int            mMaxWorkingMemoryMB  = 0;
+    // ----- Named ICNTL/CNTL parameters (read from Parameters in constructor) -----
 
-    // Parallel ordering / analysis
-    int            mAnalysisType        = 0;
-    int            mParallelOrdering    = 0;
+    int    mSym                 = 0;     ///< id.sym: 0=unsymmetric, 1=symmetric, 2=SPD
+    int    mVerbosity           = 0;     ///< Controls ICNTL(1–4) output streams
+    int    mOrdering            = 0;     ///< ICNTL(7): fill-reducing ordering method
+    int    mIterativeRefinement = 0;     ///< ICNTL(10): max iterative refinement steps
+    int    mOutOfCore           = 0;     ///< ICNTL(22): 1 = out-of-core factorization
+    int    mScaling             = 77;    ///< ICNTL(8): scaling strategy (77=automatic)
+    double mPivotingThreshold   = -1.0; ///< CNTL(1): pivoting threshold (<0 = MUMPS auto)
+    int    mNullPivotDetection  = 0;     ///< ICNTL(24): 1 = detect null pivots
+    double mNullPivotThreshold  = 0.0;  ///< CNTL(3): null pivot detection threshold
+    int    mMemoryRelaxation    = -1;    ///< ICNTL(14): workspace relaxation % (<0 = default)
+    int    mMaxWorkingMemoryMB  = 0;     ///< ICNTL(23): per-process working memory limit (MB)
+    int    mAnalysisType        = 0;     ///< ICNTL(28): 0=auto, 1=sequential, 2=parallel
+    int    mParallelOrdering    = 0;     ///< ICNTL(29): 0=auto, 1=PT-Scotch, 2=ParMETIS
+    int    mBlockLowRank        = 0;     ///< ICNTL(35): BLR level (0=off)
+    int    mBlrVariant          = 0;     ///< ICNTL(36): BLR variant selector
+    double mBlrThreshold        = 0.0;  ///< CNTL(7): BLR compression threshold
+    int    mErrorAnalysis       = 0;     ///< ICNTL(11): 0=none, 1=full, 2=backward error only
+    int    mComputeDeterminant  = 0;     ///< ICNTL(33): 1 = compute the determinant
 
-    // Block Low-Rank
-    int            mBlockLowRank        = 0;
-    int            mBlrVariant          = 0;
-    double         mBlrThreshold        = 0.0;
-
-    // Diagnostics
-    int            mErrorAnalysis       = 0;
-    int            mComputeDeterminant  = 0;
-
-    // Escape hatch: index (1-based) -> value
+    /// Raw ICNTL overrides from `additional_icntl`; pairs of (1-based index, value).
     std::vector<std::pair<int, int>>    mAdditionalIcntl;
+
+    /// Raw CNTL overrides from `additional_cntl`; pairs of (1-based index, value).
     std::vector<std::pair<int, double>> mAdditionalCntl;
 
     ///@}
 
 }; // class TrilinosMumpsSolver
 
-/// output stream function
+///@}
+
+/// Output stream operator.
 template<class TSparseSpaceType, class TDenseSpaceType, class TReordererType>
-inline std::ostream& operator<<(std::ostream& rOStream,
-                                const TrilinosMumpsSolver<TSparseSpaceType,
-                                TDenseSpaceType, TReordererType>& rThis)
+inline std::ostream& operator<<(
+    std::ostream& rOStream,
+    const TrilinosMumpsSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>& rThis)
 {
     rThis.PrintInfo(rOStream);
     rOStream << std::endl;
     return rOStream;
 }
+
+///@}
 
 } // namespace Kratos
 
