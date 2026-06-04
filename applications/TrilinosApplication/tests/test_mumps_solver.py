@@ -1,3 +1,4 @@
+import math
 import pathlib
 
 import KratosMultiphysics
@@ -141,6 +142,101 @@ class TestMumpsDirectLinearSolvers(KratosUnittest.TestCase):
         # And the second solution must also satisfy the original system
         achieved_norm, target_norm = self._CheckResidual(space, pAcopy, pbcopy, px2, data_comm)
         self.assertLessEqual(achieved_norm, target_norm)
+
+    # ------------------------------------------------------------------
+    # Helper: solve A.mm with extra settings and assert the residual
+    # ------------------------------------------------------------------
+    def _SolveWithSettings(self, settings_string, tolerance=1e-9):
+        settings = KratosMultiphysics.Parameters(settings_string)
+        space, comm, data_comm, pA, pAcopy, pb, pbcopy, px = self._BuildSystem()
+
+        solver = trilinos_linear_solver_factory.ConstructSolver(settings)
+        solver.Solve(pA.GetReference(), px.GetReference(), pb.GetReference())
+
+        achieved_norm, target_norm = self._CheckResidual(space, pAcopy, pbcopy, px, data_comm, tolerance)
+        self.assertLessEqual(achieved_norm, target_norm)
+        return solver
+
+    # ------------------------------------------------------------------
+    # Numerical robustness: explicit scaling
+    # ------------------------------------------------------------------
+    def test_mumps_direct_scaling(self):
+        """Solve with explicit MUMPS scaling enabled (ICNTL(8))."""
+        self._SolveWithSettings('{"solver_type": "mumps_direct", "scaling": 77}')
+
+    # ------------------------------------------------------------------
+    # Memory controls: memory relaxation percentage
+    # ------------------------------------------------------------------
+    def test_mumps_direct_memory_relaxation(self):
+        """Solve with an increased working-memory relaxation (ICNTL(14))."""
+        self._SolveWithSettings('{"solver_type": "mumps_direct", "memory_relaxation_percent": 40}')
+
+    # ------------------------------------------------------------------
+    # Parallel ordering / analysis
+    # ------------------------------------------------------------------
+    def test_mumps_direct_parallel_ordering(self):
+        """Solve requesting parallel analysis with automatic parallel ordering.
+
+        Parallel analysis needs a parallel ordering tool (PT-Scotch/ParMETIS) in
+        the MUMPS build; if it is unavailable MUMPS returns error -38, in which
+        case the test is skipped rather than failed.
+        """
+        try:
+            self._SolveWithSettings('{"solver_type": "mumps_direct", "analysis_type": 2, "parallel_ordering": 0}')
+        except RuntimeError as exc:
+            if "code -38" in str(exc):
+                self.skipTest("MUMPS build has no parallel ordering tool (PT-Scotch/ParMETIS); error -38")
+            raise
+
+    # ------------------------------------------------------------------
+    # Block Low-Rank (approximate factorization, looser tolerance)
+    # ------------------------------------------------------------------
+    def test_mumps_direct_block_low_rank(self):
+        """Solve using BLR (ICNTL(35)); approximate, so use a relaxed tolerance."""
+        self._SolveWithSettings(
+            '{"solver_type": "mumps_direct", "block_low_rank": 1, "blr_compression_threshold": 1e-10}',
+            tolerance=1e-6)
+
+    # ------------------------------------------------------------------
+    # Escape hatch: additional_icntl / additional_cntl passthrough
+    # ------------------------------------------------------------------
+    def test_mumps_direct_additional_controls(self):
+        """Raw ICNTL/CNTL overrides must be honoured and still solve correctly."""
+        # ICNTL(14)=35 (memory relaxation), CNTL(1)=0.001 (pivoting threshold)
+        self._SolveWithSettings(
+            '{"solver_type": "mumps_direct", "additional_icntl": {"14": 35}, "additional_cntl": {"1": 0.001}}')
+
+    # ------------------------------------------------------------------
+    # Diagnostics: determinant getter returns a finite non-zero value
+    # ------------------------------------------------------------------
+    def test_mumps_direct_determinant(self):
+        """With compute_determinant enabled, the determinant getters must be wired and
+        indicate a non-singular matrix.
+
+        The numeric correctness of the determinant (det = n!) is verified by the C++
+        test on a known diagonal system. Here we only confirm the Python bindings and
+        non-singularity: A.mm has a very large determinant that overflows double to
+        +/-inf, so we tolerate a non-finite magnitude but require a non-zero mantissa
+        (RINFOG(12)) and a non-NaN result.
+        """
+        solver = self._SolveWithSettings('{"solver_type": "mumps_direct", "compute_determinant": 1}')
+        det = solver.GetDeterminant()
+        mantissa = solver.GetRinfog(12)  # RINFOG(12)
+        self.assertFalse(math.isnan(det))
+        self.assertNotAlmostEqual(mantissa, 0.0)  # non-singular
+
+    # ------------------------------------------------------------------
+    # Diagnostics: error analysis getters return sane values
+    # ------------------------------------------------------------------
+    def test_mumps_direct_error_analysis(self):
+        """With error_analysis=1, condition number and backward error must be finite and non-negative."""
+        solver = self._SolveWithSettings('{"solver_type": "mumps_direct", "error_analysis": 1}')
+        cond = solver.GetEstimatedConditionNumber()
+        berr = solver.GetBackwardError()
+        self.assertTrue(math.isfinite(cond))
+        self.assertGreaterEqual(cond, 0.0)
+        self.assertTrue(math.isfinite(berr))
+        self.assertGreaterEqual(berr, 0.0)
 
 
 if __name__ == '__main__':
