@@ -150,6 +150,121 @@ KRATOS_DISTRIBUTED_TEST_CASE_IN_SUITE(TrilinosMumpsSolverRepeatSolve, KratosTril
     }
 }
 
+/**
+ * Compute the determinant of the diagonal system A(i,i) = 1 + i.
+ *
+ * For global size n the determinant is exactly n! = 1*2*...*n.
+ * Enables "compute_determinant" (ICNTL(33)) and reads it via GetDeterminant().
+ */
+KRATOS_DISTRIBUTED_TEST_CASE_IN_SUITE(TrilinosMumpsSolverDeterminant, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 4 * r_comm.Size();
+
+    auto A = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    auto b = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 1.0);
+    auto x = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 0.0);
+
+    MumpsSolverType solver(Parameters(R"({"solver_type":"mumps_direct","sym":0,"compute_determinant":1})"));
+    KRATOS_EXPECT_TRUE(solver.Solve(A, x, b));
+
+    // Expected determinant = n!
+    double expected_det = 1.0;
+    for (int i = 1; i <= size; ++i) {
+        expected_det *= static_cast<double>(i);
+    }
+
+    KRATOS_EXPECT_RELATIVE_NEAR(solver.GetDeterminant(), expected_det, 1e-8);
+}
+
+/**
+ * Solve the tridiagonal system with explicit scaling enabled (ICNTL(8)=77).
+ */
+KRATOS_DISTRIBUTED_TEST_CASE_IN_SUITE(TrilinosMumpsSolverScaling, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 4 * r_comm.Size();
+
+    auto A = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 2.0, true);
+    auto b = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 1.0);
+    auto x = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 0.0);
+
+    MumpsSolverType solver(Parameters(R"({"solver_type":"mumps_direct","sym":0,"scaling":77})"));
+    KRATOS_EXPECT_TRUE(solver.Solve(A, x, b));
+
+    KRATOS_EXPECT_LT(RelativeResidual(A, x, b), 1e-10);
+}
+
+/**
+ * Solve the tridiagonal system using Block Low-Rank factorization (ICNTL(35)=1).
+ *
+ * BLR is approximate, so a relaxed residual tolerance is used.
+ */
+KRATOS_DISTRIBUTED_TEST_CASE_IN_SUITE(TrilinosMumpsSolverBlockLowRank, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 4 * r_comm.Size();
+
+    auto A = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 2.0, true);
+    auto b = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 1.0);
+    auto x = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 0.0);
+
+    MumpsSolverType solver(Parameters(R"({"solver_type":"mumps_direct","sym":0,"block_low_rank":1,"blr_compression_threshold":1e-10})"));
+    KRATOS_EXPECT_TRUE(solver.Solve(A, x, b));
+
+    KRATOS_EXPECT_LT(RelativeResidual(A, x, b), 1e-6);
+}
+
+/**
+ * Escape hatch: raw ICNTL/CNTL overrides must be honoured and still solve.
+ *
+ * additional_icntl sets ICNTL(14)=35 (memory relaxation), additional_cntl sets
+ * CNTL(1)=0.001 (pivoting threshold).
+ */
+KRATOS_DISTRIBUTED_TEST_CASE_IN_SUITE(TrilinosMumpsSolverAdditionalControls, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 4 * r_comm.Size();
+
+    auto A = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    auto b = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 1.0);
+    auto x = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 0.0);
+
+    MumpsSolverType solver(Parameters(R"({
+        "solver_type"      : "mumps_direct",
+        "sym"              : 0,
+        "additional_icntl" : {"14": 35},
+        "additional_cntl"  : {"1": 0.001}
+    })"));
+    KRATOS_EXPECT_TRUE(solver.Solve(A, x, b));
+
+    const int n_local = x.Map().NumMyElements();
+    for (int i = 0; i < n_local; ++i) {
+        KRATOS_EXPECT_NEAR(x[0][i], 1.0, 1e-10);
+    }
+}
+
+/**
+ * Diagnostics on a non-singular system: null-pivot detection must report 0 null
+ * pivots and the backward error from error analysis must be tiny.
+ */
+KRATOS_DISTRIBUTED_TEST_CASE_IN_SUITE(TrilinosMumpsSolverDiagnostics, KratosTrilinosApplicationMPITestSuite)
+{
+    const auto& r_comm = Testing::GetDefaultDataCommunicator();
+    const int size = 4 * r_comm.Size();
+
+    auto A = TrilinosCPPTestUtilities::GenerateDummySparseMatrix(r_comm, size, 1.0);
+    auto b = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 1.0);
+    auto x = TrilinosCPPTestUtilities::GenerateDummySparseVector(r_comm, size, 0.0);
+
+    MumpsSolverType solver(Parameters(R"({"solver_type":"mumps_direct","sym":0,"null_pivot_detection":1,"error_analysis":1})"));
+    KRATOS_EXPECT_TRUE(solver.Solve(A, x, b));
+
+    KRATOS_EXPECT_EQ(solver.GetNumNullPivots(), 0);
+    KRATOS_EXPECT_GE(solver.GetEstimatedConditionNumber(), 0.0);
+    KRATOS_EXPECT_LT(solver.GetBackwardError(), 1e-10);
+}
+
 } // namespace Kratos::Testing
 
 #endif // KRATOS_TRILINOS_USE_MUMPS_DIRECTLY
