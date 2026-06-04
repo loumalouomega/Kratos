@@ -175,6 +175,12 @@ void  AddLinearSolvers(pybind11::module& m)
         .def("PrintInfo", [](const TrilinosMumpsSolverType& rSelf) {
             rSelf.PrintInfo(std::cout);
         })
+        .def("GetInfog", &TrilinosMumpsSolverType::GetInfog, py::arg("index"))
+        .def("GetRinfog", &TrilinosMumpsSolverType::GetRinfog, py::arg("index"))
+        .def("GetDeterminant", &TrilinosMumpsSolverType::GetDeterminant)
+        .def("GetEstimatedConditionNumber", &TrilinosMumpsSolverType::GetEstimatedConditionNumber)
+        .def("GetBackwardError", &TrilinosMumpsSolverType::GetBackwardError)
+        .def("GetNumNullPivots", &TrilinosMumpsSolverType::GetNumNullPivots)
         .def("__str__", PrintObject<TrilinosMumpsSolverType>)
         ;
 #endif
