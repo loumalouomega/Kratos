@@ -76,7 +76,7 @@ def build_transition_surface(model, name="Surface"):
 
 
 def load_bunny_ascii():
-    bunny = os.path.join(script_dir, "Bunny-LowPoly.stl")
+    bunny = os.path.join(script_dir, "auxiliar_files_for_python_unittest", "stl_files", "Bunny-LowPoly.stl")
     if not os.path.exists(bunny): return None
     try:
         with open(bunny,"rb") as f: f.read(80); n=struct.unpack("<I",f.read(4))[0]
