@@ -16,8 +16,8 @@
 
 // Project includes
 #include "modeler/coloring/classify_cells_inside_outside.h"
-#include "modeler/octree_mesher_modeler.h"
-#include "modeler/internals/octree_mesher_data.h"
+#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
@@ -26,11 +26,11 @@ namespace Kratos {
  * @brief Returns the default JSON parameter schema for @ref ClassifyCellsInsideOutside.
  * @details The schema contains a single key:
  *   - `"type"` (`string`, default `"ClassifyCellsInsideOutside"`): the Registry type
- *     token consumed by `OctreeMesherModeler::Dispatch`.
+ *     token consumed by `OctreeHybridMesherModeler::Dispatch`.
  *
  *   No further configuration keys are required because all classification data
  *   (triangle soup, node coordinates, hex connectivity) are already stored in the
- *   shared @ref OctreeMesherData object accessible through the modeler.
+ *   shared @ref OctreeHybridMesherData object accessible through the modeler.
  * @return Parameters object with key `"type"` set to `"ClassifyCellsInsideOutside"`.
  */
 const Parameters ClassifyCellsInsideOutside::GetDefaultParameters() const
@@ -42,8 +42,8 @@ const Parameters ClassifyCellsInsideOutside::GetDefaultParameters() const
 
 /**
  * @brief Classifies every hex cell in the modeler's shared data as inside (1) or outside (0).
- * @details The method operates on `rModeler.GetData()` (an @ref OctreeMesherData reference)
- *          and populates `OctreeMesherData::mCellColor` with one integer per cell:
+ * @details The method operates on `rModeler.GetData()` (an @ref OctreeHybridMesherData reference)
+ *          and populates `OctreeHybridMesherData::mCellColor` with one integer per cell:
  *
  *          - **Projected-mesh path** (`mProjected == true`): The surface-projection pass
  *            that runs during octree extraction has already removed all cells whose
@@ -61,22 +61,22 @@ const Parameters ClassifyCellsInsideOutside::GetDefaultParameters() const
  *              - `mCells`: hex connectivity (8 node indices per cell).
  *              - `mCellColor`: output vector, resized and filled by the utility.
  *
- * @param rModeler           The owning modeler; its `OctreeMesherData::mCellColor` is
+ * @param rModeler           The owning modeler; its `OctreeHybridMesherData::mCellColor` is
  *                           populated in-place.  The method does not modify the octree,
  *                           the node coordinates, or the connectivity.
  * @param ColoringParameters Validated JSON parameters (unused beyond validation; the
  *                           only key is `"type"`).
  *
  * @note `ColoringParameters` is accepted by value (copied from the JSON stage array)
- *       to match the virtual-function signature of @ref OctreeMesherColoring::Apply.
+ *       to match the virtual-function signature of @ref OctreeHybridMesherColoring::Apply.
  *       The parameter is intentionally unnamed in the definition because it is not
  *       consumed inside the body.
  *
  * @see OctreeHybridMeshUtility::ClassifyInsideOutside
- * @see OctreeMesherData::mCellColor
- * @see OctreeMesherData::mProjected
+ * @see OctreeHybridMesherData::mCellColor
+ * @see OctreeHybridMesherData::mProjected
  */
-void ClassifyCellsInsideOutside::Apply(OctreeMesherModeler& rModeler, Parameters) const
+void ClassifyCellsInsideOutside::Apply(OctreeHybridMesherModeler& rModeler, Parameters) const
 {
     auto& r_data = rModeler.GetData();
 

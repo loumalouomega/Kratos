@@ -29,9 +29,9 @@ namespace Kratos::Internals {
 ///@{
 
 /**
- * @class OctreeMesherData
+ * @class OctreeHybridMesherData
  * @ingroup KratosCore
- * @brief Shared state of the @ref OctreeMesherModeler, accessed by its components.
+ * @brief Shared state of the @ref OctreeHybridMesherModeler, accessed by its components.
  * @details Holds the built octree, the surface triangle soup, and the extracted
  * in-memory dual/primal hex mesh (node coordinates, hex connectivity, per-cell
  * refinement level and inside/outside colour), plus the de-duplication map from a
@@ -39,7 +39,7 @@ namespace Kratos::Internals {
  * voxel mesher's `CartesianMeshColors` + `CartesianData`.
  * @author Vicente Mataix Ferrandiz
  */
-class OctreeMesherData
+class OctreeHybridMesherData
 {
 public:
     ///@name Type Definitions

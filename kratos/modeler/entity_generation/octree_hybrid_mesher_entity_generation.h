@@ -29,14 +29,14 @@ namespace Kratos {
 ///@{
 
 /// Forward declaration — avoids pulling the heavy octree header into every translation unit.
-class OctreeMesherModeler;
+class OctreeHybridMesherModeler;
 
 /**
- * @class OctreeMesherEntityGeneration
+ * @class OctreeHybridMesherEntityGeneration
  * @ingroup KratosCore
- * @brief Abstract base class for entity-generation stages of the @ref OctreeMesherModeler pipeline.
+ * @brief Abstract base class for entity-generation stages of the @ref OctreeHybridMesherModeler pipeline.
  * @details Entity-generation stages transform the in-memory hex mesh stored in
- * `OctreeMesherData` into Kratos ModelPart entities:
+ * `OctreeHybridMesherData` into Kratos ModelPart entities:
  *
  *   - **Hexahedral elements** — one `Element3D8N` (or a user-chosen type) per cell
  *     whose colour matches the requested value (@ref GenerateHexesByCellColor).
@@ -46,9 +46,9 @@ class OctreeMesherModeler;
  *
  * The class follows the *Registry prototype* pattern: concrete sub-classes register
  * themselves through `KRATOS_REGISTRY_ADD_PROTOTYPE` so that
- * `OctreeMesherModeler::Dispatch` can instantiate them by name at run time.  The
+ * `OctreeHybridMesherModeler::Dispatch` can instantiate them by name at run time.  The
  * do-work method @ref Generate is `const` and stateless — all mutable state lives in
- * the @ref OctreeMesherModeler passed as argument.
+ * the @ref OctreeHybridMesherModeler passed as argument.
  *
  * ### Typical pipeline position
  * 1. `SetupModelPart` builds + balances the octree and extracts the hex mesh.
@@ -57,34 +57,34 @@ class OctreeMesherModeler;
  * 4. Optional post-processing operations.
  *
  * @see GenerateHexesByCellColor
- * @see OctreeMesherColoring
- * @see OctreeMesherModeler
+ * @see OctreeHybridMesherColoring
+ * @see OctreeHybridMesherModeler
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Type Definitions
     ///@{
 
-    /// Pointer definition of OctreeMesherEntityGeneration.
-    KRATOS_CLASS_POINTER_DEFINITION(OctreeMesherEntityGeneration);
+    /// Pointer definition of OctreeHybridMesherEntityGeneration.
+    KRATOS_CLASS_POINTER_DEFINITION(OctreeHybridMesherEntityGeneration);
 
     ///@}
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeMesherEntityGeneration() = default;
+    OctreeHybridMesherEntityGeneration() = default;
 
     /**
      * @brief Copy constructor (no-op body — derived classes carry no state).
      * @param rOther Source instance; no data is copied.
      */
-    OctreeMesherEntityGeneration(OctreeMesherEntityGeneration const& rOther) {}
+    OctreeHybridMesherEntityGeneration(OctreeHybridMesherEntityGeneration const& rOther) {}
 
     /// Destructor.
-    virtual ~OctreeMesherEntityGeneration() = default;
+    virtual ~OctreeHybridMesherEntityGeneration() = default;
 
     ///@}
     ///@name Operations
@@ -107,9 +107,9 @@ public:
      *                              this specific generation step (see
      *                              @ref GetDefaultParameters for the schema).
      */
-    virtual void Generate(OctreeMesherModeler& rModeler, Parameters GenerationParameters) const
+    virtual void Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const
     {
-        KRATOS_ERROR << "Calling base OctreeMesherEntityGeneration::Generate. Please override it in the derived class." << std::endl;
+        KRATOS_ERROR << "Calling base OctreeHybridMesherEntityGeneration::Generate. Please override it in the derived class." << std::endl;
     }
 
     /**
@@ -142,17 +142,17 @@ public:
      * @brief Returns a string identifying this component.
      * @return Human-readable name; derived classes should override to return their own name.
      */
-    virtual std::string Info() const { return "OctreeMesherEntityGeneration"; }
+    virtual std::string Info() const { return "OctreeHybridMesherEntityGeneration"; }
 
     ///@}
 private:
     ///@name Registry
     ///@{
 
-    /// Registers the base prototype at path "OctreeMesherEntityGeneration.KratosMultiphysics.OctreeMesherEntityGeneration.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.KratosMultiphysics", OctreeMesherEntityGeneration, OctreeMesherEntityGeneration)
-    /// Registers the base prototype at path "OctreeMesherEntityGeneration.All.OctreeMesherEntityGeneration.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.All", OctreeMesherEntityGeneration, OctreeMesherEntityGeneration)
+    /// Registers the base prototype at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.OctreeHybridMesherEntityGeneration.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, OctreeHybridMesherEntityGeneration)
+    /// Registers the base prototype at path "OctreeHybridMesherEntityGeneration.All.OctreeHybridMesherEntityGeneration.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, OctreeHybridMesherEntityGeneration)
 
     ///@}
 };
@@ -162,12 +162,12 @@ private:
 ///@{
 
 /**
- * @brief Stream insertion operator for @ref OctreeMesherEntityGeneration.
+ * @brief Stream insertion operator for @ref OctreeHybridMesherEntityGeneration.
  * @param rOStream Output stream.
- * @param rThis    Instance to print (delegates to @ref OctreeMesherEntityGeneration::Info).
+ * @param rThis    Instance to print (delegates to @ref OctreeHybridMesherEntityGeneration::Info).
  * @return Reference to @p rOStream for chaining.
  */
-inline std::ostream& operator<<(std::ostream& rOStream, const OctreeMesherEntityGeneration& rThis)
+inline std::ostream& operator<<(std::ostream& rOStream, const OctreeHybridMesherEntityGeneration& rThis)
 {
     rOStream << rThis.Info();
     return rOStream;

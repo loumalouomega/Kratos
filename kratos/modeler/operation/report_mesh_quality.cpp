@@ -18,7 +18,7 @@
 // Project includes
 #include "includes/element.h"
 #include "modeler/operation/report_mesh_quality.h"
-#include "modeler/octree_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesher_modeler.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
@@ -62,7 +62,7 @@ const Parameters ReportMeshQuality::GetDefaultParameters() const
  * @param OperationParameters Validated JSON parameters; must contain `"model_part_name"`
  *                            with the name of an existing ModelPart.
  */
-void ReportMeshQuality::Execute(OctreeMesherModeler& rModeler, Parameters OperationParameters) const
+void ReportMeshQuality::Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const
 {
     ModelPart& r_mp = rModeler.GetModel().GetModelPart(
         OperationParameters["model_part_name"].GetString());

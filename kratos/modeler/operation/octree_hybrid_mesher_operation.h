@@ -28,20 +28,20 @@ namespace Kratos {
 ///@name Kratos Classes
 ///@{
 
-/// Forward declaration to break the include cycle with octree_mesher_modeler.h.
-class OctreeMesherModeler;
+/// Forward declaration to break the include cycle with octree_hybrid_mesher_modeler.h.
+class OctreeHybridMesherModeler;
 
 /**
- * @class OctreeMesherOperation
+ * @class OctreeHybridMesherOperation
  * @ingroup KratosCore
- * @brief Base class for post-processing operations executed by @ref OctreeMesherModeler.
+ * @brief Base class for post-processing operations executed by @ref OctreeHybridMesherModeler.
  * @details Operations run after the entity-generation stage, acting on the finished
  * ModelPart.  Typical uses include mesh-quality reporting, post-smoothing diagnostics,
  * and any read-only or topology-preserving pass over the generated mesh.
  *
  * The design follows a Registry-prototype pattern: each concrete derived class registers
  * itself via `KRATOS_REGISTRY_ADD_PROTOTYPE` under two paths —
- * `"OctreeMesherOperation.KratosMultiphysics"` and `"OctreeMesherOperation.All"`.
+ * `"OctreeHybridMesherOperation.KratosMultiphysics"` and `"OctreeHybridMesherOperation.All"`.
  * The modeler retrieves a shared, stateless prototype and calls @ref Execute on it.
  * Because all instances may be shared, @ref Execute is declared `const` and receives
  * the modeler reference and its own Parameters as arguments rather than storing state.
@@ -52,35 +52,35 @@ class OctreeMesherModeler;
  *   and default assignment by @ref ValidateParameters).
  * - Register with the two `KRATOS_REGISTRY_ADD_PROTOTYPE` macros in the `private` section.
  *
- * @see OctreeMesherModeler
+ * @see OctreeHybridMesherModeler
  * @see ReportMeshQuality
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeMesherOperation
+class KRATOS_API(KRATOS_CORE) OctreeHybridMesherOperation
 {
 public:
     ///@name Type Definitions
     ///@{
 
-    /// Pointer definition of OctreeMesherOperation.
-    KRATOS_CLASS_POINTER_DEFINITION(OctreeMesherOperation);
+    /// Pointer definition of OctreeHybridMesherOperation.
+    KRATOS_CLASS_POINTER_DEFINITION(OctreeHybridMesherOperation);
 
     ///@}
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeMesherOperation() = default;
+    OctreeHybridMesherOperation() = default;
 
     /**
      * @brief Copy constructor (explicitly defined so that derived classes may also
      *        be copy-constructed without special effort).
      * @param rOther The operation to copy.  No data members need copying in the base.
      */
-    OctreeMesherOperation(OctreeMesherOperation const& rOther) {}
+    OctreeHybridMesherOperation(OctreeHybridMesherOperation const& rOther) {}
 
     /// Destructor (virtual so that base pointers are correctly destroyed).
-    virtual ~OctreeMesherOperation() = default;
+    virtual ~OctreeHybridMesherOperation() = default;
 
     ///@}
     ///@name Operations
@@ -94,14 +94,14 @@ public:
      *
      * The base implementation raises an error to force derived classes to override it.
      *
-     * @param rModeler            Reference to the @ref OctreeMesherModeler that owns
+     * @param rModeler            Reference to the @ref OctreeHybridMesherModeler that owns
      *                            the Model, the mesh data, and the ID counters.
      * @param OperationParameters JSON parameters for this specific invocation, already
      *                            validated and default-filled by @ref ValidateParameters.
      */
-    virtual void Execute(OctreeMesherModeler& rModeler, Parameters OperationParameters) const
+    virtual void Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const
     {
-        KRATOS_ERROR << "Calling base OctreeMesherOperation::Execute. Please override it in the derived class." << std::endl;
+        KRATOS_ERROR << "Calling base OctreeHybridMesherOperation::Execute. Please override it in the derived class." << std::endl;
     }
 
     /**
@@ -135,10 +135,10 @@ public:
 
     /**
      * @brief Returns a string identifying this operation.
-     * @return The string `"OctreeMesherOperation"` in the base class; derived classes
+     * @return The string `"OctreeHybridMesherOperation"` in the base class; derived classes
      *         typically return their own class name.
      */
-    virtual std::string Info() const { return "OctreeMesherOperation"; }
+    virtual std::string Info() const { return "OctreeHybridMesherOperation"; }
 
     ///@}
 private:
@@ -146,9 +146,9 @@ private:
     ///@{
 
     /// Self-registers the base class prototype at the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherOperation.KratosMultiphysics", OctreeMesherOperation, OctreeMesherOperation)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.KratosMultiphysics", OctreeHybridMesherOperation, OctreeHybridMesherOperation)
     /// Self-registers the base class prototype at the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherOperation.All", OctreeMesherOperation, OctreeMesherOperation)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.All", OctreeHybridMesherOperation, OctreeHybridMesherOperation)
 
     ///@}
 };
@@ -158,12 +158,12 @@ private:
 ///@{
 
 /**
- * @brief Stream insertion operator for @ref OctreeMesherOperation.
+ * @brief Stream insertion operator for @ref OctreeHybridMesherOperation.
  * @param rOStream Output stream to write to.
- * @param rThis    The operation whose @ref OctreeMesherOperation::Info string is printed.
+ * @param rThis    The operation whose @ref OctreeHybridMesherOperation::Info string is printed.
  * @return Reference to @p rOStream for chaining.
  */
-inline std::ostream& operator<<(std::ostream& rOStream, const OctreeMesherOperation& rThis)
+inline std::ostream& operator<<(std::ostream& rOStream, const OctreeHybridMesherOperation& rThis)
 {
     rOStream << rThis.Info();
     return rOStream;

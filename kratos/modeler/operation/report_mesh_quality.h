@@ -17,7 +17,7 @@
 // External includes
 
 // Project includes
-#include "modeler/operation/octree_mesher_operation.h"
+#include "modeler/operation/octree_hybrid_mesher_operation.h"
 
 namespace Kratos {
 
@@ -47,8 +47,8 @@ namespace Kratos {
  *
  * ### Registry paths
  * Registered at:
- * - `OctreeMesherOperation.KratosMultiphysics`
- * - `OctreeMesherOperation.All`
+ * - `OctreeHybridMesherOperation.KratosMultiphysics`
+ * - `OctreeHybridMesherOperation.All`
  *
  * ### Parameters schema
  * | Key                | Type   | Default           | Description                       |
@@ -57,11 +57,11 @@ namespace Kratos {
  * | `model_part_name`  | string | `"Undefined"`     | Name of the ModelPart to analyse. |
  *
  * @note Elements with fewer or more than 8 nodes are silently skipped.
- * @see OctreeMesherOperation
+ * @see OctreeHybridMesherOperation
  * @see OctreeHybridMeshUtility::ScaledJacobianMin
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) ReportMeshQuality : public OctreeMesherOperation
+class KRATOS_API(KRATOS_CORE) ReportMeshQuality : public OctreeHybridMesherOperation
 {
 public:
     ///@name Life Cycle
@@ -90,13 +90,13 @@ public:
      * the `INFO` log level.  If the ModelPart contains no elements the method logs a
      * short notice and returns immediately without error.
      *
-     * @param rModeler            The @ref OctreeMesherModeler that holds the Model
+     * @param rModeler            The @ref OctreeHybridMesherModeler that holds the Model
      *                            from which the target ModelPart is retrieved.
      * @param OperationParameters Validated JSON parameters.  Must contain the key
      *                            `"model_part_name"` with the name of an existing
      *                            ModelPart.
      */
-    void Execute(OctreeMesherModeler& rModeler, Parameters OperationParameters) const override;
+    void Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this operation.
@@ -117,9 +117,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherOperation.KratosMultiphysics", OctreeMesherOperation, ReportMeshQuality)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.KratosMultiphysics", OctreeHybridMesherOperation, ReportMeshQuality)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherOperation.All", OctreeMesherOperation, ReportMeshQuality)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.All", OctreeHybridMesherOperation, ReportMeshQuality)
 
     ///@}
 };

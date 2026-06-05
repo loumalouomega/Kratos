@@ -22,7 +22,7 @@
 #include "includes/variables.h"
 #include "includes/registry.h"
 
-#include "modeler/octree_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesher_modeler.h"
 
 namespace Kratos::Testing {
 
@@ -91,13 +91,13 @@ void BuildTransitionSurface(ModelPart& rSurfaceMesh)
 }
 
 /**
- * @brief Runs OctreeMesherModeler::SetupModelPart with the given JSON settings
+ * @brief Runs OctreeHybridMesherModeler::SetupModelPart with the given JSON settings
  *        string, then returns the named output ModelPart.
  */
 ModelPart& RunModeler(Model& rModel, const std::string& rSettingsJson)
 {
     Parameters settings(rSettingsJson);
-    OctreeMesherModeler modeler(rModel, settings);
+    OctreeHybridMesherModeler modeler(rModel, settings);
     modeler.SetupModelPart();
     return rModel.GetModelPart(settings["output_model_part_name"].GetString());
 }
@@ -135,10 +135,10 @@ double MinScaledJacobian(const Element& rElement)
 } // anonymous namespace
 
 // ===========================================================================
-// OctreeMesherModeler — top-level modeler tests
+// OctreeHybridMesherModeler — top-level modeler tests
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualElementsCreated, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerDualElementsCreated, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -157,7 +157,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualElementsCreated, KratosCoreFast
     KRATOS_EXPECT_GT(out.NumberOfNodes(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualZeroInverted, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerDualZeroInverted, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -179,7 +179,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualZeroInverted, KratosCoreFastSui
     KRATOS_EXPECT_EQ(n_inv, 0);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualCarveBbox, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerDualCarveBbox, KratosCoreFastSuite)
 {
     constexpr double lo = 0.3, hi = 0.7;
     Model model;
@@ -207,9 +207,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDualCarveBbox, KratosCoreFastSuite)
     }
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDefaultParametersValid, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerDefaultParametersValid, KratosCoreFastSuite)
 {
-    OctreeMesherModeler m;
+    OctreeHybridMesherModeler m;
     const Parameters defaults = m.GetDefaultParameters();
 
     // Check that the mandatory keys are present with correct types
@@ -227,13 +227,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerDefaultParametersValid, KratosCoreF
     KRATOS_EXPECT_TRUE(gen.Has("project_to_surface"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerInfoString, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerInfoString, KratosCoreFastSuite)
 {
-    OctreeMesherModeler m;
-    KRATOS_EXPECT_EQ(m.Info(), "OctreeMesherModeler");
+    OctreeHybridMesherModeler m;
+    KRATOS_EXPECT_EQ(m.Info(), "OctreeHybridMesherModeler");
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerUnknownOperationThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerUnknownOperationThrows, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -245,7 +245,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerUnknownOperationThrows, KratosCoreF
         "entities_generator_list": [],
         "model_part_operations"  : [{ "type": "NonExistentOperationType_XYZ" }]
     })");
-    OctreeMesherModeler modeler(model, settings);
+    OctreeHybridMesherModeler modeler(model, settings);
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
 }
 
@@ -253,7 +253,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherModelerUnknownOperationThrows, KratosCoreF
 // ClassifyCellsInsideOutside colouring
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherClassifyReducesCellCount, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherClassifyReducesCellCount, KratosCoreFastSuite)
 {
     // Without colouring the hex generator sees all cells (color=1 default matches
     // everything since mCellColor is empty). With colouring the set must be smaller.
@@ -285,23 +285,23 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherClassifyReducesCellCount, KratosCoreFastSu
     KRATOS_EXPECT_GT(out_carved.NumberOfElements(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherClassifyRegistered, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherClassifyRegistered, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"));
+        "OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype"));
 }
 
 // ===========================================================================
 // GenerateHexesByCellColor entity generator
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesRegistered, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesRegistered, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype"));
+        "OctreeHybridMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesNodeDeduplication, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesNodeDeduplication, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -322,7 +322,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesNodeDeduplication, KratosCore
     KRATOS_EXPECT_GT(n_nodes, 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesRefinementLevelTagged, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesRefinementLevelTagged, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -346,7 +346,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesRefinementLevelTagged, Kratos
     KRATOS_EXPECT_TRUE(has_positive_level);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesNoLevelWhenDisabled, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesNoLevelWhenDisabled, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -366,7 +366,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesNoLevelWhenDisabled, KratosCo
     }
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesUniqueIds, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesUniqueIds, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -396,13 +396,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherGenerateHexesUniqueIds, KratosCoreFastSuit
 // GenerateBoundaryConditionsByFace entity generator
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsRegistered, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsRegistered, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype"));
+        "OctreeHybridMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsCreated, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsCreated, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -423,7 +423,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsCreated, KratosCoreFastS
     KRATOS_EXPECT_GT(bnd.NumberOfNodes(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsQuadNodes, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsQuadNodes, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -444,7 +444,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsQuadNodes, KratosCoreFas
         KRATOS_EXPECT_EQ(r_cond.GetGeometry().size(), 4u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsFewerthanSixTimesElements, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsFewerthanSixTimesElements, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -465,7 +465,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryConditionsFewerthanSixTimesElement
     KRATOS_EXPECT_LT(bnd.NumberOfConditions(), 6 * vol.NumberOfElements());
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryNodesSubsetOfVolume, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryNodesSubsetOfVolume, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -495,13 +495,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherBoundaryNodesSubsetOfVolume, KratosCoreFas
 // GenerateHangingNodeConstraints entity generator
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherHangingNodeConstraintsRegistered, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherHangingNodeConstraintsRegistered, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype"));
+        "OctreeHybridMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalMeshConstraintsGenerated, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMeshConstraintsGenerated, KratosCoreFastSuite)
 {
     Model model;
     BuildTransitionSurface(model.CreateModelPart("Surface"));
@@ -522,7 +522,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalMeshConstraintsGenerated, KratosCore
     KRATOS_EXPECT_GT(out.NumberOfMasterSlaveConstraints(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalConstraintsPartitionOfUnity, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsPartitionOfUnity, KratosCoreFastSuite)
 {
     Model model;
     BuildTransitionSurface(model.CreateModelPart("Surface"));
@@ -553,7 +553,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalConstraintsPartitionOfUnity, KratosC
     }
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalConstraintsMasterCountsValid, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsMasterCountsValid, KratosCoreFastSuite)
 {
     Model model;
     BuildTransitionSurface(model.CreateModelPart("Surface"));
@@ -579,7 +579,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalConstraintsMasterCountsValid, Kratos
     KRATOS_EXPECT_TRUE(found_4_master);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalMultiVariableConstraints, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, KratosCoreFastSuite)
 {
     Model m1, m2;
     BuildTransitionSurface(m1.CreateModelPart("S"));
@@ -613,7 +613,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherPrimalMultiVariableConstraints, KratosCore
                      3 * out1.NumberOfMasterSlaveConstraints());
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherDualMeshNoHangingConstraints, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherDualMeshNoHangingConstraints, KratosCoreFastSuite)
 {
     Model model;
     BuildTransitionSurface(model.CreateModelPart("Surface"));
@@ -634,13 +634,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherDualMeshNoHangingConstraints, KratosCoreFa
 // ReportMeshQuality operation
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityRegistered, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherReportMeshQualityRegistered, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherOperation.All.ReportMeshQuality.Prototype"));
+        "OctreeHybridMesherOperation.All.ReportMeshQuality.Prototype"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityRunsWithoutError, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherReportMeshQualityRunsWithoutError, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -659,7 +659,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityRunsWithoutError, KratosC
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityEmptyModelPart, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherReportMeshQualityEmptyModelPart, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -674,7 +674,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityEmptyModelPart, KratosCor
         "model_part_operations":[{"type":"ReportMeshQuality","model_part_name":"Empty"}]
     })");
     // SetupModelPart on an empty entity list should not throw
-    OctreeMesherModeler modeler(model, settings);
+    OctreeHybridMesherModeler modeler(model, settings);
     modeler.SetupModelPart();
     KRATOS_EXPECT_EQ(model.GetModelPart("Empty").NumberOfElements(), 0u);
 }
@@ -683,27 +683,27 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherReportMeshQualityEmptyModelPart, KratosCor
 // Registry dispatch mechanism
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBasePrototypesPresent, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryBasePrototypesPresent, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherColoring.All.OctreeMesherColoring.Prototype"));
+        "OctreeHybridMesherColoring.All.OctreeHybridMesherColoring.Prototype"));
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherEntityGeneration.All.OctreeMesherEntityGeneration.Prototype"));
+        "OctreeHybridMesherEntityGeneration.All.OctreeHybridMesherEntityGeneration.Prototype"));
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherOperation.All.OctreeMesherOperation.Prototype"));
+        "OctreeHybridMesherOperation.All.OctreeHybridMesherOperation.Prototype"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryKratosMultiphysicsPaths, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryKratosMultiphysicsPaths, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherColoring.KratosMultiphysics.ClassifyCellsInsideOutside.Prototype"));
+        "OctreeHybridMesherColoring.KratosMultiphysics.ClassifyCellsInsideOutside.Prototype"));
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherEntityGeneration.KratosMultiphysics.GenerateHexesByCellColor.Prototype"));
+        "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateHexesByCellColor.Prototype"));
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeMesherOperation.KratosMultiphysics.ReportMeshQuality.Prototype"));
+        "OctreeHybridMesherOperation.KratosMultiphysics.ReportMeshQuality.Prototype"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryFullPathDispatchWorks, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryFullPathDispatchWorks, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -713,7 +713,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryFullPathDispatchWorks, KratosCoreF
         "input_model_part_name":"Skin","output_model_part_name":"Output",
         "octree_generator":{"refinement_depth":3,"adaptive":false},
         "coloring_settings_list":[{
-            "type":"OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
+            "type":"OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
         }],
         "entities_generator_list":[{"type":"GenerateHexesByCellColor",
             "model_part_name":"Output","color":1}],
@@ -723,7 +723,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryFullPathDispatchWorks, KratosCoreF
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBaseColoringInvocationThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryBaseColoringInvocationThrows, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -731,15 +731,15 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBaseColoringInvocationThrows, Krat
         "input_model_part_name":"Skin","output_model_part_name":"Output",
         "octree_generator":{"refinement_depth":3,"adaptive":false},
         "coloring_settings_list":[{
-            "type":"OctreeMesherColoring.All.OctreeMesherColoring.Prototype"
+            "type":"OctreeHybridMesherColoring.All.OctreeHybridMesherColoring.Prototype"
         }],
         "entities_generator_list":[],"model_part_operations":[]
     })");
-    OctreeMesherModeler m(model, settings);
+    OctreeHybridMesherModeler m(model, settings);
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBaseOperationInvocationThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryBaseOperationInvocationThrows, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -749,10 +749,10 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeMesherRegistryBaseOperationInvocationThrows, Kra
         "coloring_settings_list":[],
         "entities_generator_list":[],
         "model_part_operations":[{
-            "type":"OctreeMesherOperation.All.OctreeMesherOperation.Prototype"
+            "type":"OctreeHybridMesherOperation.All.OctreeHybridMesherOperation.Prototype"
         }]
     })");
-    OctreeMesherModeler m(model, settings);
+    OctreeHybridMesherModeler m(model, settings);
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
 }
 

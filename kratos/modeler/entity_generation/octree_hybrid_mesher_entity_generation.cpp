@@ -15,7 +15,7 @@
 // External includes
 
 // Project includes
-#include "octree_mesher_coloring.h"
+#include "octree_hybrid_mesher_entity_generation.h"
 
-// This translation unit anchors the OctreeMesherColoring base prototype
+// This translation unit anchors the OctreeHybridMesherEntityGeneration base prototype
 // registration into KratosCore.  The base class is defined inline in the header.

@@ -19,8 +19,8 @@
 #include "includes/variables.h"
 #include "linear_solvers/linear_solver.h"
 #include "modeler/entity_generation/generate_hanging_node_constraints.h"
-#include "modeler/octree_mesher_modeler.h"
-#include "modeler/internals/octree_mesher_data.h"
+#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos {
 
@@ -35,7 +35,7 @@ const Parameters GenerateHangingNodeConstraints::GetDefaultParameters() const
 }
 
 void GenerateHangingNodeConstraints::Generate(
-    OctreeMesherModeler& rModeler,
+    OctreeHybridMesherModeler& rModeler,
     Parameters GenerationParameters) const
 {
     auto& r_data = rModeler.GetData();

@@ -1,9 +1,9 @@
 """
-Tests for OctreeMesherModeler — the Registry-driven modeler that wraps the
+Tests for OctreeHybridMesherModeler — the Registry-driven modeler that wraps the
 OctreeHybridMeshUtility engine.
 
 Run directly:
-    PYTHONPATH=.../bin/Release python3 test_octree_mesher_modeler.py
+    PYTHONPATH=.../bin/Release python3 test_octree_hybrid_mesher_modeler.py
 or under the Kratos test runner.
 """
 
@@ -103,14 +103,14 @@ def load_bunny_ascii():
 
 def run_modeler(model, settings_json):
     settings = KM.Parameters(settings_json)
-    mod = KM.OctreeMesherModeler(model, settings)
+    mod = KM.OctreeHybridMesherModeler(model, settings)
     mod.SetupGeometryModel()
     mod.PrepareGeometryModel()
     mod.SetupModelPart()
 
 
 # ===========================================================================
-class TestOctreeMesherModelerDual(unittest.TestCase):
+class TestOctreeHybridMesherModelerDual(unittest.TestCase):
     """Tests for the dual (conforming) hex mesh path."""
 
     def _build_box_model(self, lo=0.3, hi=0.7, name="CS"):
@@ -212,7 +212,7 @@ class TestOctreeMesherModelerDual(unittest.TestCase):
 
 
 # ===========================================================================
-class TestOctreeMesherModelerPrimal(unittest.TestCase):
+class TestOctreeHybridMesherModelerPrimal(unittest.TestCase):
     """Tests for the primal (leaf-hex + hanging-node constraints) path."""
 
     def _run_primal(self, model, surface_name, depth=4):
@@ -275,7 +275,7 @@ class TestOctreeMesherModelerPrimal(unittest.TestCase):
 
 
 # ===========================================================================
-class TestOctreeMesherModelerBunny(unittest.TestCase):
+class TestOctreeHybridMesherModelerBunny(unittest.TestCase):
     """Tests using the low-poly Stanford Bunny surface (skipped if absent)."""
 
     def setUp(self):
@@ -402,7 +402,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
 
     def test_default_type_name(self):
         """The default parameters include type='ClassifyCellsInsideOutside'."""
-        proto_path = "OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
+        proto_path = "OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
         self.assertTrue(KM.Registry.HasValue(proto_path),
                         f"Registry path not found: {proto_path}")
 
@@ -500,7 +500,7 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
 
     def test_registry_path_exists(self):
         self.assertTrue(KM.Registry.HasValue(
-            "OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype"))
+            "OctreeHybridMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype"))
 
     def test_unknown_entity_type_raises(self):
         with self.assertRaises(Exception):
@@ -573,7 +573,7 @@ class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
 
     def test_registry_path_exists(self):
         self.assertTrue(KM.Registry.HasValue(
-            "OctreeMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype"))
+            "OctreeHybridMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype"))
 
 
 # ===========================================================================
@@ -650,7 +650,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
 
     def test_registry_path_exists(self):
         self.assertTrue(KM.Registry.HasValue(
-            "OctreeMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype"))
+            "OctreeHybridMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype"))
 
     def test_dual_mesh_no_hanging_constraints(self):
         """Dual mesh never produces hanging constraints (conforming by construction)."""
@@ -711,30 +711,30 @@ class TestReportMeshQuality(unittest.TestCase):
 
     def test_registry_path_exists(self):
         self.assertTrue(KM.Registry.HasValue(
-            "OctreeMesherOperation.All.ReportMeshQuality.Prototype"))
+            "OctreeHybridMesherOperation.All.ReportMeshQuality.Prototype"))
 
 
 # ===========================================================================
 class TestRegistryDispatch(unittest.TestCase):
-    """Tests for the Registry-prototype dispatch mechanism in OctreeMesherModeler."""
+    """Tests for the Registry-prototype dispatch mechanism in OctreeHybridMesherModeler."""
 
     def test_all_base_prototypes_registered(self):
         """All three base-class prototypes are registered in the Registry."""
         for path in [
-            "OctreeMesherColoring.All.OctreeMesherColoring.Prototype",
-            "OctreeMesherEntityGeneration.All.OctreeMesherEntityGeneration.Prototype",
-            "OctreeMesherOperation.All.OctreeMesherOperation.Prototype",
+            "OctreeHybridMesherColoring.All.OctreeHybridMesherColoring.Prototype",
+            "OctreeHybridMesherEntityGeneration.All.OctreeHybridMesherEntityGeneration.Prototype",
+            "OctreeHybridMesherOperation.All.OctreeHybridMesherOperation.Prototype",
         ]:
             self.assertTrue(KM.Registry.HasValue(path), f"Missing: {path}")
 
     def test_all_concrete_prototypes_registered(self):
         """All concrete components are registered."""
         paths = [
-            "OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype",
-            "OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype",
-            "OctreeMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype",
-            "OctreeMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype",
-            "OctreeMesherOperation.All.ReportMeshQuality.Prototype",
+            "OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype",
+            "OctreeHybridMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype",
+            "OctreeHybridMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype",
+            "OctreeHybridMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype",
+            "OctreeHybridMesherOperation.All.ReportMeshQuality.Prototype",
         ]
         for path in paths:
             self.assertTrue(KM.Registry.HasValue(path), f"Missing: {path}")
@@ -747,7 +747,7 @@ class TestRegistryDispatch(unittest.TestCase):
             "input_model_part_name":"S","output_model_part_name":"O",
             "octree_generator":{"type":"generate_octree_from_surface","refinement_depth":3,"adaptive":false},
             "coloring_settings_list":[{
-                "type":"OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
+                "type":"OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype"
             }],
             "entities_generator_list":[{"type":"GenerateHexesByCellColor",
                                         "model_part_name":"O","color":1}],
@@ -768,7 +768,7 @@ class TestRegistryDispatch(unittest.TestCase):
                 "model_part_operations":[{"type":"TotallyUnknownOperation"}]}""")
 
     def test_base_type_invocation_raises(self):
-        """Invoking the base OctreeMesherOperation prototype raises a clear error."""
+        """Invoking the base OctreeHybridMesherOperation prototype raises a clear error."""
         model = KM.Model()
         build_closed_box_surface(model, name="S")
         with self.assertRaises(Exception):
@@ -779,7 +779,7 @@ class TestRegistryDispatch(unittest.TestCase):
                 "coloring_settings_list":[],
                 "entities_generator_list":[],
                 "model_part_operations":[{
-                    "type":"OctreeMesherOperation.All.OctreeMesherOperation.Prototype"
+                    "type":"OctreeHybridMesherOperation.All.OctreeHybridMesherOperation.Prototype"
                 }]}""")
 
 

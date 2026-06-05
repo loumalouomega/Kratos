@@ -17,7 +17,7 @@
 // External includes
 
 // Project includes
-#include "modeler/entity_generation/octree_mesher_entity_generation.h"
+#include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 
 namespace Kratos {
 
@@ -36,7 +36,7 @@ namespace Kratos {
  * of the coarser mesh, which breaks displacement compatibility.
  *
  * This generator reads the `OctreeHybridMeshUtility::HangingConstraint` records stored
- * in `OctreeMesherData::mHanging` (populated by the hex-generation step) and creates
+ * in `OctreeHybridMesherData::mHanging` (populated by the hex-generation step) and creates
  * one `LinearMasterSlaveConstraint` per **(hanging node × configured DOF variable)**
  * pair.  The linear relation imposed is:
  *
@@ -67,8 +67,8 @@ namespace Kratos {
  *
  * ### Registry paths
  * Registered at:
- * - `OctreeMesherEntityGeneration.KratosMultiphysics`
- * - `OctreeMesherEntityGeneration.All`
+ * - `OctreeHybridMesherEntityGeneration.KratosMultiphysics`
+ * - `OctreeHybridMesherEntityGeneration.All`
  *
  * ### Parameters schema
  * | Key                | Type         | Default                                          | Description                                       |
@@ -80,12 +80,12 @@ namespace Kratos {
  *
  * @note All variable names listed in `variables` must be registered as
  *       `Variable<double>` in the Kratos component database at the time of execution.
- * @see OctreeMesherEntityGeneration
+ * @see OctreeHybridMesherEntityGeneration
  * @see OctreeHybridMeshUtility::HangingConstraint
- * @see OctreeMesherData::mHanging
+ * @see OctreeHybridMesherData::mHanging
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHangingNodeConstraints : public OctreeMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) GenerateHangingNodeConstraints : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
@@ -118,16 +118,16 @@ public:
      *    - A zero constant vector of size 1 is created.
      *    - `ModelPart::CreateNewMasterSlaveConstraint` is called with the registered
      *      constraint type name, a fresh constraint ID from
-     *      `OctreeMesherModeler::NextConstraintId`, and the assembled DOF lists.
+     *      `OctreeHybridMesherModeler::NextConstraintId`, and the assembled DOF lists.
      *
-     * @param rModeler              The owning @ref OctreeMesherModeler.  Provides the
-     *                              Model, `OctreeMesherData::mHanging`,
-     *                              `OctreeMesherData::mNodePtrs`, and the constraint
+     * @param rModeler              The owning @ref OctreeHybridMesherModeler.  Provides the
+     *                              Model, `OctreeHybridMesherData::mHanging`,
+     *                              `OctreeHybridMesherData::mNodePtrs`, and the constraint
      *                              ID counter.
      * @param GenerationParameters  Validated JSON parameters; see @ref GetDefaultParameters
      *                              for the full schema.
      */
-    void Generate(OctreeMesherModeler& rModeler, Parameters GenerationParameters) const override;
+    void Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this generator.
@@ -150,9 +150,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.KratosMultiphysics", OctreeMesherEntityGeneration, GenerateHangingNodeConstraints)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHangingNodeConstraints)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.All", OctreeMesherEntityGeneration, GenerateHangingNodeConstraints)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHangingNodeConstraints)
 
     ///@}
 };

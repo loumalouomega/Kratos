@@ -17,7 +17,7 @@
 // External includes
 
 // Project includes
-#include "modeler/coloring/octree_mesher_coloring.h"
+#include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 
 namespace Kratos {
 
@@ -35,7 +35,7 @@ namespace Kratos {
  *          produce a robust inside/outside decision for each cell's representative point.
  *
  *          ### Projected-mesh short-circuit
- *          When `OctreeMesherData::mProjected == true`, the surface-projection pass has
+ *          When `OctreeHybridMesherData::mProjected == true`, the surface-projection pass has
  *          already carved away all outside cells during the extraction phase.  In that
  *          case every surviving cell is definitively inside, so the classification loop
  *          is replaced by a single `std::vector::assign` that sets all entries to 1
@@ -47,8 +47,8 @@ namespace Kratos {
  *          |   1   | Inside   |
  *          |   0   | Outside  |
  *
- *          Results are written into `OctreeMesherData::mCellColor`; the vector is
- *          resized to match `OctreeMesherData::mCells.size()` before any entry is set.
+ *          Results are written into `OctreeHybridMesherData::mCellColor`; the vector is
+ *          resized to match `OctreeHybridMesherData::mCells.size()` before any entry is set.
  *
  * ### Usage
  * Add the following block to the `"colorings"` list in the modeler JSON parameters:
@@ -60,13 +60,13 @@ namespace Kratos {
  *       extracted (i.e.\ after `SetupModelPart` has called `BuildOctreeAndExtract`),
  *       and **before** any entity-generation stage that filters by colour.
  *
- * @see OctreeMesherColoring
- * @see OctreeMesherEntityGeneration
+ * @see OctreeHybridMesherColoring
+ * @see OctreeHybridMesherEntityGeneration
  * @see GenerateHexesByCellColor
  * @see OctreeHybridMeshUtility::ClassifyInsideOutside
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) ClassifyCellsInsideOutside : public OctreeMesherColoring
+class KRATOS_API(KRATOS_CORE) ClassifyCellsInsideOutside : public OctreeHybridMesherColoring
 {
 public:
     ///@name Life Cycle
@@ -93,13 +93,13 @@ public:
      *          passing the triangle soup, node coordinates, connectivity and the colour
      *          array to fill.
      *
-     * @param rModeler            The owning modeler; its `OctreeMesherData` is modified
+     * @param rModeler            The owning modeler; its `OctreeHybridMesherData` is modified
      *                            in-place (`mCellColor` is populated).
      * @param ColoringParameters  Validated JSON parameters for this step (all keys are
      *                            defaults from @ref GetDefaultParameters; the base
      *                            `"type"` key is the only one in the schema).
      */
-    void Apply(OctreeMesherModeler& rModeler, Parameters ColoringParameters) const override;
+    void Apply(OctreeHybridMesherModeler& rModeler, Parameters ColoringParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this colouring stage.
@@ -119,10 +119,10 @@ private:
     ///@name Registry
     ///@{
 
-    /// Registers this class at path "OctreeMesherColoring.KratosMultiphysics.ClassifyCellsInsideOutside.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.KratosMultiphysics", OctreeMesherColoring, ClassifyCellsInsideOutside)
-    /// Registers this class at path "OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.All", OctreeMesherColoring, ClassifyCellsInsideOutside)
+    /// Registers this class at path "OctreeHybridMesherColoring.KratosMultiphysics.ClassifyCellsInsideOutside.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.KratosMultiphysics", OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
+    /// Registers this class at path "OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.All", OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
 
     ///@}
 };

@@ -1349,7 +1349,7 @@ Expect long runtimes on detailed surfaces.
 
 ## See also
 
-- **[OctreeMesherModeler](octree_mesher_modeler.md)** — the Kratos modeler that wraps this
+- **[OctreeHybridMesherModeler](octree_hybrid_mesher_modeler.md)** — the Kratos modeler that wraps this
   utility inside the standard Kratos pipeline; produces an in-memory `ModelPart` with
   elements, boundary conditions, and (in primal mode) hanging-node master-slave constraints.
 - [OctreeHybrid spatial container](../../Spatial_Containers/Trees_And_Searches/octree_hybrid.md)

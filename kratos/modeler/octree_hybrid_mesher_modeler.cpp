@@ -15,41 +15,41 @@
 // External includes
 
 // Project includes
-#include "modeler/octree_mesher_modeler.h"
-#include "modeler/internals/octree_mesher_data.h"
-#include "modeler/coloring/octree_mesher_coloring.h"
-#include "modeler/entity_generation/octree_mesher_entity_generation.h"
-#include "modeler/operation/octree_mesher_operation.h"
+#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/internals/octree_hybrid_mesher_data.h"
+#include "modeler/coloring/octree_hybrid_mesher_coloring.h"
+#include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
+#include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
 
-OctreeMesherModeler::OctreeMesherModeler()
+OctreeHybridMesherModeler::OctreeHybridMesherModeler()
     : Modeler()
-    , mpData(Kratos::make_unique<Internals::OctreeMesherData>())
+    , mpData(Kratos::make_unique<Internals::OctreeHybridMesherData>())
 {
 }
 
-OctreeMesherModeler::OctreeMesherModeler(
+OctreeHybridMesherModeler::OctreeHybridMesherModeler(
     Model& rModel,
     Parameters ModelerParameters)
     : Modeler(rModel, ModelerParameters)
     , mpModel(&rModel)
-    , mpData(Kratos::make_unique<Internals::OctreeMesherData>())
+    , mpData(Kratos::make_unique<Internals::OctreeHybridMesherData>())
 {
     mParameters.ValidateAndAssignDefaults(GetDefaultParameters());
     mParameters["octree_generator"].ValidateAndAssignDefaults(
         GetDefaultParameters()["octree_generator"]);
 }
 
-OctreeMesherModeler::~OctreeMesherModeler() = default;
+OctreeHybridMesherModeler::~OctreeHybridMesherModeler() = default;
 
-Internals::OctreeMesherData& OctreeMesherModeler::GetData()
+Internals::OctreeHybridMesherData& OctreeHybridMesherModeler::GetData()
 {
     return *mpData;
 }
 
-const Parameters OctreeMesherModeler::GetDefaultParameters() const
+const Parameters OctreeHybridMesherModeler::GetDefaultParameters() const
 {
     return Parameters(R"({
         "echo_level" : 0,
@@ -71,14 +71,14 @@ const Parameters OctreeMesherModeler::GetDefaultParameters() const
     })");
 }
 
-ModelPart& OctreeMesherModeler::CreateAndGetModelPart(const std::string& rFullName)
+ModelPart& OctreeHybridMesherModeler::CreateAndGetModelPart(const std::string& rFullName)
 {
     return mpModel->HasModelPart(rFullName)
         ? mpModel->GetModelPart(rFullName)
         : mpModel->CreateModelPart(rFullName);
 }
 
-void OctreeMesherModeler::SetStartIds(ModelPart& rModelPart)
+void OctreeHybridMesherModeler::SetStartIds(ModelPart& rModelPart)
 {
     ModelPart& r_root = rModelPart.GetRootModelPart();
     const std::size_t node_proposal = r_root.NodesArray().empty() ? 1 : r_root.NodesArray().back()->Id() + 1;
@@ -91,12 +91,12 @@ void OctreeMesherModeler::SetStartIds(ModelPart& rModelPart)
     mStartConstraintId = std::max(mpc_proposal, mStartConstraintId == 0 ? std::size_t(1) : mStartConstraintId);
 }
 
-Node::Pointer OctreeMesherModeler::GenerateOrRetrieveNode(
+Node::Pointer OctreeHybridMesherModeler::GenerateOrRetrieveNode(
     ModelPart& rModelPart,
     ModelPart::NodesContainerType& rNewNodes,
     int NodeIndex)
 {
-    Internals::OctreeMesherData& r_data = *mpData;
+    Internals::OctreeHybridMesherData& r_data = *mpData;
     if (r_data.mNodePtrs[NodeIndex]) return r_data.mNodePtrs[NodeIndex];
 
     const auto& r_coord = r_data.mNodes[NodeIndex];
@@ -110,18 +110,18 @@ Node::Pointer OctreeMesherModeler::GenerateOrRetrieveNode(
     return p_node;
 }
 
-void OctreeMesherModeler::BuildOctreeAndExtract()
+void OctreeHybridMesherModeler::BuildOctreeAndExtract()
 {
     Parameters gen = mParameters["octree_generator"];
 
     std::string surface_name = gen["input_model_part_name"].GetString();
     if (surface_name.empty()) surface_name = mParameters["input_model_part_name"].GetString();
     KRATOS_ERROR_IF(surface_name.empty())
-        << "OctreeMesherModeler: no input surface model part specified "
+        << "OctreeHybridMesherModeler: no input surface model part specified "
         << "(set 'input_model_part_name' on the modeler or its 'octree_generator')." << std::endl;
     ModelPart& r_surface = mpModel->GetModelPart(surface_name);
 
-    Internals::OctreeMesherData& r_data = *mpData;
+    Internals::OctreeHybridMesherData& r_data = *mpData;
     r_data.mTriangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_surface);
     r_data.mpOctree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         r_surface, gen["refinement_depth"].GetInt(), gen["adaptive"].GetBool());
@@ -146,32 +146,32 @@ void OctreeMesherModeler::BuildOctreeAndExtract()
         OctreeHybridMeshUtility::ExtractPrimalHexMesh(
             *r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mHanging);
     } else {
-        KRATOS_ERROR << "OctreeMesherModeler: unknown mesh_type '" << mesh_type
+        KRATOS_ERROR << "OctreeHybridMesherModeler: unknown mesh_type '" << mesh_type
                      << "'. Use 'dual' or 'primal'." << std::endl;
     }
 
     r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
 }
 
-void OctreeMesherModeler::SetupModelPart()
+void OctreeHybridMesherModeler::SetupModelPart()
 {
     // 1. Internal octree-generation step: build, balance and extract the hex mesh.
     BuildOctreeAndExtract();
 
     // 2. Colouring (classify cells).
-    Dispatch<OctreeMesherColoring>(
-        "OctreeMesherColoring", mParameters["coloring_settings_list"],
-        [&](const OctreeMesherColoring& rProto, Parameters rParams) { rProto.Apply(*this, rParams); });
+    Dispatch<OctreeHybridMesherColoring>(
+        "OctreeHybridMesherColoring", mParameters["coloring_settings_list"],
+        [&](const OctreeHybridMesherColoring& rProto, Parameters rParams) { rProto.Apply(*this, rParams); });
 
     // 3. Entity generation (elements, conditions, constraints).
-    Dispatch<OctreeMesherEntityGeneration>(
-        "OctreeMesherEntityGeneration", mParameters["entities_generator_list"],
-        [&](const OctreeMesherEntityGeneration& rProto, Parameters rParams) { rProto.Generate(*this, rParams); });
+    Dispatch<OctreeHybridMesherEntityGeneration>(
+        "OctreeHybridMesherEntityGeneration", mParameters["entities_generator_list"],
+        [&](const OctreeHybridMesherEntityGeneration& rProto, Parameters rParams) { rProto.Generate(*this, rParams); });
 
     // 4. Operations (post-processing on the finished ModelPart).
-    Dispatch<OctreeMesherOperation>(
-        "OctreeMesherOperation", mParameters["model_part_operations"],
-        [&](const OctreeMesherOperation& rProto, Parameters rParams) { rProto.Execute(*this, rParams); });
+    Dispatch<OctreeHybridMesherOperation>(
+        "OctreeHybridMesherOperation", mParameters["model_part_operations"],
+        [&](const OctreeHybridMesherOperation& rProto, Parameters rParams) { rProto.Execute(*this, rParams); });
 }
 
 } // namespace Kratos

@@ -29,21 +29,21 @@ namespace Kratos {
 ///@{
 
 /// Forward declaration — avoids pulling the heavy octree header into every translation unit.
-class OctreeMesherModeler;
+class OctreeHybridMesherModeler;
 
 /**
- * @class OctreeMesherColoring
+ * @class OctreeHybridMesherColoring
  * @ingroup KratosCore
- * @brief Abstract base class for cell-colouring stages of the @ref OctreeMesherModeler pipeline.
+ * @brief Abstract base class for cell-colouring stages of the @ref OctreeHybridMesherModeler pipeline.
  * @details Colouring stages classify the extracted dual/primal hexahedral cells, writing an
  * integer label into the shared per-cell colour array
- * (`OctreeMesherData::mCellColor`, indexed by cell).  Downstream entity-generation stages
+ * (`OctreeHybridMesherData::mCellColor`, indexed by cell).  Downstream entity-generation stages
  * emit only cells whose colour matches the requested value (e.g.\ inside == 1, outside == 0).
  *
  * The class follows the *Registry prototype* pattern: concrete sub-classes register themselves
- * through `KRATOS_REGISTRY_ADD_PROTOTYPE` so that `OctreeMesherModeler::Dispatch` can
+ * through `KRATOS_REGISTRY_ADD_PROTOTYPE` so that `OctreeHybridMesherModeler::Dispatch` can
  * instantiate them by name at run time.  The do-work method @ref Apply is `const` and
- * stateless — all mutable state lives in the @ref OctreeMesherModeler passed as argument.
+ * stateless — all mutable state lives in the @ref OctreeHybridMesherModeler passed as argument.
  *
  * ### Typical pipeline position
  * 1. `SetupModelPart` builds + balances the octree and extracts the hex mesh.
@@ -52,34 +52,34 @@ class OctreeMesherModeler;
  * 4. Optional post-processing operations.
  *
  * @see ClassifyCellsInsideOutside
- * @see OctreeMesherEntityGeneration
- * @see OctreeMesherModeler
+ * @see OctreeHybridMesherEntityGeneration
+ * @see OctreeHybridMesherModeler
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeMesherColoring
+class KRATOS_API(KRATOS_CORE) OctreeHybridMesherColoring
 {
 public:
     ///@name Type Definitions
     ///@{
 
-    /// Pointer definition of OctreeMesherColoring.
-    KRATOS_CLASS_POINTER_DEFINITION(OctreeMesherColoring);
+    /// Pointer definition of OctreeHybridMesherColoring.
+    KRATOS_CLASS_POINTER_DEFINITION(OctreeHybridMesherColoring);
 
     ///@}
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeMesherColoring() = default;
+    OctreeHybridMesherColoring() = default;
 
     /**
      * @brief Copy constructor (no-op body — derived classes carry no state).
      * @param rOther Source instance; no data is copied.
      */
-    OctreeMesherColoring(OctreeMesherColoring const& rOther) {}
+    OctreeHybridMesherColoring(OctreeHybridMesherColoring const& rOther) {}
 
     /// Destructor.
-    virtual ~OctreeMesherColoring() = default;
+    virtual ~OctreeHybridMesherColoring() = default;
 
     ///@}
     ///@name Operations
@@ -101,9 +101,9 @@ public:
      *                          this specific colouring step (see
      *                          @ref GetDefaultParameters for the schema).
      */
-    virtual void Apply(OctreeMesherModeler& rModeler, Parameters ColoringParameters) const
+    virtual void Apply(OctreeHybridMesherModeler& rModeler, Parameters ColoringParameters) const
     {
-        KRATOS_ERROR << "Calling base OctreeMesherColoring::Apply. Please override it in the derived class." << std::endl;
+        KRATOS_ERROR << "Calling base OctreeHybridMesherColoring::Apply. Please override it in the derived class." << std::endl;
     }
 
     /**
@@ -136,17 +136,17 @@ public:
      * @brief Returns a string identifying this component.
      * @return Human-readable name; derived classes should override to return their own name.
      */
-    virtual std::string Info() const { return "OctreeMesherColoring"; }
+    virtual std::string Info() const { return "OctreeHybridMesherColoring"; }
 
     ///@}
 private:
     ///@name Registry
     ///@{
 
-    /// Registers the base prototype at path "OctreeMesherColoring.KratosMultiphysics.OctreeMesherColoring.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.KratosMultiphysics", OctreeMesherColoring, OctreeMesherColoring)
-    /// Registers the base prototype at path "OctreeMesherColoring.All.OctreeMesherColoring.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.All", OctreeMesherColoring, OctreeMesherColoring)
+    /// Registers the base prototype at path "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridMesherColoring.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.KratosMultiphysics", OctreeHybridMesherColoring, OctreeHybridMesherColoring)
+    /// Registers the base prototype at path "OctreeHybridMesherColoring.All.OctreeHybridMesherColoring.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.All", OctreeHybridMesherColoring, OctreeHybridMesherColoring)
 
     ///@}
 };
@@ -156,12 +156,12 @@ private:
 ///@{
 
 /**
- * @brief Stream insertion operator for @ref OctreeMesherColoring.
+ * @brief Stream insertion operator for @ref OctreeHybridMesherColoring.
  * @param rOStream Output stream.
- * @param rThis    Instance to print (delegates to @ref OctreeMesherColoring::Info).
+ * @param rThis    Instance to print (delegates to @ref OctreeHybridMesherColoring::Info).
  * @return Reference to @p rOStream for chaining.
  */
-inline std::ostream& operator<<(std::ostream& rOStream, const OctreeMesherColoring& rThis)
+inline std::ostream& operator<<(std::ostream& rOStream, const OctreeHybridMesherColoring& rThis)
 {
     rOStream << rThis.Info();
     return rOStream;

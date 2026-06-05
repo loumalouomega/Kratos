@@ -17,7 +17,7 @@
 // External includes
 
 // Project includes
-#include "modeler/entity_generation/octree_mesher_entity_generation.h"
+#include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 
 namespace Kratos {
 
@@ -29,19 +29,19 @@ namespace Kratos {
  * @ingroup KratosCore
  * @brief Entity-generation stage that emits one hexahedral element per cell whose
  *        colour matches the requested value.
- * @details For every entry `c` in `OctreeMesherData::mCells` whose associated colour
- *          `OctreeMesherData::mCellColor[c]` equals the parameter `"color"`, the stage:
+ * @details For every entry `c` in `OctreeHybridMesherData::mCells` whose associated colour
+ *          `OctreeHybridMesherData::mCellColor[c]` equals the parameter `"color"`, the stage:
  *
  *          1. De-duplicates the eight corner nodes by calling
- *             `OctreeMesherModeler::GenerateOrRetrieveNode` — a node is created in the
+ *             `OctreeHybridMesherModeler::GenerateOrRetrieveNode` — a node is created in the
  *             ModelPart only on its first encounter; subsequent cells sharing the same
  *             mesh-node index reuse the cached `Node::Pointer` stored in
- *             `OctreeMesherData::mNodePtrs`.
+ *             `OctreeHybridMesherData::mNodePtrs`.
  *          2. Creates a new element via the prototype returned by
  *             `KratosComponents<Element>::Get("generated_entity")` (default
  *             `"Element3D8N"`).
  *          3. Optionally tags the element with the octree refinement level
- *             `OctreeMesherData::mCellLevel[c]` under the variable `REFINEMENT_LEVEL`
+ *             `OctreeHybridMesherData::mCellLevel[c]` under the variable `REFINEMENT_LEVEL`
  *             when the parameter `"tag_refinement_level"` is `true` (default).
  *          4. Adds the new nodes and elements to the target ModelPart in bulk.
  *
@@ -68,16 +68,16 @@ namespace Kratos {
  * }
  * @endcode
  *
- * @note The ModelPart is created via `OctreeMesherModeler::CreateAndGetModelPart` if it
+ * @note The ModelPart is created via `OctreeHybridMesherModeler::CreateAndGetModelPart` if it
  *       does not exist yet.  Properties with `"properties_id"` are likewise created on
  *       demand.
  *
- * @see OctreeMesherEntityGeneration
- * @see OctreeMesherModeler::GenerateOrRetrieveNode
+ * @see OctreeHybridMesherEntityGeneration
+ * @see OctreeHybridMesherModeler::GenerateOrRetrieveNode
  * @see ClassifyCellsInsideOutside
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHexesByCellColor : public OctreeMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) GenerateHexesByCellColor : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
@@ -105,7 +105,7 @@ public:
      *          Nodes are added to the ModelPart via
      *          `ModelPartUtils::AddNodesFromOrderedContainer` (bulk, sorted insertion) and
      *          elements via `ModelPart::AddElements`.  Entity IDs are consumed from
-     *          `OctreeMesherModeler::NextElementId`.
+     *          `OctreeHybridMesherModeler::NextElementId`.
      *
      * @param rModeler              The owning modeler; nodes and elements are added to the
      *                              ModelPart whose name is given by
@@ -117,7 +117,7 @@ public:
      *   - `"generated_entity"` (`string`): registered Element type name.
      *   - `"tag_refinement_level"` (`bool`): whether to store `REFINEMENT_LEVEL` on each element.
      */
-    void Generate(OctreeMesherModeler& rModeler, Parameters GenerationParameters) const override;
+    void Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this entity-generation stage.
@@ -141,10 +141,10 @@ private:
     ///@name Registry
     ///@{
 
-    /// Registers this class at path "OctreeMesherEntityGeneration.KratosMultiphysics.GenerateHexesByCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.KratosMultiphysics", OctreeMesherEntityGeneration, GenerateHexesByCellColor)
-    /// Registers this class at path "OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherEntityGeneration.All", OctreeMesherEntityGeneration, GenerateHexesByCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateHexesByCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHexesByCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHexesByCellColor)
 
     ///@}
 };

@@ -1,12 +1,12 @@
 ---
-title: OctreeMesherModeler
+title: OctreeHybridMesherModeler
 keywords: mesh hex hexahedral octree adaptive dual primal modeler hanging-node constraints
 tags: [mesh hexahedral octree modeler]
 sidebar: kratos_core_utilities
 summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine to produce all-hex ModelParts with optional surface projection and hanging-node constraints.
 ---
 
-# OctreeMesherModeler
+# OctreeHybridMesherModeler
 
 ## Table of contents
 
@@ -17,7 +17,7 @@ summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine t
    - 3.2 [Coloring — `coloring_settings_list`](#32-coloring--coloring_settings_list)
    - 3.3 [Entity generation — `entities_generator_list`](#33-entity-generation--entities_generator_list)
    - 3.4 [Operations — `model_part_operations`](#34-operations--model_part_operations)
-4. [Shared state: OctreeMesherData](#4-shared-state-octreemesherdata)
+4. [Shared state: OctreeHybridMesherData](#4-shared-state-octreemesherdata)
 5. [Mesh topologies](#5-mesh-topologies)
    - 5.1 [Dual mesh (default)](#51-dual-mesh-default)
    - 5.2 [Primal mesh with hanging-node constraints](#52-primal-mesh-with-hanging-node-constraints)
@@ -41,7 +41,7 @@ summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine t
 
 ## 1. What this modeler does
 
-`OctreeMesherModeler` is a Kratos `Modeler` subclass that converts a closed, orientable
+`OctreeHybridMesherModeler` is a Kratos `Modeler` subclass that converts a closed, orientable
 triangular surface `ModelPart` into an **all-hexahedral volumetric ModelPart** using the
 HybridOctree_Hex algorithm implemented in `OctreeHybridMeshUtility`.
 
@@ -80,8 +80,8 @@ than hand-written factory maps.
 Every pluggable component (coloring, entity generation, operation) is a stateless C++
 class that:
 
-1. Derives from the relevant abstract base (`OctreeMesherColoring`,
-   `OctreeMesherEntityGeneration`, or `OctreeMesherOperation`).
+1. Derives from the relevant abstract base (`OctreeHybridMesherColoring`,
+   `OctreeHybridMesherEntityGeneration`, or `OctreeHybridMesherOperation`).
 2. Declares two `KRATOS_REGISTRY_ADD_PROTOTYPE` entries in its `private` section —
    one under the `KratosMultiphysics` sub-path and one under `All`.  These macros
    create a static `RegistryItem` that inserts a shared instance of the class into
@@ -89,14 +89,14 @@ class that:
 
 ```cpp
 // Example — inside ClassifyCellsInsideOutside:
-KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.KratosMultiphysics",
-                               OctreeMesherColoring, ClassifyCellsInsideOutside)
-KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.All",
-                               OctreeMesherColoring, ClassifyCellsInsideOutside)
+KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.KratosMultiphysics",
+                               OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
+KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.All",
+                               OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
 ```
 
 This registers the prototype at the path
-`OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype` (and the
+`OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype` (and the
 `KratosMultiphysics` variant).
 
 When `SetupModelPart` processes a stage list, the private `Dispatch<TBase>` template
@@ -125,13 +125,13 @@ void Dispatch(const std::string& rRegistryRoot, Parameters StageList, TInvoke&& 
 
 | `"type"` value | Resulting registry path |
 |----------------|------------------------|
-| `"ClassifyCellsInsideOutside"` | `OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype` |
-| `"OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype"` (4 dots) | used as-is |
+| `"ClassifyCellsInsideOutside"` | `OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype` |
+| `"OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype"` (4 dots) | used as-is |
 
 Because the retrieved prototype is a **shared, stateless object**, the do-work methods
 (`Apply`, `Generate`, `Execute`) are declared `const`.  All mutable state lives in the
-`OctreeMesherModeler` argument passed to each call — specifically in the
-`OctreeMesherData` struct held by the modeler.  This makes the prototype objects
+`OctreeHybridMesherModeler` argument passed to each call — specifically in the
+`OctreeHybridMesherData` struct held by the modeler.  This makes the prototype objects
 inherently thread-safe (they hold no data) and avoids any per-invocation allocation
 of component objects.
 
@@ -149,13 +149,13 @@ SetupModelPart()
     │      • extract dual or primal hex mesh
     │      • optionally carve + project to surface (dual only)
     │
-    ├─ 2. Dispatch<OctreeMesherColoring>  [coloring_settings_list]
+    ├─ 2. Dispatch<OctreeHybridMesherColoring>  [coloring_settings_list]
     │      for each entry: r_prototype.Apply(*this, params)
     │
-    ├─ 3. Dispatch<OctreeMesherEntityGeneration>  [entities_generator_list]
+    ├─ 3. Dispatch<OctreeHybridMesherEntityGeneration>  [entities_generator_list]
     │      for each entry: r_prototype.Generate(*this, params)
     │
-    └─ 4. Dispatch<OctreeMesherOperation>  [model_part_operations]
+    └─ 4. Dispatch<OctreeHybridMesherOperation>  [model_part_operations]
            for each entry: r_prototype.Execute(*this, params)
 ```
 
@@ -164,9 +164,9 @@ SetupModelPart()
 | # | Stage | Base class | JSON key | Purpose |
 |---|-------|-----------|----------|---------|
 | 1 | Octree generation | *(internal)* | `octree_generator` | Build octree, extract hex mesh |
-| 2 | Coloring | `OctreeMesherColoring` | `coloring_settings_list` | Classify cells inside/outside |
-| 3 | Entity generation | `OctreeMesherEntityGeneration` | `entities_generator_list` | Create nodes, elements, conditions, constraints |
-| 4 | Operations | `OctreeMesherOperation` | `model_part_operations` | Post-processing (e.g. quality report) |
+| 2 | Coloring | `OctreeHybridMesherColoring` | `coloring_settings_list` | Classify cells inside/outside |
+| 3 | Entity generation | `OctreeHybridMesherEntityGeneration` | `entities_generator_list` | Create nodes, elements, conditions, constraints |
+| 4 | Operations | `OctreeHybridMesherOperation` | `model_part_operations` | Post-processing (e.g. quality report) |
 
 ---
 
@@ -198,7 +198,7 @@ parameters come from the top-level `"octree_generator"` block.
 
    - Calls `OctreeHybridMeshUtility::ExtractDualHexMesh`, which runs the
      face-adjacency detection and transition-template emission pass to produce a
-     conforming all-hex dual mesh stored as flat arrays in `OctreeMesherData`.
+     conforming all-hex dual mesh stored as flat arrays in `OctreeHybridMesherData`.
    - If `project_to_surface: true` and the triangle soup is non-empty:
      - `RemoveOutsideElement`: carves away hexes whose centroids are outside the
        surface (ray-cast inside/outside parity test + signed-distance filter).
@@ -207,16 +207,16 @@ parameters come from the top-level `"octree_generator"` block.
      - `ProjectToIsoSurface`: runs the Jacobian-controlled optimiser to pull boundary
        nodes onto the input surface.  The iteration budget is controlled by
        `projection_iterations` and `projection_smoothing`.
-     - Sets `OctreeMesherData::mProjected = true`.
+     - Sets `OctreeHybridMesherData::mProjected = true`.
 
    **`mesh_type: "primal"`**
 
    - Calls `OctreeHybridMeshUtility::ExtractPrimalHexMesh`, which enumerates each
      octree leaf as one hex cell.  The connectivity is non-conforming at 2:1
      transitions.  Hanging-node constraint records are stored in
-     `OctreeMesherData::mHanging`.
+     `OctreeHybridMesherData::mHanging`.
 
-5. Initialises `OctreeMesherData::mNodePtrs` (size = number of nodes, all null) for
+5. Initialises `OctreeHybridMesherData::mNodePtrs` (size = number of nodes, all null) for
    lazy de-duplication during entity generation.
 
 **Key parameter decisions:**
@@ -236,7 +236,7 @@ parameters come from the top-level `"octree_generator"` block.
 
 ### 3.2 Coloring — `coloring_settings_list`
 
-Coloring stages write an integer label into `OctreeMesherData::mCellColor` (one entry
+Coloring stages write an integer label into `OctreeHybridMesherData::mCellColor` (one entry
 per hex cell).  Downstream entity-generation stages filter on this label.
 
 The coloring list is processed in order; multiple coloring stages can be stacked, but
@@ -268,7 +268,7 @@ Entity-generation stages transform the flat in-memory hex mesh into Kratos entit
 (nodes, elements, conditions, master-slave constraints) inside one or more ModelParts.
 
 Stages are processed in order.  Node de-duplication is shared across stages via
-`OctreeMesherData::mNodePtrs`: the first stage that needs a given mesh-node index
+`OctreeHybridMesherData::mNodePtrs`: the first stage that needs a given mesh-node index
 creates a `Node` object and caches the pointer; subsequent stages sharing the same
 node reuse it without creating a duplicate.
 
@@ -299,11 +299,11 @@ Registered operations:
 
 ---
 
-## 4. Shared state: OctreeMesherData
+## 4. Shared state: OctreeHybridMesherData
 
-`OctreeMesherData` (in `kratos/modeler/internals/octree_mesher_data.h`) is the central
+`OctreeHybridMesherData` (in `kratos/modeler/internals/octree_hybrid_mesher_data.h`) is the central
 shared-state struct that all pipeline stages read from and write to.  The modeler owns
-it as a `std::unique_ptr<OctreeMesherData>` and exposes it through `GetData()`.
+it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetData()`.
 
 | Field | Type | Written by | Read by | Description |
 |-------|------|------------|---------|-------------|
@@ -375,7 +375,7 @@ when `tag_refinement_level: true`):
 - At a 2:1 transition, a fine cell's edge-midpoint node sits on the face of a
   coarser neighbour but is not a corner of that coarser cell.  This is a
   *hanging node*.  `ExtractPrimalHexMesh` records these in `HangingConstraint`
-  structs stored in `OctreeMesherData::mHanging`.
+  structs stored in `OctreeHybridMesherData::mHanging`.
 
 **Hanging-node constraint weights:**
 
@@ -410,7 +410,7 @@ parameter of `GenerateHangingNodeConstraints` lists which DOF variables to const
 
 ## 6. Full JSON parameters schema
 
-The complete parameter block accepted by `OctreeMesherModeler`:
+The complete parameter block accepted by `OctreeHybridMesherModeler`:
 
 ```json
 {
@@ -479,7 +479,7 @@ remaining keys are specific to the component and are described in
 
 Classifies every hex cell as inside (label 1) or outside (label 0) the input surface.
 
-**Registry path:** `OctreeMesherColoring.All.ClassifyCellsInsideOutside.Prototype`
+**Registry path:** `OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype`
 
 **Class:** `Kratos::ClassifyCellsInsideOutside`
 
@@ -493,7 +493,7 @@ Classifies every hex cell as inside (label 1) or outside (label 0) the input sur
 
 **Behaviour:**
 
-- If `OctreeMesherData::mProjected == true` (surface projection was applied), every
+- If `OctreeHybridMesherData::mProjected == true` (surface projection was applied), every
   surviving cell is definitively inside; the method assigns `1` to all entries in
   `mCellColor` with a single `std::vector::assign` call and returns immediately,
   skipping the ray-caster entirely.
@@ -517,7 +517,7 @@ Classifies every hex cell as inside (label 1) or outside (label 0) the input sur
 Creates one 8-noded hexahedral element per cell whose colour matches the configured
 value.
 
-**Registry path:** `OctreeMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype`
 
 **Class:** `Kratos::GenerateHexesByCellColor`
 
@@ -538,7 +538,7 @@ value.
 
 Iterates `mCells` in order.  For each cell `c` where `mCellColor[c] == color`:
 1. Resolves the 8 corner mesh-node indices.
-2. For each corner, calls `OctreeMesherModeler::GenerateOrRetrieveNode` — creates a
+2. For each corner, calls `OctreeHybridMesherModeler::GenerateOrRetrieveNode` — creates a
    new node on the first encounter or returns the cached pointer for subsequent cells
    sharing the same node.
 3. Creates an element using the registered prototype for `generated_entity`.
@@ -568,7 +568,7 @@ Kratos `Hexahedra3D8` local-node numbering, so no remapping is required.
 Creates quadrilateral boundary conditions on the outer surface of the coloured hex
 mesh.
 
-**Registry path:** `OctreeMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype`
 
 **Class:** `Kratos::GenerateBoundaryConditionsByFace`
 
@@ -614,7 +614,7 @@ Winding convention: outward normals follow the convention of `ExtractBoundaryFac
 
 Creates `LinearMasterSlaveConstraint` objects for hanging nodes in the primal mesh.
 
-**Registry path:** `OctreeMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype`
 
 **Class:** `Kratos::GenerateHangingNodeConstraints`
 
@@ -641,7 +641,7 @@ For each `HangingConstraint` record in `mData.mHanging`:
    - `Node::AddDof` is called on the slave and all master nodes.
    - A `1 x N_masters` relation matrix is built from `HangingConstraint::Weights`.
    - `ModelPart::CreateNewMasterSlaveConstraint` is called with the constraint type
-     name, a fresh ID from `OctreeMesherModeler::NextConstraintId`, and the
+     name, a fresh ID from `OctreeHybridMesherModeler::NextConstraintId`, and the
      assembled DOF vectors.
 
 The imposed linear relation is:
@@ -677,7 +677,7 @@ no error is thrown.
 
 Logs scaled-Jacobian statistics for all hexahedral elements in a ModelPart.
 
-**Registry path:** `OctreeMesherOperation.All.ReportMeshQuality.Prototype`
+**Registry path:** `OctreeHybridMesherOperation.All.ReportMeshQuality.Prototype`
 
 **Class:** `Kratos::ReportMeshQuality`
 
@@ -757,7 +757,7 @@ settings = KM.Parameters("""{
     "model_part_operations" : []
 }""")
 
-modeler = KM.OctreeMesherModeler(model, settings)
+modeler = KM.OctreeHybridMesherModeler(model, settings)
 modeler.SetupGeometryModel()
 modeler.PrepareGeometryModel()
 modeler.SetupModelPart()
@@ -817,7 +817,7 @@ settings = KM.Parameters("""{
     ]
 }""")
 
-modeler = KM.OctreeMesherModeler(model, settings)
+modeler = KM.OctreeHybridMesherModeler(model, settings)
 modeler.SetupGeometryModel()
 modeler.PrepareGeometryModel()
 modeler.SetupModelPart()
@@ -876,7 +876,7 @@ settings = KM.Parameters("""{
     ]
 }""")
 
-modeler = KM.OctreeMesherModeler(model, settings)
+modeler = KM.OctreeHybridMesherModeler(model, settings)
 modeler.SetupGeometryModel()
 modeler.PrepareGeometryModel()
 modeler.SetupModelPart()
@@ -955,10 +955,10 @@ Expected log output (example, depth-4 dual box mesh):
 
 ## 9. API reference
 
-### `OctreeMesherModeler` — public interface
+### `OctreeHybridMesherModeler` — public interface
 
 ```cpp
-#include "modeler/octree_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesher_modeler.h"
 ```
 
 ---
@@ -966,8 +966,8 @@ Expected log output (example, depth-4 dual box mesh):
 #### Constructors
 
 ```cpp
-OctreeMesherModeler();
-OctreeMesherModeler(Model& rModel, Parameters ModelerParameters = Parameters());
+OctreeHybridMesherModeler();
+OctreeHybridMesherModeler(Model& rModel, Parameters ModelerParameters = Parameters());
 ```
 
 The default constructor is used internally when the Registry prototype is created.
@@ -996,7 +996,7 @@ modeler).
 #### `GetData`
 
 ```cpp
-Internals::OctreeMesherData& GetData();
+Internals::OctreeHybridMesherData& GetData();
 ```
 
 Returns the shared mesher state.  Used by all pipeline component stages to read the
@@ -1079,18 +1079,18 @@ Called during construction to fill in any missing keys.
 
 ### Registering the modeler
 
-`OctreeMesherModeler` is registered in `KratosApplication` via:
+`OctreeHybridMesherModeler` is registered in `KratosApplication` via:
 
 ```cpp
 // kratos/sources/kratos_application.cpp
-KRATOS_REGISTER_MODELER("OctreeMesherModeler", mOctreeMesherModeler);
+KRATOS_REGISTER_MODELER("OctreeHybridMesherModeler", mOctreeHybridMesherModeler);
 ```
 
-where `mOctreeMesherModeler` is a `const OctreeMesherModeler` data member of
+where `mOctreeHybridMesherModeler` is a `const OctreeHybridMesherModeler` data member of
 `KratosApplication` (declared in `kratos/includes/kratos_application.h`).
 
 `KRATOS_REGISTER_MODELER` calls `KratosComponents<Modeler>::Add`, which inserts the
-prototype under the key `"OctreeMesherModeler"` in the global component database.
+prototype under the key `"OctreeHybridMesherModeler"` in the global component database.
 
 ### Instantiation from JSON
 
@@ -1102,7 +1102,7 @@ import KratosMultiphysics as KM
 
 model = KM.Model()
 modeler = KM.CreateModeler(model, KM.Parameters("""{
-    "modeler_name" : "OctreeMesherModeler",
+    "modeler_name" : "OctreeHybridMesherModeler",
     "Parameters"   : {
         "input_model_part_name" : "MySurface",
         ...
@@ -1116,13 +1116,13 @@ modeler.SetupModelPart()
 Alternatively, construct it directly in Python:
 
 ```python
-modeler = KM.OctreeMesherModeler(model, settings)
+modeler = KM.OctreeHybridMesherModeler(model, settings)
 ```
 
 The Python binding is registered in `kratos/python/add_modeler_to_python.cpp`:
 
 ```cpp
-py::class_<OctreeMesherModeler, OctreeMesherModeler::Pointer, Modeler>(m, "OctreeMesherModeler")
+py::class_<OctreeHybridMesherModeler, OctreeHybridMesherModeler::Pointer, Modeler>(m, "OctreeHybridMesherModeler")
     .def(py::init<Model&, Parameters>())
 ;
 ```
@@ -1131,7 +1131,7 @@ py::class_<OctreeMesherModeler, OctreeMesherModeler::Pointer, Modeler>(m, "Octre
 
 To add a new coloring stage, entity-generation component, or operation without
 modifying the core Kratos source tree, create a class that derives from
-`OctreeMesherColoring`, `OctreeMesherEntityGeneration`, or `OctreeMesherOperation`
+`OctreeHybridMesherColoring`, `OctreeHybridMesherEntityGeneration`, or `OctreeHybridMesherOperation`
 respectively, add the two `KRATOS_REGISTRY_ADD_PROTOTYPE` macros in its `private`
 section, and ensure its translation unit is compiled and linked.  The macros register
 the prototype at static-initialisation time (before `main`), so no additional
@@ -1140,14 +1140,14 @@ registration call is needed.
 **Coloring example skeleton:**
 
 ```cpp
-#include "modeler/coloring/octree_mesher_coloring.h"
+#include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 
-class MyCustomColoring : public Kratos::OctreeMesherColoring {
+class MyCustomColoring : public Kratos::OctreeHybridMesherColoring {
 public:
     MyCustomColoring() = default;
     MyCustomColoring(MyCustomColoring const&) {}
 
-    void Apply(Kratos::OctreeMesherModeler& rModeler,
+    void Apply(Kratos::OctreeHybridMesherModeler& rModeler,
                Kratos::Parameters ColoringParameters) const override
     {
         // Populate rModeler.GetData().mCellColor here.
@@ -1158,10 +1158,10 @@ public:
     }
 
 private:
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.KratosMultiphysics",
-                                   Kratos::OctreeMesherColoring, MyCustomColoring)
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeMesherColoring.All",
-                                   Kratos::OctreeMesherColoring, MyCustomColoring)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.KratosMultiphysics",
+                                   Kratos::OctreeHybridMesherColoring, MyCustomColoring)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.All",
+                                   Kratos::OctreeHybridMesherColoring, MyCustomColoring)
 };
 ```
 
@@ -1172,20 +1172,20 @@ private:
 The test suite lives at:
 
 ```
-kratos/tests/test_octree_mesher_modeler.py
+kratos/tests/test_octree_hybrid_mesher_modeler.py
 ```
 
 It can be run directly:
 
 ```bash
-PYTHONPATH=/path/to/build/Release python3 kratos/tests/test_octree_mesher_modeler.py
+PYTHONPATH=/path/to/build/Release python3 kratos/tests/test_octree_hybrid_mesher_modeler.py
 ```
 
 or under the Kratos test runner.
 
 The file contains three test classes:
 
-### `TestOctreeMesherModelerDual`
+### `TestOctreeHybridMesherModelerDual`
 
 Tests for the dual (conforming) hex mesh path using a synthetic closed-box surface
 and a small inclined-patch surface that forces 2:1 transitions.
@@ -1199,7 +1199,7 @@ and a small inclined-patch surface that forces 2:1 transitions.
 | `test_boundary_conditions_created` | `GenerateBoundaryConditionsByFace` creates a non-empty `Boundary` ModelPart alongside the volume. |
 | `test_quality_report_operation` | `ReportMeshQuality` runs without error; the resulting ModelPart is non-empty. |
 
-### `TestOctreeMesherModelerPrimal`
+### `TestOctreeHybridMesherModelerPrimal`
 
 Tests for the primal (leaf-hex + hanging-node constraints) path.
 
@@ -1210,7 +1210,7 @@ Tests for the primal (leaf-hex + hanging-node constraints) path.
 | `test_primal_constraint_row_sum` | Every constraint's relation matrix sums to 1.0 (partition of unity), verified to within `1e-10`. |
 | `test_primal_constraint_master_counts` | Every constraint has exactly 2 masters (edge-midpoint) or 4 masters (face-centre) — no other master counts are permitted. |
 
-### `TestOctreeMesherModelerBunny`
+### `TestOctreeHybridMesherModelerBunny`
 
 Tests using the low-poly Stanford Bunny surface (`Bunny-LowPoly.stl`).  These tests
 are automatically skipped when the STL is absent.

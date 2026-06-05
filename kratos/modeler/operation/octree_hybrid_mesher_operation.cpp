@@ -15,7 +15,7 @@
 // External includes
 
 // Project includes
-#include "octree_mesher_operation.h"
+#include "octree_hybrid_mesher_operation.h"
 
-// Translation unit that anchors the OctreeMesherOperation base prototype
+// Translation unit that anchors the OctreeHybridMesherOperation base prototype
 // registration (KRATOS_REGISTRY_ADD_PROTOTYPE) into KratosCore.

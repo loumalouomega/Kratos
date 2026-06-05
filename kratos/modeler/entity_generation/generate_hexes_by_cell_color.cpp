@@ -20,8 +20,8 @@
 #include "includes/variables.h"
 #include "utilities/model_part_utils.h"
 #include "modeler/entity_generation/generate_hexes_by_cell_color.h"
-#include "modeler/octree_mesher_modeler.h"
-#include "modeler/internals/octree_mesher_data.h"
+#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos {
 
@@ -57,24 +57,24 @@ const Parameters GenerateHexesByCellColor::GetDefaultParameters() const
  * @brief Generates one hexahedral element per cell whose colour matches the requested value.
  * @details The method iterates over every cell in `rModeler.GetData().mCells` (indexed by `c`).
  *          Cells are skipped when:
- *            - `OctreeMesherData::mCellColor` is non-empty **and**
+ *            - `OctreeHybridMesherData::mCellColor` is non-empty **and**
  *              `mCellColor[c] != want_color`.
  *
  *          For each selected cell the following steps are performed:
  *
- *          1. **Node de-duplication** — `OctreeMesherModeler::GenerateOrRetrieveNode` is
+ *          1. **Node de-duplication** — `OctreeHybridMesherModeler::GenerateOrRetrieveNode` is
  *             called for each of the 8 corners (`mCells[c][k]`, k = 0…7).  On the first
  *             call for a given mesh-node index the node is created from the world-space
- *             coordinates in `OctreeMesherData::mNodes` and cached in
- *             `OctreeMesherData::mNodePtrs`; subsequent calls return the cached pointer.
+ *             coordinates in `OctreeHybridMesherData::mNodes` and cached in
+ *             `OctreeHybridMesherData::mNodePtrs`; subsequent calls return the cached pointer.
  *             New nodes are accumulated in the local `new_nodes` container.
  *
  *          2. **Element creation** — `Element::Create(id, nodes, properties)` is invoked
  *             on the prototype element retrieved from the KratosComponents registry.  The
- *             element ID is produced by `OctreeMesherModeler::NextElementId`.
+ *             element ID is produced by `OctreeHybridMesherModeler::NextElementId`.
  *
  *          3. **Refinement-level tagging** — when `tag_level` is `true` and
- *             `OctreeMesherData::mCellLevel` is non-empty, the non-historical variable
+ *             `OctreeHybridMesherData::mCellLevel` is non-empty, the non-historical variable
  *             `REFINEMENT_LEVEL` is set on the element to `mCellLevel[c]`.
  *
  *          4. **Bulk insertion** — after all cells have been processed, duplicate node
@@ -89,7 +89,7 @@ const Parameters GenerateHexesByCellColor::GetDefaultParameters() const
  *          permutation array is required.
  *
  * @param rModeler              The owning modeler.  Provides access to the shared
- *                              `OctreeMesherData` (cells, nodes, colours, levels) and
+ *                              `OctreeHybridMesherData` (cells, nodes, colours, levels) and
  *                              the helper methods `CreateAndGetModelPart`,
  *                              `SetStartIds`, `GenerateOrRetrieveNode`, and
  *                              `NextElementId`.
@@ -107,13 +107,13 @@ const Parameters GenerateHexesByCellColor::GetDefaultParameters() const
  * @note Properties with the given `properties_id` are retrieved from the ModelPart if
  *       they already exist, or created fresh otherwise.
  *
- * @see OctreeMesherModeler::GenerateOrRetrieveNode
- * @see OctreeMesherData::mCells
- * @see OctreeMesherData::mCellColor
- * @see OctreeMesherData::mCellLevel
+ * @see OctreeHybridMesherModeler::GenerateOrRetrieveNode
+ * @see OctreeHybridMesherData::mCells
+ * @see OctreeHybridMesherData::mCellColor
+ * @see OctreeHybridMesherData::mCellLevel
  * @see ModelPartUtils::AddNodesFromOrderedContainer
  */
-void GenerateHexesByCellColor::Generate(OctreeMesherModeler& rModeler, Parameters GenerationParameters) const
+void GenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const
 {
     auto& r_data = rModeler.GetData();
     ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
