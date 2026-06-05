@@ -25,7 +25,7 @@ namespace Kratos {
 ///@{
 
 /**
- * @class ReportMeshQuality
+ * @class OctreeHybridReportMeshQuality
  * @ingroup KratosCore
  * @brief Post-processing operation that logs scaled-Jacobian statistics for the hex mesh.
  * @details Iterates every eight-noded hexahedral element (`Element3D8N` or any element
@@ -35,7 +35,7 @@ namespace Kratos {
  * `SJ_ADJ` edge-triple convention from the underlying octree engine.
  *
  * At the end of the loop the following statistics are emitted at `INFO` level via
- * `KRATOS_INFO("ReportMeshQuality")`:
+ * `KRATOS_INFO("OctreeHybridReportMeshQuality")`:
  * - **minSJ**   — minimum scaled Jacobian across all elements (worst element quality).
  * - **meanSJ**  — arithmetic mean of per-element minimum scaled Jacobians.
  * - **inverted** — count (and percentage) of elements whose minimum scaled Jacobian is
@@ -53,7 +53,7 @@ namespace Kratos {
  * ### Parameters schema
  * | Key                | Type   | Default           | Description                       |
  * |--------------------|--------|-------------------|-----------------------------------|
- * | `type`             | string | `"ReportMeshQuality"` | Registry lookup key.          |
+ * | `type`             | string | `"OctreeHybridReportMeshQuality"` | Registry lookup key.          |
  * | `model_part_name`  | string | `"Undefined"`     | Name of the ModelPart to analyse. |
  *
  * @note Elements with fewer or more than 8 nodes are silently skipped.
@@ -61,20 +61,20 @@ namespace Kratos {
  * @see OctreeHybridMeshUtility::ScaledJacobianMin
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) ReportMeshQuality : public OctreeHybridMesherOperation
+class KRATOS_API(KRATOS_CORE) OctreeHybridReportMeshQuality : public OctreeHybridMesherOperation
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    ReportMeshQuality() = default;
+    OctreeHybridReportMeshQuality() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The instance to copy.  No data members to copy in this class.
      */
-    ReportMeshQuality(ReportMeshQuality const& rOther) {}
+    OctreeHybridReportMeshQuality(OctreeHybridReportMeshQuality const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -103,7 +103,7 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"            : "ReportMeshQuality",
+     *     "type"            : "OctreeHybridReportMeshQuality",
      *     "model_part_name" : "Undefined"
      * }
      * @endcode
@@ -117,9 +117,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.KratosMultiphysics", OctreeHybridMesherOperation, ReportMeshQuality)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.KratosMultiphysics", OctreeHybridMesherOperation, OctreeHybridReportMeshQuality)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.All", OctreeHybridMesherOperation, ReportMeshQuality)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherOperation.All", OctreeHybridMesherOperation, OctreeHybridReportMeshQuality)
 
     ///@}
 };

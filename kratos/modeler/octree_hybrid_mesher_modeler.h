@@ -84,10 +84,10 @@ namespace Internals { class OctreeHybridMesherData; }
  *     "input_model_part_name"  : "Surface",
  *     "output_model_part_name" : "Volume",
  *     "octree_generator"  : { "refinement_depth": 5 },
- *     "coloring_settings_list" : [{ "type": "ClassifyCellsInsideOutside" }],
- *     "entities_generator_list": [{ "type": "GenerateHexesByCellColor",
+ *     "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+ *     "entities_generator_list": [{ "type": "OctreeHybridGenerateHexesByCellColor",
  *                                   "model_part_name": "Volume", "color": 1 }],
- *     "model_part_operations"  : [{ "type": "ReportMeshQuality",
+ *     "model_part_operations"  : [{ "type": "OctreeHybridReportMeshQuality",
  *                                   "model_part_name": "Volume" }]
  * }''')
  * mod = KM.OctreeHybridMesherModeler(model, settings)

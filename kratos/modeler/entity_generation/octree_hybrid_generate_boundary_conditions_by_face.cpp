@@ -18,7 +18,7 @@
 #include "includes/condition.h"
 #include "includes/kratos_components.h"
 #include "utilities/model_part_utils.h"
-#include "modeler/entity_generation/generate_boundary_conditions_by_face.h"
+#include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
@@ -26,19 +26,19 @@
 namespace Kratos {
 
 /**
- * @brief Returns the default parameter schema for @ref GenerateBoundaryConditionsByFace.
+ * @brief Returns the default parameter schema for @ref OctreeHybridGenerateBoundaryConditionsByFace.
  * @details The schema contains:
- * - `"type"` — the Registry lookup key, fixed to `"GenerateBoundaryConditionsByFace"`.
+ * - `"type"` — the Registry lookup key, fixed to `"OctreeHybridGenerateBoundaryConditionsByFace"`.
  * - `"model_part_name"` — name of the ModelPart in which conditions are created.
  * - `"color"` — integer cell-colour label identifying inside cells (default `1`).
  * - `"properties_id"` — ID of the Properties object assigned to each new condition.
  * - `"generated_entity"` — registered Condition type name to instantiate per face.
  * @return Parameters with all accepted keys and their default values.
  */
-const Parameters GenerateBoundaryConditionsByFace::GetDefaultParameters() const
+const Parameters OctreeHybridGenerateBoundaryConditionsByFace::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"               : "GenerateBoundaryConditionsByFace",
+        "type"               : "OctreeHybridGenerateBoundaryConditionsByFace",
         "model_part_name"    : "Undefined",
         "color"              : 1,
         "properties_id"      : 1,
@@ -88,13 +88,13 @@ const Parameters GenerateBoundaryConditionsByFace::GetDefaultParameters() const
  * @param GenerationParameters  Validated JSON parameters; see @ref GetDefaultParameters
  *                              for the full schema.
  */
-void GenerateBoundaryConditionsByFace::Generate(
+void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
     OctreeHybridMesherModeler& rModeler,
     Parameters GenerationParameters) const
 {
     auto& r_data = rModeler.GetData();
     KRATOS_ERROR_IF(!r_data.IsExtracted())
-        << "GenerateBoundaryConditionsByFace: hex mesh not yet extracted." << std::endl;
+        << "OctreeHybridGenerateBoundaryConditionsByFace: hex mesh not yet extracted." << std::endl;
 
     ModelPart& r_mp = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
     rModeler.SetStartIds(r_mp);

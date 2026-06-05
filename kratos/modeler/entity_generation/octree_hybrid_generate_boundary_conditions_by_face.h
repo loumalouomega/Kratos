@@ -25,7 +25,7 @@ namespace Kratos {
 ///@{
 
 /**
- * @class GenerateBoundaryConditionsByFace
+ * @class OctreeHybridGenerateBoundaryConditionsByFace
  * @ingroup KratosCore
  * @brief Entity-generation component that creates quadrilateral boundary conditions on
  *        the exterior faces of the coloured hex mesh.
@@ -46,7 +46,7 @@ namespace Kratos {
  * registered in the Kratos component database (default: `"SurfaceCondition3D4N"`).
  *
  * ### Prerequisite
- * The hex-generation step (e.g. @ref GenerateHexesByCellColor) must have run first so
+ * The hex-generation step (e.g. @ref OctreeHybridGenerateHexesByCellColor) must have run first so
  * that `OctreeHybridMesherData::mCells` and `OctreeHybridMesherData::mCellColor` are populated.
  *
  * ### Registry paths
@@ -57,7 +57,7 @@ namespace Kratos {
  * ### Parameters schema
  * | Key                | Type   | Default                    | Description                                |
  * |--------------------|--------|----------------------------|--------------------------------------------|
- * | `type`             | string | `"GenerateBoundaryConditionsByFace"` | Registry lookup key.             |
+ * | `type`             | string | `"OctreeHybridGenerateBoundaryConditionsByFace"` | Registry lookup key.             |
  * | `model_part_name`  | string | `"Undefined"`              | ModelPart to create conditions in.         |
  * | `color`            | int    | `1`                        | Cell color (inside label) to use.          |
  * | `properties_id`    | int    | `1`                        | Properties ID assigned to each condition.  |
@@ -69,20 +69,20 @@ namespace Kratos {
  * @see OctreeHybridMeshUtility::ExtractBoundaryFaces
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateBoundaryConditionsByFace : public OctreeHybridMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) OctreeHybridGenerateBoundaryConditionsByFace : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    GenerateBoundaryConditionsByFace() = default;
+    OctreeHybridGenerateBoundaryConditionsByFace() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The instance to copy.  No data members to copy in this class.
      */
-    GenerateBoundaryConditionsByFace(GenerateBoundaryConditionsByFace const& rOther) {}
+    OctreeHybridGenerateBoundaryConditionsByFace(OctreeHybridGenerateBoundaryConditionsByFace const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -115,7 +115,7 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"             : "GenerateBoundaryConditionsByFace",
+     *     "type"             : "OctreeHybridGenerateBoundaryConditionsByFace",
      *     "model_part_name"  : "Undefined",
      *     "color"            : 1,
      *     "properties_id"    : 1,
@@ -132,9 +132,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateBoundaryConditionsByFace)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateBoundaryConditionsByFace)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateBoundaryConditionsByFace)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateBoundaryConditionsByFace)
 
     ///@}
 };

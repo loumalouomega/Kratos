@@ -51,7 +51,7 @@ class OctreeHybridMesherModeler;
  * 3. Entity generation emits only cells with the desired colour.
  * 4. Optional post-processing operations.
  *
- * @see ClassifyCellsInsideOutside
+ * @see OctreeHybridClassifyCellsInsideOutside
  * @see OctreeHybridMesherEntityGeneration
  * @see OctreeHybridMesherModeler
  * @author Vicente Mataix Ferrandiz

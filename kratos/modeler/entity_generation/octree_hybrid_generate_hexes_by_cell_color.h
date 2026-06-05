@@ -25,7 +25,7 @@ namespace Kratos {
 ///@{
 
 /**
- * @class GenerateHexesByCellColor
+ * @class OctreeHybridGenerateHexesByCellColor
  * @ingroup KratosCore
  * @brief Entity-generation stage that emits one hexahedral element per cell whose
  *        colour matches the requested value.
@@ -59,7 +59,7 @@ namespace Kratos {
  * ### Typical JSON configuration
  * @code{.json}
  * {
- *     "type"                : "GenerateHexesByCellColor",
+ *     "type"                : "OctreeHybridGenerateHexesByCellColor",
  *     "model_part_name"     : "FluidDomain",
  *     "color"               : 1,
  *     "properties_id"       : 1,
@@ -74,23 +74,23 @@ namespace Kratos {
  *
  * @see OctreeHybridMesherEntityGeneration
  * @see OctreeHybridMesherModeler::GenerateOrRetrieveNode
- * @see ClassifyCellsInsideOutside
+ * @see OctreeHybridClassifyCellsInsideOutside
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHexesByCellColor : public OctreeHybridMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) OctreeHybridGenerateHexesByCellColor : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    GenerateHexesByCellColor() = default;
+    OctreeHybridGenerateHexesByCellColor() = default;
 
     /**
      * @brief Copy constructor (no-op body — this class carries no state).
      * @param rOther Source instance; no data is copied.
      */
-    GenerateHexesByCellColor(GenerateHexesByCellColor const& rOther) {}
+    OctreeHybridGenerateHexesByCellColor(OctreeHybridGenerateHexesByCellColor const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -124,7 +124,7 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"                : "GenerateHexesByCellColor",
+     *     "type"                : "OctreeHybridGenerateHexesByCellColor",
      *     "model_part_name"     : "Undefined",
      *     "color"               : 1,
      *     "properties_id"       : 1,
@@ -141,10 +141,10 @@ private:
     ///@name Registry
     ///@{
 
-    /// Registers this class at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateHexesByCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHexesByCellColor)
-    /// Registers this class at path "OctreeHybridMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHexesByCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.OctreeHybridGenerateHexesByCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateHexesByCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHexesByCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateHexesByCellColor)
 
     ///@}
 };

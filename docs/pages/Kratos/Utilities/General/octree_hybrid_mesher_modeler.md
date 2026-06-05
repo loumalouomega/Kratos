@@ -88,15 +88,15 @@ class that:
    the global Kratos Registry at load time (before `main`).
 
 ```cpp
-// Example — inside ClassifyCellsInsideOutside:
+// Example — inside OctreeHybridClassifyCellsInsideOutside:
 KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.KratosMultiphysics",
-                               OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
+                               OctreeHybridMesherColoring, OctreeHybridClassifyCellsInsideOutside)
 KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.All",
-                               OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
+                               OctreeHybridMesherColoring, OctreeHybridClassifyCellsInsideOutside)
 ```
 
 This registers the prototype at the path
-`OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype` (and the
+`OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype` (and the
 `KratosMultiphysics` variant).
 
 When `SetupModelPart` processes a stage list, the private `Dispatch<TBase>` template
@@ -125,8 +125,8 @@ void Dispatch(const std::string& rRegistryRoot, Parameters StageList, TInvoke&& 
 
 | `"type"` value | Resulting registry path |
 |----------------|------------------------|
-| `"ClassifyCellsInsideOutside"` | `OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype` |
-| `"OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype"` (4 dots) | used as-is |
+| `"OctreeHybridClassifyCellsInsideOutside"` | `OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype` |
+| `"OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype"` (4 dots) | used as-is |
 
 Because the retrieved prototype is a **shared, stateless object**, the do-work methods
 (`Apply`, `Generate`, `Execute`) are declared `const`.  All mutable state lives in the
@@ -240,7 +240,7 @@ Coloring stages write an integer label into `OctreeHybridMesherData::mCellColor`
 per hex cell).  Downstream entity-generation stages filter on this label.
 
 The coloring list is processed in order; multiple coloring stages can be stacked, but
-in practice a single `ClassifyCellsInsideOutside` entry is sufficient for most use
+in practice a single `OctreeHybridClassifyCellsInsideOutside` entry is sufficient for most use
 cases.
 
 The canonical colour convention is:
@@ -253,11 +253,11 @@ The canonical colour convention is:
 When using `mesh_type: "dual"` **without** `project_to_surface`, the coloring stage is
 responsible for the inside/outside carving.  When `project_to_surface: true`, the
 projection pass has already removed all outside cells and set `mProjected = true`;
-`ClassifyCellsInsideOutside` then short-circuits with a single `assign(n, 1)` call
+`OctreeHybridClassifyCellsInsideOutside` then short-circuits with a single `assign(n, 1)` call
 instead of running the ray-caster.
 
 When using `mesh_type: "primal"`, the coloring list can be left empty (all cells
-included), or `ClassifyCellsInsideOutside` can be run to carve away outside cells
+included), or `OctreeHybridClassifyCellsInsideOutside` can be run to carve away outside cells
 before entity generation.
 
 ---
@@ -280,9 +280,9 @@ Registered entity-generation components:
 
 | JSON `"type"` | Class | Purpose |
 |--------------|-------|---------|
-| `GenerateHexesByCellColor` | `GenerateHexesByCellColor` | Create hex elements for cells matching a colour |
-| `GenerateBoundaryConditionsByFace` | `GenerateBoundaryConditionsByFace` | Create quad conditions on the outer surface |
-| `GenerateHangingNodeConstraints` | `GenerateHangingNodeConstraints` | Create `LinearMasterSlaveConstraint` for primal mesh |
+| `OctreeHybridGenerateHexesByCellColor` | `OctreeHybridGenerateHexesByCellColor` | Create hex elements for cells matching a colour |
+| `OctreeHybridGenerateBoundaryConditionsByFace` | `OctreeHybridGenerateBoundaryConditionsByFace` | Create quad conditions on the outer surface |
+| `OctreeHybridGenerateHangingNodeConstraints` | `OctreeHybridGenerateHangingNodeConstraints` | Create `LinearMasterSlaveConstraint` for primal mesh |
 
 ---
 
@@ -295,7 +295,7 @@ Registered operations:
 
 | JSON `"type"` | Class | Purpose |
 |--------------|-------|---------|
-| `ReportMeshQuality` | `ReportMeshQuality` | Log min/mean scaled Jacobian and inverted-element count |
+| `OctreeHybridReportMeshQuality` | `OctreeHybridReportMeshQuality` | Log min/mean scaled Jacobian and inverted-element count |
 
 ---
 
@@ -313,9 +313,9 @@ it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetDat
 | `mCells` | `vector<array<int,8>>` | `BuildOctreeAndExtract` | All stages | Hex connectivity (8 node indices per cell, Hexahedra3D8 ordering). |
 | `mCellLevel` | `vector<int>` | `BuildOctreeAndExtract` | Entity generation, quality report | Octree refinement level per cell (-1 for transition-template hexes). |
 | `mCellColor` | `vector<int>` | Coloring stages | Entity generation | Per-cell inside(1)/outside(0) label. Empty until coloring runs. |
-| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `GenerateHangingNodeConstraints` | Hanging-node interpolation records (primal mesh only). |
+| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `OctreeHybridGenerateHangingNodeConstraints` | Hanging-node interpolation records (primal mesh only). |
 | `mNodePtrs` | `vector<Node::Pointer>` | Entity generation (lazy) | Entity generation | De-duplication cache: mesh-node index -> ModelPart Node. Null until the node is first needed. |
-| `mProjected` | `bool` | `BuildOctreeAndExtract` | `ClassifyCellsInsideOutside` | True when surface projection has been applied; triggers the classification short-circuit. |
+| `mProjected` | `bool` | `BuildOctreeAndExtract` | `OctreeHybridClassifyCellsInsideOutside` | True when surface projection has been applied; triggers the classification short-circuit. |
 
 `IsExtracted()` returns `true` once `mCells` is non-empty (i.e. after
 `BuildOctreeAndExtract` completes).
@@ -348,7 +348,7 @@ it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetDat
   regular dual hexes carry the octree level of their leaf cell.
 - **Full bounding-box block**: `ExtractDualHexMesh` alone produces a hex mesh
   covering the entire octree bounding box.  The inside/outside carving is done
-  separately by the coloring stage (`ClassifyCellsInsideOutside`) or by the
+  separately by the coloring stage (`OctreeHybridClassifyCellsInsideOutside`) or by the
   `project_to_surface` pass.
 
 **Refinement levels** on elements (accessible via the `REFINEMENT_LEVEL` variable
@@ -393,7 +393,7 @@ The weights are bilinear interpolation coefficients:
 | Face-centre | 4 | 0.25, 0.25, 0.25, 0.25 |
 
 One constraint is created per (hanging node, DOF variable) pair.  The `"variables"`
-parameter of `GenerateHangingNodeConstraints` lists which DOF variables to constrain
+parameter of `OctreeHybridGenerateHangingNodeConstraints` lists which DOF variables to constrain
 (default: `DISPLACEMENT_X`, `DISPLACEMENT_Y`, `DISPLACEMENT_Z`).
 
 **Properties:**
@@ -475,21 +475,21 @@ remaining keys are specific to the component and are described in
 
 ### 7.1 Coloring components
 
-#### `ClassifyCellsInsideOutside`
+#### `OctreeHybridClassifyCellsInsideOutside`
 
 Classifies every hex cell as inside (label 1) or outside (label 0) the input surface.
 
-**Registry path:** `OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype`
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype`
 
-**Class:** `Kratos::ClassifyCellsInsideOutside`
+**Class:** `Kratos::OctreeHybridClassifyCellsInsideOutside`
 
-**Header:** `kratos/modeler/coloring/classify_cells_inside_outside.h`
+**Header:** `kratos/modeler/coloring/octree_hybrid_classify_cells_inside_outside.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"ClassifyCellsInsideOutside"` | Registry lookup key. |
+| `type` | string | `"OctreeHybridClassifyCellsInsideOutside"` | Registry lookup key. |
 
 **Behaviour:**
 
@@ -505,29 +505,29 @@ Classifies every hex cell as inside (label 1) or outside (label 0) the input sur
 **Example JSON:**
 
 ```json
-{ "type": "ClassifyCellsInsideOutside" }
+{ "type": "OctreeHybridClassifyCellsInsideOutside" }
 ```
 
 ---
 
 ### 7.2 Entity-generation components
 
-#### `GenerateHexesByCellColor`
+#### `OctreeHybridGenerateHexesByCellColor`
 
 Creates one 8-noded hexahedral element per cell whose colour matches the configured
 value.
 
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHexesByCellColor.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHexesByCellColor.Prototype`
 
-**Class:** `Kratos::GenerateHexesByCellColor`
+**Class:** `Kratos::OctreeHybridGenerateHexesByCellColor`
 
-**Header:** `kratos/modeler/entity_generation/generate_hexes_by_cell_color.h`
+**Header:** `kratos/modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"GenerateHexesByCellColor"` | Registry lookup key. |
+| `type` | string | `"OctreeHybridGenerateHexesByCellColor"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
 | `color` | int | `1` | Cell-colour label to emit (e.g. `1` for inside cells). |
 | `properties_id` | int | `1` | Properties block ID assigned to every new element (created on demand). |
@@ -552,7 +552,7 @@ Kratos `Hexahedra3D8` local-node numbering, so no remapping is required.
 
 ```json
 {
-    "type"                : "GenerateHexesByCellColor",
+    "type"                : "OctreeHybridGenerateHexesByCellColor",
     "model_part_name"     : "FluidDomain",
     "color"               : 1,
     "properties_id"       : 1,
@@ -563,22 +563,22 @@ Kratos `Hexahedra3D8` local-node numbering, so no remapping is required.
 
 ---
 
-#### `GenerateBoundaryConditionsByFace`
+#### `OctreeHybridGenerateBoundaryConditionsByFace`
 
 Creates quadrilateral boundary conditions on the outer surface of the coloured hex
 mesh.
 
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateBoundaryConditionsByFace.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateBoundaryConditionsByFace.Prototype`
 
-**Class:** `Kratos::GenerateBoundaryConditionsByFace`
+**Class:** `Kratos::OctreeHybridGenerateBoundaryConditionsByFace`
 
-**Header:** `kratos/modeler/entity_generation/generate_boundary_conditions_by_face.h`
+**Header:** `kratos/modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"GenerateBoundaryConditionsByFace"` | Registry lookup key. |
+| `type` | string | `"OctreeHybridGenerateBoundaryConditionsByFace"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
 | `color` | int | `1` | Cell-colour label identifying the volume to extract the boundary of. |
 | `properties_id` | int | `1` | Properties block ID assigned to every new condition. |
@@ -600,7 +600,7 @@ Winding convention: outward normals follow the convention of `ExtractBoundaryFac
 
 ```json
 {
-    "type"             : "GenerateBoundaryConditionsByFace",
+    "type"             : "OctreeHybridGenerateBoundaryConditionsByFace",
     "model_part_name"  : "Boundary",
     "color"            : 1,
     "properties_id"    : 1,
@@ -610,21 +610,21 @@ Winding convention: outward normals follow the convention of `ExtractBoundaryFac
 
 ---
 
-#### `GenerateHangingNodeConstraints`
+#### `OctreeHybridGenerateHangingNodeConstraints`
 
 Creates `LinearMasterSlaveConstraint` objects for hanging nodes in the primal mesh.
 
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHangingNodeConstraints.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHangingNodeConstraints.Prototype`
 
-**Class:** `Kratos::GenerateHangingNodeConstraints`
+**Class:** `Kratos::OctreeHybridGenerateHangingNodeConstraints`
 
-**Header:** `kratos/modeler/entity_generation/generate_hanging_node_constraints.h`
+**Header:** `kratos/modeler/entity_generation/octree_hybrid_generate_hanging_node_constraints.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"GenerateHangingNodeConstraints"` | Registry lookup key. |
+| `type` | string | `"OctreeHybridGenerateHangingNodeConstraints"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | ModelPart to add constraints to (must already exist with the mesh nodes). |
 | `constraint_name` | string | `"LinearMasterSlaveConstraint"` | Registered constraint type to instantiate. |
 | `variables` | string array | `["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]` | Scalar DOF variables to constrain (each must be a registered `Variable<double>`). |
@@ -650,10 +650,10 @@ u_slave = w_0 * u_master_0 + w_1 * u_master_1 [+ w_2 * u_master_2 + w_3 * u_mast
 ```
 where the weights satisfy partition-of-unity (`sum(w_i) == 1.0`).
 
-**Prerequisite:** The primal hex-generation step (`GenerateHexesByCellColor` with
+**Prerequisite:** The primal hex-generation step (`OctreeHybridGenerateHexesByCellColor` with
 `mesh_type: "primal"`) must have run first so that `mData.mNodePtrs` is populated.
 
-**Prerequisite — coloring:** If a coloring stage (e.g. `ClassifyCellsInsideOutside`)
+**Prerequisite — coloring:** If a coloring stage (e.g. `OctreeHybridClassifyCellsInsideOutside`)
 was run before hex generation, only inside cells were created.  Hanging-node records
 whose slave or master nodes belong to carved-away outside cells are silently skipped;
 no error is thrown.
@@ -662,7 +662,7 @@ no error is thrown.
 
 ```json
 {
-    "type"            : "GenerateHangingNodeConstraints",
+    "type"            : "OctreeHybridGenerateHangingNodeConstraints",
     "model_part_name" : "FluidDomain",
     "constraint_name" : "LinearMasterSlaveConstraint",
     "variables"       : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
@@ -673,21 +673,21 @@ no error is thrown.
 
 ### 7.3 Operation components
 
-#### `ReportMeshQuality`
+#### `OctreeHybridReportMeshQuality`
 
 Logs scaled-Jacobian statistics for all hexahedral elements in a ModelPart.
 
-**Registry path:** `OctreeHybridMesherOperation.All.ReportMeshQuality.Prototype`
+**Registry path:** `OctreeHybridMesherOperation.All.OctreeHybridReportMeshQuality.Prototype`
 
-**Class:** `Kratos::ReportMeshQuality`
+**Class:** `Kratos::OctreeHybridReportMeshQuality`
 
-**Header:** `kratos/modeler/operation/report_mesh_quality.h`
+**Header:** `kratos/modeler/operation/octree_hybrid_report_mesh_quality.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"ReportMeshQuality"` | Registry lookup key. |
+| `type` | string | `"OctreeHybridReportMeshQuality"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the ModelPart to analyse. |
 
 **Behaviour:**
@@ -696,7 +696,7 @@ Iterates all elements in the ModelPart (elements with fewer or more than 8 nodes
 skipped silently).  For each 8-noded element, computes the minimum scaled Jacobian
 over the body centre and 8 corners using
 `OctreeHybridMeshUtility::ScaledJacobianMin`.  At the end, logs the following
-statistics at `INFO` level via `KRATOS_INFO("ReportMeshQuality")`:
+statistics at `INFO` level via `KRATOS_INFO("OctreeHybridReportMeshQuality")`:
 
 - `minSJ`: minimum scaled Jacobian across all elements (worst element quality).
 - `meanSJ`: arithmetic mean of per-element minimum scaled Jacobians.
@@ -708,7 +708,7 @@ This operation is purely read-only and does not modify any mesh entity.
 
 ```json
 {
-    "type"            : "ReportMeshQuality",
+    "type"            : "OctreeHybridReportMeshQuality",
     "model_part_name" : "FluidDomain"
 }
 ```
@@ -742,11 +742,11 @@ settings = KM.Parameters("""{
         "mesh_type"         : "dual"
     },
     "coloring_settings_list" : [
-        { "type" : "ClassifyCellsInsideOutside" }
+        { "type" : "OctreeHybridClassifyCellsInsideOutside" }
     ],
     "entities_generator_list" : [
         {
-            "type"             : "GenerateHexesByCellColor",
+            "type"             : "OctreeHybridGenerateHexesByCellColor",
             "model_part_name"  : "Volume",
             "color"            : 1,
             "properties_id"    : 1,
@@ -793,17 +793,17 @@ settings = KM.Parameters("""{
         "mesh_type"         : "primal"
     },
     "coloring_settings_list" : [
-        { "type" : "ClassifyCellsInsideOutside" }
+        { "type" : "OctreeHybridClassifyCellsInsideOutside" }
     ],
     "entities_generator_list" : [
         {
-            "type"            : "GenerateHexesByCellColor",
+            "type"            : "OctreeHybridGenerateHexesByCellColor",
             "model_part_name" : "Domain",
             "color"           : 1,
             "properties_id"   : 1
         },
         {
-            "type"            : "GenerateHangingNodeConstraints",
+            "type"            : "OctreeHybridGenerateHangingNodeConstraints",
             "model_part_name" : "Domain",
             "constraint_name" : "LinearMasterSlaveConstraint",
             "variables"       : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
@@ -811,7 +811,7 @@ settings = KM.Parameters("""{
     ],
     "model_part_operations" : [
         {
-            "type"            : "ReportMeshQuality",
+            "type"            : "OctreeHybridReportMeshQuality",
             "model_part_name" : "Domain"
         }
     ]
@@ -857,11 +857,11 @@ settings = KM.Parameters("""{
         "projection_smoothing" : 1000
     },
     "coloring_settings_list" : [
-        { "type" : "ClassifyCellsInsideOutside" }
+        { "type" : "OctreeHybridClassifyCellsInsideOutside" }
     ],
     "entities_generator_list" : [
         {
-            "type"             : "GenerateHexesByCellColor",
+            "type"             : "OctreeHybridGenerateHexesByCellColor",
             "model_part_name"  : "Volume",
             "color"            : 1,
             "properties_id"    : 1,
@@ -870,7 +870,7 @@ settings = KM.Parameters("""{
     ],
     "model_part_operations" : [
         {
-            "type"            : "ReportMeshQuality",
+            "type"            : "OctreeHybridReportMeshQuality",
             "model_part_name" : "Volume"
         }
     ]
@@ -891,7 +891,7 @@ no ray-casting occurs.
 
 ### 8.4 Boundary conditions on the exterior surface
 
-Combine `GenerateHexesByCellColor` and `GenerateBoundaryConditionsByFace` to populate
+Combine `OctreeHybridGenerateHexesByCellColor` and `OctreeHybridGenerateBoundaryConditionsByFace` to populate
 both a volume ModelPart and a boundary ModelPart in a single `SetupModelPart` call.
 
 ```python
@@ -904,17 +904,17 @@ settings = KM.Parameters("""{
         "mesh_type"        : "dual"
     },
     "coloring_settings_list" : [
-        { "type" : "ClassifyCellsInsideOutside" }
+        { "type" : "OctreeHybridClassifyCellsInsideOutside" }
     ],
     "entities_generator_list" : [
         {
-            "type"            : "GenerateHexesByCellColor",
+            "type"            : "OctreeHybridGenerateHexesByCellColor",
             "model_part_name" : "Volume",
             "color"           : 1,
             "properties_id"   : 1
         },
         {
-            "type"             : "GenerateBoundaryConditionsByFace",
+            "type"             : "OctreeHybridGenerateBoundaryConditionsByFace",
             "model_part_name"  : "Boundary",
             "color"            : 1,
             "properties_id"    : 1,
@@ -926,20 +926,20 @@ settings = KM.Parameters("""{
 ```
 
 The `Boundary` ModelPart will contain the exterior quad conditions and the shared
-nodes; nodes created first by `GenerateHexesByCellColor` are reused (not duplicated)
-by `GenerateBoundaryConditionsByFace` through the `mNodePtrs` de-duplication cache.
+nodes; nodes created first by `OctreeHybridGenerateHexesByCellColor` are reused (not duplicated)
+by `OctreeHybridGenerateBoundaryConditionsByFace` through the `mNodePtrs` de-duplication cache.
 
 ---
 
 ### 8.5 Quality report
 
-Add `ReportMeshQuality` to the operations list to print scaled-Jacobian statistics
+Add `OctreeHybridReportMeshQuality` to the operations list to print scaled-Jacobian statistics
 after mesh generation.  It runs last and does not alter the mesh.
 
 ```json
 "model_part_operations" : [
     {
-        "type"            : "ReportMeshQuality",
+        "type"            : "OctreeHybridReportMeshQuality",
         "model_part_name" : "Volume"
     }
 ]
@@ -948,7 +948,7 @@ after mesh generation.  It runs last and does not alter the mesh.
 Expected log output (example, depth-4 dual box mesh):
 
 ```
-[ReportMeshQuality] minSJ=0.472  meanSJ=0.891  inverted=0 (0.0%)
+[OctreeHybridReportMeshQuality] minSJ=0.472  meanSJ=0.891  inverted=0 (0.0%)
 ```
 
 ---
@@ -1196,8 +1196,8 @@ and a small inclined-patch surface that forces 2:1 transitions.
 | `test_dual_mesh_zero_inverted` | All hexes have minimum scaled Jacobian > 0 (no inverted elements). |
 | `test_dual_mesh_carve_bbox_inside_surface` | Output node bounding box lies within one half-cell margin of the input surface box (carve respected). |
 | `test_dual_mesh_refinement_level_tagged` | `REFINEMENT_LEVEL` is set on every element; at least one positive level and at least one `-1` (template hexes) are present. |
-| `test_boundary_conditions_created` | `GenerateBoundaryConditionsByFace` creates a non-empty `Boundary` ModelPart alongside the volume. |
-| `test_quality_report_operation` | `ReportMeshQuality` runs without error; the resulting ModelPart is non-empty. |
+| `test_boundary_conditions_created` | `OctreeHybridGenerateBoundaryConditionsByFace` creates a non-empty `Boundary` ModelPart alongside the volume. |
+| `test_quality_report_operation` | `OctreeHybridReportMeshQuality` runs without error; the resulting ModelPart is non-empty. |
 
 ### `TestOctreeHybridMesherModelerPrimal`
 
@@ -1230,7 +1230,7 @@ are automatically skipped when the STL is absent.
    `mesh_type: "dual"` with `project_to_surface: true` for a surface-fitted boundary.
 
 2. **Classification carve count differs slightly from the reference.** The
-   `ClassifyCellsInsideOutside` pass uses a pseudo-random ray direction for the
+   `OctreeHybridClassifyCellsInsideOutside` pass uses a pseudo-random ray direction for the
    inside/outside parity test.  The ray sequence is not bit-reproducible across
    implementations (the retry logic regenerates the direction when a triangle is hit
    edge-on), so the carve keeps slightly fewer or more surface-band cells than the
@@ -1262,9 +1262,9 @@ are automatically skipped when the STL is absent.
    §13.2 for a detailed explanation.
 
 7. **Coloring required before entity generation.** Even when `project_to_surface:
-   true` (which already removes outside cells), `ClassifyCellsInsideOutside` must
+   true` (which already removes outside cells), `OctreeHybridClassifyCellsInsideOutside` must
    still appear in `coloring_settings_list` so that `mCellColor` is populated.
-   `GenerateHexesByCellColor` filters on `mCellColor` and will produce no elements
+   `OctreeHybridGenerateHexesByCellColor` filters on `mCellColor` and will produce no elements
    if the color array is empty.
 
 ---

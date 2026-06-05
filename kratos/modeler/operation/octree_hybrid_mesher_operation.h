@@ -53,7 +53,7 @@ class OctreeHybridMesherModeler;
  * - Register with the two `KRATOS_REGISTRY_ADD_PROTOTYPE` macros in the `private` section.
  *
  * @see OctreeHybridMesherModeler
- * @see ReportMeshQuality
+ * @see OctreeHybridReportMeshQuality
  * @author Vicente Mataix Ferrandiz
  */
 class KRATOS_API(KRATOS_CORE) OctreeHybridMesherOperation

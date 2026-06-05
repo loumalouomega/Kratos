@@ -15,7 +15,7 @@
 // External includes
 
 // Project includes
-#include "modeler/coloring/classify_cells_inside_outside.h"
+#include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
@@ -23,20 +23,20 @@
 namespace Kratos {
 
 /**
- * @brief Returns the default JSON parameter schema for @ref ClassifyCellsInsideOutside.
+ * @brief Returns the default JSON parameter schema for @ref OctreeHybridClassifyCellsInsideOutside.
  * @details The schema contains a single key:
- *   - `"type"` (`string`, default `"ClassifyCellsInsideOutside"`): the Registry type
+ *   - `"type"` (`string`, default `"OctreeHybridClassifyCellsInsideOutside"`): the Registry type
  *     token consumed by `OctreeHybridMesherModeler::Dispatch`.
  *
  *   No further configuration keys are required because all classification data
  *   (triangle soup, node coordinates, hex connectivity) are already stored in the
  *   shared @ref OctreeHybridMesherData object accessible through the modeler.
- * @return Parameters object with key `"type"` set to `"ClassifyCellsInsideOutside"`.
+ * @return Parameters object with key `"type"` set to `"OctreeHybridClassifyCellsInsideOutside"`.
  */
-const Parameters ClassifyCellsInsideOutside::GetDefaultParameters() const
+const Parameters OctreeHybridClassifyCellsInsideOutside::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type" : "ClassifyCellsInsideOutside"
+        "type" : "OctreeHybridClassifyCellsInsideOutside"
     })");
 }
 
@@ -76,7 +76,7 @@ const Parameters ClassifyCellsInsideOutside::GetDefaultParameters() const
  * @see OctreeHybridMesherData::mCellColor
  * @see OctreeHybridMesherData::mProjected
  */
-void ClassifyCellsInsideOutside::Apply(OctreeHybridMesherModeler& rModeler, Parameters) const
+void OctreeHybridClassifyCellsInsideOutside::Apply(OctreeHybridMesherModeler& rModeler, Parameters) const
 {
     auto& r_data = rModeler.GetData();
 

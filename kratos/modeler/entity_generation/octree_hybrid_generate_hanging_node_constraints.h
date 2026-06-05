@@ -25,7 +25,7 @@ namespace Kratos {
 ///@{
 
 /**
- * @class GenerateHangingNodeConstraints
+ * @class OctreeHybridGenerateHangingNodeConstraints
  * @ingroup KratosCore
  * @brief Entity-generation component that creates `LinearMasterSlaveConstraint`s for
  *        hanging nodes in the primal (leaf-hex) octree mesh.
@@ -50,7 +50,7 @@ namespace Kratos {
  * and 4 for a face-centre hanging node.
  *
  * ### Prerequisite
- * The primal hex-generation step (i.e. `GenerateHexesByCellColor` with
+ * The primal hex-generation step (i.e. `OctreeHybridGenerateHexesByCellColor` with
  * `mesh_type = "primal"`) must have already run so that `mData.mNodePtrs` is fully
  * populated.  A hanging node or master node that has no entry in `mNodePtrs` (e.g.
  * because it belongs to a carved-away outside cell) is silently skipped together with
@@ -73,7 +73,7 @@ namespace Kratos {
  * ### Parameters schema
  * | Key                | Type         | Default                                          | Description                                       |
  * |--------------------|--------------|--------------------------------------------------|---------------------------------------------------|
- * | `type`             | string       | `"GenerateHangingNodeConstraints"`               | Registry lookup key.                              |
+ * | `type`             | string       | `"OctreeHybridGenerateHangingNodeConstraints"`               | Registry lookup key.                              |
  * | `model_part_name`  | string       | `"Undefined"`                                    | ModelPart to add constraints to.                  |
  * | `constraint_name`  | string       | `"LinearMasterSlaveConstraint"`                  | Registered constraint type to instantiate.        |
  * | `variables`        | string array | `["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]` | Scalar DOF variables to constrain.          |
@@ -85,20 +85,20 @@ namespace Kratos {
  * @see OctreeHybridMesherData::mHanging
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHangingNodeConstraints : public OctreeHybridMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) OctreeHybridGenerateHangingNodeConstraints : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    GenerateHangingNodeConstraints() = default;
+    OctreeHybridGenerateHangingNodeConstraints() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The instance to copy.  No data members to copy in this class.
      */
-    GenerateHangingNodeConstraints(GenerateHangingNodeConstraints const& rOther) {}
+    OctreeHybridGenerateHangingNodeConstraints(OctreeHybridGenerateHangingNodeConstraints const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -134,7 +134,7 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"            : "GenerateHangingNodeConstraints",
+     *     "type"            : "OctreeHybridGenerateHangingNodeConstraints",
      *     "model_part_name" : "Undefined",
      *     "constraint_name" : "LinearMasterSlaveConstraint",
      *     "variables"       : ["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]
@@ -150,9 +150,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHangingNodeConstraints)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateHangingNodeConstraints)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHangingNodeConstraints)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateHangingNodeConstraints)
 
     ///@}
 };

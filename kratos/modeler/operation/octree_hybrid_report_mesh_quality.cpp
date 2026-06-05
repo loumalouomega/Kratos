@@ -17,23 +17,23 @@
 
 // Project includes
 #include "includes/element.h"
-#include "modeler/operation/report_mesh_quality.h"
+#include "modeler/operation/octree_hybrid_report_mesh_quality.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
 
 /**
- * @brief Returns the default parameter schema for @ref ReportMeshQuality.
+ * @brief Returns the default parameter schema for @ref OctreeHybridReportMeshQuality.
  * @details The schema contains:
- * - `"type"` — the Registry lookup key, fixed to `"ReportMeshQuality"`.
+ * - `"type"` — the Registry lookup key, fixed to `"OctreeHybridReportMeshQuality"`.
  * - `"model_part_name"` — name of the ModelPart to evaluate; must be set by the caller.
  * @return Parameters with both keys and their default values.
  */
-const Parameters ReportMeshQuality::GetDefaultParameters() const
+const Parameters OctreeHybridReportMeshQuality::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"             : "ReportMeshQuality",
+        "type"             : "OctreeHybridReportMeshQuality",
         "model_part_name"  : "Undefined"
     })");
 }
@@ -52,7 +52,7 @@ const Parameters ReportMeshQuality::GetDefaultParameters() const
  * 4. Global minimum (`sj_min`), running sum (`sj_sum`), and inverted-element count
  *    (`n_inverted`, i.e. elements with scaled Jacobian <= 0) are accumulated.
  * 5. After the loop the statistics — minimum, mean, and inverted count with percentage
- *    — are logged via `KRATOS_INFO("ReportMeshQuality")`.
+ *    — are logged via `KRATOS_INFO("OctreeHybridReportMeshQuality")`.
  *
  * Elements with a number of nodes other than 8 are silently skipped so that mixed
  * ModelParts (e.g. containing surfaces or lower-order elements) do not cause errors.
@@ -62,14 +62,14 @@ const Parameters ReportMeshQuality::GetDefaultParameters() const
  * @param OperationParameters Validated JSON parameters; must contain `"model_part_name"`
  *                            with the name of an existing ModelPart.
  */
-void ReportMeshQuality::Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const
+void OctreeHybridReportMeshQuality::Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const
 {
     ModelPart& r_mp = rModeler.GetModel().GetModelPart(
         OperationParameters["model_part_name"].GetString());
 
     const int n = static_cast<int>(r_mp.NumberOfElements());
     if (n == 0) {
-        KRATOS_INFO("ReportMeshQuality")
+        KRATOS_INFO("OctreeHybridReportMeshQuality")
             << r_mp.FullName() << ": no elements." << std::endl;
         return;
     }
@@ -97,7 +97,7 @@ void ReportMeshQuality::Execute(OctreeHybridMesherModeler& rModeler, Parameters 
 
     const double sj_mean = sj_sum / n;
 
-    KRATOS_INFO("ReportMeshQuality")
+    KRATOS_INFO("OctreeHybridReportMeshQuality")
         << r_mp.FullName() << " (" << n << " hexes): "
         << "minSJ=" << sj_min
         << "  meanSJ=" << sj_mean

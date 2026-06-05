@@ -18,30 +18,30 @@
 #include "containers/model.h"
 #include "includes/variables.h"
 #include "linear_solvers/linear_solver.h"
-#include "modeler/entity_generation/generate_hanging_node_constraints.h"
+#include "modeler/entity_generation/octree_hybrid_generate_hanging_node_constraints.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos {
 
-const Parameters GenerateHangingNodeConstraints::GetDefaultParameters() const
+const Parameters OctreeHybridGenerateHangingNodeConstraints::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"             : "GenerateHangingNodeConstraints",
+        "type"             : "OctreeHybridGenerateHangingNodeConstraints",
         "model_part_name"  : "Undefined",
         "constraint_name"  : "LinearMasterSlaveConstraint",
         "variables"        : ["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]
     })");
 }
 
-void GenerateHangingNodeConstraints::Generate(
+void OctreeHybridGenerateHangingNodeConstraints::Generate(
     OctreeHybridMesherModeler& rModeler,
     Parameters GenerationParameters) const
 {
     auto& r_data = rModeler.GetData();
 
     KRATOS_ERROR_IF(r_data.mHanging.empty() && r_data.mCells.empty())
-        << "GenerateHangingNodeConstraints: no primal mesh data. "
+        << "OctreeHybridGenerateHangingNodeConstraints: no primal mesh data. "
         << "Set mesh_type to 'primal' on the octree_generator." << std::endl;
 
     if (r_data.mHanging.empty()) return;  // all-same-level mesh — no transitions
@@ -59,7 +59,7 @@ void GenerateHangingNodeConstraints::Generate(
     for (int vi = 0; vi < n_vars; ++vi) {
         const std::string& vname = r_var_list[vi].GetString();
         KRATOS_ERROR_IF_NOT(KratosComponents<Variable<double>>::Has(vname))
-            << "GenerateHangingNodeConstraints: variable '" << vname
+            << "OctreeHybridGenerateHangingNodeConstraints: variable '" << vname
             << "' is not registered as a scalar variable." << std::endl;
         vars[vi] = &KratosComponents<Variable<double>>::Get(vname);
     }

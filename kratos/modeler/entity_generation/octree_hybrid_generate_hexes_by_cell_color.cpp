@@ -19,20 +19,20 @@
 #include "includes/kratos_components.h"
 #include "includes/variables.h"
 #include "utilities/model_part_utils.h"
-#include "modeler/entity_generation/generate_hexes_by_cell_color.h"
+#include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos {
 
 /**
- * @brief Returns the default JSON parameter schema for @ref GenerateHexesByCellColor.
+ * @brief Returns the default JSON parameter schema for @ref OctreeHybridGenerateHexesByCellColor.
  * @details The schema defines all configuration keys accepted by the @ref Generate
  *          method with their default values:
  *
  *   | Key                    | Type    | Default              | Description |
  *   |------------------------|---------|----------------------|-------------|
- *   | `"type"`               | string  | `"GenerateHexesByCellColor"` | Registry type token. |
+ *   | `"type"`               | string  | `"OctreeHybridGenerateHexesByCellColor"` | Registry type token. |
  *   | `"model_part_name"`    | string  | `"Undefined"`        | Target ModelPart; created if absent. |
  *   | `"color"`              | int     | `1`                  | Cell-colour value to select (1 == inside). |
  *   | `"properties_id"`      | int     | `1`                  | Properties block ID for generated elements. |
@@ -41,10 +41,10 @@ namespace Kratos {
  *
  * @return Parameters object with all keys set to their defaults.
  */
-const Parameters GenerateHexesByCellColor::GetDefaultParameters() const
+const Parameters OctreeHybridGenerateHexesByCellColor::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type" : "GenerateHexesByCellColor",
+        "type" : "OctreeHybridGenerateHexesByCellColor",
         "model_part_name" : "Undefined",
         "color" : 1,
         "properties_id" : 1,
@@ -113,7 +113,7 @@ const Parameters GenerateHexesByCellColor::GetDefaultParameters() const
  * @see OctreeHybridMesherData::mCellLevel
  * @see ModelPartUtils::AddNodesFromOrderedContainer
  */
-void GenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const
+void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const
 {
     auto& r_data = rModeler.GetData();
     ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());

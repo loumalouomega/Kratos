@@ -25,7 +25,7 @@ namespace Kratos {
 ///@{
 
 /**
- * @class ClassifyCellsInsideOutside
+ * @class OctreeHybridClassifyCellsInsideOutside
  * @ingroup KratosCore
  * @brief Colouring stage that labels every extracted hex cell as inside (1) or outside (0)
  *        the input surface mesh.
@@ -53,7 +53,7 @@ namespace Kratos {
  * ### Usage
  * Add the following block to the `"colorings"` list in the modeler JSON parameters:
  * @code{.json}
- * { "type" : "ClassifyCellsInsideOutside" }
+ * { "type" : "OctreeHybridClassifyCellsInsideOutside" }
  * @endcode
  *
  * @note This stage must run **after** the octree has been built and the hex mesh
@@ -62,24 +62,24 @@ namespace Kratos {
  *
  * @see OctreeHybridMesherColoring
  * @see OctreeHybridMesherEntityGeneration
- * @see GenerateHexesByCellColor
+ * @see OctreeHybridGenerateHexesByCellColor
  * @see OctreeHybridMeshUtility::ClassifyInsideOutside
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) ClassifyCellsInsideOutside : public OctreeHybridMesherColoring
+class KRATOS_API(KRATOS_CORE) OctreeHybridClassifyCellsInsideOutside : public OctreeHybridMesherColoring
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    ClassifyCellsInsideOutside() = default;
+    OctreeHybridClassifyCellsInsideOutside() = default;
 
     /**
      * @brief Copy constructor (no-op body — this class carries no state).
      * @param rOther Source instance; no data is copied.
      */
-    ClassifyCellsInsideOutside(ClassifyCellsInsideOutside const& rOther) {}
+    OctreeHybridClassifyCellsInsideOutside(OctreeHybridClassifyCellsInsideOutside const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -104,12 +104,12 @@ public:
     /**
      * @brief Returns the default parameter schema for this colouring stage.
      * @details The schema contains only the mandatory `"type"` key set to
-     *          `"ClassifyCellsInsideOutside"`.  No additional configuration is
+     *          `"OctreeHybridClassifyCellsInsideOutside"`.  No additional configuration is
      *          needed because the classification is fully driven by the shared
      *          octree data already stored in the modeler.
      * @return Parameters object:
      * @code{.json}
-     * { "type" : "ClassifyCellsInsideOutside" }
+     * { "type" : "OctreeHybridClassifyCellsInsideOutside" }
      * @endcode
      */
     const Parameters GetDefaultParameters() const override;
@@ -119,10 +119,10 @@ private:
     ///@name Registry
     ///@{
 
-    /// Registers this class at path "OctreeHybridMesherColoring.KratosMultiphysics.ClassifyCellsInsideOutside.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.KratosMultiphysics", OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
-    /// Registers this class at path "OctreeHybridMesherColoring.All.ClassifyCellsInsideOutside.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.All", OctreeHybridMesherColoring, ClassifyCellsInsideOutside)
+    /// Registers this class at path "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridClassifyCellsInsideOutside.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.KratosMultiphysics", OctreeHybridMesherColoring, OctreeHybridClassifyCellsInsideOutside)
+    /// Registers this class at path "OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherColoring.All", OctreeHybridMesherColoring, OctreeHybridClassifyCellsInsideOutside)
 
     ///@}
 };
