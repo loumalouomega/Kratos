@@ -9,7 +9,6 @@ or under the Kratos test runner.
 
 import os
 import sys
-import struct
 import unittest
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -75,26 +74,9 @@ def build_transition_surface(model, name="Surface"):
     return mp
 
 
-def load_bunny_ascii():
+def _get_bunny_stl_path():
     bunny = os.path.join(script_dir, "auxiliar_files_for_python_unittest", "stl_files", "Bunny-LowPoly.stl")
-    if not os.path.exists(bunny): return None
-    try:
-        with open(bunny,"rb") as f: f.read(80); n=struct.unpack("<I",f.read(4))[0]
-    except Exception: return None
-    tmp = os.path.join(script_dir, "_bunny_modeler_test.stl")
-    with open(bunny,"rb") as f:
-        f.read(84)
-        with open(tmp,"w") as out:
-            out.write("solid s\n")
-            for _ in range(n):
-                f.read(12)
-                out.write("facet normal 0 0 1\n outer loop\n")
-                for _ in range(3):
-                    x,y,z = struct.unpack("<fff", f.read(12))
-                    out.write(f"  vertex {x} {y} {z}\n")
-                f.read(2); out.write(" endloop\nendfacet\n")
-            out.write("endsolid s\n")
-    return tmp
+    return bunny if os.path.exists(bunny) else None
 
 
 # ---------------------------------------------------------------------------
@@ -279,13 +261,9 @@ class TestOctreeHybridMesherModelerBunny(unittest.TestCase):
     """Tests using the low-poly Stanford Bunny surface (skipped if absent)."""
 
     def setUp(self):
-        self.stl = load_bunny_ascii()
+        self.stl = _get_bunny_stl_path()
         if self.stl is None:
             self.skipTest("Bunny-LowPoly.stl not available")
-
-    def tearDown(self):
-        if self.stl and os.path.exists(self.stl):
-            os.remove(self.stl)
 
     def _load_surface(self, model, name="BunnySurface"):
         mp = model.CreateModelPart(name)
