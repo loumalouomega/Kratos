@@ -17,7 +17,6 @@
 // Project includes
 #include "containers/model.h"
 #include "includes/variables.h"
-#include "linear_solvers/linear_solver.h"
 #include "modeler/entity_generation/octree_hybrid_generate_hanging_node_constraints.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
@@ -30,7 +29,7 @@ const Parameters OctreeHybridGenerateHangingNodeConstraints::GetDefaultParameter
         "type"             : "OctreeHybridGenerateHangingNodeConstraints",
         "model_part_name"  : "Undefined",
         "constraint_name"  : "LinearMasterSlaveConstraint",
-        "variables"        : ["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]
+        "variables"        : []
     })");
 }
 
