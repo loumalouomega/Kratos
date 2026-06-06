@@ -20,7 +20,8 @@
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
 
-namespace Kratos {
+namespace Kratos 
+{
 
 const Parameters OctreeHybridClassifyCellsInsideOutside::GetDefaultParameters() const
 {
@@ -28,6 +29,9 @@ const Parameters OctreeHybridClassifyCellsInsideOutside::GetDefaultParameters() 
         "type" : "OctreeHybridClassifyCellsInsideOutside"
     })");
 }
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 void OctreeHybridClassifyCellsInsideOutside::Apply(OctreeHybridMesherModeler& rModeler, Parameters) const
 {
