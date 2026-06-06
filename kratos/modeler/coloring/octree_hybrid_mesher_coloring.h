@@ -17,13 +17,13 @@
 // External includes
 
 // Project includes
-#include "includes/define.h"
 #include "includes/kratos_parameters.h"
 #include "includes/registry.h"
 #include "includes/registry_item.h"
 #include "includes/define_registry.h"
 
-namespace Kratos {
+namespace Kratos 
+{
 
 ///@name Kratos Classes
 ///@{

@@ -25,16 +25,6 @@
 
 namespace Kratos {
 
-/**
- * @brief Returns the default parameter schema for @ref OctreeHybridGenerateBoundaryConditionsByFace.
- * @details The schema contains:
- * - `"type"` — the Registry lookup key, fixed to `"OctreeHybridGenerateBoundaryConditionsByFace"`.
- * - `"model_part_name"` — name of the ModelPart in which conditions are created.
- * - `"color"` — integer cell-colour label identifying inside cells (default `1`).
- * - `"properties_id"` — ID of the Properties object assigned to each new condition.
- * - `"generated_entity"` — registered Condition type name to instantiate per face.
- * @return Parameters with all accepted keys and their default values.
- */
 const Parameters OctreeHybridGenerateBoundaryConditionsByFace::GetDefaultParameters() const
 {
     return Parameters(R"({
