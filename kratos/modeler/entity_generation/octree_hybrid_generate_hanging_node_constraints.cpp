@@ -21,7 +21,8 @@
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
-namespace Kratos {
+namespace Kratos 
+{
 
 const Parameters OctreeHybridGenerateHangingNodeConstraints::GetDefaultParameters() const
 {
