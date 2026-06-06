@@ -13,13 +13,11 @@
 #pragma once
 
 // System includes
-#include <memory>
-#include <string>
 
 // External includes
 
 // Project includes
-#include "includes/model_part.h"
+#include "containers/model.h"
 #include "includes/registry.h"
 #include "modeler/modeler.h"
 #include "utilities/string_utilities.h"

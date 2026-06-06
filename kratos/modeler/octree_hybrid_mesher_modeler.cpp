@@ -30,6 +30,10 @@ OctreeHybridMesherModeler::OctreeHybridMesherModeler()
 {
 }
 
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 OctreeHybridMesherModeler::OctreeHybridMesherModeler(
     Model& rModel,
     Parameters ModelerParameters)
@@ -42,12 +46,24 @@ OctreeHybridMesherModeler::OctreeHybridMesherModeler(
         GetDefaultParameters()["octree_generator"]);
 }
 
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 OctreeHybridMesherModeler::~OctreeHybridMesherModeler() = default;
+
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 Internals::OctreeHybridMesherData& OctreeHybridMesherModeler::GetData()
 {
     return *mpData;
 }
+
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 const Parameters OctreeHybridMesherModeler::GetDefaultParameters() const
 {
@@ -71,12 +87,19 @@ const Parameters OctreeHybridMesherModeler::GetDefaultParameters() const
     })");
 }
 
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 ModelPart& OctreeHybridMesherModeler::CreateAndGetModelPart(const std::string& rFullName)
 {
     return mpModel->HasModelPart(rFullName)
         ? mpModel->GetModelPart(rFullName)
         : mpModel->CreateModelPart(rFullName);
 }
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 void OctreeHybridMesherModeler::SetStartIds(ModelPart& rModelPart)
 {
@@ -90,6 +113,9 @@ void OctreeHybridMesherModeler::SetStartIds(ModelPart& rModelPart)
     const std::size_t mpc_proposal = r_root.MasterSlaveConstraints().empty() ? 1 : r_root.MasterSlaveConstraints().back().Id() + 1;
     mStartConstraintId = std::max(mpc_proposal, mStartConstraintId == 0 ? std::size_t(1) : mStartConstraintId);
 }
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 Node::Pointer OctreeHybridMesherModeler::GenerateOrRetrieveNode(
     ModelPart& rModelPart,
@@ -109,6 +135,9 @@ Node::Pointer OctreeHybridMesherModeler::GenerateOrRetrieveNode(
     rNewNodes.push_back(p_node);
     return p_node;
 }
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 void OctreeHybridMesherModeler::BuildOctreeAndExtract()
 {
@@ -152,6 +181,9 @@ void OctreeHybridMesherModeler::BuildOctreeAndExtract()
 
     r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
 }
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 void OctreeHybridMesherModeler::SetupModelPart()
 {
