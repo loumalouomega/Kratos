@@ -640,7 +640,6 @@ The plain-dual pass (Stage 4) then skips any vertex `v` where `consumed[v] == tr
 | Surface projection | `ProjectToIsoSurface` (analytic gradient descent) | Ported (`BuildCarveProjectAndWriteVtk`): buffer-zone meshing + finite-difference Jacobian control + gated smoothing + gradual threshold escalation; reproduces the reference's quality distribution and lifts the worst element off the untangling gate (§13.2) |
 | Coordinate system | Normalised to `[0,100]^3` | Octree in `[0,1]^3`; the projector renormalises to `[0,100]` internally so the reference's optimiser constants apply |
 | Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
-| Output format | World coordinates via `BOX_LENGTH_RATIO` | World coordinates via `ScaleBackToOriginalCoordinate` |
 
 ### 6.2 Node-merge spatial hash
 
