@@ -13,9 +13,6 @@
 #pragma once
 
 // System includes
-#include <array>
-#include <memory>
-#include <vector>
 
 // External includes
 
@@ -23,7 +20,8 @@
 #include "includes/node.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
 
-namespace Kratos::Internals {
+namespace Kratos::Internals 
+{
 
 ///@name Kratos Classes
 ///@{
