@@ -1169,7 +1169,9 @@ private:
 
 ## 11. Testing
 
-The test suite lives at:
+### Python tests
+
+The Python test suite lives at:
 
 ```
 kratos/tests/test_octree_hybrid_mesher_modeler.py
@@ -1181,44 +1183,170 @@ It can be run directly:
 PYTHONPATH=/path/to/build/Release python3 kratos/tests/test_octree_hybrid_mesher_modeler.py
 ```
 
-or under the Kratos test runner.
+or under the Kratos test runner.  The file contains nine test classes.
 
-The file contains three test classes:
+#### `TestOctreeHybridMesherModelerDual`
 
-### `TestOctreeHybridMesherModelerDual`
-
-Tests for the dual (conforming) hex mesh path using a synthetic closed-box surface
-and a small inclined-patch surface that forces 2:1 transitions.
+Tests for the dual (conforming) hex mesh path using a synthetic closed-box surface.
 
 | Test | Assertion |
 |------|-----------|
 | `test_dual_mesh_elements_created` | `SetupModelPart` produces a non-empty hex ModelPart (elements > 0, nodes > 0). |
 | `test_dual_mesh_zero_inverted` | All hexes have minimum scaled Jacobian > 0 (no inverted elements). |
 | `test_dual_mesh_carve_bbox_inside_surface` | Output node bounding box lies within one half-cell margin of the input surface box (carve respected). |
-| `test_dual_mesh_refinement_level_tagged` | `REFINEMENT_LEVEL` is set on every element; at least one positive level and at least one `-1` (template hexes) are present. |
+| `test_dual_mesh_refinement_level_tagged` | At least one element has `REFINEMENT_LEVEL > 0` (regular dual hexes carry their octree level). |
 | `test_boundary_conditions_created` | `OctreeHybridGenerateBoundaryConditionsByFace` creates a non-empty `Boundary` ModelPart alongside the volume. |
 | `test_quality_report_operation` | `OctreeHybridReportMeshQuality` runs without error; the resulting ModelPart is non-empty. |
 
-### `TestOctreeHybridMesherModelerPrimal`
+#### `TestOctreeHybridMesherModelerPrimal`
 
 Tests for the primal (leaf-hex + hanging-node constraints) path.
 
 | Test | Assertion |
 |------|-----------|
 | `test_primal_elements_created` | Primal mesh with `adaptive: true` produces elements and nodes. |
-| `test_primal_constraints_count` | At least one hanging-node constraint is generated at 2:1 transitions; with 2 configured variables the count is at least 2. |
+| `test_primal_constraints_count` | At least one hanging-node constraint is generated at 2:1 transitions. |
 | `test_primal_constraint_row_sum` | Every constraint's relation matrix sums to 1.0 (partition of unity), verified to within `1e-10`. |
-| `test_primal_constraint_master_counts` | Every constraint has exactly 2 masters (edge-midpoint) or 4 masters (face-centre) — no other master counts are permitted. |
+| `test_primal_constraint_master_counts` | Every constraint has exactly 2 masters (edge-midpoint) or 4 masters (face-centre). |
 
-### `TestOctreeHybridMesherModelerBunny`
+#### `TestOctreeHybridMesherModelerBunny`
 
-Tests using the low-poly Stanford Bunny surface (`Bunny-LowPoly.stl`).  These tests
-are automatically skipped when the STL is absent.
+Tests using the low-poly Stanford Bunny surface (`Bunny-LowPoly.stl`).  Automatically skipped when the STL is absent.
 
 | Test | Assertion |
 |------|-----------|
 | `test_dual_bunny_zero_inverted` | Dual mesh at depth 4 produces a non-empty ModelPart with 0 inverted hexes. |
 | `test_primal_bunny_constraints_row_sum` | Primal mesh of the bunny at depth 4: all hanging-node constraints satisfy partition of unity. |
+
+#### `TestClassifyCellsInsideOutside`
+
+Unit tests for the `OctreeHybridClassifyCellsInsideOutside` coloring component.
+
+| Test | Assertion |
+|------|-----------|
+| `test_produces_inside_and_outside_colors` | Running the classifier reduces the element count vs. the unfiltered full block; the inside set is strictly smaller but non-empty. |
+| `test_projected_shortcut_all_cells_inside` | With `project_to_surface: true` the short-circuit path fires: all surviving cells receive `color = 1`. |
+| `test_default_type_name` | The Registry path `OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype` exists. |
+| `test_unknown_coloring_type_raises` | A non-existent coloring type name triggers a clear error. |
+
+#### `TestGenerateHexesByCellColor`
+
+Unit tests for the `OctreeHybridGenerateHexesByCellColor` entity-generation component.
+
+| Test | Assertion |
+|------|-----------|
+| `test_positive_element_count` | At least one element and one node are created. |
+| `test_color_filter_inside` | `color = 1` produces fewer elements than omitting the coloring stage (the inside-only carve is smaller than the full block). |
+| `test_zero_inverted_elements` | All hexes have positive scaled Jacobian. |
+| `test_refinement_level_tagged` | With `tag_refinement_level: true` at least one element has `REFINEMENT_LEVEL > 0`. |
+| `test_refinement_level_not_tagged` | With `tag_refinement_level: false` all elements show the default value `0`. |
+| `test_node_deduplication` | Node count is strictly less than 8 × element count (nodes are shared across adjacent elements). |
+| `test_node_ids_contiguous_from_one` | Node ids are unique and start from 1. |
+| `test_element_ids_contiguous_from_one` | Element ids are unique and start from 1. |
+| `test_registry_path_exists` | The Registry path for `OctreeHybridGenerateHexesByCellColor` exists. |
+| `test_unknown_entity_type_raises` | A non-existent `generated_entity` type name triggers a clear error. |
+
+#### `TestGenerateBoundaryConditionsByFace`
+
+Unit tests for the `OctreeHybridGenerateBoundaryConditionsByFace` entity-generation component.
+
+| Test | Assertion |
+|------|-----------|
+| `test_conditions_created` | At least one boundary condition is created. |
+| `test_boundary_nodes_populated` | The boundary ModelPart contains at least one node. |
+| `test_boundary_nodes_subset_of_volume_nodes` | Every boundary node id also exists in the volume mesh (nodes are shared, not duplicated). |
+| `test_condition_ids_contiguous` | Condition ids are unique and start from 1. |
+| `test_each_condition_has_four_nodes` | Every boundary condition has exactly 4 nodes (is a quad). |
+| `test_boundary_faces_lt_6_times_elements` | Boundary face count is less than 6 × element count (interior faces are not counted). |
+| `test_registry_path_exists` | The Registry path for `OctreeHybridGenerateBoundaryConditionsByFace` exists. |
+
+#### `TestGenerateHangingNodeConstraints`
+
+Unit tests for the `OctreeHybridGenerateHangingNodeConstraints` entity-generation component (primal mesh).
+
+| Test | Assertion |
+|------|-----------|
+| `test_constraints_generated` | At least one hanging-node constraint is produced on the transition surface. |
+| `test_partition_of_unity` | Every constraint row sums to 1.0. |
+| `test_master_counts_two_or_four` | Only 2-master (edge-midpoint) and 4-master (face-centre) constraints exist. |
+| `test_face_centre_constraints_present` | At least one 4-master (face-centre) constraint is present. |
+| `test_multiple_variables` | Requesting 3 variables multiplies the constraint count by exactly 3. |
+| `test_each_constraint_has_one_slave_dof` | Every constraint has exactly one slave DOF. |
+| `test_registry_path_exists` | The Registry path for `OctreeHybridGenerateHangingNodeConstraints` exists. |
+| `test_dual_mesh_no_hanging_constraints` | The dual mesh path produces zero hanging-node constraints (it is conforming by construction). |
+
+#### `TestReportMeshQuality`
+
+Unit tests for the `OctreeHybridReportMeshQuality` operation component.
+
+| Test | Assertion |
+|------|-----------|
+| `test_runs_without_error` | The operation completes without raising an exception. |
+| `test_zero_inverted_box` | A carved box mesh at depth 4 has zero inverted elements after the quality report runs. |
+| `test_empty_model_part_does_not_crash` | Running the quality report on an empty ModelPart logs nothing and does not throw. |
+| `test_registry_path_exists` | The Registry path for `OctreeHybridReportMeshQuality` exists. |
+
+#### `TestRegistryDispatch`
+
+Tests for the Registry-prototype dispatch mechanism inside `OctreeHybridMesherModeler`.
+
+| Test | Assertion |
+|------|-----------|
+| `test_all_base_prototypes_registered` | All three abstract base-class prototypes (`OctreeHybridMesherColoring`, `OctreeHybridMesherEntityGeneration`, `OctreeHybridMesherOperation`) are in the Registry. |
+| `test_all_concrete_prototypes_registered` | All five concrete components are in the Registry. |
+| `test_full_path_dispatch_works` | A four-segment dot-separated full Registry path in the `"type"` field is accepted and dispatched correctly. |
+| `test_unknown_operation_type_raises` | An unknown operation type name triggers a Registry-not-found error. |
+| `test_base_type_invocation_raises` | Invoking the abstract base `OctreeHybridMesherOperation` prototype directly raises a clear error (the base does not implement the do-work virtual). |
+
+---
+
+### C++ tests
+
+The C++ tests use the GTest framework and live at:
+
+```
+kratos/tests/cpp_tests/modeler/test_octree_hybrid_mesher_modeler.cpp
+```
+
+All tests are registered in `KratosCoreFastSuite`.  Run them with:
+
+```bash
+# From the build directory
+./KratosCore.Tests --gtest_filter="*OctreeHybridMesher*"
+# or via the VS Code "Run C++ Test Suite Filtered" task with the pattern OctreeHybridMesher
+```
+
+The C++ suite mirrors the Python suite, covering the same seven functional groups:
+
+| Group | C++ test names |
+|-------|---------------|
+| Top-level modeler | `OctreeHybridMesherModelerDualElementsCreated`, `…DualZeroInverted`, `…DualCarveBbox`, `…DefaultParametersValid`, `…InfoString`, `…UnknownOperationThrows` |
+| `OctreeHybridClassifyCellsInsideOutside` | `OctreeHybridMesherClassifyReducesCellCount`, `…ClassifyRegistered` |
+| `OctreeHybridGenerateHexesByCellColor` | `OctreeHybridMesherGenerateHexesRegistered`, `…GenerateHexesNodeDeduplication`, `…GenerateHexesRefinementLevelTagged`, `…GenerateHexesNoLevelWhenDisabled`, `…GenerateHexesUniqueIds` |
+| `OctreeHybridGenerateBoundaryConditionsByFace` | `OctreeHybridMesherBoundaryConditionsRegistered`, `…BoundaryConditionsCreated`, `…BoundaryConditionsQuadNodes`, `…BoundaryConditionsFewerthanSixTimesElements`, `…BoundaryNodesSubsetOfVolume` |
+| `OctreeHybridGenerateHangingNodeConstraints` | `OctreeHybridMesherHangingNodeConstraintsRegistered`, `…PrimalMeshConstraintsGenerated`, `…PrimalConstraintsPartitionOfUnity`, `…PrimalConstraintsMasterCountsValid`, `…PrimalMultiVariableConstraints`, `…DualMeshNoHangingConstraints` |
+| `OctreeHybridReportMeshQuality` | `OctreeHybridMesherReportMeshQualityRegistered`, `…ReportMeshQualityRunsWithoutError`, `…ReportMeshQualityEmptyModelPart` |
+| Registry dispatch | `OctreeHybridMesherRegistryBasePrototypesPresent`, `…RegistryKratosMultiphysicsPaths`, `…RegistryFullPathDispatchWorks`, `…RegistryBaseColoringInvocationThrows`, `…RegistryBaseOperationInvocationThrows` |
+
+---
+
+### Example notebook
+
+An interactive Jupyter notebook demonstrating the full modeler pipeline (with PyVista 3-D
+visualisation) is provided at:
+
+```
+kratos/python_scripts/notebooks/octree_hybrid_mesher_modeler_example.ipynb
+```
+
+The notebook walks through:
+- Loading a surface from a closed-box or STL geometry.
+- Running the dual and primal mesh pipelines with annotated JSON settings blocks.
+- Visualising the octree adaptive refinement (level scalar field) and the hex mesh quality.
+- Comparing the uncarved block, the coloring-carved mesh, and the surface-projected mesh.
+- Generating hanging-node constraints for the primal mesh and inspecting their partition-of-unity property.
+
+It requires `KratosMultiphysics`, `pyvista`, and optionally `trame`/`ipywidgets` for interactive rendering.
 
 ---
 
