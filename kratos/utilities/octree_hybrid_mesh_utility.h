@@ -2252,16 +2252,19 @@ public:
         if (d3>=0 && d4<=d3) { q[0]=b[0]; q[1]=b[1]; q[2]=b[2]; return; }
         const double vc=d1*d4-d3*d2;
         if (vc<=0 && d1>=0 && d3<=0) { const double v=d1/(d1-d3);
-            for(int d=0;d<3;++d) q[d]=a[d]+v*ab[d]; return; }
+            for(int d=0;d<3;++d) q[d]=a[d]+v*ab[d];
+            return; }
         double cp[3]; sub(p,c,cp);
         const double d5=dot(ab,cp), d6=dot(ac,cp);
         if (d6>=0 && d5<=d6) { q[0]=c[0]; q[1]=c[1]; q[2]=c[2]; return; }
         const double vb=d5*d2-d1*d6;
         if (vb<=0 && d2>=0 && d6<=0) { const double w=d2/(d2-d6);
-            for(int d=0;d<3;++d) q[d]=a[d]+w*ac[d]; return; }
+            for(int d=0;d<3;++d) q[d]=a[d]+w*ac[d];
+            return; }
         const double va=d3*d6-d5*d4;
         if (va<=0 && (d4-d3)>=0 && (d5-d6)>=0) { const double w=(d4-d3)/((d4-d3)+(d5-d6));
-            for(int d=0;d<3;++d) q[d]=b[d]+w*(c[d]-b[d]); return; }
+            for(int d=0;d<3;++d) q[d]=b[d]+w*(c[d]-b[d]);
+            return; }
         const double denom=1.0/(va+vb+vc);
         const double v=vb*denom, w=vc*denom;
         for(int d=0;d<3;++d) q[d]=a[d]+ab[d]*v+ac[d]*w;
