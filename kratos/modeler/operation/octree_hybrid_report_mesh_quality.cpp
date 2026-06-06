@@ -16,7 +16,6 @@
 // External includes
 
 // Project includes
-#include "includes/element.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "utilities/octree_hybrid_mesh_utility.h"
@@ -30,6 +29,9 @@ const Parameters OctreeHybridReportMeshQuality::GetDefaultParameters() const
         "model_part_name"  : "Undefined"
     })");
 }
+
+/***********************************************************************************/
+/***********************************************************************************/
 
 void OctreeHybridReportMeshQuality::Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const
 {

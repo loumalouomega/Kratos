@@ -19,7 +19,8 @@
 // Project includes
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 
-namespace Kratos {
+namespace Kratos 
+{
 
 ///@name Kratos Classes
 ///@{
