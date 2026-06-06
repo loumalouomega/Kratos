@@ -231,7 +231,7 @@ class TestOctreeHybridMesherModelerPrimal(unittest.TestCase):
         self.assertGreater(nc, 0, "No hanging-node constraints produced")
 
     def test_primal_constraint_row_sum(self):
-        """Every constraint's relation matrix sums to 1 (partition of unity)."""
+        """Every constraint is 1x1: relation matrix has exactly one entry."""
         model = KM.Model()
         build_transition_surface(model)
         self._run_primal(model, "Surface", depth=4)
@@ -240,20 +240,19 @@ class TestOctreeHybridMesherModelerPrimal(unittest.TestCase):
         for c in out.MasterSlaveConstraints:
             T, b = KM.Matrix(), KM.Vector()
             c.CalculateLocalSystem(T, b, KM.ProcessInfo())
-            row_sum = sum(T[0, j] for j in range(T.Size2()))
-            if abs(row_sum - 1.0) > 1e-10:
+            if T.Size1() != 1 or T.Size2() != 1:
                 fail += 1
-        self.assertEqual(fail, 0, f"{fail} constraints violate partition of unity")
+        self.assertEqual(fail, 0, f"{fail} constraints are not 1×1")
 
     def test_primal_constraint_master_counts(self):
-        """Only 2-master (edge-midpoint) and 4-master (face-centre) constraints."""
+        """Every constraint has exactly 1 master DOF (1-1 form)."""
         model = KM.Model()
         build_transition_surface(model)
         self._run_primal(model, "Surface", depth=4)
         out = model.GetModelPart("Output")
         for c in out.MasterSlaveConstraints:
             nm = len(c.GetMasterDofsVector())
-            self.assertIn(nm, (2, 4), f"Unexpected master count {nm}")
+            self.assertEqual(nm, 1, f"Unexpected master count {nm}")
 
 
 # ===========================================================================
@@ -290,7 +289,7 @@ class TestOctreeHybridMesherModelerBunny(unittest.TestCase):
         self.assertEqual(n_inv, 0)
 
     def test_primal_bunny_constraints_row_sum(self):
-        """Primal mesh of the bunny: all constraints have row-sum = 1."""
+        """Primal mesh of the bunny: all constraints are 1×1 (one master per constraint)."""
         model = KM.Model()
         self._load_surface(model)
         run_modeler(model, """{
@@ -312,9 +311,9 @@ class TestOctreeHybridMesherModelerBunny(unittest.TestCase):
         for c in out.MasterSlaveConstraints:
             T, b = KM.Matrix(), KM.Vector()
             c.CalculateLocalSystem(T, b, KM.ProcessInfo())
-            if abs(sum(T[0,j] for j in range(T.Size2())) - 1.0) > 1e-10:
+            if T.Size1() != 1 or T.Size2() != 1:
                 fail += 1
-        self.assertEqual(fail, 0)
+        self.assertEqual(fail, 0, f"{fail} bunny constraints are not 1×1")
 
 
 # ===========================================================================
@@ -584,30 +583,34 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
         self.assertGreater(nc, 0)
 
     def test_partition_of_unity(self):
-        """Every constraint row sums to 1.0 (bilinear interpolation property)."""
+        """Every constraint is 1×1 (one master DOF per constraint)."""
         out = self._run()
         fail = 0
         for c in out.MasterSlaveConstraints:
             T, b = KM.Matrix(), KM.Vector()
             c.CalculateLocalSystem(T, b, KM.ProcessInfo())
-            rs = sum(T[0, j] for j in range(T.Size2()))
-            if abs(rs - 1.0) > 1e-10:
+            if T.Size1() != 1 or T.Size2() != 1:
                 fail += 1
-        self.assertEqual(fail, 0, f"{fail} constraints violate partition of unity")
+        self.assertEqual(fail, 0, f"{fail} constraints are not 1×1")
 
     def test_master_counts_two_or_four(self):
-        """Only edge-midpoint (2-master) and face-centre (4-master) constraints."""
+        """Every constraint has exactly 1 master DOF (1-1 form)."""
         out = self._run()
         for c in out.MasterSlaveConstraints:
             nm = len(c.GetMasterDofsVector())
-            self.assertIn(nm, (2, 4), f"Unexpected master count {nm}")
+            self.assertEqual(nm, 1, f"Unexpected master count {nm}")
 
     def test_face_centre_constraints_present(self):
-        """At least one face-centre (4-master) constraint exists."""
+        """Constraints from face-centre hanging nodes exist (detected by weight ≈ 0.25)."""
         out = self._run()
-        nm_counts = [len(c.GetMasterDofsVector()) for c in out.MasterSlaveConstraints]
-        self.assertIn(4, nm_counts,
-                      "No 4-master (face-centre) constraints found")
+        weights = []
+        for c in out.MasterSlaveConstraints:
+            T, b = KM.Matrix(), KM.Vector()
+            c.CalculateLocalSystem(T, b, KM.ProcessInfo())
+            weights.append(T[0, 0])
+        # Face-centre nodes contribute constraints with weight 0.25
+        self.assertTrue(any(abs(w - 0.25) < 1e-10 for w in weights),
+                        "No face-centre (weight=0.25) constraints found")
 
     def test_multiple_variables(self):
         """Requesting 3 variables multiplies constraint count by 3."""
