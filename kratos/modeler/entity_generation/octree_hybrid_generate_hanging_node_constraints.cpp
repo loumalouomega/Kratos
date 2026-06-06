@@ -34,6 +34,10 @@ const Parameters OctreeHybridGenerateHangingNodeConstraints::GetDefaultParameter
     })");
 }
 
+/***********************************************************************************/
+/***********************************************************************************/
+
+
 void OctreeHybridGenerateHangingNodeConstraints::Generate(
     OctreeHybridMesherModeler& rModeler,
     Parameters GenerationParameters) const
@@ -64,9 +68,8 @@ void OctreeHybridGenerateHangingNodeConstraints::Generate(
         vars[vi] = &KratosComponents<Variable<double>>::Get(vname);
     }
 
-    // Build constraints: one LinearMasterSlaveConstraint per (hanging_node × variable).
-    // Master nodes: 2 or 4 coarse face corners with bilinear weights.
-    // Slave node:   1 hanging node.
+    // Build constraints: one LinearMasterSlaveConstraint per
+    // (hanging_node × master_node × variable) — the 1-1 form.
     // The hex generator must have run first so mNodePtrs are filled.
     for (const auto& hc : r_data.mHanging) {
         // Skip if the slave node wasn't created (e.g. outside cells carved away)
@@ -82,30 +85,21 @@ void OctreeHybridGenerateHangingNodeConstraints::Generate(
         }
         if (!all_masters_exist) continue;
 
-        // One constraint per DOF variable
         for (int vi = 0; vi < n_vars; ++vi) {
             const Variable<double>& r_var = *vars[vi];
 
-            // Ensure DOFs exist on all involved nodes
+            // Ensure DOFs exist before using the node+variable overload
             p_slave->AddDof(r_var);
             for (int m = 0; m < hc.NumMasters; ++m) master_ptrs[m]->AddDof(r_var);
 
-            // Build master DOF vector and 1×Nm relation matrix
-            ModelPart::DofsVectorType master_dofs(hc.NumMasters);
-            for (int m = 0; m < hc.NumMasters; ++m)
-                master_dofs[m] = master_ptrs[m]->pGetDof(r_var);
-
-            ModelPart::DofsVectorType slave_dofs(1);
-            slave_dofs[0] = p_slave->pGetDof(r_var);
-
-            // Relation matrix [1×Nm] and zero constant vector [1]
-            Matrix rel(1, hc.NumMasters);
-            for (int m = 0; m < hc.NumMasters; ++m) rel(0, m) = hc.Weights[m];
-            Vector constant = ZeroVector(1);
-
-            r_mp.CreateNewMasterSlaveConstraint(
-                constraint_name, rModeler.NextConstraintId(),
-                master_dofs, slave_dofs, rel, constant);
+            // One 1×1 constraint per master (matches model_part_io MPC format)
+            for (int m = 0; m < hc.NumMasters; ++m) {
+                r_mp.CreateNewMasterSlaveConstraint(
+                    constraint_name, rModeler.NextConstraintId(),
+                    *master_ptrs[m], r_var,
+                    *p_slave, r_var,
+                    hc.Weights[m], 0.0);
+            }
         }
     }
 }

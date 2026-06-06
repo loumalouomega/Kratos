@@ -37,17 +37,18 @@ namespace Kratos {
  *
  * This generator reads the `OctreeHybridMeshUtility::HangingConstraint` records stored
  * in `OctreeHybridMesherData::mHanging` (populated by the hex-generation step) and creates
- * one `LinearMasterSlaveConstraint` per **(hanging node × configured DOF variable)**
- * pair.  The linear relation imposed is:
+ * one `LinearMasterSlaveConstraint` per **(hanging node × master node × configured DOF
+ * variable)** triple — the same 1-1 (one slave DOF, one master DOF) form used by
+ * `ModelPartIO`.  The full bilinear interpolation
  *
  * @f[
  *   u_s = \sum_{m=0}^{N_m - 1} w_m \, u_{M_m}
  * @f]
  *
- * where @f$u_s@f$ is the slave (hanging-node) DOF, @f$u_{M_m}@f$ are the master
- * (coarse-corner) DOFs, and @f$w_m@f$ are the bilinear interpolation weights stored in
- * `HangingConstraint::Weights`.  @f$N_m@f$ is 2 for an edge-midpoint hanging node
- * and 4 for a face-centre hanging node.
+ * is recovered by the builder-and-solver when it accumulates all constraints that share
+ * the same slave DOF.  @f$N_m@f$ is 2 for an edge-midpoint hanging node (one constraint
+ * per master, weight 0.5 each) and 4 for a face-centre hanging node (one constraint per
+ * master, weight 0.25 each).
  *
  * ### Prerequisite
  * The primal hex-generation step (i.e. `OctreeHybridGenerateHexesByCellColor` with
@@ -114,11 +115,12 @@ public:
      *    master pointer is null.
      * 3. For each variable in the `"variables"` list:
      *    - `Node::AddDof` is called on the slave and all master nodes.
-     *    - A 1×N_m relation matrix is built from `HangingConstraint::Weights`.
-     *    - A zero constant vector of size 1 is created.
-     *    - `ModelPart::CreateNewMasterSlaveConstraint` is called with the registered
-     *      constraint type name, a fresh constraint ID from
-     *      `OctreeHybridMesherModeler::NextConstraintId`, and the assembled DOF lists.
+     *    - For each master index `m` in `0 .. NumMasters-1`:
+     *      `ModelPart::CreateNewMasterSlaveConstraint` is called with the
+     *      `NodeType&, Variable<double>&` node+variable overload (the 1-1 form),
+     *      using `HangingConstraint::Weights[m]` as the scalar weight and `0.0` as
+     *      the constant.  Each call consumes one ID from
+     *      `OctreeHybridMesherModeler::NextConstraintId`.
      *
      * @param rModeler              The owning @ref OctreeHybridMesherModeler.  Provides the
      *                              Model, `OctreeHybridMesherData::mHanging`,
