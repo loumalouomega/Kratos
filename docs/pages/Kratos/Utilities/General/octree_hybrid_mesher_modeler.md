@@ -379,22 +379,24 @@ when `tag_refinement_level: true`):
 
 **Hanging-node constraint weights:**
 
-The linear relation enforced by each `LinearMasterSlaveConstraint` is:
+Each `LinearMasterSlaveConstraint` uses the **1-1 form** (one master DOF, one slave DOF),
+matching the format written and read by `ModelPartIO`.  The full bilinear interpolation:
 
 ```
 u_slave = sum_m (w_m * u_master_m)
 ```
 
-The weights are bilinear interpolation coefficients:
+is recovered by the builder-and-solver when it accumulates all constraints sharing the
+same slave DOF.  One constraint is created per **(hanging node × master node × DOF
+variable)** triple:
 
-| Hanging-node type | Number of masters | Weights |
-|------------------|--------------------|---------|
-| Edge-midpoint | 2 | 0.5, 0.5 |
-| Face-centre | 4 | 0.25, 0.25, 0.25, 0.25 |
+| Hanging-node type | Constraints per (node × variable) | Weight per constraint |
+|------------------|-----------------------------------|----------------------|
+| Edge-midpoint | 2 | 0.5 |
+| Face-centre | 4 | 0.25 |
 
-One constraint is created per (hanging node, DOF variable) pair.  The `"variables"`
-parameter of `OctreeHybridGenerateHangingNodeConstraints` lists which DOF variables to constrain
-(default: `DISPLACEMENT_X`, `DISPLACEMENT_Y`, `DISPLACEMENT_Z`).
+The `"variables"` parameter of `OctreeHybridGenerateHangingNodeConstraints` lists which
+DOF variables to constrain (default: `DISPLACEMENT_X`, `DISPLACEMENT_Y`, `DISPLACEMENT_Z`).
 
 **Properties:**
 
@@ -637,18 +639,19 @@ For each `HangingConstraint` record in `mData.mHanging`:
    classified outside and not emitted).
 2. All master node pointers are looked up; the record is skipped if any master
    pointer is null.
-3. For each variable in `"variables"`:
+3. For each variable in `"variables"`, for each master index `m`:
    - `Node::AddDof` is called on the slave and all master nodes.
-   - A `1 x N_masters` relation matrix is built from `HangingConstraint::Weights`.
-   - `ModelPart::CreateNewMasterSlaveConstraint` is called with the constraint type
-     name, a fresh ID from `OctreeHybridMesherModeler::NextConstraintId`, and the
-     assembled DOF vectors.
+   - `ModelPart::CreateNewMasterSlaveConstraint` is called with the **1-1
+     node+variable overload** using `HangingConstraint::Weights[m]` as the scalar
+     weight and `0.0` as the constant.  Each call consumes one ID from
+     `OctreeHybridMesherModeler::NextConstraintId`.
 
-The imposed linear relation is:
+Each constraint relates exactly one master DOF to one slave DOF (1×1 relation matrix),
+matching the `ModelPartIO` MPC format.  The builder-and-solver accumulates all
+constraints sharing the same slave DOF to recover the full bilinear interpolation:
 ```
 u_slave = w_0 * u_master_0 + w_1 * u_master_1 [+ w_2 * u_master_2 + w_3 * u_master_3]
 ```
-where the weights satisfy partition-of-unity (`sum(w_i) == 1.0`).
 
 **Prerequisite:** The primal hex-generation step (`OctreeHybridGenerateHexesByCellColor` with
 `mesh_type: "primal"`) must have run first so that `mData.mNodePtrs` is populated.
@@ -1206,8 +1209,8 @@ Tests for the primal (leaf-hex + hanging-node constraints) path.
 |------|-----------|
 | `test_primal_elements_created` | Primal mesh with `adaptive: true` produces elements and nodes. |
 | `test_primal_constraints_count` | At least one hanging-node constraint is generated at 2:1 transitions. |
-| `test_primal_constraint_row_sum` | Every constraint's relation matrix sums to 1.0 (partition of unity), verified to within `1e-10`. |
-| `test_primal_constraint_master_counts` | Every constraint has exactly 2 masters (edge-midpoint) or 4 masters (face-centre). |
+| `test_primal_constraint_row_sum` | Every constraint is 1×1 (one master DOF per constraint). |
+| `test_primal_constraint_master_counts` | Every constraint has exactly 1 master DOF (1-1 form). |
 
 #### `TestOctreeHybridMesherModelerBunny`
 
@@ -1267,9 +1270,9 @@ Unit tests for the `OctreeHybridGenerateHangingNodeConstraints` entity-generatio
 | Test | Assertion |
 |------|-----------|
 | `test_constraints_generated` | At least one hanging-node constraint is produced on the transition surface. |
-| `test_partition_of_unity` | Every constraint row sums to 1.0. |
-| `test_master_counts_two_or_four` | Only 2-master (edge-midpoint) and 4-master (face-centre) constraints exist. |
-| `test_face_centre_constraints_present` | At least one 4-master (face-centre) constraint is present. |
+| `test_partition_of_unity` | Every constraint is 1×1 (one master DOF per constraint). |
+| `test_master_counts_two_or_four` | Every constraint has exactly 1 master DOF (1-1 form). |
+| `test_face_centre_constraints_present` | At least one constraint has weight ≈ 0.25 (from a face-centre hanging node). |
 | `test_multiple_variables` | Requesting 3 variables multiplies the constraint count by exactly 3. |
 | `test_each_constraint_has_one_slave_dof` | Every constraint has exactly one slave DOF. |
 | `test_registry_path_exists` | The Registry path for `OctreeHybridGenerateHangingNodeConstraints` exists. |
