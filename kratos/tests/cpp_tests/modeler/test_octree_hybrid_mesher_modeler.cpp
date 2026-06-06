@@ -539,17 +539,14 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsPartitionOfUnity, K
         "model_part_operations":[]
     })");
 
+    // Each constraint is now 1×1 (one master DOF per constraint)
     for (const auto& r_constraint : out.MasterSlaveConstraints()) {
         MasterSlaveConstraint::MatrixType T;
         MasterSlaveConstraint::VectorType b;
         r_constraint.CalculateLocalSystem(T, b, out.GetProcessInfo());
 
-        const IndexType nm = T.size2();
-        KRATOS_EXPECT_TRUE(nm == 2u || nm == 4u);
-
-        double row_sum = 0.0;
-        for (IndexType j = 0; j < nm; ++j) row_sum += T(0, j);
-        KRATOS_EXPECT_NEAR(row_sum, 1.0, 1e-10);
+        KRATOS_EXPECT_EQ(T.size1(), 1u);
+        KRATOS_EXPECT_EQ(T.size2(), 1u);
     }
 }
 
@@ -570,13 +567,17 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsMasterCountsValid, 
         "model_part_operations":[]
     })");
 
-    bool found_4_master = false;
+    // Every constraint has exactly 1 master DOF (1-1 form)
+    bool found_quarter_weight = false;
     for (const auto& r_constraint : out.MasterSlaveConstraints()) {
-        const IndexType nm = r_constraint.GetMasterDofsVector().size();
-        KRATOS_EXPECT_TRUE(nm == 2u || nm == 4u);
-        if (nm == 4u) found_4_master = true;
+        KRATOS_EXPECT_EQ(r_constraint.GetMasterDofsVector().size(), 1u);
+        MasterSlaveConstraint::MatrixType T;
+        MasterSlaveConstraint::VectorType b;
+        r_constraint.CalculateLocalSystem(T, b, out.GetProcessInfo());
+        if (std::abs(T(0,0) - 0.25) < 1e-10) found_quarter_weight = true;
     }
-    KRATOS_EXPECT_TRUE(found_4_master);
+    // Face-centre hanging nodes contribute constraints with weight 0.25
+    KRATOS_EXPECT_TRUE(found_quarter_weight);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, KratosCoreFastSuite)
