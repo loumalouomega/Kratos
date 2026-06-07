@@ -69,7 +69,7 @@
 #include "utilities/string_utilities.h"
 #include "utilities/model_part_operation_utilities.h"
 #include "utilities/model_part_utils.h"
-#include "utilities/octree_hybrid_mesh_utility.h"
+#include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos::Python {
 

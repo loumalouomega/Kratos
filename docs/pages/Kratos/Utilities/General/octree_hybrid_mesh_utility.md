@@ -126,7 +126,7 @@ configuration.
 
 The reference implementation is in
 `external_libraries/HybridOctree_Hex/HybridOctree_Hex/` (read-only).
-The Kratos port lives in `kratos/utilities/octree_hybrid_mesh_utility.h`.
+The Kratos port lives in `kratos/modeler/utilities/octree_hybrid_mesh_utility.h` (with the implementation in `octree_hybrid_mesh_utility.cpp`).
 
 ---
 
@@ -1062,7 +1062,7 @@ writes `octree_hex_mesh.vtk` in the current directory.  With `--carve` it runs
 ### C++
 
 ```cpp
-#include "utilities/octree_hybrid_mesh_utility.h"
+#include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 // surface_mp already populated with Triangle3D3 elements
 KM::OctreeHybridMeshUtility::BuildAndWriteVtk(surface_mp, "block.vtk", 8);       // block
