@@ -17,6 +17,9 @@
 // Project includes
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
+#include "modeler/refine_operations/refine_hybrid_octree.h"
+#include "modeler/refine_operations/refine_uniform_hybrid_octree.h"
+#include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
 #include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
@@ -81,6 +84,7 @@ const Parameters OctreeHybridMesherModeler::GetDefaultParameters() const
             "projection_iterations" : 20000,
             "projection_smoothing" : 1000
         },
+        "refine_operations_list" : [],
         "coloring_settings_list" : [],
         "entities_generator_list" : [],
         "model_part_operations" : []
@@ -154,6 +158,14 @@ void OctreeHybridMesherModeler::BuildOctreeAndExtract()
     r_data.mTriangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_surface);
     r_data.mpOctree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         r_surface, gen["refinement_depth"].GetInt(), gen["adaptive"].GetBool());
+
+    // Optional refinement passes: run before 2:1 balancing so all additions are
+    // covered by a single StrongConstrain2To1 call.
+    Dispatch<OctreeHybridRefineOperation>(
+        "OctreeHybridRefineOperation", mParameters["refine_operations_list"],
+        [&](const OctreeHybridRefineOperation& rProto, Parameters rParams) {
+            rProto.Refine(*this, rParams); });
+
     r_data.mpOctree->StrongConstrain2To1();
 
     const std::string mesh_type = gen["mesh_type"].GetString();
