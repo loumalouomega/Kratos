@@ -18,7 +18,7 @@
 // Project includes
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
-#include "utilities/octree_hybrid_mesh_utility.h"
+#include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
 

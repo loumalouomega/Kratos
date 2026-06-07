@@ -21,7 +21,7 @@
 #include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
-#include "utilities/octree_hybrid_mesh_utility.h"
+#include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
 

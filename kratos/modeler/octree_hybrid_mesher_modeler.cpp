@@ -20,7 +20,7 @@
 #include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
-#include "utilities/octree_hybrid_mesh_utility.h"
+#include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
 

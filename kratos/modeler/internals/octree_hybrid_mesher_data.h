@@ -18,7 +18,7 @@
 
 // Project includes
 #include "includes/node.h"
-#include "utilities/octree_hybrid_mesh_utility.h"
+#include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos::Internals 
 {

@@ -185,7 +185,7 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
 auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
     ModelPart& rSurfaceMesh,
     std::size_t RefinementDepth,
-    bool Adaptive)
+    bool Adaptive) -> std::unique_ptr<OctreeType>
 {
     KRATOS_ERROR_IF(RefinementDepth < 1 || RefinementDepth > ConfigurationType::MAX_DEPTH)
         << "OctreeHybridMeshUtility: RefinementDepth must be in [1, "
@@ -258,7 +258,7 @@ auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
 
 auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
     ModelPart& rSurfaceMesh,
-    std::size_t RefinementDepth)
+    std::size_t RefinementDepth) -> std::unique_ptr<OctreeType>
 {
     const AdaptiveRefineData data = BuildRefineSets(rSurfaceMesh);
     KRATOS_ERROR_IF(data.tri_geom.empty())
@@ -1758,7 +1758,7 @@ void OctreeHybridMeshUtility::ClassifyInsideOutside(
 
 auto OctreeHybridMeshUtility::ComputeNodeSignedDistance(
     const TriangleSoup& rTriangles,
-    const std::vector<std::array<double,3>>& rNodes)
+    const std::vector<std::array<double,3>>& rNodes) -> std::vector<double>
 {
     constexpr double DIST_THRES = 1e-12;
     const int NV = static_cast<int>(rNodes.size());
@@ -1960,7 +1960,7 @@ static constexpr int FACE_FIDC[6][4] =
 /***********************************************************************************/
 
 auto OctreeHybridMeshUtility::ExtractBoundaryFaces(
-    const std::vector<std::array<int,8>>& rCells)
+    const std::vector<std::array<int,8>>& rCells) -> std::vector<std::array<int,5>>
 {
     std::map<std::array<int,4>, int> count;
     std::map<std::array<int,4>, std::array<int,5>> first;
