@@ -894,7 +894,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformElementSizeProducesElements, 
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
-    RunModeler(model, settings);
+    RunModeler(model, settings.WriteJsonString());
 
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
 }
@@ -920,7 +920,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsElementSizeProducesEle
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
-    RunModeler(model, settings);
+    RunModeler(model, settings.WriteJsonString());
 
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
 }
