@@ -299,6 +299,82 @@ public:
         std::size_t RefinementDepth);
 
     ///@}
+    ///@name Octree refinement
+    ///@{
+
+    /**
+     * @brief Refines all leaves of @p rOctree to at least @p TargetDepth by
+     *        repeatedly subdividing every leaf that is shallower than the target.
+     *
+     * The method iterates over a snapshot of the leaf list and subdivides each
+     * leaf whose level is strictly less than @p TargetDepth, repeating until no
+     * such leaf remains.  Existing leaves already at or beyond @p TargetDepth are
+     * left unchanged.  If @p TargetDepth exceeds the octree's maximum depth
+     * (`OctreeHybrid::GetDepth()`), it is silently clamped.
+     *
+     * @note Call `OctreeHybrid::StrongConstrain2To1()` and re-extract the mesh
+     *       **after** all refinement operations have run — not between them.
+     *
+     * @param rOctree     The octree to refine in-place.
+     * @param TargetDepth The minimum leaf depth to reach.  Cells at this depth
+     *                    are not subdivided further.
+     */
+    static void RefineAllCells(OctreeType& rOctree, std::size_t TargetDepth);
+
+    /**
+     * @brief Refines octree cells that contain surface-triangle vertices to at
+     *        least @p TargetDepth, approximating the interface geometry.
+     *
+     * For every vertex in @p rTriangles the method normalises the world-space
+     * coordinates and, for each level 0 … @p TargetDepth-1, computes the
+     * integer grid coordinates of the enclosing cell and subdivides that cell if
+     * it is still a leaf.  This drives refinement along the paths from the root
+     * to the finest cells that contain surface vertices, refining the octree
+     * near the interface without touching interior or exterior regions.
+     *
+     * Multiple calls with different triangle soups (different geometry model
+     * parts) can be chained: each call adds refinement around its own surface,
+     * and the combined result is 2:1-balanced in a single
+     * `StrongConstrain2To1()` call at the end.
+     *
+     * @note Call `OctreeHybrid::StrongConstrain2To1()` and re-extract the mesh
+     *       **after** all refinement operations have run — not between them.
+     *
+     * @param rOctree     The octree to refine in-place.
+     * @param rTriangles  Surface triangles in world coordinates (one entry per
+     *                    triangle, each with 3 vertices of 3 doubles).
+     * @param TargetDepth Maximum depth to refine interface cells to.  Clamped to
+     *                    the octree's `GetDepth()` if larger.
+     */
+    static void RefineInterfaceCells(
+        OctreeType&         rOctree,
+        const TriangleSoup& rTriangles,
+        std::size_t         TargetDepth);
+
+    /**
+     * @brief Converts a desired world-space element size to an equivalent octree depth.
+     * @details Computes the minimum number of refinement levels needed so that every leaf
+     * cell has a characteristic size **at most** @p ElementSize in every dimension.
+     *
+     * The conversion uses the octree's normalisation transform to avoid direct access to
+     * the private bounding-box members: two points separated by @p ElementSize in each
+     * axis direction are normalised, and the resulting coordinate deltas give the
+     * per-axis scale factors.  The target depth is then:
+     * @code
+     *   d = ceil( log2(1 / min_norm_delta) )
+     * @endcode
+     * where `min_norm_delta` = min over axes of `ElementSize * scale_axis`.
+     * Using the minimum ensures that all three axes reach the requested resolution.
+     *
+     * The result is clamped to `[0, rOctree.GetDepth()]`.
+     *
+     * @param rOctree     The octree whose bounding box provides the conversion.
+     * @param ElementSize Desired maximum cell size in world-space units.  Must be > 0.
+     * @return Equivalent refinement depth (clamped to the octree's maximum depth).
+     */
+    static std::size_t ElementSizeToDepth(OctreeType& rOctree, double ElementSize);
+
+    ///@}
     ///@name Carving, projection and mesh extraction (reusable by callers)
     ///@{
     // These stateless static helpers operate on the in-memory node/cell arrays

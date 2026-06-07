@@ -360,6 +360,90 @@ auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
 /***********************************************************************************/
 /***********************************************************************************/
 
+void OctreeHybridMeshUtility::RefineAllCells(OctreeType& rOctree, std::size_t TargetDepth)
+{
+    TargetDepth = std::min(TargetDepth, rOctree.GetDepth());
+    bool any = true;
+    while (any) {
+        any = false;
+        const std::vector<int> snapshot = rOctree.GetLeafIds();
+        for (const int id : snapshot) {
+            if (!rOctree.IsLeaf(id)) continue;
+            const int level = rOctree.GetLevelFromId(id);
+            if (static_cast<std::size_t>(level) < TargetDepth) {
+                rOctree.SubdivideCellByIdAndLevel(id, level);
+                any = true;
+            }
+        }
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshUtility::RefineInterfaceCells(
+    OctreeType&         rOctree,
+    const TriangleSoup& rTriangles,
+    std::size_t         TargetDepth)
+{
+    TargetDepth = std::min(TargetDepth, rOctree.GetDepth());
+    for (const auto& tri : rTriangles) {
+        for (int k = 0; k < 3; ++k) {
+            double norm_pt[3] = { tri[k][0], tri[k][1], tri[k][2] };
+            rOctree.NormalizeCoordinates(norm_pt);
+            for (int d = 0; d < 3; ++d)
+                norm_pt[d] = std::max(0.0, std::min(1.0 - 1e-10, norm_pt[d]));
+
+            for (std::size_t L = 0; L < TargetDepth; ++L) {
+                const double res = static_cast<double>(std::size_t(1) << L);
+                const int gx = static_cast<int>(norm_pt[0] * res);
+                const int gy = static_cast<int>(norm_pt[1] * res);
+                const int gz = static_cast<int>(norm_pt[2] * res);
+                const int id = rOctree.XyzToOctreeIdx(static_cast<int>(L), gx, gy, gz);
+                if (rOctree.IsLeaf(id))
+                    rOctree.SubdivideCellByIdAndLevel(id, static_cast<int>(L));
+            }
+        }
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+std::size_t OctreeHybridMeshUtility::ElementSizeToDepth(OctreeType& rOctree, double ElementSize)
+{
+    KRATOS_ERROR_IF(ElementSize <= 0.0)
+        << "OctreeHybridMeshUtility::ElementSizeToDepth: ElementSize must be > 0, got "
+        << ElementSize << std::endl;
+
+    // NormalizeCoordinates applies the affine map  norm_i = (coord_i + offset_i) * scale_i.
+    // For two points differing by ElementSize along axis i:
+    //   delta_norm_i = ElementSize * scale_i
+    // Using p0 = {0,0,0} and p_axis shifted by ElementSize in each direction:
+    double p0[3] = { 0.0, 0.0, 0.0 };
+    double px[3] = { ElementSize, 0.0, 0.0 };
+    double py[3] = { 0.0, ElementSize, 0.0 };
+    double pz[3] = { 0.0, 0.0, ElementSize };
+    rOctree.NormalizeCoordinates(p0);
+    rOctree.NormalizeCoordinates(px);
+    rOctree.NormalizeCoordinates(py);
+    rOctree.NormalizeCoordinates(pz);
+
+    // Take the minimum normalized delta (corresponding to the largest world dimension).
+    const double norm_size = std::min({ px[0] - p0[0], py[1] - p0[1], pz[2] - p0[2] });
+    KRATOS_ERROR_IF(norm_size <= 0.0)
+        << "OctreeHybridMeshUtility::ElementSizeToDepth: could not compute a positive "
+        << "normalised delta — check that ElementSize is smaller than the bounding-box extent."
+        << std::endl;
+
+    const std::size_t depth = static_cast<std::size_t>(
+        std::ceil(-std::log2(norm_size)));
+    return std::min(depth, rOctree.GetDepth());
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 void OctreeHybridMeshUtility::ExtractDualHexMesh(
     OctreeType& rOctree,
     std::vector<std::array<double,3>>& rNodes,
