@@ -27,44 +27,54 @@ namespace Kratos {
 /**
  * @class OctreeHybridRefineInterfaceCells
  * @ingroup KratosCore
- * @brief Refinement operation that selectively subdivides octree cells near a surface geometry.
- * @details For each vertex in the triangle soup of the specified input model part this
- * operation refines every cell along the root-to-leaf path that contains that vertex,
- * up to `"refinement_depth"`.  Only cells in the vicinity of the input geometry are
- * subdivided; interior and far-field cells are left at their current level, keeping
- * the octree graded without a globally fine resolution.
+ * @brief Builds the initial octree from a surface (first call) and selectively refines
+ *        cells near it on subsequent calls.
+ * @details **First call** (no octree in `OctreeHybridMesherData` yet):
+ * 1. Extracts a triangle soup from the input surface model part.
+ * 2. Builds the adaptive (or uniform) octree via `OctreeHybridMeshUtility::BuildFromSurfaceMesh`.
+ * 3. Records `mesh_type`, `project_to_surface`, `projection_iterations`, and
+ *    `projection_smoothing` into @ref Internals::OctreeHybridMesherData for use during
+ *    the later balancing and extraction step.
  *
- * The surface geometry is taken from the model part named by `"input_model_part_name"`.
- * When that key is empty the modeler's main input surface (already extracted as
- * `OctreeHybridMesherData::mTriangles`) is reused, avoiding a second triangle extraction.
+ * **Subsequent calls** (octree already built):
+ * For each vertex in the triangle soup of the specified input model part, every cell
+ * along the root-to-leaf path that contains that vertex is subdivided up to
+ * `"refinement_depth"`.  Only cells in the vicinity of the input geometry are
+ * subdivided; interior and far-field cells are left at their current level.
  *
- * Multiple `OctreeHybridRefineInterfaceCells` entries may be chained in
- * `refine_operations_list`, each targeting a **different model part**, to achieve
- * feature-specific resolution without redundant passes:
+ * When `"input_model_part_name"` is empty on a subsequent call, the triangle soup already
+ * stored in `OctreeHybridMesherData::mTriangles` (the main input surface) is reused.
+ * Multiple entries may be chained in `refine_operations_list`, each targeting a
+ * **different model part**, to achieve feature-specific resolution:
  *
  * @code{.json}
  * "refine_operations_list": [
  *   { "type": "OctreeHybridRefineInterfaceCells",
- *     "input_model_part_name": "InnerWall", "refinement_depth": 6 },
+ *     "refinement_depth": 3, "adaptive": true, "mesh_type": "dual" },
  *   { "type": "OctreeHybridRefineInterfaceCells",
- *     "input_model_part_name": "OuterWall", "refinement_depth": 4 }
+ *     "input_model_part_name": "InnerWall", "refinement_depth": 6 }
  * ]
  * @endcode
  *
- * After all refinement operations in `refine_operations_list` complete, the modeler
- * calls `StrongConstrain2To1()` once to produce the globally 2:1-balanced octree
- * before mesh extraction.
+ * After all operations complete, the modeler calls `StrongConstrain2To1()` once to
+ * produce a globally 2:1-balanced octree before mesh extraction.
  *
  * ### Parameters schema
  * | Key                      | Type   | Default | Description                         |
  * |--------------------------|--------|---------|-------------------------------------|
  * | `type`                   | string | `"OctreeHybridRefineInterfaceCells"` | Registry key. |
- * | `refinement_depth`       | int    | `5`     | Maximum depth for interface cells.  Used when `element_size` is 0. |
- * | `element_size`           | double | `0.0`   | Desired maximum cell size in world-space units.  When > 0, overrides `refinement_depth` and the equivalent depth is computed via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
- * | `input_model_part_name`  | string | `""`    | Model part whose surface triangles drive refinement.  Empty → use the modeler's main input surface. |
+ * | `input_model_part_name`  | string | `""`    | Surface model part.  On first call, empty → falls back to the modeler's top-level `input_model_part_name`.  On subsequent calls, empty → reuse the already-extracted main triangle soup. |
+ * | `refinement_depth`       | int    | `5`     | Build depth (first call) or maximum refinement depth for interface cells (subsequent calls).  Overridden by `element_size` > 0 on subsequent calls. |
+ * | `element_size`           | double | `0.0`   | Desired maximum cell size (world-space) for subsequent calls.  When > 0, overrides `refinement_depth` via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
+ * | `adaptive`               | bool   | `true`  | First call only: adaptive subdivision near the surface; globally uniform when false. |
+ * | `mesh_type`              | string | `"dual"` | First call only: `"dual"` (conforming all-hex) or `"primal"` (leaf-hex with hanging-node constraints). |
+ * | `project_to_surface`     | bool   | `false` | First call only: project extracted dual mesh onto the iso-surface. |
+ * | `projection_iterations`  | int    | `20000` | First call only: maximum projection iterations. |
+ * | `projection_smoothing`   | int    | `1000`  | First call only: smoothing iterations in the projection step. |
  *
  * @see OctreeHybridRefineOperation
  * @see OctreeHybridRefineUniform
+ * @see OctreeHybridMeshUtility::BuildFromSurfaceMesh
  * @see OctreeHybridMeshUtility::RefineInterfaceCells
  * @author Vicente Mataix Ferrandiz
  */
@@ -88,17 +98,20 @@ public:
     ///@{
 
     /**
-     * @brief Refines octree cells near the specified surface to the requested depth.
-     * @details If `RefineParameters["input_model_part_name"]` is non-empty, the triangle
-     * soup is extracted from that model part via
-     * `OctreeHybridMeshUtility::ExtractTriangleSoup`; otherwise the triangle soup already
-     * stored in `rModeler.GetData().mTriangles` (the main input surface) is used.
-     * `OctreeHybridMeshUtility::RefineInterfaceCells` is then called with the chosen soup
-     * and the target depth.
+     * @brief Builds the octree (first call) or refines interface cells (subsequent calls).
+     * @details On the first call (`rModeler.GetData().mpOctree == nullptr`): resolves the
+     * surface model part (falling back to the modeler's top-level `input_model_part_name`
+     * when the operation's own key is empty), extracts the triangle soup, builds the octree,
+     * and writes `mesh_type`, `project_to_surface`, `projection_iterations`, and
+     * `projection_smoothing` into @ref Internals::OctreeHybridMesherData.
+     *
+     * On subsequent calls: if `RefineParameters["input_model_part_name"]` is non-empty, the
+     * triangle soup is extracted from that model part; otherwise the soup already stored in
+     * `rModeler.GetData().mTriangles` is reused.  `OctreeHybridMeshUtility::RefineInterfaceCells`
+     * is then called with the chosen soup and the target depth.
      *
      * @param rModeler         Reference to the owning @ref OctreeHybridMesherModeler.
-     * @param RefineParameters Validated JSON parameters containing `"refinement_depth"`
-     *                         and optionally `"input_model_part_name"`.
+     * @param RefineParameters Validated JSON parameters (see schema in the class Doxygen).
      */
     void Refine(OctreeHybridMesherModeler& rModeler, Parameters RefineParameters) const override;
 
@@ -108,9 +121,14 @@ public:
      * @code{.json}
      * {
      *     "type"                  : "OctreeHybridRefineInterfaceCells",
+     *     "input_model_part_name" : "",
      *     "refinement_depth"      : 5,
      *     "element_size"          : 0.0,
-     *     "input_model_part_name" : ""
+     *     "adaptive"              : true,
+     *     "mesh_type"             : "dual",
+     *     "project_to_surface"    : false,
+     *     "projection_iterations" : 20000,
+     *     "projection_smoothing"  : 1000
      * }
      * @endcode
      * @return A Parameters object with all accepted keys and their default values.
