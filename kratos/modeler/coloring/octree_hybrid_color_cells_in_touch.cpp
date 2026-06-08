@@ -46,6 +46,9 @@ void OctreeHybridColorCellsInTouch::Apply(
     auto& r_data = rModeler.GetData();
     const std::size_t n_cells = r_data.mCells.size();
 
+    // Only reset the color vector when it has the wrong size so that prior
+    // coloring steps' assignments are preserved (see OctreeHybridColorCellsByLevel
+    // for the same rationale).
     if (r_data.mCellColor.size() != n_cells)
         r_data.mCellColor.assign(n_cells, 0);
 
@@ -98,13 +101,20 @@ void OctreeHybridColorCellsInTouch::Apply(
         }
 
         for (std::size_t i = 0; i < n_cells; ++i) {
+            // Skip cells already carrying the target color — once colored,
+            // a cell cannot be un-colored by subsequent geometries in the same
+            // pass, and the SAT test below would be redundant.
             if (r_data.mCellColor[i] == color) continue;
             const auto& bb = cell_aabb[i];
-            // AABB quick-reject
+            // AABB quick-reject: bb layout is {min_x,min_y,min_z,max_x,max_y,max_z}.
+            // Rejecting here costs six comparisons and avoids the SAT call for the
+            // vast majority of cells that don't overlap the geometry's bounding box.
             if (bb[3] < g_min[0] || bb[0] > g_max[0]) continue;
             if (bb[4] < g_min[1] || bb[1] > g_max[1]) continue;
             if (bb[5] < g_min[2] || bb[2] > g_max[2]) continue;
-            // Precise SAT test
+            // Precise SAT (Separating Axis Theorem) test: handles non-box
+            // geometries (triangles, quads) that pass the AABB overlap but do
+            // not actually intersect the cell.
             const Point cell_min(bb[0], bb[1], bb[2]);
             const Point cell_max(bb[3], bb[4], bb[5]);
             if (rGeometry.HasIntersection(cell_min, cell_max))

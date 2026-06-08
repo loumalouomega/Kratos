@@ -52,6 +52,8 @@ void OctreeHybridColorConnectedCellsInTouch::Apply(
     auto& r_data = rModeler.GetData();
     const std::size_t n_cells = r_data.mCells.size();
 
+    // Only reset when the vector has the wrong size so prior coloring steps'
+    // assignments are preserved (see OctreeHybridColorCellsByLevel for rationale).
     if (r_data.mCellColor.size() != n_cells)
         r_data.mCellColor.assign(n_cells, 0);
 
@@ -91,6 +93,9 @@ void OctreeHybridColorConnectedCellsInTouch::Apply(
         {0,1,2,3}, {4,5,6,7}, {0,1,5,4}, {1,2,6,5}, {2,3,7,6}, {3,0,4,7}
     };
 
+    // std::map is used instead of unordered_map because array<int,4> has no
+    // standard hash; the lexicographic ordering of std::map suffices here and
+    // avoids a custom hash implementation.
     using FaceKey = std::array<int, 4>;
     std::map<FaceKey, std::vector<int>> face_to_cells;
     face_to_cells.clear();
@@ -100,12 +105,17 @@ void OctreeHybridColorConnectedCellsInTouch::Apply(
             FaceKey key;
             for (int k = 0; k < 4; ++k)
                 key[k] = r_data.mCells[ci][face_nodes[fi][k]];
+            // Sort the four global node indices so the key is orientation-independent:
+            // the same face seen from two different cells will produce the same sorted key.
             std::sort(key.begin(), key.end());
             face_to_cells[key].push_back(ci);
         }
     }
 
-    // adjacency[i] = list of cells sharing a face with cell i
+    // adjacency[i] = list of cells sharing a face with cell i.
+    // A face shared by exactly 2 cells is an interior face — only those form
+    // valid adjacency edges.  A face seen by 1 cell is a boundary; by >2 is
+    // non-manifold and is ignored to avoid propagating across degenerate geometry.
     std::vector<std::vector<int>> adjacency(n_cells);
     for (const auto& [key, cells] : face_to_cells) {
         if (cells.size() == 2) {
@@ -127,6 +137,8 @@ void OctreeHybridColorConnectedCellsInTouch::Apply(
     };
 
     // --- Find seeds: cells with cell_color that touch a geometry ---
+    // `visited` is shared between the seed-finding pass and the BFS so that a
+    // cell pushed as a seed is not pushed again by a second overlapping geometry.
     std::vector<bool> visited(n_cells, false);
     std::stack<int> work;
 
@@ -148,6 +160,8 @@ void OctreeHybridColorConnectedCellsInTouch::Apply(
         }
         for (std::size_t ci = 0; ci < n_cells; ++ci) {
             if (r_data.mCellColor[ci] != cell_color) continue;
+            // Mark as visited before pushing so that a cell touched by multiple
+            // seed geometries is only pushed once.
             if (visited[ci]) continue;
             if (touches_geometry(ci, rGeometry, g_min, g_max)) {
                 visited[ci] = true;
@@ -173,6 +187,11 @@ void OctreeHybridColorConnectedCellsInTouch::Apply(
     }
 
     // --- BFS flood-fill through cells with cell_color ---
+    // The color check (mCellColor[nb] == cell_color) gates the flood at region
+    // boundaries: cells with a different color (e.g. already-colored interior
+    // cells from a prior pass) act as walls that stop propagation.  This lets
+    // the connected exterior be labeled with a distinct color without spilling
+    // into inner pockets that were separately assigned a different color.
     while (!work.empty()) {
         const int ci = work.top();
         work.pop();
