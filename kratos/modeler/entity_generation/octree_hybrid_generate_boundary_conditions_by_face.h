@@ -148,13 +148,18 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"             : "OctreeHybridGenerateBoundaryConditionsByFace",
-     *     "model_part_name"  : "Undefined",
-     *     "color"            : 1,
-     *     "properties_id"    : 1,
-     *     "generated_entity" : "SurfaceCondition3D4N"
+     *     "type"              : "OctreeHybridGenerateBoundaryConditionsByFace",
+     *     "model_part_name"   : "Undefined",
+     *     "color"             : 1,
+     *     "properties_id"     : 1,
+     *     "generated_entity"  : "SurfaceCondition3D4N",
+     *     "constraint_name"   : "LinearMasterSlaveConstraint",
+     *     "variables"         : []
      * }
      * @endcode
+     * The `"variables"` array lists scalar DOF names (e.g. `"PRESSURE"`) for which
+     * a `LinearMasterSlaveConstraint` is generated at every 2:1 hanging node on the
+     * boundary.  Leave empty (default) when no constraints are needed.
      * @return A Parameters object with all accepted keys and their default values.
      */
     const Parameters GetDefaultParameters() const override;
