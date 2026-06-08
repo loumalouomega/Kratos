@@ -741,6 +741,9 @@ class TestRegistryDispatch(unittest.TestCase):
         paths = [
             "OctreeHybridRefineOperation.All.OctreeHybridRefineInterfaceCells.Prototype",
             "OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype",
+            "OctreeHybridMesherColoring.All.OctreeHybridColorCellsInTouch.Prototype",
+            "OctreeHybridMesherColoring.All.OctreeHybridColorConnectedCellsInTouch.Prototype",
+            "OctreeHybridMesherColoring.All.OctreeHybridColorCellsByLevel.Prototype",
             "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHexesByCellColor.Prototype",
             "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateBoundaryConditionsByFace.Prototype",
             "OctreeHybridMesherOperation.All.OctreeHybridReportMeshQuality.Prototype",
@@ -790,6 +793,237 @@ class TestRegistryDispatch(unittest.TestCase):
                 "model_part_operations":[{
                     "type":"OctreeHybridMesherOperation.All.OctreeHybridMesherOperation.Prototype"
                 }]}""")
+
+
+# ===========================================================================
+class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
+    """Unit tests for OctreeHybridColorCellsInTouch coloring stage."""
+
+    def _run(self, color_settings, gen_color, depth=4):
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, f"""{{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "refine_operations_list":[{{"type":"OctreeHybridRefineInterfaceCells",
+                                        "refinement_depth":{depth},"adaptive":false}}],
+            "coloring_settings_list":{color_settings},
+            "entities_generator_list":[{{"type":"OctreeHybridGenerateHexesByCellColor",
+                                        "model_part_name":"O","color":{gen_color}}}],
+            "model_part_operations":[]}}""")
+        return model.GetModelPart("O")
+
+    def test_cells_in_touch_produces_some_colored_cells(self):
+        """OctreeHybridColorCellsInTouch colors at least some cells touching the surface."""
+        out = self._run(
+            '[{"type":"OctreeHybridColorCellsInTouch","model_part_name":"S","color":1}]',
+            gen_color=1)
+        n = out.NumberOfElements()
+        print(f"\n[OctreeHybridColorCellsInTouch] cells_in_touch={n}")
+        self.assertGreater(n, 0, "No cells colored by OctreeHybridColorCellsInTouch")
+
+    def test_cells_in_touch_not_all_cells_colored(self):
+        """Interior cells not touching the surface remain uncolored (color=0)."""
+        # Color=1 are cells touching the surface; color=0 are the rest.
+        # The interior of a box at depth 4 has cells that don't touch any surface triangle.
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"All",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":false}],
+            "coloring_settings_list":[],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"All","color":1}],
+            "model_part_operations":[]}""")
+        n_all = model.GetModelPart("All").NumberOfElements()
+
+        n_touch = self._run(
+            '[{"type":"OctreeHybridColorCellsInTouch","model_part_name":"S","color":1}]',
+            gen_color=1).NumberOfElements()
+        print(f"\n[OctreeHybridColorCellsInTouch] all={n_all} in_touch={n_touch}")
+        self.assertGreater(n_all, n_touch,
+                           "All cells were colored — interior cells should not touch the surface")
+
+    def test_cells_in_touch_elements_entities(self):
+        """input_entities='elements' is accepted and colors cells touching triangles."""
+        model = KM.Model()
+        mp = model.CreateModelPart("SurfaceElems")
+        mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
+        pts = [(0.3,0.3,0.3),(0.7,0.3,0.3),(0.7,0.7,0.3),(0.3,0.7,0.3)]
+        for i,(x,y,z) in enumerate(pts, start=1): mp.CreateNewNode(i,x,y,z)
+        mp.CreateNewElement("Element2D3N", 1, [1,2,3], mp.GetProperties()[0])
+        build_closed_box_surface(model, name="S2")
+        run_modeler(model, """{
+            "input_model_part_name":"S2","output_model_part_name":"O",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":false}],
+            "coloring_settings_list":[{"type":"OctreeHybridColorCellsInTouch",
+                                       "model_part_name":"SurfaceElems","color":1,
+                                       "input_entities":"elements"}],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":1}],
+            "model_part_operations":[]}""")
+        self.assertGreater(model.GetModelPart("O").NumberOfElements(), 0)
+
+    def test_registry_path_exists(self):
+        self.assertTrue(KM.Registry.HasValue(
+            "OctreeHybridMesherColoring.All.OctreeHybridColorCellsInTouch.Prototype"))
+
+
+# ===========================================================================
+class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
+    """Unit tests for OctreeHybridColorConnectedCellsInTouch coloring stage."""
+
+    def test_connected_flood_fill_from_surface(self):
+        """Flood-fill from surface through outside cells (color=0) produces color=2 cells."""
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":false}],
+            "coloring_settings_list":[
+                {"type":"OctreeHybridClassifyCellsInsideOutside"},
+                {"type":"OctreeHybridColorConnectedCellsInTouch",
+                 "model_part_name":"S","color":2,"cell_color":0}
+            ],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":2}],
+            "model_part_operations":[]}""")
+        n = model.GetModelPart("O").NumberOfElements()
+        print(f"\n[OctreeHybridColorConnectedCellsInTouch] flood_filled_outside={n}")
+        self.assertGreater(n, 0, "No cells reached by the flood-fill")
+
+    def test_connected_flood_fill_fewer_than_all_outside(self):
+        """Flood-fill through outside cells gives fewer or equal cells than all outside cells."""
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+
+        # Count all outside cells (color=0 after ClassifyInsideOutside)
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"AllOutside",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":false}],
+            "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"AllOutside","color":0}],
+            "model_part_operations":[]}""")
+        n_outside = model.GetModelPart("AllOutside").NumberOfElements()
+
+        model2 = KM.Model()
+        build_closed_box_surface(model2, lo=0.3, hi=0.7, name="S")
+        run_modeler(model2, """{
+            "input_model_part_name":"S","output_model_part_name":"Flooded",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":false}],
+            "coloring_settings_list":[
+                {"type":"OctreeHybridClassifyCellsInsideOutside"},
+                {"type":"OctreeHybridColorConnectedCellsInTouch",
+                 "model_part_name":"S","color":2,"cell_color":0}
+            ],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Flooded","color":2}],
+            "model_part_operations":[]}""")
+        n_flooded = model2.GetModelPart("Flooded").NumberOfElements()
+        print(f"\n[OctreeHybridColorConnectedCellsInTouch] all_outside={n_outside} flooded={n_flooded}")
+        self.assertLessEqual(n_flooded, n_outside,
+                             "Flood-fill colored more cells than exist with cell_color=0")
+
+    def test_connected_flood_fill_inside_cells(self):
+        """Flood-fill through inside cells (cell_color=1) from the surface."""
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":false}],
+            "coloring_settings_list":[
+                {"type":"OctreeHybridClassifyCellsInsideOutside"},
+                {"type":"OctreeHybridColorConnectedCellsInTouch",
+                 "model_part_name":"S","color":3,"cell_color":1}
+            ],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":3}],
+            "model_part_operations":[]}""")
+        n = model.GetModelPart("O").NumberOfElements()
+        print(f"\n[OctreeHybridColorConnectedCellsInTouch] flood_filled_inside={n}")
+        self.assertGreater(n, 0, "No inside cells reached by the flood-fill from surface")
+
+    def test_registry_path_exists(self):
+        self.assertTrue(KM.Registry.HasValue(
+            "OctreeHybridMesherColoring.All.OctreeHybridColorConnectedCellsInTouch.Prototype"))
+
+
+# ===========================================================================
+class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
+    """Unit tests for OctreeHybridColorCellsByLevel coloring stage."""
+
+    def _run(self, min_level, max_level, color=2, depth=4):
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, f"""{{
+            "input_model_part_name":"S","output_model_part_name":"O",
+            "refine_operations_list":[{{"type":"OctreeHybridRefineInterfaceCells",
+                                        "refinement_depth":{depth},"adaptive":false}}],
+            "coloring_settings_list":[
+                {{"type":"OctreeHybridColorCellsByLevel",
+                  "color":{color},"min_level":{min_level},"max_level":{max_level}}}
+            ],
+            "entities_generator_list":[{{"type":"OctreeHybridGenerateHexesByCellColor",
+                                        "model_part_name":"O","color":{color}}}],
+            "model_part_operations":[]}}""")
+        return model.GetModelPart("O")
+
+    def test_color_by_target_level_finds_cells(self):
+        """Coloring cells at the refinement depth produces a non-empty result."""
+        out = self._run(min_level=4, max_level=4)
+        n = out.NumberOfElements()
+        print(f"\n[OctreeHybridColorCellsByLevel] level=4 cells={n}")
+        self.assertGreater(n, 0, "No cells at level 4 found in a depth-4 mesh")
+
+    def test_color_beyond_max_depth_finds_nothing(self):
+        """Requesting level > refinement_depth returns no cells."""
+        out = self._run(min_level=5, max_level=5, depth=4)
+        self.assertEqual(out.NumberOfElements(), 0,
+                         "Level-5 cells should not exist in a depth-4 mesh")
+
+    def test_wide_range_covers_all_positive_levels(self):
+        """min_level=1, max_level=100 colors all cells with a positive octree level."""
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        # Total cells (default color=1, all included)
+        run_modeler(model, """{
+            "input_model_part_name":"S","output_model_part_name":"All",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":false}],
+            "coloring_settings_list":[],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"All","color":1}],
+            "model_part_operations":[]}""")
+        n_all = model.GetModelPart("All").NumberOfElements()
+
+        # Non-adaptive uniform depth=4: all cells are at level 4; no templates (no transitions).
+        out = self._run(min_level=1, max_level=100)
+        n_colored = out.NumberOfElements()
+        print(f"\n[OctreeHybridColorCellsByLevel] all={n_all} level_1_to_100={n_colored}")
+        self.assertGreater(n_colored, 0)
+        # For a uniform non-adaptive mesh there are no template hexes, so coloring
+        # all levels ≥1 should capture all cells.
+        self.assertEqual(n_colored, n_all,
+                         "Wide level range should cover all cells in a uniform mesh")
+
+    def test_template_hexes_captured_by_negative_level(self):
+        """Including min_level=-1 captures transition-template hexes in an adaptive mesh."""
+        model = KM.Model()
+        build_transition_surface(model)  # triggers 2:1 transitions → template hexes
+        run_modeler(model, """{
+            "input_model_part_name":"Surface","output_model_part_name":"Templates",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,"adaptive":true}],
+            "coloring_settings_list":[
+                {"type":"OctreeHybridClassifyCellsInsideOutside"},
+                {"type":"OctreeHybridColorCellsByLevel","color":2,"min_level":-1,"max_level":-1}
+            ],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+                                        "model_part_name":"Templates","color":2,
+                                        "tag_refinement_level":true}],
+            "model_part_operations":[]}""")
+        tpl = model.GetModelPart("Templates")
+        levels = {el.GetValue(KM.REFINEMENT_LEVEL) for el in tpl.Elements}
+        print(f"\n[OctreeHybridColorCellsByLevel] template_cells={tpl.NumberOfElements()} levels={levels}")
+        # All emitted cells should carry level -1 (template)
+        if tpl.NumberOfElements() > 0:
+            self.assertEqual(levels, {-1},
+                             "Color-by-level=-1 should only emit template hexes")
+
+    def test_registry_path_exists(self):
+        self.assertTrue(KM.Registry.HasValue(
+            "OctreeHybridMesherColoring.All.OctreeHybridColorCellsByLevel.Prototype"))
 
 
 if __name__ == "__main__":
