@@ -231,6 +231,62 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerInfoString, KratosCoreFastSui
     KRATOS_EXPECT_EQ(m.Info(), "OctreeHybridMesherModeler");
 }
 
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerEmptyRefineListThrows, KratosCoreFastSuite)
+{
+    // An empty refine_operations_list means no OctreeHybridRefineInterfaceCells entry is
+    // dispatched, so mpOctree is never built.  SetupModelPart must throw with a clear message.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [],
+        "coloring_settings_list" : [],
+        "entities_generator_list": [],
+        "model_part_operations"  : []
+    })");
+    OctreeHybridMesherModeler modeler(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerRefineUniformWithoutOctreeThrows, KratosCoreFastSuite)
+{
+    // A refine_operations_list that starts with OctreeHybridRefineUniform (instead of
+    // OctreeHybridRefineInterfaceCells) never builds the octree.  OctreeHybridRefineUniform
+    // checks mpOctree internally and must throw before the extraction guard is even reached.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineUniform", "refinement_depth": 4 }],
+        "coloring_settings_list" : [],
+        "entities_generator_list": [],
+        "model_part_operations"  : []
+    })");
+    OctreeHybridMesherModeler modeler(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerUnknownMeshTypeThrows, KratosCoreFastSuite)
+{
+    // ExecuteRefinementOperations throws for any mesh_type that is neither "dual" nor "primal".
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 2, "adaptive": false,
+                                      "mesh_type": "invalid_mesh_type" }],
+        "coloring_settings_list" : [],
+        "entities_generator_list": [],
+        "model_part_operations"  : []
+    })");
+    OctreeHybridMesherModeler modeler(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
+}
+
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerUnknownOperationThrows, KratosCoreFastSuite)
 {
     Model model;
