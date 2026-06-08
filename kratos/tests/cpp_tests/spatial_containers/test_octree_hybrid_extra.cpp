@@ -362,4 +362,25 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridCellDataPayloadAssignAndRead, KratosCoreFa
     // Cell destructor calls DeleteData → memory freed, no leak
 }
 
+// ===========================================================================
+// OctreeHybrid::Initialize — direct call
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridInitializeResetsToSingleLeaf, KratosCoreFastSuite)
+{
+    OHExtraOctree octree(4);
+    octree.SubdivideCellByIdAndLevel(0, 0); // root → 8 leaves
+    KRATOS_EXPECT_EQ(octree.GetLeafCount(), 8);
+
+    octree.Initialize(3); // reset to depth 3
+    KRATOS_EXPECT_EQ(octree.GetLeafCount(), 1);
+    KRATOS_EXPECT_EQ(octree.GetDepth(), std::size_t{3});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridInitializeThrowsOnInvalidDepth, KratosCoreFastSuite)
+{
+    OHExtraOctree octree(4);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(octree.Initialize(0), "");
+}
+
 } // namespace Kratos::Testing
