@@ -1,9 +1,9 @@
 ---
 title: OctreeHybridMesherModeler
-keywords: mesh hex hexahedral octree adaptive dual primal modeler hanging-node constraints
-tags: [mesh hexahedral octree modeler]
+keywords: mesh hex hexahedral tetrahedral octree adaptive dual primal modeler hanging-node constraints BCC Freudenthal
+tags: [mesh hexahedral tetrahedral octree modeler]
 sidebar: kratos_core_utilities
-summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine to produce all-hex ModelParts with optional surface projection and hanging-node constraints.
+summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine to produce all-hex or all-tet ModelParts with optional surface projection and hanging-node constraints.
 ---
 
 # OctreeHybridMesherModeler
@@ -33,6 +33,7 @@ summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine t
    - 8.3 [Dual mesh with surface projection](#83-dual-mesh-with-surface-projection)
    - 8.4 [Boundary conditions on the exterior surface](#84-boundary-conditions-on-the-exterior-surface)
    - 8.5 [Quality report](#85-quality-report)
+   - 8.6 [Tetrahedral mesh (BCC Freudenthal decomposition)](#86-tetrahedral-mesh-bcc-freudenthal-decomposition)
 9. [API reference](#9-api-reference)
 10. [Registration and instantiation](#10-registration-and-instantiation)
 11. [Testing](#11-testing)
@@ -43,8 +44,8 @@ summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine t
 ## 1. What this modeler does
 
 `OctreeHybridMesherModeler` is a Kratos `Modeler` subclass that converts a closed, orientable
-triangular surface `ModelPart` into an **all-hexahedral volumetric ModelPart** using the
-HybridOctree_Hex algorithm implemented in `OctreeHybridMeshUtility`.
+triangular surface `ModelPart` into a volumetric ModelPart — either **all-hexahedral** or
+**all-tetrahedral** — using the HybridOctree_Hex algorithm implemented in `OctreeHybridMeshUtility`.
 
 It sits in the standard Kratos modeler pipeline (`SetupGeometryModel` →
 `PrepareGeometryModel` → `SetupModelPart`) and the entire mesh generation happens inside
@@ -305,6 +306,8 @@ Registered entity-generation components:
 |--------------|-------|---------|
 | `OctreeHybridGenerateHexesByCellColor` | `OctreeHybridGenerateHexesByCellColor` | Create hex elements for cells matching a colour; optionally generates `LinearMasterSlaveConstraint` for primal mesh hanging nodes when `"variables"` is non-empty |
 | `OctreeHybridGenerateBoundaryConditionsByFace` | `OctreeHybridGenerateBoundaryConditionsByFace` | Create quad conditions on the outer surface; optionally generates `LinearMasterSlaveConstraint` for primal mesh hanging nodes when `"variables"` is non-empty |
+| `OctreeHybridGenerateTetrahedraByCellColor` | `OctreeHybridGenerateTetrahedraByCellColor` | Decompose each colour-matched hex into 6 tetrahedral elements using the Freudenthal–Kuhn scheme (BCC lattice, §3.3.3) |
+| `OctreeHybridGenerateTriangleBoundaryConditionsByFace` | `OctreeHybridGenerateTriangleBoundaryConditionsByFace` | Create triangular conditions on the outer surface by splitting each boundary quad along the `(n₀, n₂)` diagonal (2 triangles per quad) |
 
 ---
 
@@ -861,6 +864,102 @@ Winding convention: outward normals follow the convention of `ExtractBoundaryFac
 
 ---
 
+#### `OctreeHybridGenerateTetrahedraByCellColor`
+
+Decomposes each colour-matched hex cell into **6 tetrahedra** using the Freudenthal–Kuhn
+decomposition along the main diagonal (local nodes 0 → 6).  This implements the BCC-lattice
+tetrahedral pattern described in TACS1de1.pdf §3.3.3: dual-hex cell centres act as BCC body
+positions, yielding tetrahedra with a minimum dihedral angle of **45°**.
+
+The resulting tet mesh is **conforming**: `OctreeHybridMeshUtility::ExtractDualHexMesh` assigns
+local node indices via the fixed `idTransform` map, so adjacent hexes always share the same
+physical node at the same logical corner — the shared-face diagonal is therefore identical in
+both hexes, and no hanging nodes are produced.
+
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateTetrahedraByCellColor.Prototype`
+
+**Class:** `Kratos::OctreeHybridGenerateTetrahedraByCellColor`
+
+**Header:** `kratos/modeler/entity_generation/octree_hybrid_generate_tetrahedra_by_cell_color.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridGenerateTetrahedraByCellColor"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
+| `color` | int | `1` | Cell-colour label to decompose (e.g. `1` for inside cells). |
+| `properties_id` | int | `1` | Properties block ID assigned to every new element. |
+| `generated_entity` | string | `"Element3D4N"` | Registered tetrahedral element type name. |
+| `tag_refinement_level` | bool | `true` | When `true`, each element carries the parent hex's `REFINEMENT_LEVEL` value. |
+
+**Freudenthal 6-tet connectivity** (local hex node indices, Hexahedra3D8 ordering):
+
+| Tet | Nodes |
+|-----|-------|
+| 0 | 0, 3, 6, 2 |
+| 1 | 3, 6, 7, 0 |
+| 2 | 4, 7, 6, 0 |
+| 3 | 0, 4, 5, 6 |
+| 4 | 0, 1, 2, 6 |
+| 5 | 1, 5, 6, 0 |
+
+**Example JSON:**
+
+```json
+{
+    "type"                 : "OctreeHybridGenerateTetrahedraByCellColor",
+    "model_part_name"      : "TetDomain",
+    "color"                : 1,
+    "properties_id"        : 1,
+    "generated_entity"     : "Element3D4N",
+    "tag_refinement_level" : true
+}
+```
+
+---
+
+#### `OctreeHybridGenerateTriangleBoundaryConditionsByFace`
+
+Creates **triangular boundary conditions** on the outer surface of the coloured hex mesh.
+Each boundary quad `{n₀, n₁, n₂, n₃}` from `OctreeHybridMeshUtility::ExtractBoundaryFaces`
+is split along the `(n₀, n₂)` diagonal into two triangles:
+- triangle 1: `{n₀, n₁, n₂}`
+- triangle 2: `{n₀, n₂, n₃}`
+
+This diagonal is consistent with the `(0, 6)` main-diagonal Freudenthal decomposition used by
+`OctreeHybridGenerateTetrahedraByCellColor`, so every boundary triangle is an exposed face of an
+interior tetrahedron.  A tet mesh + triangle BC mesh pair generated from the same `entities_generator_list`
+is therefore **conforming** at the boundary.
+
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateTriangleBoundaryConditionsByFace.Prototype`
+
+**Class:** `Kratos::OctreeHybridGenerateTriangleBoundaryConditionsByFace`
+
+**Header:** `kratos/modeler/entity_generation/octree_hybrid_generate_triangle_boundary_conditions_by_face.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridGenerateTriangleBoundaryConditionsByFace"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
+| `color` | int | `1` | Cell-colour label identifying the volume to extract the boundary of. |
+| `properties_id` | int | `1` | Properties block ID assigned to every new condition. |
+| `generated_entity` | string | `"SurfaceCondition3D3N"` | Registered triangular condition type name. |
+
+**Example JSON:**
+
+```json
+{
+    "type"             : "OctreeHybridGenerateTriangleBoundaryConditionsByFace",
+    "model_part_name"  : "TetDomain.Boundary",
+    "color"            : 1,
+    "properties_id"    : 1,
+    "generated_entity" : "SurfaceCondition3D3N"
+}
+```
+
 ---
 
 ### 7.3 Operation components
@@ -1146,6 +1245,71 @@ Expected log output (example, depth-4 dual box mesh):
 ```
 [OctreeHybridReportMeshQuality] minSJ=0.472  meanSJ=0.891  inverted=0 (0.0%)
 ```
+
+---
+
+### 8.6 Tetrahedral mesh (BCC Freudenthal decomposition)
+
+`OctreeHybridGenerateTetrahedraByCellColor` decomposes each hex cell into 6 tetrahedra.
+Pair it with `OctreeHybridGenerateTriangleBoundaryConditionsByFace` to obtain a conforming
+tet + triangle-BC mesh in a single `SetupModelPart` call.
+
+The tet count is always exactly **6 × hex count** for the same settings, and the
+triangle count is exactly **2 × quad-BC count**.
+
+```python
+import KratosMultiphysics as KM
+
+model = KM.Model()
+surface_mp = model.CreateModelPart("Surface")
+surface_mp.ProcessInfo[KM.DOMAIN_SIZE] = 3
+KM.StlIO("my_surface.stl", KM.Parameters('{"open_mode":"read"}')).ReadModelPart(surface_mp)
+
+settings = KM.Parameters("""{
+    "input_model_part_name"  : "Surface",
+    "output_model_part_name" : "TetDomain",
+    "refine_operations_list" : [
+        {
+            "type"             : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth" : 4,
+            "adaptive"         : false,
+            "mesh_type"        : "dual"
+        }
+    ],
+    "coloring_settings_list" : [
+        { "type" : "OctreeHybridClassifyCellsInsideOutside" }
+    ],
+    "entities_generator_list" : [
+        {
+            "type"                 : "OctreeHybridGenerateTetrahedraByCellColor",
+            "model_part_name"      : "TetDomain",
+            "color"                : 1,
+            "properties_id"        : 1,
+            "generated_entity"     : "Element3D4N",
+            "tag_refinement_level" : true
+        },
+        {
+            "type"             : "OctreeHybridGenerateTriangleBoundaryConditionsByFace",
+            "model_part_name"  : "TetDomain.Boundary",
+            "color"            : 1,
+            "properties_id"    : 1,
+            "generated_entity" : "SurfaceCondition3D3N"
+        }
+    ],
+    "model_part_operations" : []
+}""")
+
+modeler = KM.OctreeHybridMesherModeler(model, settings)
+modeler.SetupModelPart()
+
+tet_mp   = model.GetModelPart("TetDomain")
+bound_mp = model.GetModelPart("TetDomain.Boundary")
+print(f"Tet elements : {tet_mp.NumberOfElements()}")
+print(f"Tri BCs      : {bound_mp.NumberOfConditions()}")
+```
+
+> **Note:** `"TetDomain.Boundary"` is a sub-model-part of `"TetDomain"`.  Node IDs are
+> shared: every boundary triangle node also appears in the volume mesh.
 
 ---
 
@@ -1548,7 +1712,7 @@ All tests are registered in `KratosCoreFastSuite`.  Run them with:
 # or via the VS Code "Run C++ Test Suite Filtered" task with the pattern OctreeHybridMesher
 ```
 
-The C++ suite mirrors the Python suite, covering the same seven functional groups:
+The C++ suite mirrors the Python suite, covering the same functional groups plus new tet/triangle tests:
 
 | Group | C++ test names |
 |-------|---------------|
@@ -1559,6 +1723,8 @@ The C++ suite mirrors the Python suite, covering the same seven functional group
 | `OctreeHybridGenerateHexesByCellColor` (hanging-node path) | `OctreeHybridMesherGenerateHexesByCellColorHasConstraintParams`, `…PrimalMeshConstraintsGenerated`, `…PrimalConstraintsPartitionOfUnity`, `…PrimalConstraintsMasterCountsValid`, `…PrimalMultiVariableConstraints`, `…DualMeshNoHangingConstraints` |
 | `OctreeHybridReportMeshQuality` | `OctreeHybridMesherReportMeshQualityRegistered`, `…ReportMeshQualityRunsWithoutError`, `…ReportMeshQualityEmptyModelPart` |
 | Registry dispatch | `OctreeHybridMesherRegistryBasePrototypesPresent`, `…RegistryKratosMultiphysicsPaths`, `…RegistryFullPathDispatchWorks`, `…RegistryBaseColoringInvocationThrows`, `…RegistryBaseOperationInvocationThrows` |
+| `OctreeHybridGenerateTetrahedraByCellColor` | `OctreeHybridGenerateTetrahedraRegistryEntry`, `OctreeHybridMesherModelerTetraElementsCreated`, `…TetraCountIsHexTimes6`, `…TetraZeroInverted`, `…TetraNodeSubsetFromHex`, `…TetraTagRefinementLevel` |
+| `OctreeHybridGenerateTriangleBoundaryConditionsByFace` | `OctreeHybridGenerateTriangleBCsRegistryEntry`, `OctreeHybridMesherModelerTriangleBCsCreated`, `…TriangleBCsCountIsTwiceQuad`, `…TriangleBCsNodeSubset` |
 
 ---
 
@@ -1577,6 +1743,7 @@ The notebook walks through:
 - Visualising the octree adaptive refinement (level scalar field) and the hex mesh quality.
 - Comparing the uncarved block, the coloring-carved mesh, and the surface-projected mesh.
 - Generating hanging-node constraints for the primal mesh and inspecting their partition-of-unity property.
+- **Step 11 (new):** Generating a conforming tetrahedral mesh via `OctreeHybridGenerateTetrahedraByCellColor` and triangular boundary conditions via `OctreeHybridGenerateTriangleBoundaryConditionsByFace`; verifying the 6× tet/hex ratio and zero inverted elements; PyVista visualisation of the tet mesh coloured by refinement level.
 
 It requires `KratosMultiphysics`, `pyvista`, and optionally `trame`/`ipywidgets` for interactive rendering.
 
