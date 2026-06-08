@@ -293,9 +293,8 @@ Registered entity-generation components:
 
 | JSON `"type"` | Class | Purpose |
 |--------------|-------|---------|
-| `OctreeHybridGenerateHexesByCellColor` | `OctreeHybridGenerateHexesByCellColor` | Create hex elements for cells matching a colour |
-| `OctreeHybridGenerateBoundaryConditionsByFace` | `OctreeHybridGenerateBoundaryConditionsByFace` | Create quad conditions on the outer surface |
-| `OctreeHybridGenerateHangingNodeConstraints` | `OctreeHybridGenerateHangingNodeConstraints` | Create `LinearMasterSlaveConstraint` for primal mesh |
+| `OctreeHybridGenerateHexesByCellColor` | `OctreeHybridGenerateHexesByCellColor` | Create hex elements for cells matching a colour; optionally generates `LinearMasterSlaveConstraint` for primal mesh hanging nodes when `"variables"` is non-empty |
+| `OctreeHybridGenerateBoundaryConditionsByFace` | `OctreeHybridGenerateBoundaryConditionsByFace` | Create quad conditions on the outer surface; optionally generates `LinearMasterSlaveConstraint` for primal mesh hanging nodes when `"variables"` is non-empty |
 
 ---
 
@@ -326,7 +325,7 @@ it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetDat
 | `mCells` | `vector<array<int,8>>` | `BuildOctreeAndExtract` | All stages | Hex connectivity (8 node indices per cell, Hexahedra3D8 ordering). |
 | `mCellLevel` | `vector<int>` | `BuildOctreeAndExtract` | Entity generation, quality report | Octree refinement level per cell (-1 for transition-template hexes). |
 | `mCellColor` | `vector<int>` | Coloring stages | Entity generation | Per-cell inside(1)/outside(0) label. Empty until coloring runs. |
-| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `OctreeHybridGenerateHangingNodeConstraints` | Hanging-node interpolation records (primal mesh only). |
+| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `OctreeHybridGenerateHexesByCellColor` (when `"variables"` is non-empty) | Hanging-node interpolation records (primal mesh only). |
 | `mNodePtrs` | `vector<Node::Pointer>` | Entity generation (lazy) | Entity generation | De-duplication cache: mesh-node index -> ModelPart Node. Null until the node is first needed. |
 | `mProjected` | `bool` | `BuildOctreeAndExtract` | `OctreeHybridClassifyCellsInsideOutside` | True when surface projection has been applied; triggers the classification short-circuit. |
 
@@ -408,8 +407,10 @@ variable)** triple:
 | Edge-midpoint | 2 | 0.5 |
 | Face-centre | 4 | 0.25 |
 
-The `"variables"` parameter of `OctreeHybridGenerateHangingNodeConstraints` lists which
-DOF variables to constrain (default: `DISPLACEMENT_X`, `DISPLACEMENT_Y`, `DISPLACEMENT_Z`).
+The `"variables"` parameter of `OctreeHybridGenerateHexesByCellColor` lists which
+DOF variables to constrain at 2:1 transitions (default: `[]` — no constraints).
+Pass the desired scalar DOF names (e.g. `["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]`)
+to enable constraint generation in the same pass as element creation.
 
 **Properties:**
 
@@ -683,6 +684,8 @@ mesh.
 | `color` | int | `1` | Cell-colour label identifying the volume to extract the boundary of. |
 | `properties_id` | int | `1` | Properties block ID assigned to every new condition. |
 | `generated_entity` | string | `"SurfaceCondition3D4N"` | Registered condition type name. |
+| `constraint_name` | string | `"LinearMasterSlaveConstraint"` | Constraint type for hanging-node MPC; used only when `"variables"` is non-empty. |
+| `variables` | string array | `[]` | Scalar DOF variable names to constrain at 2:1 transitions.  Empty (default) = no constraints generated. |
 
 **Behaviour:**
 
@@ -693,10 +696,13 @@ mesh.
    `GenerateOrRetrieveNode` (reuses nodes already created by a prior hex-generation
    stage) and constructs a condition using `generated_entity`.
 4. Bulk-inserts all nodes and conditions into the target ModelPart.
+5. If `"variables"` is non-empty and `mHanging` is non-empty, generates
+   `LinearMasterSlaveConstraint` objects for all 2:1 hanging-node transitions
+   (same logic as `OctreeHybridGenerateHexesByCellColor` with `"variables"`).
 
 Winding convention: outward normals follow the convention of `ExtractBoundaryFaces`.
 
-**Example JSON:**
+**Example JSON (primal mesh with hanging-node constraints on the boundary):**
 
 ```json
 {
@@ -704,71 +710,12 @@ Winding convention: outward normals follow the convention of `ExtractBoundaryFac
     "model_part_name"  : "Boundary",
     "color"            : 1,
     "properties_id"    : 1,
-    "generated_entity" : "SurfaceCondition3D4N"
+    "generated_entity" : "SurfaceCondition3D4N",
+    "variables"        : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
 }
 ```
 
 ---
-
-#### `OctreeHybridGenerateHangingNodeConstraints`
-
-Creates `LinearMasterSlaveConstraint` objects for hanging nodes in the primal mesh.
-
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHangingNodeConstraints.Prototype`
-
-**Class:** `Kratos::OctreeHybridGenerateHangingNodeConstraints`
-
-**Header:** `kratos/modeler/entity_generation/octree_hybrid_generate_hanging_node_constraints.h`
-
-**Parameter schema:**
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `type` | string | `"OctreeHybridGenerateHangingNodeConstraints"` | Registry lookup key. |
-| `model_part_name` | string | `"Undefined"` | ModelPart to add constraints to (must already exist with the mesh nodes). |
-| `constraint_name` | string | `"LinearMasterSlaveConstraint"` | Registered constraint type to instantiate. |
-| `variables` | string array | `["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]` | Scalar DOF variables to constrain (each must be a registered `Variable<double>`). |
-
-**Behaviour:**
-
-For each `HangingConstraint` record in `mData.mHanging`:
-1. The slave node pointer is looked up in `mData.mNodePtrs`; the record is skipped
-   if the pointer is null (node was not created, e.g. because the cell was
-   classified outside and not emitted).
-2. All master node pointers are looked up; the record is skipped if any master
-   pointer is null.
-3. For each variable in `"variables"`, for each master index `m`:
-   - `Node::AddDof` is called on the slave and all master nodes.
-   - `ModelPart::CreateNewMasterSlaveConstraint` is called with the **1-1
-     node+variable overload** using `HangingConstraint::Weights[m]` as the scalar
-     weight and `0.0` as the constant.  Each call consumes one ID from
-     `OctreeHybridMesherModeler::NextConstraintId`.
-
-Each constraint relates exactly one master DOF to one slave DOF (1×1 relation matrix),
-matching the `ModelPartIO` MPC format.  The builder-and-solver accumulates all
-constraints sharing the same slave DOF to recover the full bilinear interpolation:
-```
-u_slave = w_0 * u_master_0 + w_1 * u_master_1 [+ w_2 * u_master_2 + w_3 * u_master_3]
-```
-
-**Prerequisite:** The primal hex-generation step (`OctreeHybridGenerateHexesByCellColor` with
-`mesh_type: "primal"`) must have run first so that `mData.mNodePtrs` is populated.
-
-**Prerequisite — coloring:** If a coloring stage (e.g. `OctreeHybridClassifyCellsInsideOutside`)
-was run before hex generation, only inside cells were created.  Hanging-node records
-whose slave or master nodes belong to carved-away outside cells are silently skipped;
-no error is thrown.
-
-**Example JSON:**
-
-```json
-{
-    "type"            : "OctreeHybridGenerateHangingNodeConstraints",
-    "model_part_name" : "FluidDomain",
-    "constraint_name" : "LinearMasterSlaveConstraint",
-    "variables"       : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
-}
-```
 
 ---
 
@@ -905,12 +852,7 @@ settings = KM.Parameters("""{
             "type"            : "OctreeHybridGenerateHexesByCellColor",
             "model_part_name" : "Domain",
             "color"           : 1,
-            "properties_id"   : 1
-        },
-        {
-            "type"            : "OctreeHybridGenerateHangingNodeConstraints",
-            "model_part_name" : "Domain",
-            "constraint_name" : "LinearMasterSlaveConstraint",
+            "properties_id"   : 1,
             "variables"       : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
         }
     ],
@@ -1369,10 +1311,12 @@ Unit tests for the `OctreeHybridGenerateBoundaryConditionsByFace` entity-generat
 | `test_each_condition_has_four_nodes` | Every boundary condition has exactly 4 nodes (is a quad). |
 | `test_boundary_faces_lt_6_times_elements` | Boundary face count is less than 6 × element count (interior faces are not counted). |
 | `test_registry_path_exists` | The Registry path for `OctreeHybridGenerateBoundaryConditionsByFace` exists. |
+| `test_primal_boundary_constraints_generated` | With `"variables"` set on a primal mesh, constraints are created in the boundary ModelPart. |
 
 #### `TestGenerateHangingNodeConstraints`
 
-Unit tests for the `OctreeHybridGenerateHangingNodeConstraints` entity-generation component (primal mesh).
+Tests for hanging-node constraint generation via the `"variables"` parameter of
+`OctreeHybridGenerateHexesByCellColor` (primal mesh).
 
 | Test | Assertion |
 |------|-----------|
@@ -1382,7 +1326,7 @@ Unit tests for the `OctreeHybridGenerateHangingNodeConstraints` entity-generatio
 | `test_face_centre_constraints_present` | At least one constraint has weight ≈ 0.25 (from a face-centre hanging node). |
 | `test_multiple_variables` | Requesting 3 variables multiplies the constraint count by exactly 3. |
 | `test_each_constraint_has_one_slave_dof` | Every constraint has exactly one slave DOF. |
-| `test_registry_path_exists` | The Registry path for `OctreeHybridGenerateHangingNodeConstraints` exists. |
+| `test_empty_variables_produces_no_constraints` | An empty `"variables"` list generates zero constraints (backward-compatible default). |
 | `test_dual_mesh_no_hanging_constraints` | The dual mesh path produces zero hanging-node constraints (it is conforming by construction). |
 
 #### `TestReportMeshQuality`
@@ -1403,7 +1347,7 @@ Tests for the Registry-prototype dispatch mechanism inside `OctreeHybridMesherMo
 | Test | Assertion |
 |------|-----------|
 | `test_all_base_prototypes_registered` | All four abstract base-class prototypes (`OctreeHybridRefineOperation`, `OctreeHybridMesherColoring`, `OctreeHybridMesherEntityGeneration`, `OctreeHybridMesherOperation`) are in the Registry. |
-| `test_all_concrete_prototypes_registered` | All six concrete components are in the Registry (including `OctreeHybridRefineInterfaceCells`). |
+| `test_all_concrete_prototypes_registered` | All five concrete components are in the Registry (including `OctreeHybridRefineInterfaceCells`). |
 | `test_full_path_dispatch_works` | A four-segment dot-separated full Registry path in the `"type"` field is accepted and dispatched correctly. |
 | `test_unknown_operation_type_raises` | An unknown operation type name triggers a Registry-not-found error. |
 | `test_base_type_invocation_raises` | Invoking the abstract base `OctreeHybridMesherOperation` prototype directly raises a clear error (the base does not implement the do-work virtual). |
@@ -1434,7 +1378,7 @@ The C++ suite mirrors the Python suite, covering the same seven functional group
 | `OctreeHybridClassifyCellsInsideOutside` | `OctreeHybridMesherClassifyReducesCellCount`, `…ClassifyRegistered` |
 | `OctreeHybridGenerateHexesByCellColor` | `OctreeHybridMesherGenerateHexesRegistered`, `…GenerateHexesNodeDeduplication`, `…GenerateHexesRefinementLevelTagged`, `…GenerateHexesNoLevelWhenDisabled`, `…GenerateHexesUniqueIds` |
 | `OctreeHybridGenerateBoundaryConditionsByFace` | `OctreeHybridMesherBoundaryConditionsRegistered`, `…BoundaryConditionsCreated`, `…BoundaryConditionsQuadNodes`, `…BoundaryConditionsFewerthanSixTimesElements`, `…BoundaryNodesSubsetOfVolume` |
-| `OctreeHybridGenerateHangingNodeConstraints` | `OctreeHybridMesherHangingNodeConstraintsRegistered`, `…PrimalMeshConstraintsGenerated`, `…PrimalConstraintsPartitionOfUnity`, `…PrimalConstraintsMasterCountsValid`, `…PrimalMultiVariableConstraints`, `…DualMeshNoHangingConstraints` |
+| `OctreeHybridGenerateHexesByCellColor` (hanging-node path) | `OctreeHybridMesherGenerateHexesByCellColorHasConstraintParams`, `…PrimalMeshConstraintsGenerated`, `…PrimalConstraintsPartitionOfUnity`, `…PrimalConstraintsMasterCountsValid`, `…PrimalMultiVariableConstraints`, `…DualMeshNoHangingConstraints` |
 | `OctreeHybridReportMeshQuality` | `OctreeHybridMesherReportMeshQualityRegistered`, `…ReportMeshQualityRunsWithoutError`, `…ReportMeshQualityEmptyModelPart` |
 | Registry dispatch | `OctreeHybridMesherRegistryBasePrototypesPresent`, `…RegistryKratosMultiphysicsPaths`, `…RegistryFullPathDispatchWorks`, `…RegistryBaseColoringInvocationThrows`, `…RegistryBaseOperationInvocationThrows` |
 
