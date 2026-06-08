@@ -993,4 +993,233 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineOperationBaseInvocationThrows, Krato
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
 }
 
+// ===========================================================================
+// OctreeHybridColorCellsInTouch colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInTouchRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorCellsInTouch.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorCellsInTouch.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInTouchColorsSomeCells, KratosCoreFastSuite)
+{
+    // Cells whose AABB intersects the box skin surface are labelled with color=2.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsInTouch",
+            "model_part_name":"Skin","color":2
+        }],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":2}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(),    0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInTouchNotAllCells, KratosCoreFastSuite)
+{
+    // Interior and far-exterior cells are not in contact with the skin:
+    // the surface-touch count must be strictly less than the total cell count.
+    Model m1, m2;
+    BuildClosedBoxSurface(m1.CreateModelPart("Skin"));
+    BuildClosedBoxSurface(m2.CreateModelPart("Skin"));
+
+    // Total elements (no colouring — generator treats empty mCellColor as all-match)
+    ModelPart& out_all = RunModeler(m1, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    // Only surface-touching cells (color=2)
+    ModelPart& out_touch = RunModeler(m2, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsInTouch",
+            "model_part_name":"Skin","color":2
+        }],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":2}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out_all.NumberOfElements(), out_touch.NumberOfElements());
+}
+
+// ===========================================================================
+// OctreeHybridColorConnectedCellsInTouch colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorConnectedCellsInTouchRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorConnectedCellsInTouch.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorConnectedCellsInTouch.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorConnectedCellsInTouchProducesElements, KratosCoreFastSuite)
+{
+    // Seeds: inside cells touching the skin; BFS through all inside cells → all
+    // inside cells reachable from the interface receive color=3.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[
+            {"type":"OctreeHybridClassifyCellsInsideOutside"},
+            {"type":"OctreeHybridColorConnectedCellsInTouch",
+             "model_part_name":"Skin","cell_color":1,"color":3}
+        ],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":3}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(),    0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorConnectedCellsInTouchFloodFillCoversInsideRegion, KratosCoreFastSuite)
+{
+    // The interior of the box is a single connected domain: flood-filling from the
+    // inside interface cells must reach every inside cell, so the element count
+    // from color=3 equals the count from a plain classify with color=1.
+    Model m1, m2;
+    BuildClosedBoxSurface(m1.CreateModelPart("Skin"));
+    BuildClosedBoxSurface(m2.CreateModelPart("Skin"));
+
+    ModelPart& out_inside = RunModeler(m1, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& out_connected = RunModeler(m2, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[
+            {"type":"OctreeHybridClassifyCellsInsideOutside"},
+            {"type":"OctreeHybridColorConnectedCellsInTouch",
+             "model_part_name":"Skin","cell_color":1,"color":3}
+        ],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":3}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_EQ(out_connected.NumberOfElements(), out_inside.NumberOfElements());
+}
+
+// ===========================================================================
+// OctreeHybridColorCellsByLevel colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorCellsByLevel.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorCellsByLevel.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelColorsCorrectSubset, KratosCoreFastSuite)
+{
+    // A depth-4 mesh has leaf cells at level 4; targeting only level 4 must yield
+    // at least some elements, but fewer than the full set.
+    Model m1, m2;
+    BuildClosedBoxSurface(m1.CreateModelPart("Skin"));
+    BuildClosedBoxSurface(m2.CreateModelPart("Skin"));
+
+    ModelPart& out_all = RunModeler(m1, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& out_level = RunModeler(m2, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsByLevel","color":2,"min_level":4,"max_level":4
+        }],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":2}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out_level.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out_all.NumberOfElements(), out_level.NumberOfElements());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelExcludesBeyondMaxDepth, KratosCoreFastSuite)
+{
+    // Targeting level 5 in a depth-4 mesh yields no cells.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsByLevel","color":2,"min_level":5,"max_level":5
+        }],
+        "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+            "model_part_name":"Output","color":2}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_EQ(out.NumberOfElements(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelMinGreaterThanMaxThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsByLevel","color":1,"min_level":5,"max_level":3
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+    OctreeHybridMesherModeler m(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
+}
+
 } // namespace Kratos::Testing
