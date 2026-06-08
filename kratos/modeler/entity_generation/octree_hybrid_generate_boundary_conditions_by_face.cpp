@@ -53,14 +53,20 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
 
     const int want_color = GenerationParameters["color"].GetInt();
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
+    // Retrieve an existing Properties object if present (e.g. the hex-generation
+    // step already created it on the same ModelPart), otherwise create a new one.
     Properties::Pointer p_props = r_mp.HasProperties(properties_id)
         ? r_mp.pGetProperties(properties_id)
         : r_mp.CreateNewProperties(properties_id);
     const Condition& r_proto = KratosComponents<Condition>::Get(
         GenerationParameters["generated_entity"].GetString());
 
-    // Build a colour-filtered cell list matching the hex generator's skip logic.
-    // ExtractBoundaryFaces needs only connectivity (same indices as mNodes).
+    // Build a colour-filtered cell list so ExtractBoundaryFaces sees the same
+    // cell set that the hex generator emitted.  A boundary face is one owned by
+    // exactly one cell in this filtered set — it is the outer closed surface of
+    // the carved mesh within that colour region.
+    // ExtractBoundaryFaces uses only connectivity indices (into mNodes), so there
+    // is no need to copy the actual node coordinates here.
     std::vector<std::array<int,8>> active_cells;
     active_cells.reserve(r_data.mCells.size());
     for (std::size_t c = 0; c < r_data.mCells.size(); ++c) {
@@ -70,6 +76,8 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
 
     const auto bfaces = OctreeHybridMeshUtility::ExtractBoundaryFaces(active_cells);
 
+    // Accumulate nodes and conditions locally, then batch-add at the end so the
+    // containers are sorted once rather than after every individual insertion.
     ModelPart::NodesContainerType new_nodes;
     ModelPart::ConditionsContainerType new_conditions;
     Condition::NodesArrayType face_nodes(4);
@@ -77,13 +85,20 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
         for (int k = 0; k < 4; ++k) {
             Node::Pointer p_node = rModeler.GenerateOrRetrieveNode(r_mp, new_nodes, bf[k]);
             face_nodes(k) = p_node;
-            // If the node was created by a prior stage (e.g. hex generator) it won't
-            // be in new_nodes, so push it explicitly so it lands in this ModelPart too.
+            // GenerateOrRetrieveNode only appends to new_nodes on first creation.
+            // Nodes created by a prior stage (e.g. the hex generator) already exist
+            // in mNodePtrs and are returned without being pushed into new_nodes, so
+            // this ModelPart would not own them.  Pushing explicitly here guarantees
+            // every boundary node is registered in this ModelPart regardless of when
+            // it was first created.
             new_nodes.push_back(p_node);
         }
         new_conditions.push_back(r_proto.Create(rModeler.NextConditionId(), face_nodes, p_props));
     }
 
+    // Deduplicate: shared face-corner nodes appear multiple times in new_nodes
+    // (once per incident boundary face that pushed them).  Unique() removes the
+    // duplicates before the batch add.
     new_nodes.Unique();
     ModelPartUtils::AddNodesFromOrderedContainer(r_mp, new_nodes.begin(), new_nodes.end());
     r_mp.AddConditions(new_conditions.begin(), new_conditions.end());
@@ -105,6 +120,10 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
     }
 
     for (const auto& hc : r_data.mHanging) {
+        // A null pointer means the node index was never materialised as a Kratos
+        // Node — e.g. it belongs to a cell excluded by the color filter.
+        // Skip silently; it is valid for a hanging node or one of its masters to
+        // fall outside the boundary condition region.
         Node::Pointer p_slave = r_data.mNodePtrs[hc.SlaveNode];
         if (!p_slave) continue;
 
@@ -118,8 +137,14 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
 
         for (int vi = 0; vi < n_vars; ++vi) {
             const Variable<double>& r_var = *vars[vi];
+            // DOFs must be registered on the node before a constraint can
+            // reference them — AddDof is a no-op if the DOF already exists.
             p_slave->AddDof(r_var);
             for (int m = 0; m < hc.NumMasters; ++m) master_ptrs[m]->AddDof(r_var);
+            // One binary LinearMasterSlaveConstraint per (master, variable) pair.
+            // The slave satisfies u_slave = Σ weight_m · u_master_m; each term
+            // becomes one binary constraint whose contributions accumulate during
+            // assembly.
             for (int m = 0; m < hc.NumMasters; ++m) {
                 r_mp.CreateNewMasterSlaveConstraint(
                     constraint_name, rModeler.NextConstraintId(),
