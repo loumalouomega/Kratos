@@ -11,9 +11,6 @@
 //
 
 // System includes
-#include <fstream>
-#include <sstream>
-#include <cstdio>
 
 // External includes
 
@@ -36,8 +33,7 @@ namespace Kratos::Testing {
 
 namespace {
 
-using Util = OctreeHybridMeshUtility;
-using OctreeType = Util::OctreeType;
+using OctreeType = OctreeHybridMeshUtility::OctreeType;
 
 void BuildClosedBoxSurface(ModelPart& rSurfaceMesh, double Lo = 0.3, double Hi = 0.7)
 {
@@ -92,7 +88,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityWriteHexVtkProducesVtkHeader, K
     std::vector<int> levels = {1};
 
     const std::string fname = "/tmp/kratos_test_write_hex_vtk.vtk";
-    Util::WriteHexVtk(fname, nodes, cells, levels);
+    OctreeHybridMeshUtility::WriteHexVtk(fname, nodes, cells, levels);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     KRATOS_EXPECT_EQ(ReadFirstLine(fname), std::string{"# vtk DataFile Version 2.0"});
@@ -106,7 +102,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityWriteHexVtkEmptyCellsWritesEmpt
     std::vector<int> levels;
 
     const std::string fname = "/tmp/kratos_test_write_hex_vtk_empty.vtk";
-    Util::WriteHexVtk(fname, nodes, cells, levels);
+    OctreeHybridMeshUtility::WriteHexVtk(fname, nodes, cells, levels);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     std::remove(fname.c_str());
@@ -120,11 +116,11 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityWriteDualHexVtkProducesFile, Kr
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
-    auto p_octree = Util::BuildFromSurfaceMesh(
+    auto p_octree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         model.GetModelPart("Skin"), 3, /*Adaptive=*/false);
 
     const std::string fname = "/tmp/kratos_test_write_dual_hex_vtk.vtk";
-    Util::WriteDualHexVtk(*p_octree, fname);
+    OctreeHybridMeshUtility::WriteDualHexVtk(*p_octree, fname);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     KRATOS_EXPECT_EQ(ReadFirstLine(fname), std::string{"# vtk DataFile Version 2.0"});
@@ -135,12 +131,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityWriteDualHexVtkWithCarveProduce
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
-    auto p_octree = Util::BuildFromSurfaceMesh(
+    auto p_octree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         model.GetModelPart("Skin"), 3, /*Adaptive=*/false);
-    auto triangles = Util::ExtractTriangleSoup(model.GetModelPart("Skin"));
+    auto triangles = OctreeHybridMeshUtility::ExtractTriangleSoup(model.GetModelPart("Skin"));
 
     const std::string fname = "/tmp/kratos_test_write_dual_hex_vtk_carved.vtk";
-    Util::WriteDualHexVtk(*p_octree, fname, &triangles);
+    OctreeHybridMeshUtility::WriteDualHexVtk(*p_octree, fname, &triangles);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     std::remove(fname.c_str());
@@ -154,11 +150,11 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityWritePrimalVtkProducesFile, Kra
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
-    auto p_octree = Util::BuildFromSurfaceMesh(
+    auto p_octree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         model.GetModelPart("Skin"), 3, /*Adaptive=*/false);
 
     const std::string fname = "/tmp/kratos_test_write_primal_vtk.vtk";
-    Util::WritePrimalVtk(*p_octree, fname);
+    OctreeHybridMeshUtility::WritePrimalVtk(*p_octree, fname);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     KRATOS_EXPECT_EQ(ReadFirstLine(fname), std::string{"# vtk DataFile Version 2.0"});
@@ -175,7 +171,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityBuildAndWriteVtkProducesFile, K
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
 
     const std::string fname = "/tmp/kratos_test_build_and_write_vtk.vtk";
-    Util::BuildAndWriteVtk(model.GetModelPart("Skin"), fname, 3, /*Adaptive=*/false);
+    OctreeHybridMeshUtility::BuildAndWriteVtk(model.GetModelPart("Skin"), fname, 3, /*Adaptive=*/false);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     KRATOS_EXPECT_EQ(ReadFirstLine(fname), std::string{"# vtk DataFile Version 2.0"});
@@ -192,7 +188,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityBuildCarveAndWriteVtkProducesFi
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
 
     const std::string fname = "/tmp/kratos_test_build_carve_write_vtk.vtk";
-    Util::BuildCarveAndWriteVtk(model.GetModelPart("Skin"), fname, 3, /*Adaptive=*/false);
+    OctreeHybridMeshUtility::BuildCarveAndWriteVtk(model.GetModelPart("Skin"), fname, 3, /*Adaptive=*/false);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     KRATOS_EXPECT_EQ(ReadFirstLine(fname), std::string{"# vtk DataFile Version 2.0"});
@@ -210,7 +206,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityBuildCarveProjectAndWriteVtkPro
 
     const std::string fname = "/tmp/kratos_test_build_carve_project_vtk.vtk";
     // Use minimal iterations to keep the test fast
-    Util::BuildCarveProjectAndWriteVtk(
+    OctreeHybridMeshUtility::BuildCarveProjectAndWriteVtk(
         model.GetModelPart("Skin"), fname,
         /*RefinementDepth=*/3,
         /*ProjIters=*/1, /*ProjSmooth=*/1,
@@ -231,7 +227,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityWriteOctreeForReferenceProduces
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
 
     const std::string fname = "/tmp/kratos_test_write_octree_reference.vtk";
-    Util::WriteOctreeForReference(model.GetModelPart("Skin"), fname, 3);
+    OctreeHybridMeshUtility::WriteOctreeForReference(model.GetModelPart("Skin"), fname, 3);
 
     KRATOS_EXPECT_TRUE(FileExists(fname));
     KRATOS_EXPECT_EQ(ReadFirstLine(fname), std::string{"# vtk DataFile Version 2.0"});
@@ -248,7 +244,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClearBufferZoneEmptyMeshIsNoop,
     std::vector<std::array<int,8>>   cells;
     std::vector<int> levels;
 
-    Util::ClearBufferZone(nodes, cells, levels);
+    OctreeHybridMeshUtility::ClearBufferZone(nodes, cells, levels);
     KRATOS_EXPECT_EQ(cells.size(), std::size_t{0});
 }
 
@@ -264,7 +260,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClearBufferZoneConvexHexNotRemo
     std::vector<std::array<int,8>> cells = {{{0,1,2,3,4,5,6,7}}};
     std::vector<int> levels = {1};
 
-    Util::ClearBufferZone(nodes, cells, levels);
+    OctreeHybridMeshUtility::ClearBufferZone(nodes, cells, levels);
     KRATOS_EXPECT_EQ(cells.size(), std::size_t{1});
 }
 
@@ -283,7 +279,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClearBufferZonePreservesConvexB
     };
     std::vector<int> levels = {1, 1};
 
-    Util::ClearBufferZone(nodes, cells, levels);
+    OctreeHybridMeshUtility::ClearBufferZone(nodes, cells, levels);
     KRATOS_EXPECT_EQ(cells.size(), std::size_t{2});
 }
 
@@ -300,10 +296,10 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityProjectToIsoSurfaceEmptyTriangl
     std::vector<std::array<int,8>> cells = {{{0,1,2,3,4,5,6,7}}};
     std::vector<int> levels = {1};
 
-    Util::TriangleSoup empty_soup;
+    OctreeHybridMeshUtility::TriangleSoup empty_soup;
     const auto nodes_before = nodes;
 
-    Util::ProjectToIsoSurface(empty_soup, nodes, cells, levels, /*TotalIters=*/1, /*SmoothEvery=*/1);
+    OctreeHybridMeshUtility::ProjectToIsoSurface(empty_soup, nodes, cells, levels, /*TotalIters=*/1, /*SmoothEvery=*/1);
 
     // Nothing should change when triangle soup is empty
     KRATOS_EXPECT_EQ(nodes.size(), nodes_before.size());
@@ -314,22 +310,21 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityProjectToIsoSurfaceRunsWithoutE
     // Build a carved dual-hex mesh from a box surface, then project it.
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"), 0.3, 0.7);
-    auto p_octree = Util::BuildFromSurfaceMesh(
+    auto p_octree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         model.GetModelPart("Skin"), 3, /*Adaptive=*/false);
-    auto triangles = Util::ExtractTriangleSoup(model.GetModelPart("Skin"));
+    auto triangles = OctreeHybridMeshUtility::ExtractTriangleSoup(model.GetModelPart("Skin"));
 
     std::vector<std::array<double,3>> nodes;
     std::vector<std::array<int,8>> cells;
     std::vector<int> levels;
-    Util::ExtractDualHexMesh(*p_octree, nodes, cells, levels);
-    Util::RemoveOutsideElement(triangles, nodes, cells, levels);
+    OctreeHybridMeshUtility::ExtractDualHexMesh(*p_octree, nodes, cells, levels);
+    OctreeHybridMeshUtility::RemoveOutsideElement(triangles, nodes, cells, levels);
 
     KRATOS_EXPECT_GT(cells.size(), std::size_t{0});
-    const std::size_t n_cells_before = cells.size();
 
     // Minimal iterations so the test is fast; verify it does not throw.
-    Util::ClearBufferZone(nodes, cells, levels);
-    Util::ProjectToIsoSurface(triangles, nodes, cells, levels, /*TotalIters=*/2, /*SmoothEvery=*/1);
+    OctreeHybridMeshUtility::ClearBufferZone(nodes, cells, levels);
+    OctreeHybridMeshUtility::ProjectToIsoSurface(triangles, nodes, cells, levels, /*TotalIters=*/2, /*SmoothEvery=*/1);
 
     // After projection nodes should still be finite (non-NaN, non-Inf)
     for (const auto& nd : nodes)
