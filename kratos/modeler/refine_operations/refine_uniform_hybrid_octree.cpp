@@ -42,11 +42,17 @@ void OctreeHybridRefineUniform::Refine(
     KRATOS_ERROR_IF_NOT(r_data.mpOctree)
         << "OctreeHybridRefineUniform: octree has not been built yet." << std::endl;
 
+    // element_size takes priority over refinement_depth when explicitly set (> 0).
+    // The default value of 0.0 signals "not specified", so the explicit depth
+    // parameter is used as the fallback.
     const double element_size = RefineParameters["element_size"].GetDouble();
     const std::size_t target_depth = (element_size > 0.0)
         ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, element_size, false)
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
 
+    // OctreeType is constructed with a fixed maximum depth at build time.  If
+    // the requested depth exceeds that limit, Initialize re-creates the internal
+    // grid at the new depth before any subdivision can reach that level.
     if (target_depth > r_data.mpOctree->GetDepth()) {
         r_data.mpOctree->Initialize(target_depth);
     }
