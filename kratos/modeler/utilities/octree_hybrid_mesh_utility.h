@@ -368,11 +368,14 @@ public:
      *
      * The result is clamped to `[0, rOctree.GetDepth()]`.
      *
-     * @param rOctree     The octree whose bounding box provides the conversion.
-     * @param ElementSize Desired maximum cell size in world-space units.  Must be > 0.
-     * @return Equivalent refinement depth (clamped to the octree's maximum depth).
+     * @param rOctree          The octree whose bounding box provides the conversion.
+     * @param ElementSize      Desired maximum cell size in world-space units.  Must be > 0.
+     * @param ClampToMaxDepth  When true (default), clamp the result to the octree's current
+     *                         maximum depth.  Pass false to obtain the raw geometric depth.
+     * @return Equivalent refinement depth.
      */
-    static std::size_t ElementSizeToDepth(OctreeType& rOctree, double ElementSize);
+    static std::size_t ElementSizeToDepth(OctreeType& rOctree, double ElementSize,
+                                          bool ClampToMaxDepth = true);
 
     ///@}
     ///@name Carving, projection and mesh extraction (reusable by callers)

@@ -410,7 +410,8 @@ void OctreeHybridMeshUtility::RefineInterfaceCells(
 /***********************************************************************************/
 /***********************************************************************************/
 
-std::size_t OctreeHybridMeshUtility::ElementSizeToDepth(OctreeType& rOctree, double ElementSize)
+std::size_t OctreeHybridMeshUtility::ElementSizeToDepth(OctreeType& rOctree, double ElementSize,
+                                                        bool ClampToMaxDepth)
 {
     KRATOS_ERROR_IF(ElementSize <= 0.0)
         << "OctreeHybridMeshUtility::ElementSizeToDepth: ElementSize must be > 0, got "
@@ -438,7 +439,7 @@ std::size_t OctreeHybridMeshUtility::ElementSizeToDepth(OctreeType& rOctree, dou
 
     const std::size_t depth = static_cast<std::size_t>(
         std::ceil(-std::log2(norm_size)));
-    return std::min(depth, rOctree.GetDepth());
+    return ClampToMaxDepth ? std::min(depth, rOctree.GetDepth()) : depth;
 }
 
 /***********************************************************************************/
