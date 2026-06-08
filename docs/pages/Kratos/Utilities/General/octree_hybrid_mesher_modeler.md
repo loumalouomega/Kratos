@@ -252,9 +252,9 @@ subsequent entries are optional and can apply additional refinement (e.g. `Octre
 Coloring stages write an integer label into `OctreeHybridMesherData::mCellColor` (one entry
 per hex cell).  Downstream entity-generation stages filter on this label.
 
-The coloring list is processed in order; multiple coloring stages can be stacked, but
-in practice a single `OctreeHybridClassifyCellsInsideOutside` entry is sufficient for most use
-cases.
+The coloring list is processed in order; multiple stages can be stacked to build
+composite masks (e.g. classify inside/outside, then further mark interface cells or
+level-specific regions).
 
 The canonical colour convention is:
 
@@ -262,6 +262,16 @@ The canonical colour convention is:
 |-------|---------|
 | `1` | Inside the input surface |
 | `0` | Outside the input surface |
+| other | User-defined sub-region |
+
+Registered coloring components:
+
+| JSON `"type"` | Purpose |
+|--------------|---------|
+| `OctreeHybridClassifyCellsInsideOutside` | Ray-cast inside/outside classification |
+| `OctreeHybridColorCellsInTouch` | Color cells whose AABB intersects input-model-part geometry |
+| `OctreeHybridColorConnectedCellsInTouch` | Flood-fill connected cells touching input geometry |
+| `OctreeHybridColorCellsByLevel` | Color cells by octree refinement level |
 
 When using `mesh_type: "dual"` **without** `project_to_surface`, the coloring stage is
 responsible for the inside/outside carving.  When `project_to_surface: true`, the
@@ -607,6 +617,140 @@ Classifies every hex cell as inside (label 1) or outside (label 0) the input sur
 
 ```json
 { "type": "OctreeHybridClassifyCellsInsideOutside" }
+```
+
+---
+
+#### `OctreeHybridColorCellsInTouch`
+
+Colors every hex cell whose axis-aligned bounding box (AABB) intersects any geometry
+from the specified ModelPart.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellsInTouch.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellsInTouch`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cells_in_touch.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellsInTouch"` | Registry lookup key. |
+| `model_part_name` | string | `""` | Name of the ModelPart whose geometry is tested. |
+| `color` | int | `1` | Label to write for cells in touch with the geometry. |
+| `input_entities` | string | `"geometries"` | Which entities to iterate: `"geometries"`, `"elements"`, or `"conditions"`. |
+
+**Behaviour:**
+
+For each geometry in the ModelPart the operation computes the geometry's AABB, uses
+it to quick-reject cells whose own AABB does not overlap, then calls
+`Geometry::HasIntersection(cell_min, cell_max)` for the remaining candidates.  Cells
+that pass are assigned the configured `color`.  If `mCellColor` has not been
+initialised it is resized and filled with `0` first.
+
+**Example JSON:**
+
+```json
+{
+    "type"            : "OctreeHybridColorCellsInTouch",
+    "model_part_name" : "MySurface",
+    "color"           : 2,
+    "input_entities"  : "geometries"
+}
+```
+
+---
+
+#### `OctreeHybridColorConnectedCellsInTouch`
+
+Flood-fills all hex cells that are face-adjacent to cells touching the input geometry
+and carry a specified seed colour.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorConnectedCellsInTouch.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorConnectedCellsInTouch`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_connected_cells_in_touch.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorConnectedCellsInTouch"` | Registry lookup key. |
+| `model_part_name` | string | `""` | Name of the ModelPart whose geometry seeds the flood-fill. |
+| `color` | int | `1` | Label to write to every reached cell. |
+| `cell_color` | int | `0` | Only cells currently carrying this label are traversed. |
+| `input_entities` | string | `"geometries"` | Which entities to iterate: `"geometries"`, `"elements"`, or `"conditions"`. |
+
+**Behaviour:**
+
+1. Builds a face-adjacency graph from `mCells` (two cells are adjacent when they
+   share a sorted 4-tuple of global node indices).
+2. Seeds: all cells with colour `cell_color` that pass the AABB + `HasIntersection`
+   test against any geometry in the ModelPart.
+3. BFS from seeds through neighbours with `cell_color`; each visited cell is
+   assigned `color`.
+
+A typical use-case is labelling the connected exterior region after
+`OctreeHybridClassifyCellsInsideOutside`: run with `cell_color=0` to mark the
+outer shell as a distinct colour (e.g. 2), separating it from interior voids that
+also received label 0.
+
+**Example JSON:**
+
+```json
+{
+    "type"            : "OctreeHybridColorConnectedCellsInTouch",
+    "model_part_name" : "MySurface",
+    "color"           : 2,
+    "cell_color"      : 0,
+    "input_entities"  : "geometries"
+}
+```
+
+---
+
+#### `OctreeHybridColorCellsByLevel`
+
+Colors cells whose octree refinement level falls within a specified inclusive range.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellsByLevel.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellsByLevel`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cells_by_level.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellsByLevel"` | Registry lookup key. |
+| `color` | int | `1` | Label to write for cells in the specified level range. |
+| `min_level` | int | `1` | Minimum octree level (inclusive). Use `-1` to include transition-template hexes; `-2` for buffer-layer hexes. |
+| `max_level` | int | `100` | Maximum octree level (inclusive). |
+
+**Behaviour:**
+
+Iterates `mCellLevel` and writes `color` to every entry where
+`min_level <= mCellLevel[i] <= max_level`.  Level conventions match
+`OctreeHybridMesherData::mCellLevel`:
+
+| Value | Meaning |
+|-------|---------|
+| 1 … N | Octree leaf level |
+| -1 | Transition-template hex (dual mesh only) |
+| -2 | Buffer-layer hex (projection path only) |
+
+**Example JSON:**
+
+```json
+{
+    "type"      : "OctreeHybridColorCellsByLevel",
+    "color"     : 2,
+    "min_level" : 4,
+    "max_level" : 4
+}
 ```
 
 ---
@@ -1235,7 +1379,7 @@ It can be run directly:
 PYTHONPATH=/path/to/build/Release python3 kratos/tests/test_octree_hybrid_mesher_modeler.py
 ```
 
-or under the Kratos test runner.  The file contains nine test classes.
+or under the Kratos test runner.  The file contains twelve test classes.
 
 #### `TestOctreeHybridMesherModelerDual`
 
@@ -1329,6 +1473,40 @@ Tests for hanging-node constraint generation via the `"variables"` parameter of
 | `test_empty_variables_produces_no_constraints` | An empty `"variables"` list generates zero constraints (backward-compatible default). |
 | `test_dual_mesh_no_hanging_constraints` | The dual mesh path produces zero hanging-node constraints (it is conforming by construction). |
 
+#### `TestOctreeHybridColorCellsInTouch`
+
+Unit tests for the `OctreeHybridColorCellsInTouch` coloring component.
+
+| Test | Assertion |
+|------|-----------|
+| `test_cells_in_touch_produces_some_colored_cells` | After running without prior inside/outside classification, at least some cells touching the box surface are colored. |
+| `test_cells_in_touch_not_all_cells_colored` | Interior cells not touching any surface triangle remain uncolored (in-touch count < total cell count). |
+| `test_cells_in_touch_elements_entities` | `input_entities="elements"` is accepted and colors cells touching the element geometries. |
+| `test_registry_path_exists` | The Registry path `OctreeHybridMesherColoring.All.OctreeHybridColorCellsInTouch.Prototype` exists. |
+
+#### `TestOctreeHybridColorConnectedCellsInTouch`
+
+Unit tests for the `OctreeHybridColorConnectedCellsInTouch` coloring component.
+
+| Test | Assertion |
+|------|-----------|
+| `test_connected_flood_fill_from_surface` | After classify + flood-fill through outside cells (cell_color=0), the flooded set is non-empty. |
+| `test_connected_flood_fill_fewer_than_all_outside` | Flood-filled cell count is ≤ total outside count (no over-coloring). |
+| `test_connected_flood_fill_inside_cells` | Flood-fill through inside cells (cell_color=1) from the surface gives a non-empty result. |
+| `test_registry_path_exists` | The Registry path `OctreeHybridMesherColoring.All.OctreeHybridColorConnectedCellsInTouch.Prototype` exists. |
+
+#### `TestOctreeHybridColorCellsByLevel`
+
+Unit tests for the `OctreeHybridColorCellsByLevel` coloring component.
+
+| Test | Assertion |
+|------|-----------|
+| `test_color_by_target_level_finds_cells` | Coloring cells at the refinement depth (level=4 for depth=4) finds at least one cell. |
+| `test_color_beyond_max_depth_finds_nothing` | Requesting level 5 on a depth-4 mesh returns zero cells. |
+| `test_wide_range_covers_all_positive_levels` | min_level=1, max_level=100 in a uniform non-adaptive mesh colors all cells. |
+| `test_template_hexes_captured_by_negative_level` | min_level=-1, max_level=-1 in an adaptive mesh captures only transition-template hexes (if any). |
+| `test_registry_path_exists` | The Registry path `OctreeHybridMesherColoring.All.OctreeHybridColorCellsByLevel.Prototype` exists. |
+
 #### `TestReportMeshQuality`
 
 Unit tests for the `OctreeHybridReportMeshQuality` operation component.
@@ -1347,7 +1525,7 @@ Tests for the Registry-prototype dispatch mechanism inside `OctreeHybridMesherMo
 | Test | Assertion |
 |------|-----------|
 | `test_all_base_prototypes_registered` | All four abstract base-class prototypes (`OctreeHybridRefineOperation`, `OctreeHybridMesherColoring`, `OctreeHybridMesherEntityGeneration`, `OctreeHybridMesherOperation`) are in the Registry. |
-| `test_all_concrete_prototypes_registered` | All five concrete components are in the Registry (including `OctreeHybridRefineInterfaceCells`). |
+| `test_all_concrete_prototypes_registered` | All nine concrete components are in the Registry (including all five coloring stages). |
 | `test_full_path_dispatch_works` | A four-segment dot-separated full Registry path in the `"type"` field is accepted and dispatched correctly. |
 | `test_unknown_operation_type_raises` | An unknown operation type name triggers a Registry-not-found error. |
 | `test_base_type_invocation_raises` | Invoking the abstract base `OctreeHybridMesherOperation` prototype directly raises a clear error (the base does not implement the do-work virtual). |
