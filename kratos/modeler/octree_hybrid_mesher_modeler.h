@@ -43,15 +43,14 @@ namespace Internals { class OctreeHybridMesherData; }
  * hand-written factory classes.
  *
  * ### Pipeline overview
- * `SetupModelPart` executes four sequential stages:
+ * `SetupModelPart` delegates to four sequential private methods:
  *
- * | Step | What happens |
- * |------|-------------|
- * | 1 | **Refinement** (`refine_operations_list`): dispatches each @ref OctreeHybridRefineOperation.  The first entry must be @ref OctreeHybridRefineInterfaceCells, which builds the initial adaptive octree from the input surface and records `mesh_type` / projection settings.  Additional entries (e.g. @ref OctreeHybridRefineUniform or further @ref OctreeHybridRefineInterfaceCells) further subdivide the octree before balancing. |
- * | 2 | **2:1 balancing + mesh extraction** (internal): calls `StrongConstrain2To1` and extracts the conforming *dual* hex mesh or non-conforming *primal* leaf-hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
- * | 3 | **Colouring** (`coloring_settings_list`): classifies cells as inside (1) or outside (0) the surface. |
- * | 4 | **Entity generation** (`entities_generator_list`): emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
- * | 5 | **Operations** (`model_part_operations`): post-processing passes (e.g. mesh-quality reports). |
+ * | Step | Private method | What happens |
+ * |------|---------------|-------------|
+ * | 1 | @ref ExecuteRefinementOperations | Dispatches each @ref OctreeHybridRefineOperation in `refine_operations_list` (the first must be @ref OctreeHybridRefineInterfaceCells, which builds the initial octree and records `mesh_type` / projection settings; further entries add deeper refinement).  Then calls `StrongConstrain2To1` and extracts the conforming *dual* or non-conforming *primal* hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
+ * | 2 | @ref ExecuteColoringOperations | Dispatches `coloring_settings_list`; classifies cells as inside (1) or outside (0) the surface. |
+ * | 3 | @ref ExecuteEntityGenerationOperations | Dispatches `entities_generator_list`; emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
+ * | 4 | @ref ExecuteModelPartOperations | Dispatches `model_part_operations`; post-processing passes (e.g. mesh-quality reports). |
  *
  * Every component in `refine_operations_list` and stages 3–5 is a Registry prototype: the
  * modeler resolves its `"type"` string to the registered prototype via
@@ -294,7 +293,7 @@ public:
      * }
      * @endcode
      * The `refine_operations_list` must start with an @ref OctreeHybridRefineInterfaceCells
-     * entry (which builds the octree and replaces the former `octree_generator` block) and may be
+     * entry (which builds the octree and records `mesh_type` / projection settings) and may be
      * followed by any number of @ref OctreeHybridRefineUniform or additional
      * @ref OctreeHybridRefineInterfaceCells entries.
      * @return Parameters object with all keys set to their defaults.
