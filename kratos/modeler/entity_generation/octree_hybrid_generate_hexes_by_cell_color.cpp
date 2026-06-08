@@ -40,7 +40,10 @@ const Parameters OctreeHybridGenerateHexesByCellColor::GetDefaultParameters() co
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const
+void OctreeHybridGenerateHexesByCellColor::Generate(
+    OctreeHybridMesherModeler& rModeler, 
+    Parameters GenerationParameters
+    ) const
 {
     auto& r_data = rModeler.GetData();
     ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
@@ -48,6 +51,8 @@ void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& r
 
     const int want_color = GenerationParameters["color"].GetInt();
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
+    // Retrieve an existing Properties object if present (e.g. a prior generation
+    // step already created it on the same ModelPart), otherwise create a new one.
     Properties::Pointer p_properties = r_model_part.HasProperties(properties_id)
         ? r_model_part.pGetProperties(properties_id)
         : r_model_part.CreateNewProperties(properties_id);
@@ -59,6 +64,10 @@ void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& r
 
     const bool tag_level = GenerationParameters["tag_refinement_level"].GetBool();
 
+    // Accumulate nodes and elements locally, then batch-add them at the end.
+    // Batch addition is required because ModelPart::AddNodes / AddElements
+    // expects the containers to be sorted — inserting one-by-one would trigger
+    // repeated re-sorting, which is O(N²) for large meshes.
     ModelPart::NodesContainerType new_nodes;
     ModelPart::ElementsContainerType new_elements;
     Element::NodesArrayType cell_nodes(8);
@@ -76,6 +85,9 @@ void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& r
         new_elements.push_back(p_el);
     }
 
+    // Deduplicate: each cell corner pushes the same node pointer for all cells
+    // that share it, so new_nodes may contain the same pointer multiple times.
+    // Unique() removes duplicates before the batch add.
     new_nodes.Unique();
     ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
     r_model_part.AddElements(new_elements.begin(), new_elements.end());
@@ -97,6 +109,10 @@ void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& r
     }
 
     for (const auto& hc : r_data.mHanging) {
+        // A null pointer means the node index was never materialised as a Kratos
+        // Node — e.g. it belongs to a cell excluded by the color filter.
+        // Skip the constraint silently; it is valid for a hanging node or one of
+        // its masters to fall outside the colored region.
         Node::Pointer p_slave = r_data.mNodePtrs[hc.SlaveNode];
         if (!p_slave) continue;
 
@@ -110,8 +126,14 @@ void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& r
 
         for (int vi = 0; vi < n_vars; ++vi) {
             const Variable<double>& r_var = *vars[vi];
+            // DOFs must be registered on the node before a constraint can
+            // reference them — AddDof is a no-op if the DOF already exists.
             p_slave->AddDof(r_var);
             for (int m = 0; m < hc.NumMasters; ++m) master_ptrs[m]->AddDof(r_var);
+            // One binary LinearMasterSlaveConstraint per (master, variable) pair.
+            // The slave DOF satisfies: u_slave = Σ weight_m · u_master_m, which
+            // requires one constraint per master to express the full interpolation
+            // (Kratos's binary constraint accumulates the contributions at assembly).
             for (int m = 0; m < hc.NumMasters; ++m) {
                 r_model_part.CreateNewMasterSlaveConstraint(
                     constraint_name, rModeler.NextConstraintId(),
