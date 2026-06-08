@@ -238,9 +238,11 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClosestPointOnTriangleVertex, K
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClosestPointOnSoupTwoTriangles, KratosCoreFastSuite)
 {
     // Two triangles in XY plane, well-separated
-    Util::TriangleSoup soup(2);
-    soup[0] = {{{0,0,0}}, {{2,0,0}}, {{0,2,0}}};  // centered near (0.67, 0.67, 0)
-    soup[1] = {{{5,0,0}}, {{7,0,0}}, {{5,2,0}}};  // centered near (5.67, 0.67, 0)
+    using Tri = Util::TriangleSoup::value_type;
+    Util::TriangleSoup soup = {
+        Tri{{{0,0,0}, {2,0,0}, {0,2,0}}},   // centered near (0.67, 0.67, 0)
+        Tri{{{5,0,0}, {7,0,0}, {5,2,0}}}    // centered near (5.67, 0.67, 0)
+    };
 
     // Query near soup[0]
     {
@@ -654,8 +656,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityRefineInterfaceCellsOnlyNearSur
     octree.SetBoundingBox(lo, hi);
 
     // Single triangle near the center
-    Util::TriangleSoup soup(1);
-    soup[0] = {{{0.3, 0.3, 0.5}}, {{0.7, 0.3, 0.5}}, {{0.5, 0.7, 0.5}}};
+    using Tri = Util::TriangleSoup::value_type;
+    Util::TriangleSoup soup = {Tri{{{0.3, 0.3, 0.5}, {0.7, 0.3, 0.5}, {0.5, 0.7, 0.5}}}};
 
     Util::RefineInterfaceCells(octree, soup, 3);
 
