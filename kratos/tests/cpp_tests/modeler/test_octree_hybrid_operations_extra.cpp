@@ -18,7 +18,6 @@
 #include "testing/testing.h"
 #include "modeler/refine_operations/refine_uniform_hybrid_octree.h"
 #include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
-#include "modeler/refine_operations/generate_from_surface_hybrid_octree.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
 #include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
 #include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
@@ -80,29 +79,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersHasIn
     KRATOS_EXPECT_EQ(p["input_model_part_name"].GetString(), std::string{""});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsInfoReturnsBaseClassName, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersAllKeys, KratosCoreFastSuite)
 {
     OctreeHybridRefineInterfaceCells op;
-    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridRefineOperation"});
-}
-
-// ===========================================================================
-// OctreeHybridGenerateFromSurface — GetDefaultParameters / Info
-// ===========================================================================
-
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceDefaultParametersTypeKey, KratosCoreFastSuite)
-{
-    OctreeHybridGenerateFromSurface op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridGenerateFromSurface"});
-}
-
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceDefaultParametersAllKeys, KratosCoreFastSuite)
-{
-    OctreeHybridGenerateFromSurface op;
-    Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_TRUE(p.Has("input_model_part_name"));
     KRATOS_EXPECT_TRUE(p.Has("refinement_depth"));
+    KRATOS_EXPECT_TRUE(p.Has("element_size"));
     KRATOS_EXPECT_TRUE(p.Has("adaptive"));
     KRATOS_EXPECT_TRUE(p.Has("mesh_type"));
     KRATOS_EXPECT_TRUE(p.Has("project_to_surface"));
@@ -110,11 +92,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceDefaultParametersAllKey
     KRATOS_EXPECT_TRUE(p.Has("projection_smoothing"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceDefaultParametersDefaults, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersDefaults, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateFromSurface op;
+    OctreeHybridRefineInterfaceCells op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
+    KRATOS_EXPECT_NEAR(p["element_size"].GetDouble(), 0.0, 1e-15);
     KRATOS_EXPECT_TRUE(p["adaptive"].GetBool());
     KRATOS_EXPECT_EQ(p["mesh_type"].GetString(), std::string{"dual"});
     KRATOS_EXPECT_FALSE(p["project_to_surface"].GetBool());
@@ -122,10 +105,10 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceDefaultParametersDefaul
     KRATOS_EXPECT_EQ(p["projection_smoothing"].GetInt(), 1000);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceInfoReturnsOwnClassName, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateFromSurface op;
-    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridGenerateFromSurface"});
+    OctreeHybridRefineInterfaceCells op;
+    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridRefineOperation"});
 }
 
 // ===========================================================================
@@ -143,7 +126,11 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideDefaultParameter
 {
     OctreeHybridClassifyCellsInsideOutside op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p.size(), std::size_t{1});
+    // Only "type" key — verify no other known keys exist
+    KRATOS_EXPECT_TRUE(p.Has("type"));
+    KRATOS_EXPECT_FALSE(p.Has("model_part_name"));
+    KRATOS_EXPECT_FALSE(p.Has("refinement_depth"));
+    KRATOS_EXPECT_FALSE(p.Has("color"));
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideInfoReturnsBaseClassName, KratosCoreFastSuite)

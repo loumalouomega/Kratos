@@ -380,7 +380,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridInitializeResetsToSingleLeaf, KratosCoreFa
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridInitializeThrowsOnInvalidDepth, KratosCoreFastSuite)
 {
     OHExtraOctree octree(4);
-    KRATOS_EXPECT_EXCEPTION_IS_THROWN(octree.Initialize(0), "");
+    EXPECT_THROW(octree.Initialize(0), std::invalid_argument);
 }
 
 } // namespace Kratos::Testing

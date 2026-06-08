@@ -146,7 +146,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerDualElementsCreated, KratosCo
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
-        "refine_operations_list" : [{ "type": "OctreeHybridGenerateFromSurface",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "OctreeHybridGenerateHexesByCellColor",
@@ -166,7 +166,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerDualZeroInverted, KratosCoreF
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
-        "refine_operations_list" : [{ "type": "OctreeHybridGenerateFromSurface",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "OctreeHybridGenerateHexesByCellColor",
@@ -190,7 +190,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerDualCarveBbox, KratosCoreFast
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
-        "refine_operations_list" : [{ "type": "OctreeHybridGenerateFromSurface",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "OctreeHybridGenerateHexesByCellColor",
@@ -237,7 +237,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerUnknownOperationThrows, Krato
     Parameters settings(R"({
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
-        "refine_operations_list" : [{ "type": "OctreeHybridGenerateFromSurface",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [],
         "entities_generator_list": [],
@@ -261,7 +261,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherClassifyReducesCellCount, KratosCore
 
     const char* settings_no_classify = R"({
         "input_model_part_name":"S","output_model_part_name":"O",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -270,7 +270,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherClassifyReducesCellCount, KratosCore
     })";
     const char* settings_classify = R"({
         "input_model_part_name":"S","output_model_part_name":"O",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -308,7 +308,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesNodeDeduplication, Krat
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -330,7 +330,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesRefinementLevelTagged, 
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -355,7 +355,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesNoLevelWhenDisabled, Kr
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -376,7 +376,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesUniqueIds, KratosCoreFa
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -413,7 +413,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsCreated, KratosCor
 
     RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Volume",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
@@ -435,7 +435,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsQuadNodes, KratosC
 
     RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Volume",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
@@ -457,7 +457,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsFewerthanSixTimesE
 
     RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Volume",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
@@ -479,7 +479,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryNodesSubsetOfVolume, KratosC
 
     RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Volume",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
@@ -516,7 +516,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMeshConstraintsGenerated, Krat
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Surface","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
@@ -538,7 +538,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsPartitionOfUnity, K
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Surface","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
@@ -567,7 +567,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsMasterCountsValid, 
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Surface","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
@@ -599,7 +599,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, Krat
 
     const char* s1 = R"({
         "input_model_part_name":"S","output_model_part_name":"O",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
@@ -610,7 +610,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, Krat
     })";
     const char* s3 = R"({
         "input_model_part_name":"S","output_model_part_name":"O",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
@@ -634,7 +634,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherDualMeshNoHangingConstraints, Kratos
 
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Surface","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":true,"mesh_type":"dual"}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -663,7 +663,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherReportMeshQualityRunsWithoutError, K
     // The operation just logs — verify it does not throw
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
@@ -684,7 +684,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherReportMeshQualityEmptyModelPart, Kra
 
     Parameters settings(R"({
         "input_model_part_name":"Skin","output_model_part_name":"Empty",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":3,"adaptive":false}],
         "coloring_settings_list":[],
         "entities_generator_list":[],
@@ -728,7 +728,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryFullPathDispatchWorks, Krato
     // A four-segment full path must be accepted directly by the Dispatch method
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":3,"adaptive":false}],
         "coloring_settings_list":[{
             "type":"OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype"
@@ -747,7 +747,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryBaseColoringInvocationThrows
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     Parameters settings(R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":3,"adaptive":false}],
         "coloring_settings_list":[{
             "type":"OctreeHybridMesherColoring.All.OctreeHybridMesherColoring.Prototype"
@@ -764,7 +764,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryBaseOperationInvocationThrow
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     Parameters settings(R"({
         "input_model_part_name":"Skin","output_model_part_name":"Output",
-        "refine_operations_list":[{"type":"OctreeHybridGenerateFromSurface",
+        "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":3,"adaptive":false}],
         "coloring_settings_list":[],
         "entities_generator_list":[],
@@ -785,12 +785,16 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinesAllCells, KratosCoreFa
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
 
-    // Reference run: depth 4 via the generate operation (no extra refinement).
+    // Reference run: build at depth 4 then uniformly refine to depth 4 (fills all cells).
     ModelPart& ref = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Ref",
-        "refine_operations_list" : [{ "type": "OctreeHybridGenerateFromSurface",
-                                      "refinement_depth": 4, "adaptive": false }],
+        "refine_operations_list" : [
+            { "type": "OctreeHybridRefineInterfaceCells",
+              "refinement_depth": 4, "adaptive": false },
+            { "type": "OctreeHybridRefineUniform",
+              "refinement_depth": 4 }
+        ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "OctreeHybridGenerateHexesByCellColor",
                                       "model_part_name": "Ref", "color": 1 }],
@@ -798,11 +802,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinesAllCells, KratosCoreFa
     })");
 
     // Test run: initial build at depth 1, then uniformly refined to depth 4.
+    // RefineUniform reinitializes the octree to the target depth when it exceeds the
+    // current max depth, so the resulting mesh is identical to the reference.
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
         "refine_operations_list" : [
-            { "type": "OctreeHybridGenerateFromSurface",
+            { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 1, "adaptive": false },
             { "type": "OctreeHybridRefineUniform",
               "refinement_depth": 4 }
@@ -814,7 +820,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinesAllCells, KratosCoreFa
     })");
 
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
-    // Both runs start from the same uniform depth-4 octree, so element counts must match.
+    // Both runs produce the same fully-uniform depth-4 octree → same element counts.
     KRATOS_EXPECT_EQ(out.NumberOfElements(), ref.NumberOfElements());
     KRATOS_EXPECT_EQ(out.NumberOfNodes(),    ref.NumberOfNodes());
 }
@@ -828,7 +834,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsProducesElements, Krat
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
         "refine_operations_list" : [
-            { "type": "OctreeHybridGenerateFromSurface",
+            { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 2, "adaptive": false },
             { "type": "OctreeHybridRefineInterfaceCells",
               "input_model_part_name": "Skin",
@@ -858,7 +864,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsFallbackToMainSurface,
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
         "refine_operations_list" : [
-            { "type": "OctreeHybridGenerateFromSurface",
+            { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 2, "adaptive": false },
             { "type": "OctreeHybridRefineInterfaceCells",
               "input_model_part_name": "",
@@ -885,7 +891,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsMultipleGeometries, Kr
         "input_model_part_name"  : "SkinA",
         "output_model_part_name" : "Output",
         "refine_operations_list" : [
-            { "type": "OctreeHybridGenerateFromSurface",
+            { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 1, "adaptive": false },
             { "type": "OctreeHybridRefineInterfaceCells",
               "input_model_part_name": "SkinA", "refinement_depth": 4 },
@@ -913,7 +919,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformElementSizeProducesElements, 
         "input_model_part_name" : "Skin",
         "output_model_part_name": "Output",
         "refine_operations_list": [
-            { "type": "OctreeHybridGenerateFromSurface",
+            { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 1, "adaptive": false },
             { "type": "OctreeHybridRefineUniform",
               "refinement_depth": 1, "element_size": 0.25 }
@@ -939,7 +945,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsElementSizeProducesEle
         "input_model_part_name" : "Skin",
         "output_model_part_name": "Output",
         "refine_operations_list": [
-            { "type": "OctreeHybridGenerateFromSurface",
+            { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 1, "adaptive": false },
             { "type": "OctreeHybridRefineInterfaceCells",
               "input_model_part_name": "Skin",
@@ -958,10 +964,6 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsElementSizeProducesEle
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineOperationRegistryPrototypePresent, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeHybridRefineOperation.All.OctreeHybridGenerateFromSurface.Prototype"));
-    KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeHybridRefineOperation.KratosMultiphysics.OctreeHybridGenerateFromSurface.Prototype"));
-    KRATOS_EXPECT_TRUE(Registry::HasValue(
         "OctreeHybridRefineOperation.All.OctreeHybridRefineUniform.Prototype"));
     KRATOS_EXPECT_TRUE(Registry::HasValue(
         "OctreeHybridRefineOperation.KratosMultiphysics.OctreeHybridRefineUniform.Prototype"));
@@ -979,7 +981,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineOperationBaseInvocationThrows, Krato
         "input_model_part_name" : "Skin",
         "output_model_part_name": "Output",
         "refine_operations_list": [
-            { "type": "OctreeHybridGenerateFromSurface",
+            { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 2, "adaptive": false },
             { "type": "OctreeHybridRefineOperation.All.OctreeHybridRefineOperation.Prototype" }
         ],

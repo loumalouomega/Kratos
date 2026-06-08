@@ -26,7 +26,6 @@
 #include "modeler/refine_operations/refine_hybrid_octree.h"
 #include "modeler/refine_operations/refine_uniform_hybrid_octree.h"
 #include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
-#include "modeler/refine_operations/generate_from_surface_hybrid_octree.h"
 
 #include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
@@ -82,67 +81,84 @@ OctreeHybridMesherModeler MakeEmptyModeler(Model& rModel,
     return OctreeHybridMesherModeler(rModel, params);
 }
 
+void ExtractMesh(OctreeHybridMesherModeler& rModeler)
+{
+    auto& r_data = rModeler.GetData();
+    KRATOS_ERROR_IF(!r_data.mpOctree) << "Octree not built — call Refine first.";
+    r_data.mpOctree->StrongConstrain2To1();
+    if (r_data.mMeshType == "primal") {
+        Util::ExtractPrimalHexMesh(*r_data.mpOctree,
+            r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mHanging);
+    } else {
+        Util::ExtractDualHexMesh(*r_data.mpOctree,
+            r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+    }
+    r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
+}
+
 } // anonymous namespace
 
 // ===========================================================================
-// OctreeHybridGenerateFromSurface::Refine — direct call
+// OctreeHybridRefineInterfaceCells::Refine — first call (octree build)
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceRefineDirectlyBuildsOctree, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsFirstCallBuildsOctree, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
-    OctreeHybridGenerateFromSurface op;
+    OctreeHybridRefineInterfaceCells op;
     Parameters p(R"({
-        "type"            : "OctreeHybridGenerateFromSurface",
+        "type"            : "OctreeHybridRefineInterfaceCells",
         "refinement_depth": 3,
         "adaptive"        : false,
         "mesh_type"       : "dual"
     })");
+    op.ValidateParameters(p);
     op.Refine(modeler, p);
 
     KRATOS_EXPECT_NE(modeler.GetData().mpOctree, nullptr);
-    KRATOS_EXPECT_GT(modeler.GetData().mCells.size(), std::size_t{0});
+    KRATOS_EXPECT_FALSE(modeler.GetData().mTriangles.empty());
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceRefineDirectlyExtractsTriangles, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsFirstCallExtractsTriangles, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
-    OctreeHybridGenerateFromSurface op;
+    OctreeHybridRefineInterfaceCells op;
     Parameters p(R"({
-        "type"            : "OctreeHybridGenerateFromSurface",
+        "type"            : "OctreeHybridRefineInterfaceCells",
         "refinement_depth": 3,
         "adaptive"        : false,
         "mesh_type"       : "dual"
     })");
+    op.ValidateParameters(p);
     op.Refine(modeler, p);
 
     KRATOS_EXPECT_FALSE(modeler.GetData().mTriangles.empty());
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateFromSurfaceRefineDirectlyPrimalMesh, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsFirstCallPrimalMeshType, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
-    OctreeHybridGenerateFromSurface op;
+    OctreeHybridRefineInterfaceCells op;
     Parameters p(R"({
-        "type"            : "OctreeHybridGenerateFromSurface",
+        "type"            : "OctreeHybridRefineInterfaceCells",
         "refinement_depth": 4,
         "adaptive"        : false,
         "mesh_type"       : "primal"
     })");
+    op.ValidateParameters(p);
     op.Refine(modeler, p);
 
     auto& r_data = modeler.GetData();
     KRATOS_EXPECT_NE(r_data.mpOctree, nullptr);
-    KRATOS_EXPECT_GT(r_data.mCells.size(), std::size_t{0});
     KRATOS_EXPECT_EQ(r_data.mMeshType, std::string{"primal"});
 }
 
@@ -158,13 +174,14 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyIncreasesLeafCo
 
     // Build octree first via GenerateFromSurface
     {
-        OctreeHybridGenerateFromSurface build_op;
+        OctreeHybridRefineInterfaceCells build_op;
         Parameters p(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 3,
             "adaptive"        : false,
             "mesh_type"       : "dual"
         })");
+        build_op.ValidateParameters(p);
         build_op.Refine(modeler, p);
     }
 
@@ -212,13 +229,14 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyIncrease
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
     {
-        OctreeHybridGenerateFromSurface build_op;
+        OctreeHybridRefineInterfaceCells build_op;
         Parameters p(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 2,
             "adaptive"        : false,
             "mesh_type"       : "dual"
         })");
+        build_op.ValidateParameters(p);
         build_op.Refine(modeler, p);
     }
 
@@ -240,11 +258,11 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyIncrease
     KRATOS_EXPECT_GE(modeler.GetData().mpOctree->GetLeafCount(), leaves_before);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyNoOctreeThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyNoSurfaceThrows, KratosCoreFastSuite)
 {
+    // No octree + no surface (empty input_model_part_name AND empty modeler top-level) → throws
     Model model;
-    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
-    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+    auto modeler = MakeEmptyModeler(model, "", "Out");
 
     OctreeHybridRefineInterfaceCells op;
     Parameters p(R"({
@@ -267,15 +285,17 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideApplyDirectlyFil
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
     {
-        OctreeHybridGenerateFromSurface build_op;
+        OctreeHybridRefineInterfaceCells build_op;
         Parameters p(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 3,
             "adaptive"        : false,
             "mesh_type"       : "dual"
         })");
+        build_op.ValidateParameters(p);
         build_op.Refine(modeler, p);
     }
+    ExtractMesh(modeler);
 
     auto& r_data = modeler.GetData();
     KRATOS_EXPECT_TRUE(r_data.mCellColor.empty());
@@ -294,15 +314,17 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideApplyDirectlyPro
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
     {
-        OctreeHybridGenerateFromSurface build_op;
+        OctreeHybridRefineInterfaceCells build_op;
         Parameters p(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 3,
             "adaptive"        : false,
             "mesh_type"       : "dual"
         })");
+        build_op.ValidateParameters(p);
         build_op.Refine(modeler, p);
     }
+    ExtractMesh(modeler);
 
     OctreeHybridClassifyCellsInsideOutside color_op;
     Parameters p(R"({"type": "OctreeHybridClassifyCellsInsideOutside"})");
@@ -326,21 +348,21 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorGenerateDirectlyCr
     model.CreateModelPart("Out");
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
-    // Build + color
+    // Build + extract + color
     {
-        OctreeHybridGenerateFromSurface build_op;
-        build_op.Refine(modeler, Parameters(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 3, "adaptive": false, "mesh_type": "dual"
-        })"));
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
     }
+    ExtractMesh(modeler);
     {
         OctreeHybridClassifyCellsInsideOutside color_op;
         color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
     }
-
-    auto& r_data = modeler.GetData();
-    r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
 
     OctreeHybridGenerateHexesByCellColor gen_op;
     Parameters p(R"({
@@ -364,19 +386,19 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorGenerateDirectlyCo
     auto modeler = MakeEmptyModeler(model, "Skin", "Outside");
 
     {
-        OctreeHybridGenerateFromSurface build_op;
-        build_op.Refine(modeler, Parameters(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 3, "adaptive": false, "mesh_type": "dual"
-        })"));
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
     }
+    ExtractMesh(modeler);
     {
         OctreeHybridClassifyCellsInsideOutside color_op;
         color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
     }
-
-    auto& r_data = modeler.GetData();
-    r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
 
     OctreeHybridGenerateHexesByCellColor gen_op;
     Parameters p(R"({
@@ -404,19 +426,19 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceGenerateDi
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
     {
-        OctreeHybridGenerateFromSurface build_op;
-        build_op.Refine(modeler, Parameters(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 3, "adaptive": false, "mesh_type": "dual"
-        })"));
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
     }
+    ExtractMesh(modeler);
     {
         OctreeHybridClassifyCellsInsideOutside color_op;
         color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
     }
-
-    auto& r_data = modeler.GetData();
-    r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
 
     // Generate hexes first
     {
@@ -473,15 +495,17 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsGenerateDire
 
     // Use primal mesh to get hanging nodes
     {
-        OctreeHybridGenerateFromSurface build_op;
-        build_op.Refine(modeler, Parameters(R"({
-            "type"            : "OctreeHybridGenerateFromSurface",
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
             "refinement_depth": 4, "adaptive": false, "mesh_type": "primal"
-        })"));
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
     }
+    ExtractMesh(modeler);
 
     auto& r_data = modeler.GetData();
-    r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
     r_data.mCellColor.assign(r_data.mCells.size(), 1);
 
     {
@@ -552,18 +576,19 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridReportMeshQualityExecuteDirectlyOnFilledPa
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
     {
-        OctreeHybridGenerateFromSurface build_op;
-        build_op.Refine(modeler, Parameters(R"({
-            "type":"OctreeHybridGenerateFromSurface",
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type":"OctreeHybridRefineInterfaceCells",
             "refinement_depth":3,"adaptive":false,"mesh_type":"dual"
-        })"));
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
     }
+    ExtractMesh(modeler);
     {
         OctreeHybridClassifyCellsInsideOutside color_op;
         color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
     }
-    auto& r_data = modeler.GetData();
-    r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
     {
         OctreeHybridGenerateHexesByCellColor hex_op;
         hex_op.Generate(modeler, Parameters(R"({
