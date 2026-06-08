@@ -50,6 +50,8 @@ void OctreeHybridRefineInterfaceCells::Refine(
 
     if (!r_data.mpOctree) {
         // First call in the pipeline: build the initial octree from the surface.
+        // The octree is built exactly once; every subsequent entry to this Refine
+        // method adds deeper refinement without rebuilding from scratch.
         std::string surface_name = op_surface_name;
         if (surface_name.empty()) surface_name = rModeler.GetInputModelPartName();
         KRATOS_ERROR_IF(surface_name.empty())
@@ -58,11 +60,16 @@ void OctreeHybridRefineInterfaceCells::Refine(
             << std::endl;
 
         ModelPart& r_surface = rModeler.GetModel().GetModelPart(surface_name);
+        // Cache the triangle soup in r_data so downstream stages
+        // (RemoveOutsideElement, ClassifyInsideOutside, ProjectToIsoSurface) can
+        // reuse it without re-parsing the ModelPart.
         r_data.mTriangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_surface);
         r_data.mpOctree   = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
             r_surface,
             RefineParameters["refinement_depth"].GetInt(),
             RefineParameters["adaptive"].GetBool());
+        // Mesh-type and projection settings are fixed at octree construction and
+        // must not be overwritten by subsequent refinement entries in the list.
         r_data.mMeshType             = RefineParameters["mesh_type"].GetString();
         r_data.mProjectToSurface     = RefineParameters["project_to_surface"].GetBool();
         r_data.mProjectionIterations = RefineParameters["projection_iterations"].GetInt();
@@ -70,15 +77,23 @@ void OctreeHybridRefineInterfaceCells::Refine(
         return;
     }
 
-    // Subsequent calls: selectively subdivide cells near the interface.
+    // Subsequent calls: selectively subdivide cells near the interface at a finer
+    // level.  element_size takes priority over refinement_depth when set (> 0).
     const double element_size = RefineParameters["element_size"].GetDouble();
     const std::size_t target_depth = (element_size > 0.0)
         ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, element_size, false)
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
 
+    // Re-initialize the octree's internal grid if the requested depth exceeds the
+    // maximum set at construction; without this, SubdivideCellByIdAndLevel would
+    // silently stop at the old maximum depth.
     if (target_depth > r_data.mpOctree->GetDepth())
         r_data.mpOctree->Initialize(target_depth);
 
+    // When no surface is specified for the sub-refinement pass, reuse the triangles
+    // from the initial build (the main geometry).  A non-empty name allows adding
+    // refinement driven by a different feature surface (e.g. a local refinement zone)
+    // without rebuilding the octree.
     if (op_surface_name.empty()) {
         OctreeHybridMeshUtility::RefineInterfaceCells(
             *r_data.mpOctree, r_data.mTriangles, target_depth);
