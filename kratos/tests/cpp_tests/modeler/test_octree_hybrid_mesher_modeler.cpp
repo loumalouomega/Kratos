@@ -12,6 +12,7 @@
 
 // System includes
 #include <cmath>
+#include <set>
 
 // External includes
 
@@ -24,6 +25,8 @@
 
 #include "modeler/octree_hybrid_mesher_modeler.h"
 #include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
+#include "modeler/entity_generation/octree_hybrid_generate_tetrahedra_by_cell_color.h"
+#include "modeler/entity_generation/octree_hybrid_generate_triangle_boundary_conditions_by_face.h"
 
 namespace Kratos::Testing {
 
@@ -1278,6 +1281,264 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelMinGreaterThanMaxThrows, 
     })");
     OctreeHybridMesherModeler m(model, settings);
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
+}
+
+// ===========================================================================
+// OctreeHybridGenerateTetrahedraByCellColor — registry and generation tests
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateTetrahedraRegistryEntry, KratosCoreFastSuite)
+{
+    const std::string path_km = "OctreeHybridMesherEntityGeneration.KratosMultiphysics."
+                                "OctreeHybridGenerateTetrahedraByCellColor.Prototype";
+    const std::string path_all = "OctreeHybridMesherEntityGeneration.All."
+                                 "OctreeHybridGenerateTetrahedraByCellColor.Prototype";
+    KRATOS_EXPECT_TRUE(Registry::HasItem(path_km));
+    KRATOS_EXPECT_TRUE(Registry::HasItem(path_all));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateTriangleBCsRegistryEntry, KratosCoreFastSuite)
+{
+    const std::string path_km = "OctreeHybridMesherEntityGeneration.KratosMultiphysics."
+                                "OctreeHybridGenerateTriangleBoundaryConditionsByFace.Prototype";
+    const std::string path_all = "OctreeHybridMesherEntityGeneration.All."
+                                 "OctreeHybridGenerateTriangleBoundaryConditionsByFace.Prototype";
+    KRATOS_EXPECT_TRUE(Registry::HasItem(path_km));
+    KRATOS_EXPECT_TRUE(Registry::HasItem(path_all));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTetraElementsCreated, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 4, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "OctreeHybridGenerateTetrahedraByCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
+        "model_part_operations"  : []
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(), 0u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTetraCountIsHexTimes6, KratosCoreFastSuite)
+{
+    const std::string common_settings = R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 3, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "model_part_operations"  : []
+    })";
+
+    Model hex_model;
+    BuildClosedBoxSurface(hex_model.CreateModelPart("Skin"));
+    Parameters hex_params(common_settings);
+    hex_params.AddValue("entities_generator_list", Parameters(R"([{
+        "type": "OctreeHybridGenerateHexesByCellColor",
+        "model_part_name": "Output", "color": 1 }])"));
+    OctreeHybridMesherModeler hex_modeler(hex_model, hex_params);
+    hex_modeler.SetupModelPart();
+    const std::size_t n_hexes = hex_model.GetModelPart("Output").NumberOfElements();
+
+    Model tet_model;
+    BuildClosedBoxSurface(tet_model.CreateModelPart("Skin"));
+    Parameters tet_params(common_settings);
+    tet_params.AddValue("entities_generator_list", Parameters(R"([{
+        "type": "OctreeHybridGenerateTetrahedraByCellColor",
+        "model_part_name": "Output", "color": 1 }])"));
+    OctreeHybridMesherModeler tet_modeler(tet_model, tet_params);
+    tet_modeler.SetupModelPart();
+    const std::size_t n_tets = tet_model.GetModelPart("Output").NumberOfElements();
+
+    KRATOS_EXPECT_EQ(n_tets, 6 * n_hexes);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTetraZeroInverted, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 4, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "OctreeHybridGenerateTetrahedraByCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
+        "model_part_operations"  : []
+    })");
+
+    int n_inv = 0;
+    for (const auto& r_el : out.Elements()) {
+        const auto& g = r_el.GetGeometry();
+        const double e0[3] = {g[1].X()-g[0].X(), g[1].Y()-g[0].Y(), g[1].Z()-g[0].Z()};
+        const double e1[3] = {g[2].X()-g[0].X(), g[2].Y()-g[0].Y(), g[2].Z()-g[0].Z()};
+        const double e2[3] = {g[3].X()-g[0].X(), g[3].Y()-g[0].Y(), g[3].Z()-g[0].Z()};
+        const double vol = e0[0]*(e1[1]*e2[2]-e1[2]*e2[1])
+                         - e0[1]*(e1[0]*e2[2]-e1[2]*e2[0])
+                         + e0[2]*(e1[0]*e2[1]-e1[1]*e2[0]);
+        if (vol <= 0.0) ++n_inv;
+    }
+    KRATOS_EXPECT_EQ(n_inv, 0);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTetraNodeSubsetFromHex, KratosCoreFastSuite)
+{
+    const std::string common_settings_str = R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 3, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "model_part_operations"  : []
+    })";
+
+    Model hex_model;
+    BuildClosedBoxSurface(hex_model.CreateModelPart("Skin"));
+    Parameters hex_p(common_settings_str);
+    hex_p.AddValue("entities_generator_list", Parameters(R"([{
+        "type": "OctreeHybridGenerateHexesByCellColor",
+        "model_part_name": "Output", "color": 1 }])"));
+    OctreeHybridMesherModeler hex_modeler(hex_model, hex_p);
+    hex_modeler.SetupModelPart();
+    std::set<IndexType> hex_node_ids;
+    for (const auto& n : hex_model.GetModelPart("Output").Nodes())
+        hex_node_ids.insert(n.Id());
+
+    Model tet_model;
+    BuildClosedBoxSurface(tet_model.CreateModelPart("Skin"));
+    Parameters tet_p(common_settings_str);
+    tet_p.AddValue("entities_generator_list", Parameters(R"([{
+        "type": "OctreeHybridGenerateTetrahedraByCellColor",
+        "model_part_name": "Output", "color": 1 }])"));
+    OctreeHybridMesherModeler tet_modeler(tet_model, tet_p);
+    tet_modeler.SetupModelPart();
+    for (const auto& n : tet_model.GetModelPart("Output").Nodes())
+        KRATOS_EXPECT_TRUE(hex_node_ids.count(n.Id()) > 0);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTetraTagRefinementLevel, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 3, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "OctreeHybridGenerateTetrahedraByCellColor",
+                                      "model_part_name": "Output", "color": 1,
+                                      "tag_refinement_level": true }],
+        "model_part_operations"  : []
+    })");
+
+    for (const auto& r_el : out.Elements())
+        KRATOS_EXPECT_GE(r_el.GetValue(REFINEMENT_LEVEL), 0);
+}
+
+// ===========================================================================
+// OctreeHybridGenerateTriangleBoundaryConditionsByFace — tests
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTriangleBCsCreated, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 4, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [
+            { "type": "OctreeHybridGenerateTetrahedraByCellColor",
+              "model_part_name": "Output", "color": 1 },
+            { "type": "OctreeHybridGenerateTriangleBoundaryConditionsByFace",
+              "model_part_name": "Output.Boundary", "color": 1 }
+        ],
+        "model_part_operations"  : []
+    })");
+
+    ModelPart& boundary = model.GetModelPart("Output.Boundary");
+    KRATOS_EXPECT_GT(boundary.NumberOfConditions(), 0u);
+    KRATOS_EXPECT_GT(boundary.NumberOfNodes(), 0u);
+
+    for (const auto& cond : boundary.Conditions())
+        KRATOS_EXPECT_EQ(cond.GetGeometry().size(), 3u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTriangleBCsCountIsTwiceQuad, KratosCoreFastSuite)
+{
+    const std::string common_str = R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 3, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "model_part_operations"  : []
+    })";
+
+    Model quad_model;
+    BuildClosedBoxSurface(quad_model.CreateModelPart("Skin"));
+    Parameters quad_p(common_str);
+    quad_p.AddValue("entities_generator_list", Parameters(R"([{
+        "type": "OctreeHybridGenerateBoundaryConditionsByFace",
+        "model_part_name": "Output", "color": 1 }])"));
+    OctreeHybridMesherModeler quad_modeler(quad_model, quad_p);
+    quad_modeler.SetupModelPart();
+    const std::size_t n_quads = quad_model.GetModelPart("Output").NumberOfConditions();
+
+    Model tri_model;
+    BuildClosedBoxSurface(tri_model.CreateModelPart("Skin"));
+    Parameters tri_p(common_str);
+    tri_p.AddValue("entities_generator_list", Parameters(R"([{
+        "type": "OctreeHybridGenerateTriangleBoundaryConditionsByFace",
+        "model_part_name": "Output", "color": 1 }])"));
+    OctreeHybridMesherModeler tri_modeler(tri_model, tri_p);
+    tri_modeler.SetupModelPart();
+    const std::size_t n_tris = tri_model.GetModelPart("Output").NumberOfConditions();
+
+    KRATOS_EXPECT_EQ(n_tris, 2 * n_quads);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerTriangleBCsNodeSubset, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 3, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [
+            { "type": "OctreeHybridGenerateTetrahedraByCellColor",
+              "model_part_name": "Output", "color": 1 },
+            { "type": "OctreeHybridGenerateTriangleBoundaryConditionsByFace",
+              "model_part_name": "Output.Boundary", "color": 1 }
+        ],
+        "model_part_operations"  : []
+    })");
+
+    std::set<IndexType> tet_node_ids;
+    for (const auto& n : model.GetModelPart("Output").Nodes())
+        tet_node_ids.insert(n.Id());
+
+    ModelPart& boundary = model.GetModelPart("Output.Boundary");
+    for (const auto& n : boundary.Nodes())
+        KRATOS_EXPECT_TRUE(tet_node_ids.count(n.Id()) > 0);
 }
 
 } // namespace Kratos::Testing
