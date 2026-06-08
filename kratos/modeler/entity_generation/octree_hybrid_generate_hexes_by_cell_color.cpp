@@ -50,7 +50,11 @@ void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& r
     Properties::Pointer p_properties = r_model_part.HasProperties(properties_id)
         ? r_model_part.pGetProperties(properties_id)
         : r_model_part.CreateNewProperties(properties_id);
-    const Element& r_prototype_element = KratosComponents<Element>::Get(GenerationParameters["generated_entity"].GetString());
+    const std::string entity_name = GenerationParameters["generated_entity"].GetString();
+    KRATOS_ERROR_IF(!KratosComponents<Element>::Has(entity_name))
+        << "OctreeHybridGenerateHexesByCellColor: element type '" << entity_name
+        << "' is not registered in KratosComponents." << std::endl;
+    const Element& r_prototype_element = KratosComponents<Element>::Get(entity_name);
 
     const bool tag_level = GenerationParameters["tag_refinement_level"].GetBool();
 

@@ -46,7 +46,7 @@ void OctreeHybridGenerateHangingNodeConstraints::Generate(
 
     KRATOS_ERROR_IF(r_data.mHanging.empty() && r_data.mCells.empty())
         << "OctreeHybridGenerateHangingNodeConstraints: no primal mesh data. "
-        << "Set mesh_type to 'primal' on the octree_generator." << std::endl;
+        << "Set mesh_type to 'primal' on the OctreeHybridRefineInterfaceCells operation." << std::endl;
 
     if (r_data.mHanging.empty()) return;  // all-same-level mesh — no transitions
 
