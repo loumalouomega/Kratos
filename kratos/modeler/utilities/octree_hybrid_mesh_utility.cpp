@@ -34,8 +34,19 @@ namespace Kratos {
 
 namespace {
 
+// Curvature thresholds for the five adaptive refinement levels.
+// Each value is the minimum sum-of-squared dihedral-angle deviations from π
+// (flat) that forces refinement at that level.  The first two are 0.0 (every
+// triangle touching the geometry triggers at least level-1 refinement); higher
+// thresholds select increasingly sharp features for deeper levels.
 constexpr double C_THRES[5] = { 0.0, 0.0, 0.4, 0.8, 1.6 };
+// Thickness thresholds for the same five levels, in the 100-unit normalized
+// space used throughout the reference.  A ray cast along a triangle's outward
+// normal that hits the opposite sheet within H_THRES[k] units triggers level-k
+// refinement on both triangles.  16 → the entire model; 1 → one finest cell.
 constexpr double H_THRES[5] = { 16.0, 8.0, 4.0, 2.0, 1.0 };
+// Normalized cell size below which a leaf is considered "in contact" with a
+// geometry (used in BuildAdaptiveFromSurfaceMesh to seed the first split pass).
 constexpr double CELL_DETECT = 1.0;
 
 struct AdaptiveRefineData {
@@ -81,6 +92,8 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
     data.cube_side = L;
 
     // --- Merge coincident corners into unique vertices (100-unit space) ---
+    // Tolerance is relative to the model extent (1e-6·L) so it stays valid
+    // regardless of the input's absolute coordinate scale.
     const double tol = 1e-6 * (L > 0.0 ? L : 1.0);
     std::map<std::array<long long,3>, int> vmap;
     std::vector<std::array<double,3>> v;             // merged, normalised
@@ -111,6 +124,15 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
     };
 
     // --- Per-vertex curvature: sum of squared dihedral-angle deviations ----
+    // For each shared edge, compute the dihedral angle between the two incident
+    // triangles (measured as the angle between their face normals projected
+    // onto the plane perpendicular to the edge at the shared vertex P).
+    // The deviation is (ang - π): a flat surface has dihedral angle π, so the
+    // deviation is 0; a sharp crease gives a large deviation.  Squaring it
+    // before accumulating makes the metric insensitive to sign and emphasizes
+    // high-curvature vertices over many gently-curved ones.
+    // pub[0/1] = which edge-offset (1 or 2) in triangle j/l contains the
+    // shared edge end — needed to identify Q1/Q2 (the non-shared vertices).
     std::vector<double> r(nV, 0.0);
     int pub[2];
     for (int j = 0; j < nTri-1; ++j)
@@ -130,6 +152,8 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
                 const double l1[3]={Q1[0]-P[0],Q1[1]-P[1],Q1[2]-P[2]};
                 const double l2[3]={Q2[0]-P[0],Q2[1]-P[1],Q2[2]-P[2]};
                 const double lp[3]={Pe[0]-P[0],Pe[1]-P[1],Pe[2]-P[2]};
+                // c1 = l1 × lp, c2 = l2 × lp: components of l1, l2 in the
+                // plane perpendicular to the shared edge direction lp.
                 double c1[3], c2[3]; cross(l1,lp,c1); cross(l2,lp,c2);
                 double ang = dot(c1,c2)/std::sqrt(dot(c1,c1)*dot(c2,c2));
                 ang = (ang >= -1) ? ang : -1;
@@ -159,6 +183,12 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
         if (nl <= 0.0) continue;
         dir[0]/=nl; dir[1]/=nl; dir[2]/=nl;
         const double cen[3]={ (A[0]+B[0]+C[0])/3, (A[1]+B[1]+C[1])/3, (A[2]+B[2]+C[2])/3 };
+        // mc = largest component of the unit normal.  TriRayIntersect returns
+        // alpha as the parametric distance along `dir` to the hit point.  For a
+        // unit vector the geometric distance would be |alpha|, but `dir` was
+        // normalised by dividing by nl, so |alpha| gives the true distance.
+        // Multiplying by mc projects that distance onto the dominant axis, giving
+        // a value that matches the 100-unit reference scale exactly.
         const double mc = std::max(std::max(std::abs(dir[0]),std::abs(dir[1])),std::abs(dir[2]));
         for (int j = i+1; j < nTri; ++j) {
             double hitp[3], alpha = 0.0;
@@ -213,6 +243,9 @@ auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         lo[1] = std::min(lo[1], r_node.Y()); hi[1] = std::max(hi[1], r_node.Y());
         lo[2] = std::min(lo[2], r_node.Z()); hi[2] = std::max(hi[2], r_node.Z());
     }
+    // Inflate the bounding box by 1 % per side so surface triangles that
+    // touch the exact domain boundary are still enclosed rather than clipped
+    // by the octree's root cell.
     for (std::size_t d = 0; d < 3; ++d) {
         const double span = hi[d] - lo[d];
         lo[d] -= 0.01 * span;
@@ -289,8 +322,11 @@ auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
                 pass3[(i*8+j)*8+k] = hit;
             }
 
+    // For levels 0..2, a parent cell should subdivide iff any of its level-3
+    // descendants is marked.  span = 8 >> L cells per axis at level L fit into
+    // the 8^3 pass3 array.  gi,gj,gk are the level-L grid coordinates.
     auto any_pass3_in_block = [&](int gi, int gj, int gk, int L) -> bool {
-        const int span = 1 << (3 - L);                 // L < 3
+        const int span = 1 << (3 - L);  // number of level-3 cells per axis under this cell
         const int i0 = gi*span, j0 = gj*span, k0 = gk*span;
         for (int i = i0; i < i0+span && i < 8; ++i)
             for (int j = j0; j < j0+span && j < 8; ++j)
@@ -300,10 +336,14 @@ auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
     };
 
     // Per-cell refinement test (reference ComputeCellValue geometry branch).
+    // At levels 4..8, idx = L-4 selects the C_THRES/H_THRES band: only
+    // triangles in refine_tri[idx] can trigger a split at this level.
+    // At level 3 the full pass3 table is used; at levels 0..2, any marked
+    // descendant in pass3 suffices.
     auto should_sub = [&](CellType* p_cell, int L, int gi, int gj, int gk) -> bool {
         if (L >= 4) {
             const int idx = L - 4;
-            if (idx > 4) return false;
+            if (idx > 4) return false;  // beyond maximum refinement depth (level 9)
             double n_lo2[3], n_hi[3], w_lo[3], w_hi[3];
             p_cell->GetMinPointNormalized(n_lo2);
             p_cell->GetMaxPointNormalized(n_hi);
@@ -341,6 +381,9 @@ auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
             const int gi = static_cast<int>(std::llround(n_lo[0] * (1 << L)));
             const int gj = static_cast<int>(std::llround(n_lo[1] * (1 << L)));
             const int gk = static_cast<int>(std::llround(n_lo[2] * (1 << L)));
+            // gi>>1, gj>>1, gk>>1 gives the parent's grid index — all eight
+            // siblings in the octet share the same parent key and are thus
+            // refined together when any one of them is marked.
             const std::array<int,4> key{ L, gi>>1, gj>>1, gk>>1 };
             cand.emplace_back(p_cell, key);
             if (should_sub(p_cell, L, gi, gj, gk)) octet_refine.insert(key);
@@ -506,6 +549,9 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
         const std::size_t stride = std::size_t{1} << (depth - static_cast<std::size_t>(lv));
 
         for (int c = 0; c < 8; ++c) {
+            // stride converts the leaf's level-relative grid index to the
+            // finest-grid index system (all levels share the same pts×pts×pts
+            // integer lattice, with coarser cells occupying a larger stride).
             const std::size_t ix = static_cast<std::size_t>(gx + CX[c]) * stride;
             const std::size_t iy = static_cast<std::size_t>(gy + CY[c]) * stride;
             const std::size_t iz = static_cast<std::size_t>(gz + CZ[c]) * stride;
@@ -702,10 +748,15 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
     std::vector<std::array<int,8>> tmpl_cells;
     tmpl_cells.reserve(N);
 
-    // Tolerances scaled by the finest cell size (model-scale independent).
-    const double merge_eps  = 1.0e-4 * min_cell;     // points within this merge
+    // Tolerances scaled by the finest cell size so they are model-scale independent.
+    // merge_eps (1e-4 cell) is tight enough that only genuinely coincident template
+    // points merge, but loose enough to catch floating-point rounding in the p[]
+    // arithmetic (reference uses a similar relative tolerance).
+    // bucket (1e-2 cell) is the spatial-hash cell width — 100× the merge radius so
+    // the 3×3×3 neighbourhood search covers all candidates within merge_eps.
+    const double merge_eps  = 1.0e-4 * min_cell;
     const double merge_tol2 = merge_eps * merge_eps;
-    const double bucket = 1.0e-2 * min_cell;          // spatial-hash bucket size
+    const double bucket = 1.0e-2 * min_cell;
     const double QUANT = 1.0 / bucket;
     std::unordered_map<std::size_t, std::vector<int>> node_hash;
 
@@ -911,11 +962,20 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
                 p[14][d] = 2*p[13][d]-p[12][d];
                 p[15][d] = 2*p[14][d]-p[13][d];
             }
-            // z: vector from face-centre to large cell centre
+            // z: offset from the centre of the four fine neighbours' face to the
+            // large cell's centre — the "depth" direction into the coarse cell.
             double z[3];
             for (int d = 0; d < 3; ++d)
                 z[d] = ci[d] - 0.25*(p[0][d]+p[1][d]+p[4][d]+p[5][d]);
 
+            // p[16..31]: the 16 "off-face" hex nodes for the 13-element template.
+            // All coefficients (268/375, 1/5, 0.072, 0.112, 0.056, 1.144 used in
+            // the sub-templates) are empirical shape constants from the reference
+            // implementation (StaticVars.h / HexGen.cpp).  They were chosen to
+            // distribute the transition nodes evenly while keeping the scaled
+            // Jacobian of every generated hex above the paper's quality threshold.
+            // p[18] = ci (large cell centre); p[19], p[28], p[29] are its
+            // reflections across the face in the ±I, ±J, ±I+J directions.
             for (int d = 0; d < 3; ++d) {
                 p[16][d] = p[1][d]+268.0/375*z[d]+(p[4][d]-p[0][d])*0.072;
                 p[17][d] = p[2][d]+268.0/375*z[d]+(p[4][d]-p[0][d])*0.072;
@@ -962,6 +1022,11 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             double ptmp[3];
 
             // -- 4-element template A (pSId[j][0] side) --------------------
+            // Condition: cell i has exactly one same/larger neighbour on the
+            // "A-side" face (pSId[j][0]), and that neighbour itself has 4 finer
+            // children on face j — i.e. the A-side shares the same transition.
+            // Together these two transitions form an "edge" configuration that
+            // requires a 4-element template to fill the corner region between them.
             if (vcount(i, pSId[j][0]) == 1 && vcount(nb(i, pSId[j][0], 0), j) == 4) {
                 for (int d = 0; d < 3; ++d) {
                     p16[0][d]  = 2*p[0][d]-p[1][d];
@@ -982,6 +1047,7 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             }
 
             // -- 4-element template B (pSId[j][1] side) --------------------
+            // Same logic as template A but for the B-side face (pSId[j][1]).
             if (vcount(i, pSId[j][1]) == 1 && vcount(nb(i, pSId[j][1], 0), j) == 4) {
                 for (int d = 0; d < 3; ++d) {
                     p16[0][d]  = 2*p[0][d]-p[4][d];
@@ -1017,6 +1083,13 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
                     p16[12][d] = p[18][d]; p16[13][d] = p[20][d];
                     p16[14][d] = p[24][d]; p16[15][d] = p[28][d];
                 }
+                // far_trans: the A-side transition face (sf) is itself bordered
+                // by a transition on the opposite face oj of its fine neighbours.
+                // When this "corner" is shared by three mutually-adjacent
+                // transitions (face j, A-side sf, and oj), the default p16 points
+                // would create negative-Jacobian hexes in the corner pocket.  The
+                // far_trans correction moves p16[0], p16[6] deeper along z and
+                // adjusts p16[2], p16[4] accordingly to keep the corner hex valid.
                 const int sf = pSId[j][0];
                 bool far_trans = false;
                 for (int k = 0; k < 4; ++k)
@@ -1032,6 +1105,9 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             }
 
             // -- 3-element template B (pSId[j][1] is itself a transition) --
+            // Same logic as template A but for the B-side face (pSId[j][1]).
+            // The far_trans correction uses p[18]/p[28] (face-normal reflections in
+            // the B-side direction) instead of p[18]/p[19] used in template A.
             if (vcount(i, pSId[j][1]) == 4) {
                 for (int d = 0; d < 3; ++d) {
                     p16[0][d]  = 2*p[0][d]-p[4][d];
@@ -1062,6 +1138,12 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             }
 
             // -- 3-element template C (pS2Id[j][0] far side) ---------------
+            // pS2Id[j][0] is the "far-A" face — the face on the other side of
+            // the transition from pSId[j][0].  The condition checks whether
+            // the single same-level neighbour on that face is itself a 4-child
+            // transition.  The far_trans probe walks two levels of adjacency
+            // (through the fine neighbour, then across face j) to detect a
+            // mirrored transition on the back side.
             if (vcount(nb(i, pS2Id[j][0], 0), pS2Id[j][0]) == 4) {
                 for (int d = 0; d < 3; ++d) {
                     p16[0][d]  = 2*p[3][d]-p[2][d];
@@ -1093,6 +1175,7 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             }
 
             // -- 3-element template D (pS2Id[j][1] far side) ---------------
+            // Symmetric counterpart of template C for the far-B side (pS2Id[j][1]).
             if (vcount(nb(i, pS2Id[j][1], 0), pS2Id[j][1]) == 4) {
                 for (int d = 0; d < 3; ++d) {
                     p16[0][d]  = 2*p[12][d]-p[8][d];
@@ -1123,7 +1206,17 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
                 emit(p16, t34Id[tmpl], 3, ptmp, DEL_IF_AVAIL);
             }
 
-            // -- 5-element template A (pSId[j][0] side, no further transition)
+            // -- 5-element template A (pSId[j][0] side, no further transition) --
+            // Condition: the A-side neighbour is a same/larger cell (count==1)
+            // AND its face j also has a single same/larger neighbour (count==1),
+            // meaning this is a plain edge-adjacent pair — no further 4-child
+            // transition on either side.  The 5-element template fills the corner
+            // without any of the far-transition corrections used in the 3-element
+            // templates.
+            // Note: p16[2] and p16[4] are set in the first d-loop and then
+            // adjusted in the second d-loop (shifted by p[8]-p[24]+2z/3).  The
+            // two-step pattern is intentional: the second loop applies a secondary
+            // correction that depends on the first values being in place.
             if (vcount(i, pSId[j][0]) == 1 && vcount(nb(i, pSId[j][0], 0), j) == 1) {
                 for (int d = 0; d < 3; ++d) {
                     p16[1][d]  = 2*p[18][d]-p[19][d];
@@ -1148,6 +1241,9 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             }
 
             // -- 5-element template B (pSId[j][1] side) --------------------
+            // Symmetric counterpart of template A for the B-side (pSId[j][1]).
+            // Same two-step p16 adjustment pattern — p16[2] and p16[4] shifted
+            // by p[1]-p[16]+2z/3 in the second d-loop.
             if (vcount(i, pSId[j][1]) == 1 && vcount(nb(i, pSId[j][1], 0), j) == 1) {
                 for (int d = 0; d < 3; ++d) {
                     p16[1][d]  = 2*p[18][d]-p[28][d];
@@ -1172,6 +1268,11 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             }
 
             // -- 5-element template C (pS2Id[j][0] far side) ---------------
+            // Condition: the neighbour on the far-A side has a single same-level
+            // neighbour on that same face, meaning neither the far-A face nor the
+            // far cell's face-j is a 4-child transition — just a plain edge pocket
+            // on the opposite side of face j.  Uses the p[3]/p[7]/p[11]/p[15]
+            // column (I-high, J-high positions on the far side).
             if (vcount(nb(i, pS2Id[j][0], 0), pS2Id[j][0]) == 1 &&
                 vcount(nb(nb(i, pS2Id[j][0], 0), pS2Id[j][0], 0), j) == 1) {
                 for (int d = 0; d < 3; ++d) {
@@ -1197,6 +1298,9 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
             }
 
             // -- 5-element template D (pS2Id[j][1] far side) ---------------
+            // Symmetric counterpart of template C for the far-B side (pS2Id[j][1]).
+            // Uses the p[12]/p[13]/p[14]/p[15] row (J-high positions in the far-B
+            // direction).
             if (vcount(nb(i, pS2Id[j][1], 0), pS2Id[j][1]) == 1 &&
                 vcount(nb(nb(i, pS2Id[j][1], 0), pS2Id[j][1], 0), j) == 1) {
                 for (int d = 0; d < 3; ++d) {
@@ -1667,7 +1771,10 @@ void OctreeHybridMeshUtility::WriteOctreeForReference(
     const std::size_t depth = p_octree->GetDepth();
     const std::size_t R   = std::size_t{1} << depth;
     const std::size_t pts = R + 1;
-    const double sc = 100.0 / static_cast<double>(R);  // reference RATIO
+    // sc maps [0, R] grid indices to [0, 100], matching the 100-unit normalised
+    // space the reference implementation uses for all quality constants and
+    // adaptive thresholds.
+    const double sc = 100.0 / static_cast<double>(R);
 
     static constexpr int dx[8] = {0,1,1,0,0,1,1,0};
     static constexpr int dy[8] = {0,0,1,1,0,0,1,1};
@@ -1723,6 +1830,8 @@ double OctreeHybridMeshUtility::SqDist(const double a[3], const double b[3])
 
 double OctreeHybridMeshUtility::TriArea(double a, double b, double c)
 {
+    // Heron's formula.  The clamp to 0 guards against negative values from
+    // floating-point rounding when the "triangle" is degenerate (collinear points).
     const double s = 0.5*(a+b+c);
     const double area = s*(s-a)*(s-b)*(s-c);
     return std::sqrt(area < 0.0 ? 0.0 : area);
@@ -1736,12 +1845,14 @@ int OctreeHybridMeshUtility::TriRayIntersect(
     const double p[3], const double dir[3], double e[3], double& alpha)
 {
     constexpr double DIST_THRES = 1e-12;
+    // A, B, C, D are the coefficients of the triangle's plane equation
+    // Ax + By + Cz + D = 0, computed from the three vertices.
     const double A = (c[1]*b[2]-b[1]*c[2]+a[1]*c[2]-a[2]*c[1]-a[1]*b[2]+a[2]*b[1]);
     const double B = (a[0]*(b[2]-c[2])-b[0]*(a[2]-c[2])+c[0]*(a[2]-b[2]));
     const double C = (a[0]*(c[1]-b[1])-b[0]*(c[1]-a[1])+c[0]*(b[1]-a[1]));
     const double D = a[0]*(b[1]*c[2]-c[1]*b[2])-b[0]*(a[1]*c[2]-a[2]*c[1])+c[0]*(a[1]*b[2]-a[2]*b[1]);
     const double den = A*dir[0]+B*dir[1]+C*dir[2];
-    if (std::abs(den) < DIST_THRES) return -1;          // parallel to plane
+    if (std::abs(den) < DIST_THRES) return -1;          // ray parallel to plane
     alpha = (-A*p[0]-B*p[1]-C*p[2]-D)/den;
     e[0]=p[0]+dir[0]*alpha; e[1]=p[1]+dir[1]*alpha; e[2]=p[2]+dir[2]*alpha;
     const double AP[3]={e[0]-a[0],e[1]-a[1],e[2]-a[2]};
@@ -1777,6 +1888,9 @@ double OctreeHybridMeshUtility::PointToTri(
     const double AB=std::sqrt(SqDist(a,b)), AC=std::sqrt(SqDist(a,c)), BC=std::sqrt(SqDist(b,c));
     const double S1=TriArea(QA,QB,AB), S2=TriArea(QA,QC,AC), S3=TriArea(QB,QC,BC);
 
+    // Check whether the foot q (projection of p onto the plane) lies inside
+    // the triangle using barycentric coordinates (fI, fJ in terms of AC, AB).
+    // fD is the denominator (det of the 2x2 Gram matrix).
     const double AP[3]={p[0]-a[0],p[1]-a[1],p[2]-a[2]};
     const double ACl[3]={c[0]-a[0],c[1]-a[1],c[2]-a[2]};
     const double ABl[3]={b[0]-a[0],b[1]-a[1],b[2]-a[2]};
@@ -1786,8 +1900,12 @@ double OctreeHybridMeshUtility::PointToTri(
     const double fD=dot(ACl,ACl)*dot(ABl,ABl)-dot(ACl,ABl)*dot(ACl,ABl);
     if (fI>=0 && fJ>=0 && fI+fJ<=fD) return alpha;          // foot inside triangle
 
-    // Closest boundary feature: nearest of the 3 vertices or the 3 edge
-    // projections (only edges whose foot lies between the endpoints).
+    // Foot is outside the triangle: the closest point is on a boundary feature
+    // (vertex or edge).  Start with the nearest vertex distance, then check
+    // each edge projection.  An edge projection is valid only when the
+    // parametric coordinate k is in (0,1) — outside that range the vertex
+    // distances already cover the endpoint.  The triangle inequality gives
+    // edge distance = 2·area / base_length.
     double beta = std::min({QA, QB, QC});
     const double kAB=((b[0]-a[0])*(q[0]-a[0])+(b[1]-a[1])*(q[1]-a[1])+(b[2]-a[2])*(q[2]-a[2]))/SqDist(a,b);
     const double kBC=((c[0]-b[0])*(q[0]-b[0])+(c[1]-b[1])*(q[1]-b[1])+(c[2]-b[2])*(q[2]-b[2]))/SqDist(b,c);
@@ -1853,8 +1971,10 @@ auto OctreeHybridMeshUtility::ComputeNodeSignedDistance(
     IndexPartition<int>(NV).for_each([&](int i) {
         const double p[3] = { rNodes[i][0], rNodes[i][1], rNodes[i][2] };
 
-        // Deterministic per-node RNG (so the carve is reproducible and the
-        // parallel loop is independent of scheduling).
+        // Deterministic per-node RNG: each node gets its own seed derived from
+        // its index so the ray direction sequence is reproducible and independent
+        // of thread scheduling.  The multiplier 2654435761 is the Knuth
+        // multiplicative hash (≈ 2³²/φ), chosen for good bit mixing.
         std::uint32_t s = 2654435761u * static_cast<std::uint32_t>(i + 1) + 12345u;
         auto nextf = [&s]() {
             s = s*1664525u + 1013904223u;
@@ -1901,6 +2021,14 @@ bool OctreeHybridMeshUtility::KeepCarvedCell(
     const std::array<int,8>& rCell,
     const std::vector<double>& rSignedDist)
 {
+    // OUT_IN_RATIO controls how deeply an "outside" node may penetrate relative
+    // to the "inside" clearance before the cell is dropped.  A value of 0.15
+    // means: if the deepest outside node is more than 15 % of the maximum inside
+    // clearance, discard the cell.  This retains boundary cells that are mostly
+    // inside while dropping those that are predominantly outside.
+    // Hard limit: if more than 2 corners are outside, drop immediately without
+    // the ratio check (avoids thin-shell cells with 3+ outside corners that the
+    // ratio alone would retain).
     constexpr double OUT_IN_RATIO = 0.15;
     double max_pos = 0.0, min_neg = 0.0;
     int n_out = 0;
@@ -1915,6 +2043,11 @@ bool OctreeHybridMeshUtility::KeepCarvedCell(
     return min_neg + OUT_IN_RATIO * max_pos >= 0.0;
 }
 
+// SJ_ADJ[corner][0..2]: the three edge-adjacent corners of a hex at `corner`
+// for computing the scaled-Jacobian metric.  The ordering follows the standard
+// 8-node hex (Hexahedra3D8): SJ_ADJ[k] are the three neighbours sharing an
+// edge with corner k, in a consistent right-hand orientation so that the triple
+// product HexEdgeTriple is positive for a well-oriented hex.
 static constexpr int SJ_ADJ[8][3] =
     {{1,3,4},{2,0,5},{3,1,6},{0,2,7},{7,5,0},{4,6,1},{5,7,2},{6,4,3}};
 
@@ -1934,7 +2067,11 @@ double OctreeHybridMeshUtility::TripleProduct(const double e0[3], const double e
 void OctreeHybridMeshUtility::HexEdgeTriple(const double p[8][3], int corner,
                           double e0[3], double e1[3], double e2[3])
 {
-    if (corner == 8) {  // body centre: opposite face-centre differences
+    if (corner == 8) {
+        // Virtual "body-centre" point (corner index 8, one past the 8 corners):
+        // edge vectors are computed as face-centre differences so that the triple
+        // product gives a measure of the overall hex volume, not a corner Jacobian.
+        // This is the reference's "principal axes" check for the cell interior.
         for (int d = 0; d < 3; ++d) {
             e0[d] = p[1][d]+p[2][d]+p[5][d]+p[6][d]-p[0][d]-p[3][d]-p[4][d]-p[7][d];
             e1[d] = p[2][d]+p[3][d]+p[6][d]+p[7][d]-p[0][d]-p[1][d]-p[4][d]-p[5][d];
@@ -2070,10 +2207,15 @@ void OctreeHybridMeshUtility::ClearBufferZone(
     std::vector<int>& rCellLevel,
     int MaxRounds)
 {
-    // ~128 unit probe directions on a Fibonacci sphere.
+    // 128 unit directions distributed evenly on a sphere via the Fibonacci
+    // sphere algorithm: each point advances by the golden angle (≈137.5°,
+    // the irrational rotation that minimises clustering) and the z coordinate
+    // steps uniformly from +1 to -1 so no hemisphere is under-sampled.
+    // 128 directions suffice to detect surface folds reliably without a visible
+    // performance cost in the typical buffer-zone removal loop.
     constexpr int ND = 128;
     std::array<std::array<double,3>,ND> dir;
-    const double ga = 3.39996322972865332;  // golden angle
+    const double ga = 3.39996322972865332;  // golden angle in radians
     for (int i=0;i<ND;++i) {
         const double z = 1.0 - 2.0*(i+0.5)/ND;
         const double r = std::sqrt(std::max(0.0,1.0-z*z));
@@ -2294,14 +2436,20 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
     }
 
     // --- 4. Optimisation --------------------------------------------------
-    constexpr double LR  = 5.0e-4;     // learning rate for the surface attractor
-    constexpr double LRQ = 2.0e-3;     // learning rate for the quality (untangling) gradient
-    constexpr double H   = 1.0e-4;     // finite-difference step
-    constexpr double TOL = 1.0e-3;     // shell-on-surface tolerance (100-unit box)
-    double eps_sj = 0.01;              // scaled-Jacobian gate (reference ELEM_THRES)
-    constexpr double EPS_TARGET = 0.50;// escalation ceiling (reference drives toward >0.5)
-    constexpr double EPS_STEP   = 0.03;// per-window escalation increment
-    constexpr int    STALL_MAX  = 8;   // windows allowed to recover before freezing eps
+    // All constants are calibrated for the 100-unit-normalised coordinate frame
+    // established in step 0 above.  Values are from the reference paper/code.
+    constexpr double LR  = 5.0e-4;  // surface-attractor step (duplicate → closest point)
+    constexpr double LRQ = 2.0e-3;  // quality-gradient step (finite-difference ascent on SJ)
+    constexpr double H   = 1.0e-4;  // finite-difference perturbation for quality gradient
+    constexpr double TOL = 1.0e-3;  // convergence: duplicate is "on surface" if dist < TOL
+    // eps_sj starts at 0.01 (just above zero — keeps hexes valid) and is
+    // escalated toward EPS_TARGET (0.50, the paper's quality threshold) in steps
+    // of EPS_STEP whenever the mesh passes a full smooth window without any
+    // element falling below the current gate.
+    double eps_sj = 0.01;
+    constexpr double EPS_TARGET = 0.50;
+    constexpr double EPS_STEP   = 0.03;
+    constexpr int    STALL_MAX  = 8;   // stall windows before backing the gate off one step
     std::vector<std::array<double,3>> grad(NN);   // surface attractor
     std::vector<std::array<double,3>> gq(NN);     // quality / untangling gradient
 
@@ -2466,7 +2614,10 @@ void OctreeHybridMeshUtility::WriteHexVtk(
         << "OctreeHybridMeshUtility::WriteHexVtk: cannot open '"
         << rFilename << "'" << std::endl;
 
-    // Keep only the nodes that some cell references, remapping ids.
+    // Compact the node list: after carving and projection some nodes in rNodes
+    // are no longer referenced by any surviving cell.  Build a remap table so
+    // the VTK file contains only the live nodes (required by some VTK readers
+    // that reject unreferenced points).
     std::vector<int> remap(rNodes.size(), -1);
     std::vector<std::array<double,3>> out_nodes;
     out_nodes.reserve(rNodes.size());
