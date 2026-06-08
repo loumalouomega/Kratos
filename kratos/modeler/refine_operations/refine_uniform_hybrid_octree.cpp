@@ -44,8 +44,12 @@ void OctreeHybridRefineUniform::Refine(
 
     const double element_size = RefineParameters["element_size"].GetDouble();
     const std::size_t target_depth = (element_size > 0.0)
-        ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, element_size)
+        ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, element_size, false)
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
+
+    if (target_depth > r_data.mpOctree->GetDepth()) {
+        r_data.mpOctree->Initialize(target_depth);
+    }
 
     OctreeHybridMeshUtility::RefineAllCells(*r_data.mpOctree, target_depth);
 }
