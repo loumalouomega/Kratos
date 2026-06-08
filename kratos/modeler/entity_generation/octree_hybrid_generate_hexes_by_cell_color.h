@@ -51,13 +51,17 @@ namespace Kratos
  *          matches the Kratos `Hexahedra3D8` local-node numbering, so corner index
  *          `k` maps directly to local node `k` without any remapping.
  *
- *          ### Dual vs. primal mesh
- *          The stage is topology-agnostic: it operates on the flat cell arrays
- *          (`mCells`, `mNodes`, `mCellColor`) regardless of whether the mesh was
- *          extracted as a conforming dual mesh or as a primal leaf-hex mesh with
- *          hanging-node constraints.
+ *          ### Dual vs. primal mesh — optional hanging-node constraints
+ *          The stage is topology-agnostic for element generation: it operates on the flat
+ *          cell arrays (`mCells`, `mNodes`, `mCellColor`) regardless of mesh type.
+ *          For **primal** meshes, when the `"variables"` array is non-empty and
+ *          `OctreeHybridMesherData::mHanging` contains 2:1 transition records, the stage
+ *          additionally creates one `LinearMasterSlaveConstraint` per
+ *          (hanging node × master node × variable) triple in the same ModelPart —
+ *          eliminating the need for a separate `OctreeHybridGenerateHangingNodeConstraints`
+ *          entry in `entities_generator_list`.
  *
- * ### Typical JSON configuration
+ * ### Typical JSON configuration (dual mesh)
  * @code{.json}
  * {
  *     "type"                : "OctreeHybridGenerateHexesByCellColor",
@@ -66,6 +70,16 @@ namespace Kratos
  *     "properties_id"       : 1,
  *     "generated_entity"    : "Element3D8N",
  *     "tag_refinement_level": true
+ * }
+ * @endcode
+ *
+ * ### Primal mesh with hanging-node constraints
+ * @code{.json}
+ * {
+ *     "type"                : "OctreeHybridGenerateHexesByCellColor",
+ *     "model_part_name"     : "StructureDomain",
+ *     "color"               : 1,
+ *     "variables"           : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
  * }
  * @endcode
  *
@@ -172,6 +186,8 @@ public:
      *   | `"properties_id"`      | int     | `1`                  | Properties block ID for generated elements. |
      *   | `"generated_entity"`   | string  | `"Element3D8N"`      | Registered Element type name. |
      *   | `"tag_refinement_level"` | bool  | `true`               | Store `REFINEMENT_LEVEL` on each element. |
+     *   | `"constraint_name"`    | string  | `"LinearMasterSlaveConstraint"` | Constraint type for hanging-node MPC; used only when `"variables"` is non-empty. |
+     *   | `"variables"`          | array   | `[]`                 | Scalar DOF variable names to constrain at 2:1 transitions.  Empty (default) = no constraints generated. |
      *
      * @return Parameters object with all keys set to their defaults.
      */

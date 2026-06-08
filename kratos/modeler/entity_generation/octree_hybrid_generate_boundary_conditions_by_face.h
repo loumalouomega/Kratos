@@ -46,6 +46,14 @@ namespace Kratos
  * Works with both dual-mesh and primal-mesh topologies, and with any condition type
  * registered in the Kratos component database (default: `"SurfaceCondition3D4N"`).
  *
+ * ### Optional hanging-node constraints (primal mesh)
+ * When `"variables"` is non-empty and `OctreeHybridMesherData::mHanging` contains 2:1
+ * transition records (set by the primal extraction path), the stage additionally creates
+ * one `LinearMasterSlaveConstraint` per (hanging node × master node × variable) triple
+ * in the same ModelPart — ensuring that boundary DOFs at refinement transitions are
+ * properly constrained without a separate entity-generation entry.  This mirrors the
+ * behaviour of @ref OctreeHybridGenerateHexesByCellColor.
+ *
  * ### Prerequisite
  * The hex-generation step (e.g. @ref OctreeHybridGenerateHexesByCellColor) must have run first so
  * that `OctreeHybridMesherData::mCells` and `OctreeHybridMesherData::mCellColor` are populated.
@@ -56,13 +64,15 @@ namespace Kratos
  * - `OctreeHybridMesherEntityGeneration.All`
  *
  * ### Parameters schema
- * | Key                | Type   | Default                    | Description                                |
- * |--------------------|--------|----------------------------|--------------------------------------------|
- * | `type`             | string | `"OctreeHybridGenerateBoundaryConditionsByFace"` | Registry lookup key.             |
- * | `model_part_name`  | string | `"Undefined"`              | ModelPart to create conditions in.         |
- * | `color`            | int    | `1`                        | Cell color (inside label) to use.          |
- * | `properties_id`    | int    | `1`                        | Properties ID assigned to each condition.  |
- * | `generated_entity` | string | `"SurfaceCondition3D4N"`   | Registered condition type to instantiate.  |
+ * | Key                  | Type         | Default                    | Description                                |
+ * |----------------------|--------------|----------------------------|--------------------------------------------|
+ * | `type`               | string       | `"OctreeHybridGenerateBoundaryConditionsByFace"` | Registry lookup key.         |
+ * | `model_part_name`    | string       | `"Undefined"`              | ModelPart to create conditions in.         |
+ * | `color`              | int          | `1`                        | Cell color (inside label) to use.          |
+ * | `properties_id`      | int          | `1`                        | Properties ID assigned to each condition.  |
+ * | `generated_entity`   | string       | `"SurfaceCondition3D4N"`   | Registered condition type to instantiate.  |
+ * | `constraint_name`    | string       | `"LinearMasterSlaveConstraint"` | Constraint type for hanging-node MPC; used only when `"variables"` is non-empty. |
+ * | `variables`          | string array | `[]`                       | Scalar DOF variable names to constrain at 2:1 transitions.  Empty (default) = no constraints generated. |
  *
  * @note Outward winding of the boundary quads follows the convention of
  *       `OctreeHybridMeshUtility::ExtractBoundaryFaces`.

@@ -15,7 +15,6 @@
 // External includes
 
 // Project includes
-#include "includes/variables.h"
 #include "utilities/model_part_utils.h"
 #include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
 #include "modeler/octree_hybrid_mesher_modeler.h"
@@ -32,7 +31,9 @@ const Parameters OctreeHybridGenerateHexesByCellColor::GetDefaultParameters() co
         "color"                : 1,
         "properties_id"        : 1,
         "generated_entity"     : "Element3D8N",
-        "tag_refinement_level" : true
+        "tag_refinement_level" : true,
+        "constraint_name"      : "LinearMasterSlaveConstraint",
+        "variables"            : []
     })");
 }
 
@@ -78,6 +79,48 @@ void OctreeHybridGenerateHexesByCellColor::Generate(OctreeHybridMesherModeler& r
     new_nodes.Unique();
     ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
     r_model_part.AddElements(new_elements.begin(), new_elements.end());
+
+    // Optionally generate hanging-node constraints for primal meshes.
+    // Triggered only when 'variables' is non-empty and there are 2:1 transitions.
+    const auto& r_var_list = GenerationParameters["variables"];
+    if (r_var_list.size() == 0 || r_data.mHanging.empty()) return;
+
+    const std::string constraint_name = GenerationParameters["constraint_name"].GetString();
+    const int n_vars = static_cast<int>(r_var_list.size());
+    std::vector<const Variable<double>*> vars(n_vars);
+    for (int vi = 0; vi < n_vars; ++vi) {
+        const std::string& vname = r_var_list[vi].GetString();
+        KRATOS_ERROR_IF_NOT(KratosComponents<Variable<double>>::Has(vname))
+            << "OctreeHybridGenerateHexesByCellColor: variable '" << vname
+            << "' is not registered as a scalar variable." << std::endl;
+        vars[vi] = &KratosComponents<Variable<double>>::Get(vname);
+    }
+
+    for (const auto& hc : r_data.mHanging) {
+        Node::Pointer p_slave = r_data.mNodePtrs[hc.SlaveNode];
+        if (!p_slave) continue;
+
+        std::vector<Node::Pointer> master_ptrs(hc.NumMasters);
+        bool all_masters_exist = true;
+        for (int m = 0; m < hc.NumMasters; ++m) {
+            master_ptrs[m] = r_data.mNodePtrs[hc.MasterNodes[m]];
+            if (!master_ptrs[m]) { all_masters_exist = false; break; }
+        }
+        if (!all_masters_exist) continue;
+
+        for (int vi = 0; vi < n_vars; ++vi) {
+            const Variable<double>& r_var = *vars[vi];
+            p_slave->AddDof(r_var);
+            for (int m = 0; m < hc.NumMasters; ++m) master_ptrs[m]->AddDof(r_var);
+            for (int m = 0; m < hc.NumMasters; ++m) {
+                r_model_part.CreateNewMasterSlaveConstraint(
+                    constraint_name, rModeler.NextConstraintId(),
+                    *master_ptrs[m], r_var,
+                    *p_slave, r_var,
+                    hc.Weights[m], 0.0);
+            }
+        }
+    }
 }
 
 } // namespace Kratos
