@@ -131,12 +131,25 @@ Node::Pointer OctreeHybridMesherModeler::GenerateOrRetrieveNode(
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMesherModeler::BuildOctreeAndExtract()
+void OctreeHybridMesherModeler::SetupModelPart()
+{
+    ExecuteRefinementOperations();
+    ExecuteColoringOperations();
+    ExecuteEntityGenerationOperations();
+    ExecuteModelPartOperations();
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMesherModeler::ExecuteRefinementOperations()
 {
     Internals::OctreeHybridMesherData& r_data = *mpData;
 
-    // Dispatch all refine operations; the first must be OctreeHybridRefineInterfaceCells,
-    // which builds the octree and writes mesh_type / projection settings into r_data.
+    // Dispatch every entry in refine_operations_list.
+    // The first entry must be OctreeHybridRefineInterfaceCells, which builds the
+    // initial octree from the surface and records mesh_type / projection settings
+    // in r_data.  Subsequent entries add deeper local or uniform refinement.
     Dispatch<OctreeHybridRefineOperation>(
         "OctreeHybridRefineOperation", mParameters["refine_operations_list"],
         [&](const OctreeHybridRefineOperation& rProto, Parameters rParams) {
@@ -147,6 +160,7 @@ void OctreeHybridMesherModeler::BuildOctreeAndExtract()
         << "Ensure 'refine_operations_list' starts with an OctreeHybridRefineInterfaceCells entry."
         << std::endl;
 
+    // 2:1 balancing + mesh extraction.
     r_data.mpOctree->StrongConstrain2To1();
 
     if (r_data.mMeshType == "dual") {
@@ -177,25 +191,34 @@ void OctreeHybridMesherModeler::BuildOctreeAndExtract()
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMesherModeler::SetupModelPart()
+void OctreeHybridMesherModeler::ExecuteColoringOperations()
 {
-    // 1. Internal octree-generation step: build, balance and extract the hex mesh.
-    BuildOctreeAndExtract();
-
-    // 2. Colouring (classify cells).
     Dispatch<OctreeHybridMesherColoring>(
         "OctreeHybridMesherColoring", mParameters["coloring_settings_list"],
-        [&](const OctreeHybridMesherColoring& rProto, Parameters rParams) { rProto.Apply(*this, rParams); });
+        [&](const OctreeHybridMesherColoring& rProto, Parameters rParams) {
+            rProto.Apply(*this, rParams); });
+}
 
-    // 3. Entity generation (elements, conditions, constraints).
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMesherModeler::ExecuteEntityGenerationOperations()
+{
     Dispatch<OctreeHybridMesherEntityGeneration>(
         "OctreeHybridMesherEntityGeneration", mParameters["entities_generator_list"],
-        [&](const OctreeHybridMesherEntityGeneration& rProto, Parameters rParams) { rProto.Generate(*this, rParams); });
+        [&](const OctreeHybridMesherEntityGeneration& rProto, Parameters rParams) {
+            rProto.Generate(*this, rParams); });
+}
 
-    // 4. Operations (post-processing on the finished ModelPart).
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMesherModeler::ExecuteModelPartOperations()
+{
     Dispatch<OctreeHybridMesherOperation>(
         "OctreeHybridMesherOperation", mParameters["model_part_operations"],
-        [&](const OctreeHybridMesherOperation& rProto, Parameters rParams) { rProto.Execute(*this, rParams); });
+        [&](const OctreeHybridMesherOperation& rProto, Parameters rParams) {
+            rProto.Execute(*this, rParams); });
 }
 
 } // namespace Kratos

@@ -47,8 +47,8 @@ namespace Internals { class OctreeHybridMesherData; }
  *
  * | Step | What happens |
  * |------|-------------|
- * | 1 | **Octree generation + refinement** (`refine_operations_list`): the first entry must be an @ref OctreeHybridRefineInterfaceCells operation, which builds the initial adaptive octree from the input surface mesh.  Additional entries (e.g. @ref OctreeHybridRefineUniform, further @ref OctreeHybridRefineInterfaceCells) further subdivide the octree before balancing.  Multiple entries are supported; each may target a different input model part. |
- * | 2 | **2:1 balancing + mesh extraction** (internal): balances the refined octree with `StrongConstrain2To1` and extracts the conforming *dual* hex mesh or non-conforming *primal* leaf-hex mesh, using the `mesh_type` and projection settings recorded by the generate operation. |
+ * | 1 | **Refinement** (`refine_operations_list`): dispatches each @ref OctreeHybridRefineOperation.  The first entry must be @ref OctreeHybridRefineInterfaceCells, which builds the initial adaptive octree from the input surface and records `mesh_type` / projection settings.  Additional entries (e.g. @ref OctreeHybridRefineUniform or further @ref OctreeHybridRefineInterfaceCells) further subdivide the octree before balancing. |
+ * | 2 | **2:1 balancing + mesh extraction** (internal): calls `StrongConstrain2To1` and extracts the conforming *dual* hex mesh or non-conforming *primal* leaf-hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
  * | 3 | **Colouring** (`coloring_settings_list`): classifies cells as inside (1) or outside (0) the surface. |
  * | 4 | **Entity generation** (`entities_generator_list`): emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
  * | 5 | **Operations** (`model_part_operations`): post-processing passes (e.g. mesh-quality reports). |
@@ -168,13 +168,12 @@ public:
 
     /**
      * @brief Runs the full meshing pipeline.
-     * @details Executes the pipeline stages in order:
-     * 1. @ref BuildOctreeAndExtract — dispatches `refine_operations_list` (the first entry
-     *    must be @ref OctreeHybridRefineInterfaceCells to build the octree; subsequent
-     *    entries further refine it), then performs 2:1 balancing and mesh extraction.
-     * 2. Dispatch over `coloring_settings_list` via @ref OctreeHybridMesherColoring.
-     * 3. Dispatch over `entities_generator_list` via @ref OctreeHybridMesherEntityGeneration.
-     * 4. Dispatch over `model_part_operations` via @ref OctreeHybridMesherOperation.
+     * @details Delegates to four sequential private stage methods:
+     * 1. @ref ExecuteRefinementOperations — dispatches `refine_operations_list`, then
+     *    balances and extracts the hex mesh.
+     * 2. @ref ExecuteColoringOperations — dispatches `coloring_settings_list`.
+     * 3. @ref ExecuteEntityGenerationOperations — dispatches `entities_generator_list`.
+     * 4. @ref ExecuteModelPartOperations — dispatches `model_part_operations`.
      */
     void SetupModelPart() override;
 
@@ -331,20 +330,38 @@ private:
     ///@{
 
     /**
-     * @brief Dispatches `refine_operations_list`, balances, and extracts the hex mesh.
-     * @details Dispatches every entry in `refine_operations_list` via
-     *          @ref OctreeHybridRefineOperation (the first entry must be an
-     *          @ref OctreeHybridRefineInterfaceCells that builds the octree and writes
-     *          `mMeshType` / projection settings into `OctreeHybridMesherData`).
-     *          After all refinement passes, calls `StrongConstrain2To1`, and then:
-     *          - **`mMeshType == "dual"`**: calls `ExtractDualHexMesh` and optionally
-     *            `RemoveOutsideElement` + `ClearBufferZone` + `ProjectToIsoSurface`
-     *            when `mProjectToSurface` is true.
-     *          - **`mMeshType == "primal"`**: calls `ExtractPrimalHexMesh` which also
-     *            fills `OctreeHybridMesherData::mHanging` with the 2:1 transition constraints.
-     *          After extraction, `mNodePtrs` is resized and zeroed.
+     * @brief Dispatches `refine_operations_list`, then balances and extracts the hex mesh.
+     * @details Calls @ref OctreeHybridRefineOperation::Refine on every entry (the first must
+     *          be @ref OctreeHybridRefineInterfaceCells).  After all refinement passes, calls
+     *          `StrongConstrain2To1` and then:
+     *          - **`mMeshType == "dual"`**: `ExtractDualHexMesh`; optionally
+     *            `RemoveOutsideElement` + `ClearBufferZone` + `ProjectToIsoSurface`.
+     *          - **`mMeshType == "primal"`**: `ExtractPrimalHexMesh`, which also fills
+     *            `OctreeHybridMesherData::mHanging` with 2:1 transition constraints.
+     *          Initialises `mNodePtrs` to null after extraction.
      */
-    void BuildOctreeAndExtract();
+    void ExecuteRefinementOperations();
+
+    /**
+     * @brief Dispatches `coloring_settings_list` via @ref OctreeHybridMesherColoring.
+     * @details Each entry's `"type"` is resolved to a registered prototype and its
+     *          `Apply(*this, parameters)` virtual is called in list order.
+     */
+    void ExecuteColoringOperations();
+
+    /**
+     * @brief Dispatches `entities_generator_list` via @ref OctreeHybridMesherEntityGeneration.
+     * @details Each entry's `"type"` is resolved to a registered prototype and its
+     *          `Generate(*this, parameters)` virtual is called in list order.
+     */
+    void ExecuteEntityGenerationOperations();
+
+    /**
+     * @brief Dispatches `model_part_operations` via @ref OctreeHybridMesherOperation.
+     * @details Each entry's `"type"` is resolved to a registered prototype and its
+     *          `Execute(*this, parameters)` virtual is called in list order.
+     */
+    void ExecuteModelPartOperations();
 
     /**
      * @brief Resolves a stage-list from JSON and invokes @p Invoke on each prototype.
