@@ -47,21 +47,20 @@ namespace Internals { class OctreeHybridMesherData; }
  *
  * | Step | What happens |
  * |------|-------------|
- * | 1 | **Octree generation** (internal): builds the initial adaptive octree from the input surface mesh into shared state (`OctreeHybridMesherData`). |
- * | 2 | **Refinement** (`refine_operations_list`): applies one or more refinement operations on the octree before 2:1 balancing and mesh extraction.  Use @ref OctreeHybridRefineUniform for a globally uniform depth, or @ref OctreeHybridRefineInterfaceCells to concentrate resolution near specific surfaces. Multiple entries are supported; each may target a different input model part. |
- * | 3 | **2:1 balancing + mesh extraction** (internal): balances the refined octree with `StrongConstrain2To1` and extracts the conforming *dual* hex mesh or non-conforming *primal* leaf-hex mesh. |
- * | 4 | **Colouring** (`coloring_settings_list`): classifies cells as inside (1) or outside (0) the surface. |
- * | 5 | **Entity generation** (`entities_generator_list`): emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
- * | 6 | **Operations** (`model_part_operations`): post-processing passes (e.g. mesh-quality reports). |
+ * | 1 | **Octree generation + refinement** (`refine_operations_list`): the first entry must be an @ref OctreeHybridRefineInterfaceCells operation, which builds the initial adaptive octree from the input surface mesh.  Additional entries (e.g. @ref OctreeHybridRefineUniform, further @ref OctreeHybridRefineInterfaceCells) further subdivide the octree before balancing.  Multiple entries are supported; each may target a different input model part. |
+ * | 2 | **2:1 balancing + mesh extraction** (internal): balances the refined octree with `StrongConstrain2To1` and extracts the conforming *dual* hex mesh or non-conforming *primal* leaf-hex mesh, using the `mesh_type` and projection settings recorded by the generate operation. |
+ * | 3 | **Colouring** (`coloring_settings_list`): classifies cells as inside (1) or outside (0) the surface. |
+ * | 4 | **Entity generation** (`entities_generator_list`): emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
+ * | 5 | **Operations** (`model_part_operations`): post-processing passes (e.g. mesh-quality reports). |
  *
- * Each component in stages 2–4 is a Registry prototype: the modeler resolves its `"type"`
- * string to the registered prototype via `Registry::GetValue<Base>(path)` and calls the
- * stateless `const` do-work virtual with `(*this, parameters)`.  No factory files are
- * needed; components self-register at static-init time through
- * `KRATOS_REGISTRY_ADD_PROTOTYPE`.
+ * Every component in `refine_operations_list` and stages 3–5 is a Registry prototype: the
+ * modeler resolves its `"type"` string to the registered prototype via
+ * `Registry::GetValue<Base>(path)` and calls the stateless `const` do-work virtual with
+ * `(*this, parameters)`.  No factory files are needed; components self-register at
+ * static-init time through `KRATOS_REGISTRY_ADD_PROTOTYPE`.
  *
  * ### Mesh topologies
- * The `"mesh_type"` key in the `"octree_generator"` block selects the topology:
+ * The `"mesh_type"` key in the first @ref OctreeHybridRefineInterfaceCells operation selects the topology:
  * - **`"dual"`** (default): a fully *conforming* mesh produced by the dual extraction +
  *   transition-template algorithm (see @ref OctreeHybridMeshUtility).  No hanging nodes.
  * - **`"primal"`**: one hexahedron per octree leaf, sharing finest-grid corner nodes.
@@ -83,10 +82,13 @@ namespace Internals { class OctreeHybridMesherData; }
  * settings = KM.Parameters('''{
  *     "input_model_part_name"  : "Surface",
  *     "output_model_part_name" : "Volume",
- *     "octree_generator"  : { "refinement_depth": 3 },
- *     "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
- *                                   "input_model_part_name": "Surface",
- *                                   "refinement_depth": 5 }],
+ *     "refine_operations_list" : [
+ *         { "type": "OctreeHybridRefineInterfaceCells",
+ *           "refinement_depth": 3 },
+ *         { "type": "OctreeHybridRefineInterfaceCells",
+ *           "input_model_part_name": "Surface",
+ *           "refinement_depth": 5 }
+ *     ],
  *     "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
  *     "entities_generator_list": [{ "type": "OctreeHybridGenerateHexesByCellColor",
  *                                   "model_part_name": "Volume", "color": 1 }],
@@ -166,15 +168,13 @@ public:
 
     /**
      * @brief Runs the full meshing pipeline.
-     * @details Executes the six pipeline stages in order:
-     * 1. @ref BuildOctreeAndExtract — octree construction from the input surface.
-     * 2. Dispatch over `refine_operations_list` via @ref OctreeHybridRefineOperation
-     *    (e.g. @ref OctreeHybridRefineUniform, @ref OctreeHybridRefineInterfaceCells).
-     * 3. 2:1 balancing (`StrongConstrain2To1`) and dual/primal mesh extraction
-     *    (and optional surface projection) — performed inside @ref BuildOctreeAndExtract.
-     * 4. Dispatch over `coloring_settings_list` via @ref OctreeHybridMesherColoring.
-     * 5. Dispatch over `entities_generator_list` via @ref OctreeHybridMesherEntityGeneration.
-     * 6. Dispatch over `model_part_operations` via @ref OctreeHybridMesherOperation.
+     * @details Executes the pipeline stages in order:
+     * 1. @ref BuildOctreeAndExtract — dispatches `refine_operations_list` (the first entry
+     *    must be @ref OctreeHybridRefineInterfaceCells to build the octree; subsequent
+     *    entries further refine it), then performs 2:1 balancing and mesh extraction.
+     * 2. Dispatch over `coloring_settings_list` via @ref OctreeHybridMesherColoring.
+     * 3. Dispatch over `entities_generator_list` via @ref OctreeHybridMesherEntityGeneration.
+     * 4. Dispatch over `model_part_operations` via @ref OctreeHybridMesherOperation.
      */
     void SetupModelPart() override;
 
@@ -198,6 +198,14 @@ public:
      * @return Reference to the `Model` that was passed to the constructor.
      */
     Model& GetModel() { return *mpModel; }
+
+    /**
+     * @brief Returns the top-level `input_model_part_name` from the modeler parameters.
+     * @details Used by @ref OctreeHybridRefineInterfaceCells as a fallback when its own
+     *          `input_model_part_name` is empty on the first call (octree build).
+     * @return The model part name string (may be empty if not set).
+     */
+    std::string GetInputModelPartName() const { return mParameters["input_model_part_name"].GetString(); }
 
     /**
      * @brief Returns or creates the ModelPart identified by @p rFullName.
@@ -277,25 +285,19 @@ public:
      * @details Full schema:
      * @code{.json}
      * {
-     *     "echo_level"              : 0,
-     *     "input_model_part_name"   : "",
-     *     "output_model_part_name"  : "",
-     *     "octree_generator" : {
-     *         "type"                  : "generate_octree_from_surface",
-     *         "input_model_part_name" : "",
-     *         "refinement_depth"      : 5,
-     *         "adaptive"              : true,
-     *         "mesh_type"             : "dual",
-     *         "project_to_surface"    : false,
-     *         "projection_iterations" : 20000,
-     *         "projection_smoothing"  : 1000
-     *     },
-     *     "refine_operations_list"   : [],
-     *     "coloring_settings_list"   : [],
-     *     "entities_generator_list"  : [],
-     *     "model_part_operations"    : []
+     *     "echo_level"             : 0,
+     *     "input_model_part_name"  : "",
+     *     "output_model_part_name" : "",
+     *     "refine_operations_list"  : [],
+     *     "coloring_settings_list"  : [],
+     *     "entities_generator_list" : [],
+     *     "model_part_operations"   : []
      * }
      * @endcode
+     * The `refine_operations_list` must start with an @ref OctreeHybridRefineInterfaceCells
+     * entry (which builds the octree and replaces the former `octree_generator` block) and may be
+     * followed by any number of @ref OctreeHybridRefineUniform or additional
+     * @ref OctreeHybridRefineInterfaceCells entries.
      * @return Parameters object with all keys set to their defaults.
      */
     const Parameters GetDefaultParameters() const override;
@@ -329,16 +331,16 @@ private:
     ///@{
 
     /**
-     * @brief Builds the octree, dispatches refinement operations, balances, and extracts the hex mesh.
-     * @details Reads `mParameters["octree_generator"]`, resolves the input surface
-     *          ModelPart, builds the adaptive (or uniform) octree via
-     *          `OctreeHybridMeshUtility::BuildFromSurfaceMesh`, dispatches the
-     *          `refine_operations_list` entries (each may further subdivide octree
-     *          cells), calls `StrongConstrain2To1`, and then:
-     *          - **`mesh_type == "dual"`**: calls `ExtractDualHexMesh` and optionally
+     * @brief Dispatches `refine_operations_list`, balances, and extracts the hex mesh.
+     * @details Dispatches every entry in `refine_operations_list` via
+     *          @ref OctreeHybridRefineOperation (the first entry must be an
+     *          @ref OctreeHybridRefineInterfaceCells that builds the octree and writes
+     *          `mMeshType` / projection settings into `OctreeHybridMesherData`).
+     *          After all refinement passes, calls `StrongConstrain2To1`, and then:
+     *          - **`mMeshType == "dual"`**: calls `ExtractDualHexMesh` and optionally
      *            `RemoveOutsideElement` + `ClearBufferZone` + `ProjectToIsoSurface`
-     *            when `"project_to_surface"` is true.
-     *          - **`mesh_type == "primal"`**: calls `ExtractPrimalHexMesh` which also
+     *            when `mProjectToSurface` is true.
+     *          - **`mMeshType == "primal"`**: calls `ExtractPrimalHexMesh` which also
      *            fills `OctreeHybridMesherData::mHanging` with the 2:1 transition constraints.
      *          After extraction, `mNodePtrs` is resized and zeroed.
      */

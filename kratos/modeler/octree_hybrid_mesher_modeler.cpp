@@ -45,8 +45,6 @@ OctreeHybridMesherModeler::OctreeHybridMesherModeler(
     , mpData(Kratos::make_unique<Internals::OctreeHybridMesherData>())
 {
     mParameters.ValidateAndAssignDefaults(GetDefaultParameters());
-    mParameters["octree_generator"].ValidateAndAssignDefaults(
-        GetDefaultParameters()["octree_generator"]);
 }
 
 
@@ -74,16 +72,6 @@ const Parameters OctreeHybridMesherModeler::GetDefaultParameters() const
         "echo_level" : 0,
         "input_model_part_name" : "",
         "output_model_part_name" : "",
-        "octree_generator" : {
-            "type" : "generate_octree_from_surface",
-            "input_model_part_name" : "",
-            "refinement_depth" : 5,
-            "adaptive" : true,
-            "mesh_type" : "dual",
-            "project_to_surface" : false,
-            "projection_iterations" : 20000,
-            "projection_smoothing" : 1000
-        },
         "refine_operations_list" : [],
         "coloring_settings_list" : [],
         "entities_generator_list" : [],
@@ -145,49 +133,41 @@ Node::Pointer OctreeHybridMesherModeler::GenerateOrRetrieveNode(
 
 void OctreeHybridMesherModeler::BuildOctreeAndExtract()
 {
-    Parameters gen = mParameters["octree_generator"];
-
-    std::string surface_name = gen["input_model_part_name"].GetString();
-    if (surface_name.empty()) surface_name = mParameters["input_model_part_name"].GetString();
-    KRATOS_ERROR_IF(surface_name.empty())
-        << "OctreeHybridMesherModeler: no input surface model part specified "
-        << "(set 'input_model_part_name' on the modeler or its 'octree_generator')." << std::endl;
-    ModelPart& r_surface = mpModel->GetModelPart(surface_name);
-
     Internals::OctreeHybridMesherData& r_data = *mpData;
-    r_data.mTriangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_surface);
-    r_data.mpOctree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
-        r_surface, gen["refinement_depth"].GetInt(), gen["adaptive"].GetBool());
 
-    // Optional refinement passes: run before 2:1 balancing so all additions are
-    // covered by a single StrongConstrain2To1 call.
+    // Dispatch all refine operations; the first must be OctreeHybridRefineInterfaceCells,
+    // which builds the octree and writes mesh_type / projection settings into r_data.
     Dispatch<OctreeHybridRefineOperation>(
         "OctreeHybridRefineOperation", mParameters["refine_operations_list"],
         [&](const OctreeHybridRefineOperation& rProto, Parameters rParams) {
             rProto.Refine(*this, rParams); });
 
+    KRATOS_ERROR_IF_NOT(r_data.mpOctree)
+        << "OctreeHybridMesherModeler: no octree was built. "
+        << "Ensure 'refine_operations_list' starts with an OctreeHybridRefineInterfaceCells entry."
+        << std::endl;
+
     r_data.mpOctree->StrongConstrain2To1();
 
-    const std::string mesh_type = gen["mesh_type"].GetString();
-    if (mesh_type == "dual") {
+    if (r_data.mMeshType == "dual") {
         OctreeHybridMeshUtility::ExtractDualHexMesh(
             *r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
 
-        if (gen["project_to_surface"].GetBool() && !r_data.mTriangles.empty()) {
+        if (r_data.mProjectToSurface && !r_data.mTriangles.empty()) {
             OctreeHybridMeshUtility::RemoveOutsideElement(
                 r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
             OctreeHybridMeshUtility::ClearBufferZone(
                 r_data.mNodes, r_data.mCells, r_data.mCellLevel);
             OctreeHybridMeshUtility::ProjectToIsoSurface(
                 r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel,
-                gen["projection_iterations"].GetInt(), gen["projection_smoothing"].GetInt());
+                r_data.mProjectionIterations, r_data.mProjectionSmoothing);
             r_data.mProjected = true;
         }
-    } else if (mesh_type == "primal") {
+    } else if (r_data.mMeshType == "primal") {
         OctreeHybridMeshUtility::ExtractPrimalHexMesh(
             *r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mHanging);
     } else {
-        KRATOS_ERROR << "OctreeHybridMesherModeler: unknown mesh_type '" << mesh_type
+        KRATOS_ERROR << "OctreeHybridMesherModeler: unknown mesh_type '" << r_data.mMeshType
                      << "'. Use 'dual' or 'primal'." << std::endl;
     }
 
