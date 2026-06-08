@@ -78,6 +78,18 @@ public:
     /// Whether the surface projection has already been applied to @ref mNodes.
     bool mProjected = false;
 
+    /// Mesh topology to extract: "dual" (default) or "primal".
+    std::string mMeshType = "dual";
+
+    /// Whether to project the extracted mesh onto the input iso-surface.
+    bool mProjectToSurface = false;
+
+    /// Number of projection iterations (used when @ref mProjectToSurface is true).
+    int mProjectionIterations = 20000;
+
+    /// Number of smoothing iterations in the projection step.
+    int mProjectionSmoothing = 1000;
+
     ///@}
     ///@name Inquiry
     ///@{
