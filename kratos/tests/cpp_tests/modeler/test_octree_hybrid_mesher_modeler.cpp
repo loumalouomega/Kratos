@@ -23,6 +23,7 @@
 #include "includes/registry.h"
 
 #include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
 
 namespace Kratos::Testing {
 
@@ -500,13 +501,17 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryNodesSubsetOfVolume, KratosC
 }
 
 // ===========================================================================
-// OctreeHybridGenerateHangingNodeConstraints entity generator
+// OctreeHybridGenerateHexesByCellColor — hanging-node constraint parameters
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherHangingNodeConstraintsRegistered, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesByCellColorHasConstraintParams, KratosCoreFastSuite)
 {
-    KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHangingNodeConstraints.Prototype"));
+    OctreeHybridGenerateHexesByCellColor op;
+    Parameters p = op.GetDefaultParameters();
+    KRATOS_EXPECT_TRUE(p.Has("constraint_name"));
+    KRATOS_EXPECT_TRUE(p.Has("variables"));
+    KRATOS_EXPECT_EQ(p["constraint_name"].GetString(), std::string{"LinearMasterSlaveConstraint"});
+    KRATOS_EXPECT_EQ(p["variables"].size(), std::size_t{0});
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMeshConstraintsGenerated, KratosCoreFastSuite)
@@ -520,8 +525,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMeshConstraintsGenerated, Krat
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1},
-            {"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"Output",
+            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1,
              "variables":["DISPLACEMENT_X"]}
         ],
         "model_part_operations":[]
@@ -542,8 +546,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsPartitionOfUnity, K
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1},
-            {"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"Output",
+            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1,
              "variables":["DISPLACEMENT_X"]}
         ],
         "model_part_operations":[]
@@ -571,8 +574,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsMasterCountsValid, 
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1},
-            {"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"Output",
+            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1,
              "variables":["DISPLACEMENT_X"]}
         ],
         "model_part_operations":[]
@@ -603,8 +605,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, Krat
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":1},
-            {"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"O",
+            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":1,
              "variables":["DISPLACEMENT_X"]}
         ],"model_part_operations":[]
     })";
@@ -614,8 +615,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, Krat
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":1},
-            {"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"O",
+            {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":1,
              "variables":["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]}
         ],"model_part_operations":[]
     })";

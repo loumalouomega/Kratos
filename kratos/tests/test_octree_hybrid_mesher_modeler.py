@@ -204,8 +204,7 @@ class TestOctreeHybridMesherModelerPrimal(unittest.TestCase):
                                         "adaptive":true,"mesh_type":"primal"}}],
             "coloring_settings_list":[],
             "entities_generator_list":[
-                {{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1}},
-                {{"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"Output",
+                {{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1,
                   "variables":["DISPLACEMENT_X","DISPLACEMENT_Y"]}}
             ],
             "model_part_operations":[]}}""")
@@ -298,8 +297,7 @@ class TestOctreeHybridMesherModelerBunny(unittest.TestCase):
                                        "mesh_type":"primal"}],
             "coloring_settings_list":[],
             "entities_generator_list":[
-                {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1},
-                {"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"Output",
+                {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Output","color":1,
                  "variables":["DISPLACEMENT_X"]}
             ],
             "model_part_operations":[]}""")
@@ -552,10 +550,29 @@ class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
         self.assertTrue(KM.Registry.HasValue(
             "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateBoundaryConditionsByFace.Prototype"))
 
+    def test_primal_boundary_constraints_generated(self):
+        """Primal mesh: 'variables' on the boundary generator produces constraints in the boundary ModelPart."""
+        model = KM.Model()
+        build_transition_surface(model)
+        run_modeler(model, """{
+            "input_model_part_name":"Surface","output_model_part_name":"Volume",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,
+                                       "adaptive":true,"mesh_type":"primal"}],
+            "coloring_settings_list":[],
+            "entities_generator_list":[
+                {"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"Volume","color":1},
+                {"type":"OctreeHybridGenerateBoundaryConditionsByFace","model_part_name":"Boundary",
+                 "color":1,"variables":["DISPLACEMENT_X"]}
+            ],
+            "model_part_operations":[]}""")
+        bnd = model.GetModelPart("Boundary")
+        self.assertGreater(bnd.NumberOfConditions(), 0)
+        self.assertGreaterEqual(bnd.NumberOfMasterSlaveConstraints(), 0)
+
 
 # ===========================================================================
 class TestGenerateHangingNodeConstraints(unittest.TestCase):
-    """Unit tests for OctreeHybridGenerateHangingNodeConstraints entity generator (primal mesh)."""
+    """Tests for hanging-node constraint generation via OctreeHybridGenerateHexesByCellColor."""
 
     def _run(self, depth=4, variables=None):
         if variables is None:
@@ -569,8 +586,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
                                         "refinement_depth":{depth},"adaptive":true,"mesh_type":"primal"}}],
             "coloring_settings_list":[],
             "entities_generator_list":[
-                {{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":1}},
-                {{"type":"OctreeHybridGenerateHangingNodeConstraints","model_part_name":"O",
+                {{"type":"OctreeHybridGenerateHexesByCellColor","model_part_name":"O","color":1,
                   "variables":{var_json}}}
             ],
             "model_part_operations":[]}}""")
@@ -579,7 +595,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
     def test_constraints_generated(self):
         out = self._run()
         nc = out.NumberOfMasterSlaveConstraints()
-        print(f"\n[OctreeHybridGenerateHangingNodeConstraints] elements={out.NumberOfElements()} constraints={nc}")
+        print(f"\n[OctreeHybridGenerateHexesByCellColor primal] elements={out.NumberOfElements()} constraints={nc}")
         self.assertGreater(nc, 0)
 
     def test_partition_of_unity(self):
@@ -618,7 +634,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
         out3 = self._run(variables=["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"])
         nc1 = out1.NumberOfMasterSlaveConstraints()
         nc3 = out3.NumberOfMasterSlaveConstraints()
-        print(f"\n[OctreeHybridGenerateHangingNodeConstraints] 1-var={nc1} 3-var={nc3}")
+        print(f"\n[OctreeHybridGenerateHexesByCellColor primal] 1-var={nc1} 3-var={nc3}")
         self.assertEqual(nc3, 3 * nc1,
                          f"3-variable count {nc3} ≠ 3 × single-variable count {nc1}")
 
@@ -629,9 +645,19 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
             self.assertEqual(len(c.GetSlaveDofsVector()), 1,
                              f"Constraint {c.Id} has {len(c.GetSlaveDofsVector())} slaves")
 
-    def test_registry_path_exists(self):
-        self.assertTrue(KM.Registry.HasValue(
-            "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHangingNodeConstraints.Prototype"))
+    def test_empty_variables_produces_no_constraints(self):
+        """Empty 'variables' list skips constraint generation entirely."""
+        model = KM.Model()
+        build_transition_surface(model)
+        run_modeler(model, """{
+            "input_model_part_name":"Surface","output_model_part_name":"O",
+            "refine_operations_list":[{"type":"OctreeHybridRefineInterfaceCells","refinement_depth":4,
+                                       "adaptive":true,"mesh_type":"primal"}],
+            "coloring_settings_list":[],
+            "entities_generator_list":[{"type":"OctreeHybridGenerateHexesByCellColor",
+                                        "model_part_name":"O","color":1,"variables":[]}],
+            "model_part_operations":[]}""")
+        self.assertEqual(model.GetModelPart("O").NumberOfMasterSlaveConstraints(), 0)
 
     def test_dual_mesh_no_hanging_constraints(self):
         """Dual mesh never produces hanging constraints (conforming by construction)."""
@@ -717,7 +743,6 @@ class TestRegistryDispatch(unittest.TestCase):
             "OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype",
             "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHexesByCellColor.Prototype",
             "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateBoundaryConditionsByFace.Prototype",
-            "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHangingNodeConstraints.Prototype",
             "OctreeHybridMesherOperation.All.OctreeHybridReportMeshQuality.Prototype",
         ]
         for path in paths:

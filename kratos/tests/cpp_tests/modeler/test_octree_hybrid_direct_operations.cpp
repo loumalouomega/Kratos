@@ -33,7 +33,6 @@
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 #include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
 #include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
-#include "modeler/entity_generation/octree_hybrid_generate_hanging_node_constraints.h"
 
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
@@ -483,17 +482,17 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceNotExtract
 }
 
 // ===========================================================================
-// OctreeHybridGenerateHangingNodeConstraints::Generate — direct call
+// OctreeHybridGenerateHexesByCellColor::Generate — hanging-node constraint path
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsGenerateDirectlyCreatesConstraints, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorWithVariablesCreatesConstraints, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     model.CreateModelPart("Out");
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
-    // Use primal mesh to get hanging nodes
+    // Build primal mesh to populate mHanging
     {
         OctreeHybridRefineInterfaceCells build_op;
         Parameters bp(R"({
@@ -508,45 +507,60 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsGenerateDire
     auto& r_data = modeler.GetData();
     r_data.mCellColor.assign(r_data.mCells.size(), 1);
 
-    {
-        OctreeHybridGenerateHexesByCellColor hex_op;
-        hex_op.Generate(modeler, Parameters(R"({
-            "type":"OctreeHybridGenerateHexesByCellColor",
-            "model_part_name":"Out","color":1,"properties_id":1,
-            "generated_entity":"Element3D8N","tag_refinement_level":true
-        })"));
-    }
-
-    OctreeHybridGenerateHangingNodeConstraints hc_op;
+    OctreeHybridGenerateHexesByCellColor hex_op;
     Parameters p(R"({
-        "type"            : "OctreeHybridGenerateHangingNodeConstraints",
-        "model_part_name" : "Out",
-        "constraint_name" : "LinearMasterSlaveConstraint",
-        "variables"       : ["DISPLACEMENT_X"]
+        "type"                 : "OctreeHybridGenerateHexesByCellColor",
+        "model_part_name"      : "Out",
+        "color"                : 1,
+        "properties_id"        : 1,
+        "generated_entity"     : "Element3D8N",
+        "tag_refinement_level" : true,
+        "constraint_name"      : "LinearMasterSlaveConstraint",
+        "variables"            : ["DISPLACEMENT_X"]
     })");
-    hc_op.Generate(modeler, p);
+    hex_op.Generate(modeler, p);
 
-    // Primal mesh of a uniform-depth box has no 2:1 transitions → no hanging nodes
-    // (all leaves at same level after non-adaptive refinement)
-    // Verify it runs without error and produces ≥ 0 constraints
+    // Uniform-depth box has no 2:1 transitions → zero hanging constraints expected,
+    // but the call must complete without error.
     KRATOS_EXPECT_GE(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsNoCellsThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorEmptyVariablesSkipsConstraints, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     model.CreateModelPart("Out");
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
-    OctreeHybridGenerateHangingNodeConstraints hc_op;
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth": 3, "adaptive": false, "mesh_type": "primal"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+
+    auto& r_data = modeler.GetData();
+    r_data.mCellColor.assign(r_data.mCells.size(), 1);
+
+    OctreeHybridGenerateHexesByCellColor hex_op;
     Parameters p(R"({
-        "type"            : "OctreeHybridGenerateHangingNodeConstraints",
-        "model_part_name" : "Out",
-        "constraint_name" : "LinearMasterSlaveConstraint",
-        "variables"       : []
+        "type"                 : "OctreeHybridGenerateHexesByCellColor",
+        "model_part_name"      : "Out",
+        "color"                : 1,
+        "properties_id"        : 1,
+        "generated_entity"     : "Element3D8N",
+        "tag_refinement_level" : true,
+        "constraint_name"      : "LinearMasterSlaveConstraint",
+        "variables"            : []
     })");
-    KRATOS_EXPECT_EXCEPTION_IS_THROWN(hc_op.Generate(modeler, p), "");
+    hex_op.Generate(modeler, p);
+
+    // Empty variables list → no constraints created
+    KRATOS_EXPECT_EQ(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
 }
 
 // ===========================================================================

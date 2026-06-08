@@ -21,7 +21,6 @@
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
 #include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
 #include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
-#include "modeler/entity_generation/octree_hybrid_generate_hanging_node_constraints.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
@@ -159,6 +158,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorDefaultParametersA
     KRATOS_EXPECT_TRUE(p.Has("properties_id"));
     KRATOS_EXPECT_TRUE(p.Has("generated_entity"));
     KRATOS_EXPECT_TRUE(p.Has("tag_refinement_level"));
+    KRATOS_EXPECT_TRUE(p.Has("constraint_name"));
+    KRATOS_EXPECT_TRUE(p.Has("variables"));
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorDefaultParametersDefaults, KratosCoreFastSuite)
@@ -170,6 +171,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorDefaultParametersD
     KRATOS_EXPECT_EQ(p["properties_id"].GetInt(), 1);
     KRATOS_EXPECT_EQ(p["generated_entity"].GetString(), std::string{"Element3D8N"});
     KRATOS_EXPECT_TRUE(p["tag_refinement_level"].GetBool());
+    KRATOS_EXPECT_EQ(p["constraint_name"].GetString(), std::string{"LinearMasterSlaveConstraint"});
+    KRATOS_EXPECT_EQ(p["variables"].size(), std::size_t{0});
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorInfoReturnsBaseClassName, KratosCoreFastSuite)
@@ -197,6 +200,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceDefaultPar
     KRATOS_EXPECT_TRUE(p.Has("color"));
     KRATOS_EXPECT_TRUE(p.Has("properties_id"));
     KRATOS_EXPECT_TRUE(p.Has("generated_entity"));
+    KRATOS_EXPECT_TRUE(p.Has("constraint_name"));
+    KRATOS_EXPECT_TRUE(p.Has("variables"));
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceDefaultParametersDefaults, KratosCoreFastSuite)
@@ -207,46 +212,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceDefaultPar
     KRATOS_EXPECT_EQ(p["color"].GetInt(), 1);
     KRATOS_EXPECT_EQ(p["properties_id"].GetInt(), 1);
     KRATOS_EXPECT_EQ(p["generated_entity"].GetString(), std::string{"SurfaceCondition3D4N"});
+    KRATOS_EXPECT_EQ(p["constraint_name"].GetString(), std::string{"LinearMasterSlaveConstraint"});
+    KRATOS_EXPECT_EQ(p["variables"].size(), std::size_t{0});
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
     OctreeHybridGenerateBoundaryConditionsByFace op;
-    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherEntityGeneration"});
-}
-
-// ===========================================================================
-// OctreeHybridGenerateHangingNodeConstraints — GetDefaultParameters / Info
-// ===========================================================================
-
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsDefaultParametersTypeKey, KratosCoreFastSuite)
-{
-    OctreeHybridGenerateHangingNodeConstraints op;
-    Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridGenerateHangingNodeConstraints"});
-}
-
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsDefaultParametersAllKeys, KratosCoreFastSuite)
-{
-    OctreeHybridGenerateHangingNodeConstraints op;
-    Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
-    KRATOS_EXPECT_TRUE(p.Has("constraint_name"));
-    KRATOS_EXPECT_TRUE(p.Has("variables"));
-}
-
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsDefaultParametersDefaults, KratosCoreFastSuite)
-{
-    OctreeHybridGenerateHangingNodeConstraints op;
-    Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
-    KRATOS_EXPECT_EQ(p["constraint_name"].GetString(), std::string{"LinearMasterSlaveConstraint"});
-    KRATOS_EXPECT_EQ(p["variables"].size(), std::size_t{0});
-}
-
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHangingNodeConstraintsInfoReturnsBaseClassName, KratosCoreFastSuite)
-{
-    OctreeHybridGenerateHangingNodeConstraints op;
     KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherEntityGeneration"});
 }
 
