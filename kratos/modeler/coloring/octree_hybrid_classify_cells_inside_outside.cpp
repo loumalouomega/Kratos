@@ -37,13 +37,20 @@ void OctreeHybridClassifyCellsInsideOutside::Apply(OctreeHybridMesherModeler& rM
 {
     auto& r_data = rModeler.GetData();
 
-    // After projection the outside cells were already removed, so everything left
-    // is inside; otherwise classify against the surface (carve decision only).
+    // When the dual mesh has been projected onto the surface, RemoveOutsideElement
+    // already discarded every cell that was predominantly outside the closed surface
+    // before ProjectToIsoSurface ran.  Every surviving cell is therefore inside by
+    // construction — running the ray-cast classifier again would be redundant and
+    // could mis-classify the buffer-layer cells (level == -2) whose centroids have
+    // been moved to the surface during projection.
     if (r_data.mProjected) {
         r_data.mCellColor.assign(r_data.mCells.size(), 1);
         return;
     }
 
+    // Non-projected path: classify each cell by the sign of its corner distances.
+    // 1 = inside (at least one corner inside and the outside penetration is within
+    // the OUT_IN_RATIO tolerance), 0 = outside.
     OctreeHybridMeshUtility::ClassifyInsideOutside(
         r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellColor);
 }
