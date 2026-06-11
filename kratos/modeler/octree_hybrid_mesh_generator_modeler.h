@@ -458,6 +458,9 @@ private:
     /// Running master-slave constraint ID counter.
     IndexType mStartConstraintId = 0;
 
+    /// The bounding box of the octree
+    BoundingBox<Kratos::Point> mOctreeBoundingBox;
+
     /// The bounding box of the input model part
     BoundingBox<Kratos::Point> mInputBoundingBox;
 

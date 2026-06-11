@@ -11,6 +11,7 @@
 //
 
 // System includes
+#include <cmath>
 
 // External includes
 
@@ -110,6 +111,14 @@ BoundingBox<Point>& OctreeHybridMeshGeneratorModeler::GetOctreeBoundingBox()
 const BoundingBox<Point>& OctreeHybridMeshGeneratorModeler::GetOctreeBoundingBox() const
 {
     return mOctreeBoundingBox;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+bool OctreeHybridMeshGeneratorModeler::HasOctreeBoundingBox() const
+{
+    return mOctreeBoundingBoxSet;
 }
 
 /***********************************************************************************/
@@ -276,6 +285,9 @@ void OctreeHybridMeshGeneratorModeler::Initialize()
 
     // Read the model parts
     ReadModelParts();
+
+    // Resolve and validate the octree bounding box override, if any
+    ResolveOctreeBoundingBox();
 
     // Prepare the internal data structure
     KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Preparing Internal Data Structure" << std::endl;
@@ -525,9 +537,75 @@ void OctreeHybridMeshGeneratorModeler::Dispatch(
 /***********************************************************************************/
 /***********************************************************************************/
 
+void OctreeHybridMeshGeneratorModeler::ResolveOctreeBoundingBox()
+{
+    KRATOS_TRY
+
+    const Parameters bounding_box = mParameters["bounding_box"];
+    const bool has_explicit_bounding_box = bounding_box["min_point"].size() == 3 && bounding_box["max_point"].size() == 3;
+    const std::string bounding_box_model_part_name = mParameters["bounding_box_model_part"].GetString();
+    const bool has_bounding_box_model_part = !bounding_box_model_part_name.empty();
+
+    KRATOS_ERROR_IF(has_explicit_bounding_box && has_bounding_box_model_part)
+        << "OctreeHybridMeshGeneratorModeler: \"bounding_box\" and \"bounding_box_model_part\" "
+        << "cannot both be defined. Choose one." << std::endl;
+
+    if (has_explicit_bounding_box) {
+        const array_1d<double, 3> min_point = bounding_box["min_point"].GetVector();
+        const array_1d<double, 3> max_point = bounding_box["max_point"].GetVector();
+        mOctreeBoundingBox = BoundingBox<Point>(Point(min_point), Point(max_point));
+        mOctreeBoundingBoxSet = true;
+    } else if (has_bounding_box_model_part) {
+        KRATOS_ERROR_IF_NOT(mpModel->HasModelPart(bounding_box_model_part_name))
+            << "OctreeHybridMeshGeneratorModeler: \"bounding_box_model_part\" '"
+            << bounding_box_model_part_name << "' was not found in the Model." << std::endl;
+        ModelPart& r_bounding_box_model_part = mpModel->GetModelPart(bounding_box_model_part_name);
+        KRATOS_ERROR_IF(r_bounding_box_model_part.NumberOfNodes() == 0)
+            << "OctreeHybridMeshGeneratorModeler: \"bounding_box_model_part\" '"
+            << bounding_box_model_part_name << "' has no nodes." << std::endl;
+        mOctreeBoundingBox = BoundingBox<Point>(r_bounding_box_model_part.NodesBegin(), r_bounding_box_model_part.NodesEnd());
+        mOctreeBoundingBoxSet = true;
+    } else {
+        mOctreeBoundingBoxSet = false;
+        return;
+    }
+
+    // Validate that the resolved octree bounding box fully contains the input model part.
+    ModelPart& r_input_model_part = GetInputModelPart();
+    KRATOS_ERROR_IF(r_input_model_part.NumberOfNodes() == 0)
+        << "OctreeHybridMeshGeneratorModeler: input model part '" << GetInputModelPartName()
+        << "' has no nodes; cannot validate the octree bounding box against it." << std::endl;
+    mInputBoundingBox = BoundingBox<Point>(r_input_model_part.NodesBegin(), r_input_model_part.NodesEnd());
+
+    const auto& r_octree_min = mOctreeBoundingBox.GetMinPoint();
+    const auto& r_octree_max = mOctreeBoundingBox.GetMaxPoint();
+    double diagonal_squared = 0.0;
+    for (unsigned int i = 0; i < 3; ++i) {
+        const double extent = r_octree_max[i] - r_octree_min[i];
+        diagonal_squared += extent * extent;
+    }
+    const double tolerance = 1e-6 * std::sqrt(diagonal_squared);
+
+    KRATOS_ERROR_IF_NOT(
+        mOctreeBoundingBox.IsInside(mInputBoundingBox.GetMinPoint(), tolerance) &&
+        mOctreeBoundingBox.IsInside(mInputBoundingBox.GetMaxPoint(), tolerance))
+        << "OctreeHybridMeshGeneratorModeler: the octree bounding box "
+        << "[(" << r_octree_min[0] << ", " << r_octree_min[1] << ", " << r_octree_min[2] << "), ("
+        << r_octree_max[0] << ", " << r_octree_max[1] << ", " << r_octree_max[2] << ")] "
+        << "does not contain the input model part '" << GetInputModelPartName() << "' bounding box "
+        << "[(" << mInputBoundingBox.GetMinPoint()[0] << ", " << mInputBoundingBox.GetMinPoint()[1] << ", " << mInputBoundingBox.GetMinPoint()[2] << "), ("
+        << mInputBoundingBox.GetMaxPoint()[0] << ", " << mInputBoundingBox.GetMaxPoint()[1] << ", " << mInputBoundingBox.GetMaxPoint()[2] << ")]."
+        << std::endl;
+
+    KRATOS_CATCH("")
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 void OctreeHybridMeshGeneratorModeler::PreparingTheInternalDataStructure(ModelPart& rTheInputModelPart)
 {
-    
+
 }
 
 /***********************************************************************************/
