@@ -27,13 +27,13 @@ namespace Kratos {
 ///@name Kratos Classes
 ///@{
 
-/// Forward declaration to break the include cycle with octree_hybrid_mesher_modeler.h.
-class OctreeHybridMesherModeler;
+/// Forward declaration to break the include cycle with octree_hybrid_mesh_generator_modeler.h.
+class OctreeHybridMeshGeneratorModeler;
 
 /**
  * @class OctreeHybridRefineOperation
  * @ingroup KratosCore
- * @brief Base class for octree refinement operations dispatched by @ref OctreeHybridMesherModeler.
+ * @brief Base class for octree refinement operations dispatched by @ref OctreeHybridMeshGeneratorModeler.
  * @details Refinement operations run inside `BuildOctreeAndExtract()` **after** the initial
  * octree is built from the surface mesh and **before** `StrongConstrain2To1()` and mesh
  * extraction.  This placement lets multiple refinement passes accumulate without
@@ -45,7 +45,7 @@ class OctreeHybridMesherModeler;
  * `"OctreeHybridRefineOperation.KratosMultiphysics"` and `"OctreeHybridRefineOperation.All"`.
  * The modeler retrieves a shared, stateless prototype and calls @ref Refine on it.
  * Because instances may be shared, @ref Refine is declared `const` and all context is
- * passed through the `OctreeHybridMesherModeler&` and `Parameters` arguments.
+ * passed through the `OctreeHybridMeshGeneratorModeler&` and `Parameters` arguments.
  *
  * ### Derived-class contract
  * - Override @ref Refine with the actual work.
@@ -61,7 +61,7 @@ class OctreeHybridMesherModeler;
  *   4. ExtractDualHexMesh / ExtractPrimalHexMesh
  * ```
  *
- * @see OctreeHybridMesherModeler
+ * @see OctreeHybridMeshGeneratorModeler
  * @see OctreeHybridRefineUniform
  * @see OctreeHybridRefineInterfaceCells
  * @author Vicente Mataix Ferrandiz
@@ -104,13 +104,13 @@ public:
      *
      * The base implementation raises an error to force derived classes to override it.
      *
-     * @param rModeler         Reference to the @ref OctreeHybridMesherModeler that owns
+     * @param rModeler         Reference to the @ref OctreeHybridMeshGeneratorModeler that owns
      *                         the Model, the mesh data (octree, triangle soup), and the
      *                         ID counters.
      * @param RefineParameters JSON parameters for this specific invocation, already
      *                         validated and default-filled by @ref ValidateParameters.
      */
-    virtual void Refine(OctreeHybridMesherModeler& rModeler, Parameters RefineParameters) const
+    virtual void Refine(OctreeHybridMeshGeneratorModeler& rModeler, Parameters RefineParameters) const
     {
         KRATOS_ERROR << "Calling base OctreeHybridRefineOperation::Refine. "
                      << "Please override it in the derived class." << std::endl;

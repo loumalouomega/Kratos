@@ -18,26 +18,30 @@
 
 // Project includes
 #include "containers/model.h"
-#include "includes/registry.h"
+#include "includes/define_registry.h"
 #include "modeler/modeler.h"
 #include "utilities/string_utilities.h"
 
-namespace Kratos {
+namespace Kratos 
+{
+///@name Type Definitions
+///@{
 
 /// Forward declaration: keeps the heavy OctreeHybridMeshUtility header out of this
 /// universally-included core header (PIMPL idiom on the shared mesh data).
 namespace Internals { class OctreeHybridMesherData; }
 
+///@}
 ///@name Kratos Classes
 ///@{
 
 /**
- * @class OctreeHybridMesherModeler
+ * @class OctreeHybridMeshGeneratorModeler
  * @ingroup KratosCore
  * @brief Builds an all-hexahedral `ModelPart` from a closed triangular surface mesh
  *        using the hybrid octree mesher engine.
  *
- * @details `OctreeHybridMesherModeler` mirrors the staged architecture of
+ * @details `OctreeHybridMeshGeneratorModeler` mirrors the staged architecture of
  * @ref VoxelMeshGeneratorModeler but drives the @ref OctreeHybridMeshUtility engine and
  * dispatches its components through the Kratos **Registry prototype pattern** instead of
  * hand-written factory classes.
@@ -80,7 +84,6 @@ namespace Internals { class OctreeHybridMesherData; }
  * # ... populate "Surface" ModelPart from an STL ...
  * settings = KM.Parameters('''{
  *     "input_model_part_name"  : "Surface",
- *     "output_model_part_name" : "Volume",
  *     "refine_operations_list" : [
  *         { "type": "OctreeHybridRefineInterfaceCells",
  *           "refinement_depth": 3 },
@@ -89,34 +92,44 @@ namespace Internals { class OctreeHybridMesherData; }
  *           "refinement_depth": 5 }
  *     ],
  *     "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
- *     "entities_generator_list": [{ "type": "OctreeHybridGenerateHexesByCellColor",
+ *     "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
  *                                   "model_part_name": "Volume", "color": 1 }],
  *     "model_part_operations"  : [{ "type": "OctreeHybridReportMeshQuality",
  *                                   "model_part_name": "Volume" }]
  * }''')
- * mod = KM.OctreeHybridMesherModeler(model, settings)
+ * mod = KM.OctreeHybridMeshGeneratorModeler(model, settings)
  * mod.SetupModelPart()
  * @endcode
  *
- * @note The modeler is registered with `KRATOS_REGISTER_MODELER("OctreeHybridMesherModeler", …)`
- *       and can therefore also be instantiated via
+ * @note The modeler self-registers in the Kratos `Registry` under
+ *       `"Modelers.KratosMultiphysics.OctreeHybridMeshGeneratorModeler"` and
+ *       `"Modelers.All.OctreeHybridMeshGeneratorModeler"` via `KRATOS_REGISTRY_ADD_PROTOTYPE`.
+ *       It can also be instantiated via
  *       `KratosModelParametersFactory.ConstructListOfItems(modelers_list)` from a JSON
- *       `"modelers"` array entry with `"name": "KratosMultiphysics.OctreeHybridMesherModeler"`.
+ *       `"modelers"` array entry with `"name": "KratosMultiphysics.OctreeHybridMeshGeneratorModeler"`,
+ *       which resolves the class directly from the `KratosMultiphysics` Python module.
  *
  * @see OctreeHybridMeshUtility
  * @see VoxelMeshGeneratorModeler
  * @see Internals::OctreeHybridMesherData
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeHybridMesherModeler
+class KRATOS_API(KRATOS_CORE) OctreeHybridMeshGeneratorModeler
     : public Modeler
 {
 public:
     ///@name Type Definitions
     ///@{
 
-    /// Pointer definition of OctreeHybridMesherModeler.
-    KRATOS_CLASS_POINTER_DEFINITION(OctreeHybridMesherModeler);
+    /// Pointer definition of OctreeHybridMeshGeneratorModeler.
+    KRATOS_CLASS_POINTER_DEFINITION(OctreeHybridMeshGeneratorModeler);
+
+    /// Index type for mesh nodes, cells, etc.  Matches the index type used by OctreeHybridMeshUtility.
+    using IndexType = std::size_t;
+
+    /// Add to the Kratos registry
+    KRATOS_REGISTRY_ADD_PROTOTYPE("Modelers.KratosMultiphysics", Modeler, OctreeHybridMeshGeneratorModeler)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("Modelers.All", Modeler, OctreeHybridMeshGeneratorModeler)
 
     ///@}
     ///@name Life Cycle
@@ -124,12 +137,12 @@ public:
 
     /**
      * @brief Default constructor.
-     * @details Used internally to create the prototype instance that is stored in the
-     *          `KRATOS_REGISTER_MODELER` factory and cloned whenever the modeler is
-     *          constructed from a JSON `"modelers"` list.  Direct use is not intended;
-     *          prefer the `(Model&, Parameters)` constructor.
+     * @details Used internally to create the prototype instance registered in the Kratos
+     *          `Registry` via `KRATOS_REGISTRY_ADD_PROTOTYPE` and cloned (through `Create`)
+     *          whenever the modeler is constructed from a JSON `"modelers"` list.  Direct
+     *          use is not intended; prefer the `(Model&, Parameters)` constructor.
      */
-    OctreeHybridMesherModeler();
+    OctreeHybridMeshGeneratorModeler();
 
     /**
      * @brief Main constructor.
@@ -138,27 +151,28 @@ public:
      * @param ModelerParameters   JSON configuration block.  Keys are validated and defaults
      *                            assigned via `GetDefaultParameters()` on construction.
      */
-    OctreeHybridMesherModeler(
+    OctreeHybridMeshGeneratorModeler(
         Model& rModel,
-        Parameters ModelerParameters = Parameters());
+        Parameters ModelerParameters = Parameters()
+        );
 
     /**
      * @brief Destructor.
      * @details Defined out-of-line so that the `unique_ptr<OctreeHybridMesherData>` (incomplete
      *          type in the header) is correctly destroyed.
      */
-    ~OctreeHybridMesherModeler() override;
+    ~OctreeHybridMeshGeneratorModeler() override;
 
     /**
      * @brief Factory method required by the `Modeler` base-class contract.
      * @param rModel          Target model.
      * @param ModelParameters JSON parameters forwarded to the new instance.
-     * @return A `shared_ptr` to a freshly constructed `OctreeHybridMesherModeler`.
+     * @return A `shared_ptr` to a freshly constructed `OctreeHybridMeshGeneratorModeler`.
      */
     Modeler::Pointer Create(
         Model& rModel, const Parameters ModelParameters) const override
     {
-        return Kratos::make_shared<OctreeHybridMesherModeler>(rModel, ModelParameters);
+        return Kratos::make_shared<OctreeHybridMeshGeneratorModeler>(rModel, ModelParameters);
     }
 
     ///@}
@@ -176,11 +190,50 @@ public:
      */
     void SetupModelPart() override;
 
+    /**
+     * @brief Read the model parts
+     */
+    void ReadModelParts();
+
+    ///@}
+    ///@name Operations
+    ///@{
+
+    /**
+     * @brief Initializes the octree hybrid meshing modeler.
+     */
+    void Initialize();
+
+    /**
+     * @brief Returns the default parameter schema for this modeler.
+     * @details Full schema:
+     * @code{.json}
+     * {
+     *     "refine_operations_list"  : [],
+     *     "coloring_settings_list"  : [],
+     *     "entities_generator_list" : [],
+     *     "model_part_operations"   : [],
+     *     "mdpa_file_name"          : "",
+     *     "input_model_part_name"   : "",
+     *     "default_outside_color"   : 1,
+     *     "remove_orphan_nodes"     : true,
+     *     "echo_level"              : 1
+     * }
+     * @endcode
+     * The `refine_operations_list` must start with an @ref OctreeHybridRefineInterfaceCells
+     * entry (which builds the octree and records `mesh_type` / projection settings) and may be
+     * followed by any number of @ref OctreeHybridRefineUniform or additional
+     * @ref OctreeHybridRefineInterfaceCells entries.
+     * @return Parameters object with all keys set to their defaults.
+     */
+    const Parameters GetDefaultParameters() const override;
+
     ///@}
     ///@name Component access API
     ///@{
+
     /// These methods are part of the public interface that registered components call
-    /// through the `OctreeHybridMesherModeler&` reference passed to their do-work virtuals.
+    /// through the `OctreeHybridMeshGeneratorModeler&` reference passed to their do-work virtuals.
 
     /**
      * @brief Returns the shared mesh data struct.
@@ -195,7 +248,20 @@ public:
      * @brief Returns the owning model.
      * @return Reference to the `Model` that was passed to the constructor.
      */
-    Model& GetModel() { return *mpModel; }
+    Model& GetModel() 
+    { 
+        return *mpModel; 
+    }
+
+    /**
+     * @brief Returns the input model part
+     * @return The input model part
+     */
+    ModelPart& GetInputModelPart()
+    {
+        KRATOS_ERROR_IF_NOT(mpInputModelPart) << "Input model part not set.  Ensure that \"input_model_part_name\" is set in the parameters and that the model part exists in the Model." << std::endl;
+        return *mpInputModelPart;
+    }
 
     /**
      * @brief Returns the top-level `input_model_part_name` from the modeler parameters.
@@ -203,7 +269,10 @@ public:
      *          `input_model_part_name` is empty on the first call (octree build).
      * @return The model part name string (may be empty if not set).
      */
-    std::string GetInputModelPartName() const { return mParameters["input_model_part_name"].GetString(); }
+    std::string GetInputModelPartName() const 
+    { 
+        return mpInputModelPart ? mpInputModelPart->FullName() : mParameters["input_model_part_name"].GetString(); 
+    }
 
     /**
      * @brief Returns or creates the ModelPart identified by @p rFullName.
@@ -233,7 +302,8 @@ public:
     Node::Pointer GenerateOrRetrieveNode(
         ModelPart& rModelPart,
         ModelPart::NodesContainerType& rNewNodes,
-        int NodeIndex);
+        IndexType NodeIndex
+        );
 
     /**
      * @brief Synchronises the internal ID counters with the current state of
@@ -248,57 +318,71 @@ public:
     void SetStartIds(ModelPart& rModelPart);
 
     /**
+     * @brief Overrides the running node ID counter, if @p Id is non-zero.
+     * @details Used by entity-generation stages to honour an explicit
+     *          `"initial_node_id"` parameter.  A value of `0` means "keep the
+     *          value computed by @ref SetStartIds" and is therefore a no-op.
+     * @param Id Requested first node ID, or `0` to leave the counter untouched.
+     */
+    void OverrideStartNodeId(IndexType Id) { if (Id > 0) mStartNodeId = Id; }
+
+    /**
+     * @brief Overrides the running element ID counter, if @p Id is non-zero.
+     * @details Used by entity-generation stages to honour an explicit
+     *          `"initial_element_id"` parameter.  A value of `0` means "keep the
+     *          value computed by @ref SetStartIds" and is therefore a no-op.
+     * @param Id Requested first element ID, or `0` to leave the counter untouched.
+     */
+    void OverrideStartElementId(IndexType Id) { if (Id > 0) mStartElementId = Id; }
+
+    /**
+     * @brief Overrides the running condition ID counter, if @p Id is non-zero.
+     * @details Used by entity-generation stages to honour an explicit
+     *          `"initial_condition_id"` parameter.  A value of `0` means "keep the
+     *          value computed by @ref SetStartIds" and is therefore a no-op.
+     * @param Id Requested first condition ID, or `0` to leave the counter untouched.
+     */
+    void OverrideStartConditionId(IndexType Id) { if (Id > 0) mStartConditionId = Id; }
+
+    /**
+     * @brief Overrides the running master-slave constraint ID counter, if @p Id is non-zero.
+     * @details Used by entity-generation stages to honour an explicit
+     *          `"initial_constraint_id"` parameter.  A value of `0` means "keep the
+     *          value computed by @ref SetStartIds" and is therefore a no-op.
+     * @param Id Requested first constraint ID, or `0` to leave the counter untouched.
+     */
+    void OverrideStartConstraintId(IndexType Id) { if (Id > 0) mStartConstraintId = Id; }
+
+    /**
      * @brief Returns and advances the next unique element ID.
      * @return The next available element ID (post-incremented).
      */
-    std::size_t NextElementId()    { return mStartElementId++; }
+    IndexType NextElementId()    { return mStartElementId++; }
 
     /**
      * @brief Returns and advances the next unique condition ID.
      * @return The next available condition ID (post-incremented).
      */
-    std::size_t NextConditionId()  { return mStartConditionId++; }
+    IndexType NextConditionId()  { return mStartConditionId++; }
 
     /**
      * @brief Returns and advances the next unique master-slave constraint ID.
      * @return The next available constraint ID (post-incremented).
      */
-    std::size_t NextConstraintId() { return mStartConstraintId++; }
+    IndexType NextConstraintId() { return mStartConstraintId++; }
 
     ///@}
     ///@name Input and output
     ///@{
 
-    /// @return The string `"OctreeHybridMesherModeler"`.
-    std::string Info() const override { return "OctreeHybridMesherModeler"; }
+    /// @return The string `"OctreeHybridMeshGeneratorModeler"`.
+    std::string Info() const override { return "OctreeHybridMeshGeneratorModeler"; }
 
     /// Prints `Info()` to @p rOStream.
     void PrintInfo(std::ostream& rOStream) const override { rOStream << Info(); }
 
     /// No data to print; provided to satisfy the `Modeler` interface.
     void PrintData(std::ostream& rOStream) const override {}
-
-    /**
-     * @brief Returns the default parameter schema for this modeler.
-     * @details Full schema:
-     * @code{.json}
-     * {
-     *     "echo_level"             : 0,
-     *     "input_model_part_name"  : "",
-     *     "output_model_part_name" : "",
-     *     "refine_operations_list"  : [],
-     *     "coloring_settings_list"  : [],
-     *     "entities_generator_list" : [],
-     *     "model_part_operations"   : []
-     * }
-     * @endcode
-     * The `refine_operations_list` must start with an @ref OctreeHybridRefineInterfaceCells
-     * entry (which builds the octree and records `mesh_type` / projection settings) and may be
-     * followed by any number of @ref OctreeHybridRefineUniform or additional
-     * @ref OctreeHybridRefineInterfaceCells entries.
-     * @return Parameters object with all keys set to their defaults.
-     */
-    const Parameters GetDefaultParameters() const override;
 
     ///@}
 private:
@@ -308,21 +392,24 @@ private:
     /// Pointer to the owning Model (non-owning; lifetime guaranteed by the caller).
     Model* mpModel = nullptr;
 
+    /// The input model part
+    ModelPart* mpInputModelPart = nullptr;
+
     /// PIMPL handle to the shared mesh data.  Defined out-of-line because
     /// `OctreeHybridMesherData` includes `octree_hybrid_mesh_utility.h` which is heavy.
     std::unique_ptr<Internals::OctreeHybridMesherData> mpData;
 
     /// Running node ID counter (seeded from the root ModelPart by SetStartIds).
-    std::size_t mStartNodeId = 0;
+    IndexType mStartNodeId = 0;
 
     /// Running element ID counter.
-    std::size_t mStartElementId = 0;
+    IndexType mStartElementId = 0;
 
     /// Running condition ID counter.
-    std::size_t mStartConditionId = 0;
+    IndexType mStartConditionId = 0;
 
     /// Running master-slave constraint ID counter.
-    std::size_t mStartConstraintId = 0;
+    IndexType mStartConstraintId = 0;
 
     ///@}
     ///@name Private Operations
@@ -404,12 +491,12 @@ private:
 ///@{
 
 /**
- * @brief Stream insertion operator for @ref OctreeHybridMesherModeler.
+ * @brief Stream insertion operator for @ref OctreeHybridMeshGeneratorModeler.
  * @param rOStream Output stream.
  * @param rThis    Modeler whose `Info()` string is written.
  * @return Reference to @p rOStream for chaining.
  */
-inline std::ostream& operator<<(std::ostream& rOStream, const OctreeHybridMesherModeler& rThis)
+inline std::ostream& operator<<(std::ostream& rOStream, const OctreeHybridMeshGeneratorModeler& rThis)
 {
     rThis.PrintInfo(rOStream);
     rOStream << std::endl;

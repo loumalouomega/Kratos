@@ -17,7 +17,7 @@
 
 // Project includes
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
@@ -33,7 +33,7 @@ const Parameters OctreeHybridReportMeshQuality::GetDefaultParameters() const
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridReportMeshQuality::Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const
+void OctreeHybridReportMeshQuality::Execute(OctreeHybridMeshGeneratorModeler& rModeler, Parameters OperationParameters) const
 {
     ModelPart& r_mp = rModeler.GetModel().GetModelPart(
         OperationParameters["model_part_name"].GetString());

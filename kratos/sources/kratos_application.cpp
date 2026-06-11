@@ -273,7 +273,6 @@ void KratosApplication::RegisterKratosCore() {
     KRATOS_REGISTER_MODELER("ConnectivityPreserveModeler", mConnectivityPreserveModeler);
     KRATOS_REGISTER_MODELER("VoxelMeshGeneratorModeler", mVoxelMeshGeneratorModeler);
     KRATOS_REGISTER_MODELER("CleanUpProblematicTrianglesModeler", mCleanUpProblematicTrianglesModeler);
-    KRATOS_REGISTER_MODELER("OctreeHybridMesherModeler", mOctreeHybridMesherModeler);
 
     // Register general geometries:
     // Point register:

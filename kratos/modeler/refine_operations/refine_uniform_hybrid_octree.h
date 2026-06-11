@@ -81,10 +81,10 @@ public:
      * `OctreeHybridMeshUtility::RefineAllCells()` with the target depth from
      * `RefineParameters["refinement_depth"]`.
      *
-     * @param rModeler         Reference to the owning @ref OctreeHybridMesherModeler.
+     * @param rModeler         Reference to the owning @ref OctreeHybridMeshGeneratorModeler.
      * @param RefineParameters Validated JSON parameters containing `"refinement_depth"`.
      */
-    void Refine(OctreeHybridMesherModeler& rModeler, Parameters RefineParameters) const override;
+    void Refine(OctreeHybridMeshGeneratorModeler& rModeler, Parameters RefineParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this operation.

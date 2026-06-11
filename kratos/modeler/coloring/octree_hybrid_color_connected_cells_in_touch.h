@@ -105,7 +105,7 @@ public:
      * @param ColoringParameters  Validated JSON parameters for this step (see
      *                            @ref GetDefaultParameters for the schema).
      */
-    void Apply(OctreeHybridMesherModeler& rModeler, Parameters ColoringParameters) const override;
+    void Apply(OctreeHybridMeshGeneratorModeler& rModeler, Parameters ColoringParameters) const override;
 
     /**
      * @brief Returns the default parameter schema.

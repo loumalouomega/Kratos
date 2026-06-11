@@ -16,7 +16,7 @@
 
 // Project includes
 #include "modeler/coloring/octree_hybrid_color_cells_by_level.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos
@@ -36,7 +36,7 @@ const Parameters OctreeHybridColorCellsByLevel::GetDefaultParameters() const
 /***********************************************************************************/
 
 void OctreeHybridColorCellsByLevel::Apply(
-    OctreeHybridMesherModeler& rModeler,
+    OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters ColoringParameters) const
 {
     KRATOS_TRY

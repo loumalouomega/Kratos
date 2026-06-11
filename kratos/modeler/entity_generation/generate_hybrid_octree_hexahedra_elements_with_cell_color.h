@@ -26,7 +26,7 @@ namespace Kratos
 ///@{
 
 /**
- * @class OctreeHybridGenerateHexesByCellColor
+ * @class GenerateHybridOctreeHexahedraElementsWithCellColor
  * @ingroup KratosCore
  * @brief Entity-generation stage that emits one hexahedral element per cell whose
  *        colour matches the requested value.
@@ -34,7 +34,7 @@ namespace Kratos
  *          `OctreeHybridMesherData::mCellColor[c]` equals the parameter `"color"`, the stage:
  *
  *          1. De-duplicates the eight corner nodes by calling
- *             `OctreeHybridMesherModeler::GenerateOrRetrieveNode` — a node is created in the
+ *             `OctreeHybridMeshGeneratorModeler::GenerateOrRetrieveNode` — a node is created in the
  *             ModelPart only on its first encounter; subsequent cells sharing the same
  *             mesh-node index reuse the cached `Node::Pointer` stored in
  *             `OctreeHybridMesherData::mNodePtrs`.
@@ -54,9 +54,10 @@ namespace Kratos
  *          ### Dual vs. primal mesh — optional hanging-node constraints
  *          The stage is topology-agnostic for element generation: it operates on the flat
  *          cell arrays (`mCells`, `mNodes`, `mCellColor`) regardless of mesh type.
- *          For **primal** meshes, when the `"variables"` array is non-empty and
+ *          For **primal** meshes, when `"constraint_type"` is non-empty and the
+ *          `"constrained_variables"` array is non-empty and
  *          `OctreeHybridMesherData::mHanging` contains 2:1 transition records, the stage
- *          additionally creates one `LinearMasterSlaveConstraint` per
+ *          additionally creates one constraint of type `"constraint_type"` per
  *          (hanging node × master node × variable) triple in the same ModelPart —
  *          eliminating the need for a separate `OctreeHybridGenerateHangingNodeConstraints`
  *          entry in `entities_generator_list`.
@@ -64,7 +65,7 @@ namespace Kratos
  * ### Typical JSON configuration (dual mesh)
  * @code{.json}
  * {
- *     "type"                : "OctreeHybridGenerateHexesByCellColor",
+ *     "type"                : "GenerateHybridOctreeHexahedraElementsWithCellColor",
  *     "model_part_name"     : "FluidDomain",
  *     "color"               : 1,
  *     "properties_id"       : 1,
@@ -76,36 +77,37 @@ namespace Kratos
  * ### Primal mesh with hanging-node constraints
  * @code{.json}
  * {
- *     "type"                : "OctreeHybridGenerateHexesByCellColor",
- *     "model_part_name"     : "StructureDomain",
- *     "color"               : 1,
- *     "variables"           : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
+ *     "type"                  : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+ *     "model_part_name"       : "StructureDomain",
+ *     "color"                 : 1,
+ *     "constraint_type"       : "LinearMasterSlaveConstraint",
+ *     "constrained_variables" : ["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"]
  * }
  * @endcode
  *
- * @note The ModelPart is created via `OctreeHybridMesherModeler::CreateAndGetModelPart` if it
+ * @note The ModelPart is created via `OctreeHybridMeshGeneratorModeler::CreateAndGetModelPart` if it
  *       does not exist yet.  Properties with `"properties_id"` are likewise created on
  *       demand.
  *
  * @see OctreeHybridMesherEntityGeneration
- * @see OctreeHybridMesherModeler::GenerateOrRetrieveNode
+ * @see OctreeHybridMeshGeneratorModeler::GenerateOrRetrieveNode
  * @see OctreeHybridClassifyCellsInsideOutside
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeHybridGenerateHexesByCellColor : public OctreeHybridMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) GenerateHybridOctreeHexahedraElementsWithCellColor : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeHybridGenerateHexesByCellColor() = default;
+    GenerateHybridOctreeHexahedraElementsWithCellColor() = default;
 
     /**
      * @brief Copy constructor (no-op body — this class carries no state).
      * @param rOther Source instance; no data is copied.
      */
-    OctreeHybridGenerateHexesByCellColor(OctreeHybridGenerateHexesByCellColor const& rOther) {}
+    GenerateHybridOctreeHexahedraElementsWithCellColor(GenerateHybridOctreeHexahedraElementsWithCellColor const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -120,7 +122,7 @@ public:
      *
      *          For each selected cell the following steps are performed:
      *
-     *          1. **Node de-duplication** — `OctreeHybridMesherModeler::GenerateOrRetrieveNode` is
+     *          1. **Node de-duplication** — `OctreeHybridMeshGeneratorModeler::GenerateOrRetrieveNode` is
      *             called for each of the 8 corners (`mCells[c][k]`, k = 0…7).  On the first
      *             call for a given mesh-node index the node is created from the world-space
      *             coordinates in `OctreeHybridMesherData::mNodes` and cached in
@@ -129,7 +131,7 @@ public:
      *
      *          2. **Element creation** — `Element::Create(id, nodes, properties)` is invoked
      *             on the prototype element retrieved from the KratosComponents registry.  The
-     *             element ID is produced by `OctreeHybridMesherModeler::NextElementId`.
+     *             element ID is produced by `OctreeHybridMeshGeneratorModeler::NextElementId`.
      *
      *          3. **Refinement-level tagging** — when `tag_level` is `true` and
      *             `OctreeHybridMesherData::mCellLevel` is non-empty, the non-historical variable
@@ -158,6 +160,12 @@ public:
      *   - `"properties_id"` — Properties block ID; created on demand.
      *   - `"generated_entity"` — registered Element type name looked up from KratosComponents.
      *   - `"tag_refinement_level"` — whether to store `REFINEMENT_LEVEL` on each element.
+     *   - `"constraint_type"` / `"constrained_variables"` — see hanging-node constraint section above.
+     *   - `"initial_node_id"` / `"initial_element_id"` / `"initial_constraint_id"` — when
+     *     non-zero, override the modeler's auto-computed starting ID for this stage
+     *     (see `OctreeHybridMeshGeneratorModeler::Override*StartId`).
+     *   - `"echo_level"` — when greater than `0`, logs the number of generated
+     *     nodes/elements/constraints via `KRATOS_INFO`.
      *
      * @note If `mCellColor` is empty (no colouring stage ran), **all** cells are emitted
      *       regardless of the requested colour, because the colour-filter condition is
@@ -165,29 +173,33 @@ public:
      * @note Properties with the given `properties_id` are retrieved from the ModelPart if
      *       they already exist, or created fresh otherwise.
      *
-     * @see OctreeHybridMesherModeler::GenerateOrRetrieveNode
+     * @see OctreeHybridMeshGeneratorModeler::GenerateOrRetrieveNode
      * @see OctreeHybridMesherData::mCells
      * @see OctreeHybridMesherData::mCellColor
      * @see OctreeHybridMesherData::mCellLevel
      * @see ModelPartUtils::AddNodesFromOrderedContainer
      */
-    void Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const override;
+    void Generate(OctreeHybridMeshGeneratorModeler& rModeler, Parameters GenerationParameters) const override;
 
     /**
-     * @brief Returns the default JSON parameter schema for @ref OctreeHybridGenerateHexesByCellColor.
+     * @brief Returns the default JSON parameter schema for @ref GenerateHybridOctreeHexahedraElementsWithCellColor.
      * @details The schema defines all configuration keys accepted by the @ref Generate
      *          method with their default values:
      *
      *   | Key                    | Type    | Default              | Description |
      *   |------------------------|---------|----------------------|-------------|
-     *   | `"type"`               | string  | `"OctreeHybridGenerateHexesByCellColor"` | Registry type token. |
+     *   | `"type"`               | string  | `"GenerateHybridOctreeHexahedraElementsWithCellColor"` | Registry type token. |
      *   | `"model_part_name"`    | string  | `"Undefined"`        | Target ModelPart; created if absent. |
      *   | `"color"`              | int     | `1`                  | Cell-colour value to select (1 == inside). |
      *   | `"properties_id"`      | int     | `1`                  | Properties block ID for generated elements. |
      *   | `"generated_entity"`   | string  | `"Element3D8N"`      | Registered Element type name. |
      *   | `"tag_refinement_level"` | bool  | `true`               | Store `REFINEMENT_LEVEL` on each element. |
-     *   | `"constraint_name"`    | string  | `"LinearMasterSlaveConstraint"` | Constraint type for hanging-node MPC; used only when `"variables"` is non-empty. |
-     *   | `"variables"`          | array   | `[]`                 | Scalar DOF variable names to constrain at 2:1 transitions.  Empty (default) = no constraints generated. |
+     *   | `"constraint_type"`    | string  | `""`                 | Registered constraint type for hanging-node MPC (e.g. `"LinearMasterSlaveConstraint"`). Empty (default) = no constraints generated. |
+     *   | `"constrained_variables"` | array | `[]`               | Scalar DOF variable names to constrain at 2:1 transitions.  Used only when `"constraint_type"` is non-empty. |
+     *   | `"initial_node_id"`    | int     | `0`                  | Explicit first node ID; `0` = auto (continue from existing model). |
+     *   | `"initial_element_id"` | int    | `0`                  | Explicit first element ID; `0` = auto. |
+     *   | `"initial_constraint_id"` | int | `0`                  | Explicit first constraint ID; `0` = auto. |
+     *   | `"echo_level"`         | int     | `0`                  | Verbosity of `KRATOS_INFO` logging (`0` = silent). |
      *
      * @return Parameters object with all keys set to their defaults.
      */
@@ -198,10 +210,10 @@ private:
     ///@name Registry
     ///@{
 
-    /// Registers this class at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.OctreeHybridGenerateHexesByCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateHexesByCellColor)
-    /// Registers this class at path "OctreeHybridMesherEntityGeneration.All.OctreeHybridGenerateHexesByCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateHexesByCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeHexahedraElementsWithCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeHexahedraElementsWithCellColor)
 
     ///@}
 };

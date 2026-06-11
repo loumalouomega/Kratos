@@ -24,10 +24,10 @@
 #include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
-#include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
+#include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 
 namespace Kratos::Testing {
 
@@ -354,7 +354,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherColoringStreamOperatorNonEmpty, Krat
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherEntityGenerationStreamOperatorNonEmpty, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateHexesByCellColor op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor op;
     std::ostringstream ss;
     ss << static_cast<const OctreeHybridMesherEntityGeneration&>(op);
     KRATOS_EXPECT_FALSE(ss.str().empty());
@@ -368,17 +368,17 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherOperationStreamOperatorNonEmpty, Kra
     KRATOS_EXPECT_FALSE(ss.str().empty());
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherModelerStreamOperatorNonEmpty, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerStreamOperatorNonEmpty, KratosCoreFastSuite)
 {
     Model model;
     model.CreateModelPart("Skin");
     model.CreateModelPart("Out");
     Parameters params(R"({
-        "input_model_part_name":"Skin","output_model_part_name":"Out",
+        "input_model_part_name":"Skin",
         "refine_operations_list":[],"coloring_settings_list":[],
         "entities_generator_list":[],"model_part_operations":[]
     })");
-    OctreeHybridMesherModeler modeler(model, params);
+    OctreeHybridMeshGeneratorModeler modeler(model, params);
     std::ostringstream ss;
     ss << modeler;
     KRATOS_EXPECT_FALSE(ss.str().empty());

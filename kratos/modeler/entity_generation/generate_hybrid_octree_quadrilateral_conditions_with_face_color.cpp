@@ -17,40 +17,52 @@
 // Project includes
 #include "includes/kratos_components.h"
 #include "utilities/model_part_utils.h"
-#include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
 
-const Parameters OctreeHybridGenerateBoundaryConditionsByFace::GetDefaultParameters() const
+const Parameters GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"               : "OctreeHybridGenerateBoundaryConditionsByFace",
-        "model_part_name"    : "Undefined",
-        "color"              : 1,
-        "properties_id"      : 1,
-        "generated_entity"   : "SurfaceCondition3D4N",
-        "constraint_name"    : "LinearMasterSlaveConstraint",
-        "variables"          : []
+        "type"                  : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+        "model_part_name"       : "Undefined",
+        "color"                 : 1,
+        "properties_id"         : 1,
+        "generated_entity"      : "SurfaceCondition3D4N",
+        "constraint_type"       : "",
+        "constrained_variables" : [],
+        "initial_node_id"       : 0,
+        "initial_condition_id"  : 0,
+        "initial_constraint_id" : 0,
+        "echo_level"            : 0
     })");
 }
 
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
-    OctreeHybridMesherModeler& rModeler,
+void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
+    OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters GenerationParameters) const
 {
+    // Validate and assign defaults to the parameters.
     auto& r_data = rModeler.GetData();
     KRATOS_ERROR_IF(!r_data.IsExtracted())
-        << "OctreeHybridGenerateBoundaryConditionsByFace: hex mesh not yet extracted." << std::endl;
+        << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: hex mesh not yet extracted." << std::endl;
 
+    // Create the output ModelPart and set its start IDs for nodes, conditions, and
     ModelPart& r_mp = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
     rModeler.SetStartIds(r_mp);
+    rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
+    rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
+    rModeler.OverrideStartConstraintId(GenerationParameters["initial_constraint_id"].GetInt());
 
+    const int echo_level = GenerationParameters["echo_level"].GetInt();
+
+    // Extract parameters.
     const int want_color = GenerationParameters["color"].GetInt();
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
     // Retrieve an existing Properties object if present (e.g. the hex-generation
@@ -74,6 +86,7 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
         active_cells.push_back(r_data.mCells[c]);
     }
 
+    // Extract the boundary faces of the active cell set.  Each face is a tuple of 4
     const auto bfaces = OctreeHybridMeshUtility::ExtractBoundaryFaces(active_cells);
 
     // Accumulate nodes and conditions locally, then batch-add at the end so the
@@ -100,25 +113,32 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
     // (once per incident boundary face that pushed them).  Unique() removes the
     // duplicates before the batch add.
     new_nodes.Unique();
+    const std::size_t n_new_nodes = new_nodes.size();
     ModelPartUtils::AddNodesFromOrderedContainer(r_mp, new_nodes.begin(), new_nodes.end());
     r_mp.AddConditions(new_conditions.begin(), new_conditions.end());
 
-    // Optionally generate hanging-node constraints for primal meshes.
-    // Triggered only when 'variables' is non-empty and there are 2:1 transitions.
-    const auto& r_var_list = GenerationParameters["variables"];
-    if (r_var_list.size() == 0 || r_data.mHanging.empty()) return;
+    KRATOS_INFO_IF("GenerateHybridOctreeQuadrilateralConditionsWithFaceColor", echo_level > 0)
+        << "Generated " << new_conditions.size() << " conditions and " << n_new_nodes
+        << " nodes in ModelPart \"" << r_mp.FullName() << "\"." << std::endl;
 
-    const std::string constraint_name = GenerationParameters["constraint_name"].GetString();
+    // Optionally generate hanging-node constraints for primal meshes.
+    // Triggered only when 'constraint_type' is non-empty, 'constrained_variables' is
+    // non-empty, and there are 2:1 transitions.
+    const std::string constraint_type = GenerationParameters["constraint_type"].GetString();
+    const auto& r_var_list = GenerationParameters["constrained_variables"];
+    if (constraint_type.empty() || r_var_list.size() == 0 || r_data.mHanging.empty()) return;
+
     const int n_vars = static_cast<int>(r_var_list.size());
     std::vector<const Variable<double>*> vars(n_vars);
     for (int vi = 0; vi < n_vars; ++vi) {
         const std::string& vname = r_var_list[vi].GetString();
         KRATOS_ERROR_IF_NOT(KratosComponents<Variable<double>>::Has(vname))
-            << "OctreeHybridGenerateBoundaryConditionsByFace: variable '" << vname
+            << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: variable '" << vname
             << "' is not registered as a scalar variable." << std::endl;
         vars[vi] = &KratosComponents<Variable<double>>::Get(vname);
     }
 
+    std::size_t n_constraints = 0;
     for (const auto& hc : r_data.mHanging) {
         // A null pointer means the node index was never materialised as a Kratos
         // Node — e.g. it belongs to a cell excluded by the color filter.
@@ -147,13 +167,18 @@ void OctreeHybridGenerateBoundaryConditionsByFace::Generate(
             // assembly.
             for (int m = 0; m < hc.NumMasters; ++m) {
                 r_mp.CreateNewMasterSlaveConstraint(
-                    constraint_name, rModeler.NextConstraintId(),
+                    constraint_type, rModeler.NextConstraintId(),
                     *master_ptrs[m], r_var,
                     *p_slave, r_var,
                     hc.Weights[m], 0.0);
+                ++n_constraints;
             }
         }
     }
+
+    KRATOS_INFO_IF("GenerateHybridOctreeQuadrilateralConditionsWithFaceColor", echo_level > 0)
+        << "Generated " << n_constraints << " \"" << constraint_type
+        << "\" hanging-node constraints in ModelPart \"" << r_mp.FullName() << "\"." << std::endl;
 }
 
 } // namespace Kratos

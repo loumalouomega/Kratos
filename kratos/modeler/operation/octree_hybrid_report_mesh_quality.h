@@ -91,13 +91,13 @@ public:
      * the `INFO` log level.  If the ModelPart contains no elements the method logs a
      * short notice and returns immediately without error.
      *
-     * @param rModeler            The @ref OctreeHybridMesherModeler that holds the Model
+     * @param rModeler            The @ref OctreeHybridMeshGeneratorModeler that holds the Model
      *                            from which the target ModelPart is retrieved.
      * @param OperationParameters Validated JSON parameters.  Must contain the key
      *                            `"model_part_name"` with the name of an existing
      *                            ModelPart.
      */
-    void Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const override;
+    void Execute(OctreeHybridMeshGeneratorModeler& rModeler, Parameters OperationParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this operation.

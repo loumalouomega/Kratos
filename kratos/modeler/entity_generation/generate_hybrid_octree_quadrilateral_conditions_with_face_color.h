@@ -26,7 +26,7 @@ namespace Kratos
 ///@{
 
 /**
- * @class OctreeHybridGenerateBoundaryConditionsByFace
+ * @class GenerateHybridOctreeQuadrilateralConditionsWithFaceColor
  * @ingroup KratosCore
  * @brief Entity-generation component that creates quadrilateral boundary conditions on
  *        the exterior faces of the coloured hex mesh.
@@ -38,7 +38,7 @@ namespace Kratos
  * colour-filtered cell list.
  *
  * Nodes for the conditions are retrieved — or created if not yet present — through
- * `OctreeHybridMesherModeler::GenerateOrRetrieveNode`, which de-duplicates via the modeler's
+ * `OctreeHybridMeshGeneratorModeler::GenerateOrRetrieveNode`, which de-duplicates via the modeler's
  * `mData.mNodePtrs` map.  Nodes that were already created during a prior hex-generation
  * step are pushed explicitly into the new ModelPart so that each boundary ModelPart
  * owns all of its nodes regardless of creation order.
@@ -47,16 +47,18 @@ namespace Kratos
  * registered in the Kratos component database (default: `"SurfaceCondition3D4N"`).
  *
  * ### Optional hanging-node constraints (primal mesh)
- * When `"variables"` is non-empty and `OctreeHybridMesherData::mHanging` contains 2:1
- * transition records (set by the primal extraction path), the stage additionally creates
- * one `LinearMasterSlaveConstraint` per (hanging node × master node × variable) triple
- * in the same ModelPart — ensuring that boundary DOFs at refinement transitions are
- * properly constrained without a separate entity-generation entry.  This mirrors the
- * behaviour of @ref OctreeHybridGenerateHexesByCellColor.
+ * When `"constraint_type"` is non-empty and `"constrained_variables"` is non-empty and
+ * `OctreeHybridMesherData::mHanging` contains 2:1 transition records (set by the primal
+ * extraction path), the stage additionally creates one constraint of type
+ * `"constraint_type"` per (hanging node × master node × variable) triple in the same
+ * ModelPart — ensuring that boundary DOFs at refinement transitions are properly
+ * constrained without a separate entity-generation entry.  This mirrors the behaviour of
+ * @ref GenerateHybridOctreeHexahedraElementsWithCellColor.
  *
  * ### Prerequisite
- * The hex-generation step (e.g. @ref OctreeHybridGenerateHexesByCellColor) must have run first so
- * that `OctreeHybridMesherData::mCells` and `OctreeHybridMesherData::mCellColor` are populated.
+ * The hex-generation step (e.g. @ref GenerateHybridOctreeHexahedraElementsWithCellColor) must
+ * have run first so that `OctreeHybridMesherData::mCells` and `OctreeHybridMesherData::mCellColor`
+ * are populated.
  *
  * ### Registry paths
  * Registered at:
@@ -64,15 +66,19 @@ namespace Kratos
  * - `OctreeHybridMesherEntityGeneration.All`
  *
  * ### Parameters schema
- * | Key                  | Type         | Default                    | Description                                |
- * |----------------------|--------------|----------------------------|--------------------------------------------|
- * | `type`               | string       | `"OctreeHybridGenerateBoundaryConditionsByFace"` | Registry lookup key.         |
- * | `model_part_name`    | string       | `"Undefined"`              | ModelPart to create conditions in.         |
- * | `color`              | int          | `1`                        | Cell color (inside label) to use.          |
- * | `properties_id`      | int          | `1`                        | Properties ID assigned to each condition.  |
- * | `generated_entity`   | string       | `"SurfaceCondition3D4N"`   | Registered condition type to instantiate.  |
- * | `constraint_name`    | string       | `"LinearMasterSlaveConstraint"` | Constraint type for hanging-node MPC; used only when `"variables"` is non-empty. |
- * | `variables`          | string array | `[]`                       | Scalar DOF variable names to constrain at 2:1 transitions.  Empty (default) = no constraints generated. |
+ * | Key                       | Type         | Default                    | Description                                |
+ * |---------------------------|--------------|----------------------------|--------------------------------------------|
+ * | `type`                    | string       | `"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor"` | Registry lookup key.         |
+ * | `model_part_name`         | string       | `"Undefined"`              | ModelPart to create conditions in.         |
+ * | `color`                   | int          | `1`                        | Cell color (inside label) to use.          |
+ * | `properties_id`           | int          | `1`                        | Properties ID assigned to each condition.  |
+ * | `generated_entity`        | string       | `"SurfaceCondition3D4N"`   | Registered condition type to instantiate.  |
+ * | `constraint_type`         | string       | `""`                       | Registered constraint type for hanging-node MPC (e.g. `"LinearMasterSlaveConstraint"`). Empty (default) = no constraints generated. |
+ * | `constrained_variables`   | string array | `[]`                       | Scalar DOF variable names to constrain at 2:1 transitions.  Used only when `"constraint_type"` is non-empty. |
+ * | `initial_node_id`         | int          | `0`                        | Explicit first node ID; `0` = auto.        |
+ * | `initial_condition_id`    | int          | `0`                        | Explicit first condition ID; `0` = auto.   |
+ * | `initial_constraint_id`   | int          | `0`                        | Explicit first constraint ID; `0` = auto.  |
+ * | `echo_level`              | int          | `0`                        | Verbosity of `KRATOS_INFO` logging (`0` = silent). |
  *
  * @note Outward winding of the boundary quads follows the convention of
  *       `OctreeHybridMeshUtility::ExtractBoundaryFaces`.
@@ -80,20 +86,20 @@ namespace Kratos
  * @see OctreeHybridMeshUtility::ExtractBoundaryFaces
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeHybridGenerateBoundaryConditionsByFace : public OctreeHybridMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) GenerateHybridOctreeQuadrilateralConditionsWithFaceColor : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeHybridGenerateBoundaryConditionsByFace() = default;
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The instance to copy.  No data members to copy in this class.
      */
-    OctreeHybridGenerateBoundaryConditionsByFace(OctreeHybridGenerateBoundaryConditionsByFace const& rOther) {}
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor(GenerateHybridOctreeQuadrilateralConditionsWithFaceColor const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -106,9 +112,9 @@ public:
      * 1. **Prerequisite check** — raises an error if `mData.mCells` is empty, which means
      *    the hex-extraction step has not yet been run.
      *
-     * 2. **ModelPart setup** — calls `OctreeHybridMesherModeler::CreateAndGetModelPart` to create
+     * 2. **ModelPart setup** — calls `OctreeHybridMeshGeneratorModeler::CreateAndGetModelPart` to create
      *    (or retrieve) the target ModelPart, then initialises its entity-ID counters via
-     *    `OctreeHybridMesherModeler::SetStartIds`.
+     *    `OctreeHybridMeshGeneratorModeler::SetStartIds`.
      *
      * 3. **Cell filtering** — iterates `mData.mCells` and keeps only those cells whose
      *    entry in `mData.mCellColor` matches `want_color`.  If `mCellColor` is empty all
@@ -122,44 +128,49 @@ public:
      *
      * 5. **Node and condition creation** — for each boundary quad:
      *    - The four corner node pointers are obtained via
-     *      `OctreeHybridMesherModeler::GenerateOrRetrieveNode`.  This call creates a new ModelPart
+     *      `OctreeHybridMeshGeneratorModeler::GenerateOrRetrieveNode`.  This call creates a new ModelPart
      *      node the first time a mesh-node index is seen, or returns the existing pointer
      *      from `mData.mNodePtrs` on subsequent references (de-duplication).
      *    - Each pointer is pushed into `new_nodes` regardless of creation order, so nodes
      *      produced by prior generators (e.g. the hex generator) are also registered in the
      *      boundary ModelPart.
      *    - A new Condition is created from the registered prototype using
-     *      `OctreeHybridMesherModeler::NextConditionId()` for the ID.
+     *      `OctreeHybridMeshGeneratorModeler::NextConditionId()` for the ID.
      *
      * 6. **Finalisation** — `new_nodes` is de-duplicated with `Unique()`, then added to the
      *    ModelPart along with all new conditions via `ModelPartUtils::AddNodesFromOrderedContainer`
      *    and `ModelPart::AddConditions`.
      *
-     * @param rModeler              The owning @ref OctreeHybridMesherModeler.  Provides the Model,
+     * @param rModeler              The owning @ref OctreeHybridMeshGeneratorModeler.  Provides the Model,
      *                              `OctreeHybridMesherData`, the node de-duplication map, and the
      *                              entity-ID counters.
      * @param GenerationParameters  Validated JSON parameters; see @ref GetDefaultParameters
      *                              for the full schema.
      */
-    void Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const override;
+    void Generate(OctreeHybridMeshGeneratorModeler& rModeler, Parameters GenerationParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this generator.
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"              : "OctreeHybridGenerateBoundaryConditionsByFace",
-     *     "model_part_name"   : "Undefined",
-     *     "color"             : 1,
-     *     "properties_id"     : 1,
-     *     "generated_entity"  : "SurfaceCondition3D4N",
-     *     "constraint_name"   : "LinearMasterSlaveConstraint",
-     *     "variables"         : []
+     *     "type"                  : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+     *     "model_part_name"       : "Undefined",
+     *     "color"                 : 1,
+     *     "properties_id"         : 1,
+     *     "generated_entity"      : "SurfaceCondition3D4N",
+     *     "constraint_type"       : "",
+     *     "constrained_variables" : [],
+     *     "initial_node_id"       : 0,
+     *     "initial_condition_id"  : 0,
+     *     "initial_constraint_id" : 0,
+     *     "echo_level"            : 0
      * }
      * @endcode
-     * The `"variables"` array lists scalar DOF names (e.g. `"PRESSURE"`) for which
-     * a `LinearMasterSlaveConstraint` is generated at every 2:1 hanging node on the
-     * boundary.  Leave empty (default) when no constraints are needed.
+     * The `"constrained_variables"` array lists scalar DOF names (e.g. `"PRESSURE"`) for
+     * which a constraint of type `"constraint_type"` is generated at every 2:1 hanging
+     * node on the boundary.  Leave `"constraint_type"` empty (default) when no
+     * constraints are needed.
      * @return A Parameters object with all accepted keys and their default values.
      */
     const Parameters GetDefaultParameters() const override;
@@ -170,9 +181,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateBoundaryConditionsByFace)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeQuadrilateralConditionsWithFaceColor)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, OctreeHybridGenerateBoundaryConditionsByFace)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeQuadrilateralConditionsWithFaceColor)
 
     ///@}
 };

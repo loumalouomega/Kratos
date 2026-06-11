@@ -27,13 +27,13 @@ namespace Kratos {
 ///@name Kratos Classes
 ///@{
 
-/// Forward declaration to break the include cycle with octree_hybrid_mesher_modeler.h.
-class OctreeHybridMesherModeler;
+/// Forward declaration to break the include cycle with octree_hybrid_mesh_generator_modeler.h.
+class OctreeHybridMeshGeneratorModeler;
 
 /**
  * @class OctreeHybridMesherOperation
  * @ingroup KratosCore
- * @brief Base class for post-processing operations executed by @ref OctreeHybridMesherModeler.
+ * @brief Base class for post-processing operations executed by @ref OctreeHybridMeshGeneratorModeler.
  * @details Operations run after the entity-generation stage, acting on the finished
  * ModelPart.  Typical uses include mesh-quality reporting, post-smoothing diagnostics,
  * and any read-only or topology-preserving pass over the generated mesh.
@@ -51,7 +51,7 @@ class OctreeHybridMesherModeler;
  *   and default assignment by @ref ValidateParameters).
  * - Register with the two `KRATOS_REGISTRY_ADD_PROTOTYPE` macros in the `private` section.
  *
- * @see OctreeHybridMesherModeler
+ * @see OctreeHybridMeshGeneratorModeler
  * @see OctreeHybridReportMeshQuality
  * @author Vicente Mataix Ferrandiz
  */
@@ -93,12 +93,12 @@ public:
      *
      * The base implementation raises an error to force derived classes to override it.
      *
-     * @param rModeler            Reference to the @ref OctreeHybridMesherModeler that owns
+     * @param rModeler            Reference to the @ref OctreeHybridMeshGeneratorModeler that owns
      *                            the Model, the mesh data, and the ID counters.
      * @param OperationParameters JSON parameters for this specific invocation, already
      *                            validated and default-filled by @ref ValidateParameters.
      */
-    virtual void Execute(OctreeHybridMesherModeler& rModeler, Parameters OperationParameters) const
+    virtual void Execute(OctreeHybridMeshGeneratorModeler& rModeler, Parameters OperationParameters) const
     {
         KRATOS_ERROR << "Calling base OctreeHybridMesherOperation::Execute. Please override it in the derived class." << std::endl;
     }

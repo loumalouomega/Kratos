@@ -16,7 +16,7 @@
 
 // Project includes
 #include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
@@ -41,7 +41,7 @@ const Parameters OctreeHybridRefineInterfaceCells::GetDefaultParameters() const
 /***********************************************************************************/
 
 void OctreeHybridRefineInterfaceCells::Refine(
-    OctreeHybridMesherModeler& rModeler,
+    OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters RefineParameters) const
 {
     Internals::OctreeHybridMesherData& r_data = rModeler.GetData();

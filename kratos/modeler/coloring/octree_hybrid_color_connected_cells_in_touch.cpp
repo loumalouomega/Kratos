@@ -22,7 +22,7 @@
 
 // Project includes
 #include "modeler/coloring/octree_hybrid_color_connected_cells_in_touch.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "geometries/point.h"
 
@@ -44,7 +44,7 @@ const Parameters OctreeHybridColorConnectedCellsInTouch::GetDefaultParameters() 
 /***********************************************************************************/
 
 void OctreeHybridColorConnectedCellsInTouch::Apply(
-    OctreeHybridMesherModeler& rModeler,
+    OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters ColoringParameters) const
 {
     KRATOS_TRY

@@ -29,26 +29,26 @@ namespace Kratos {
 ///@{
 
 /// Forward declaration — avoids pulling the heavy octree header into every translation unit.
-class OctreeHybridMesherModeler;
+class OctreeHybridMeshGeneratorModeler;
 
 /**
  * @class OctreeHybridMesherEntityGeneration
  * @ingroup KratosCore
- * @brief Abstract base class for entity-generation stages of the @ref OctreeHybridMesherModeler pipeline.
+ * @brief Abstract base class for entity-generation stages of the @ref OctreeHybridMeshGeneratorModeler pipeline.
  * @details Entity-generation stages transform the in-memory hex mesh stored in
  * `OctreeHybridMesherData` into Kratos ModelPart entities:
  *
  *   - **Hexahedral elements** — one `Element3D8N` (or a user-chosen type) per cell
- *     whose colour matches the requested value (@ref OctreeHybridGenerateHexesByCellColor).
+ *     whose colour matches the requested value (@ref GenerateHybridOctreeHexahedraElementsWithCellColor).
  *   - **Boundary conditions** — conditions on boundary faces (future extensions).
  *   - **Hanging-node constraints** — master–slave `MasterSlaveConstraint` objects at
  *     2:1 refinement transitions in the primal mesh.
  *
  * The class follows the *Registry prototype* pattern: concrete sub-classes register
  * themselves through `KRATOS_REGISTRY_ADD_PROTOTYPE` so that
- * `OctreeHybridMesherModeler::Dispatch` can instantiate them by name at run time.  The
+ * `OctreeHybridMeshGeneratorModeler::Dispatch` can instantiate them by name at run time.  The
  * do-work method @ref Generate is `const` and stateless — all mutable state lives in
- * the @ref OctreeHybridMesherModeler passed as argument.
+ * the @ref OctreeHybridMeshGeneratorModeler passed as argument.
  *
  * ### Typical pipeline position
  * 1. `SetupModelPart` builds + balances the octree and extracts the hex mesh.
@@ -56,9 +56,9 @@ class OctreeHybridMesherModeler;
  * 3. **Entity generation** (this class) emits ModelPart nodes, elements and constraints.
  * 4. Optional post-processing operations.
  *
- * @see OctreeHybridGenerateHexesByCellColor
+ * @see GenerateHybridOctreeHexahedraElementsWithCellColor
  * @see OctreeHybridMesherColoring
- * @see OctreeHybridMesherModeler
+ * @see OctreeHybridMeshGeneratorModeler
  * @author Vicente Mataix Ferrandiz
  */
 class KRATOS_API(KRATOS_CORE) OctreeHybridMesherEntityGeneration
@@ -107,7 +107,7 @@ public:
      *                              this specific generation step (see
      *                              @ref GetDefaultParameters for the schema).
      */
-    virtual void Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const
+    virtual void Generate(OctreeHybridMeshGeneratorModeler& rModeler, Parameters GenerationParameters) const
     {
         KRATOS_ERROR << "Calling base OctreeHybridMesherEntityGeneration::Generate. Please override it in the derived class." << std::endl;
     }

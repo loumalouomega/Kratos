@@ -29,21 +29,21 @@ namespace Kratos
 ///@{
 
 /// Forward declaration — avoids pulling the heavy octree header into every translation unit.
-class OctreeHybridMesherModeler;
+class OctreeHybridMeshGeneratorModeler;
 
 /**
  * @class OctreeHybridMesherColoring
  * @ingroup KratosCore
- * @brief Abstract base class for cell-colouring stages of the @ref OctreeHybridMesherModeler pipeline.
+ * @brief Abstract base class for cell-colouring stages of the @ref OctreeHybridMeshGeneratorModeler pipeline.
  * @details Colouring stages classify the extracted dual/primal hexahedral cells, writing an
  * integer label into the shared per-cell colour array
  * (`OctreeHybridMesherData::mCellColor`, indexed by cell).  Downstream entity-generation stages
  * emit only cells whose colour matches the requested value (e.g.\ inside == 1, outside == 0).
  *
  * The class follows the *Registry prototype* pattern: concrete sub-classes register themselves
- * through `KRATOS_REGISTRY_ADD_PROTOTYPE` so that `OctreeHybridMesherModeler::Dispatch` can
+ * through `KRATOS_REGISTRY_ADD_PROTOTYPE` so that `OctreeHybridMeshGeneratorModeler::Dispatch` can
  * instantiate them by name at run time.  The do-work method @ref Apply is `const` and
- * stateless — all mutable state lives in the @ref OctreeHybridMesherModeler passed as argument.
+ * stateless — all mutable state lives in the @ref OctreeHybridMeshGeneratorModeler passed as argument.
  *
  * ### Typical pipeline position
  * 1. `SetupModelPart` builds + balances the octree and extracts the hex mesh.
@@ -53,7 +53,7 @@ class OctreeHybridMesherModeler;
  *
  * @see OctreeHybridClassifyCellsInsideOutside
  * @see OctreeHybridMesherEntityGeneration
- * @see OctreeHybridMesherModeler
+ * @see OctreeHybridMeshGeneratorModeler
  * @author Vicente Mataix Ferrandiz
  */
 class KRATOS_API(KRATOS_CORE) OctreeHybridMesherColoring
@@ -101,7 +101,7 @@ public:
      *                          this specific colouring step (see
      *                          @ref GetDefaultParameters for the schema).
      */
-    virtual void Apply(OctreeHybridMesherModeler& rModeler, Parameters ColoringParameters) const
+    virtual void Apply(OctreeHybridMeshGeneratorModeler& rModeler, Parameters ColoringParameters) const
     {
         KRATOS_ERROR << "Calling base OctreeHybridMesherColoring::Apply. Please override it in the derived class." << std::endl;
     }

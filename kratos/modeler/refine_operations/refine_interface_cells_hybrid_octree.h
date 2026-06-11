@@ -110,10 +110,10 @@ public:
      * `rModeler.GetData().mTriangles` is reused.  `OctreeHybridMeshUtility::RefineInterfaceCells`
      * is then called with the chosen soup and the target depth.
      *
-     * @param rModeler         Reference to the owning @ref OctreeHybridMesherModeler.
+     * @param rModeler         Reference to the owning @ref OctreeHybridMeshGeneratorModeler.
      * @param RefineParameters Validated JSON parameters (see schema in the class Doxygen).
      */
-    void Refine(OctreeHybridMesherModeler& rModeler, Parameters RefineParameters) const override;
+    void Refine(OctreeHybridMeshGeneratorModeler& rModeler, Parameters RefineParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this operation.

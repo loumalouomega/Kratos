@@ -62,7 +62,7 @@ namespace Kratos {
  *
  * @see OctreeHybridMesherColoring
  * @see OctreeHybridMesherEntityGeneration
- * @see OctreeHybridGenerateHexesByCellColor
+ * @see GenerateHybridOctreeHexahedraElementsWithCellColor
  * @see OctreeHybridMeshUtility::ClassifyInsideOutside
  * @author Vicente Mataix Ferrandiz
  */
@@ -99,7 +99,7 @@ public:
      *                            defaults from @ref GetDefaultParameters; the base
      *                            `"type"` key is the only one in the schema).
      */
-    void Apply(OctreeHybridMesherModeler& rModeler, Parameters ColoringParameters) const override;
+    void Apply(OctreeHybridMeshGeneratorModeler& rModeler, Parameters ColoringParameters) const override;
 
     /**
      * @brief Returns the default parameter schema for this colouring stage.

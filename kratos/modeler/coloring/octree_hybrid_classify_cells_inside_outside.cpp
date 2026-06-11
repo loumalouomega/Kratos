@@ -16,7 +16,7 @@
 
 // Project includes
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
@@ -33,7 +33,7 @@ const Parameters OctreeHybridClassifyCellsInsideOutside::GetDefaultParameters() 
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridClassifyCellsInsideOutside::Apply(OctreeHybridMesherModeler& rModeler, Parameters) const
+void OctreeHybridClassifyCellsInsideOutside::Apply(OctreeHybridMeshGeneratorModeler& rModeler, Parameters) const
 {
     auto& r_data = rModeler.GetData();
 

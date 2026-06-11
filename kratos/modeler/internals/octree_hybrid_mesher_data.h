@@ -29,7 +29,7 @@ namespace Kratos::Internals
 /**
  * @class OctreeHybridMesherData
  * @ingroup KratosCore
- * @brief Shared state of the @ref OctreeHybridMesherModeler, accessed by its components.
+ * @brief Shared state of the @ref OctreeHybridMeshGeneratorModeler, accessed by its components.
  * @details Holds the built octree, the surface triangle soup, and the extracted
  * in-memory dual/primal hex mesh (node coordinates, hex connectivity, per-cell
  * refinement level and inside/outside colour), plus the de-duplication map from a

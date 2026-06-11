@@ -19,7 +19,7 @@
 #include "containers/model.h"
 #include "includes/variables.h"
 
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
@@ -31,8 +31,8 @@
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
 
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
-#include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
-#include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
+#include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
 
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
@@ -66,21 +66,20 @@ void BuildClosedBoxSurface(ModelPart& rSurfaceMesh, double Lo = 0.3, double Hi =
             std::vector<IndexType>{f[0], f[1], f[2]});
 }
 
-OctreeHybridMesherModeler MakeEmptyModeler(Model& rModel,
+OctreeHybridMeshGeneratorModeler MakeEmptyModeler(Model& rModel,
     const std::string& rInput, const std::string& rOutput)
 {
     Parameters params(R"({
         "input_model_part_name": ")" + rInput + R"(",
-        "output_model_part_name": ")" + rOutput + R"(",
         "refine_operations_list":  [],
         "coloring_settings_list":  [],
         "entities_generator_list": [],
         "model_part_operations":   []
     })");
-    return OctreeHybridMesherModeler(rModel, params);
+    return OctreeHybridMeshGeneratorModeler(rModel, params);
 }
 
-void ExtractMesh(OctreeHybridMesherModeler& rModeler)
+void ExtractMesh(OctreeHybridMeshGeneratorModeler& rModeler)
 {
     auto& r_data = rModeler.GetData();
     KRATOS_ERROR_IF(!r_data.mpOctree) << "Octree not built — call Refine first.";
@@ -337,10 +336,10 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideApplyDirectlyPro
 }
 
 // ===========================================================================
-// OctreeHybridGenerateHexesByCellColor::Generate — direct call
+// GenerateHybridOctreeHexahedraElementsWithCellColor::Generate — direct call
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorGenerateDirectlyCreatesElements, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorGenerateDirectlyCreatesElements, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -363,21 +362,22 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorGenerateDirectlyCr
         color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
     }
 
-    OctreeHybridGenerateHexesByCellColor gen_op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor gen_op;
     Parameters p(R"({
-        "type"                : "OctreeHybridGenerateHexesByCellColor",
+        "type"                : "GenerateHybridOctreeHexahedraElementsWithCellColor",
         "model_part_name"     : "Out",
         "color"               : 1,
         "properties_id"       : 1,
         "generated_entity"    : "Element3D8N",
         "tag_refinement_level": true
     })");
+    gen_op.ValidateParameters(p);
     gen_op.Generate(modeler, p);
 
     KRATOS_EXPECT_GT(model.GetModelPart("Out").NumberOfElements(), std::size_t{0});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorGenerateDirectlyColor0Elements, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorGenerateDirectlyColor0Elements, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -399,25 +399,26 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorGenerateDirectlyCo
         color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
     }
 
-    OctreeHybridGenerateHexesByCellColor gen_op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor gen_op;
     Parameters p(R"({
-        "type"                : "OctreeHybridGenerateHexesByCellColor",
+        "type"                : "GenerateHybridOctreeHexahedraElementsWithCellColor",
         "model_part_name"     : "Outside",
         "color"               : 0,
         "properties_id"       : 1,
         "generated_entity"    : "Element3D8N",
         "tag_refinement_level": false
     })");
+    gen_op.ValidateParameters(p);
     gen_op.Generate(modeler, p);
 
     KRATOS_EXPECT_GT(model.GetModelPart("Outside").NumberOfElements(), std::size_t{0});
 }
 
 // ===========================================================================
-// OctreeHybridGenerateBoundaryConditionsByFace::Generate — direct call
+// GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate — direct call
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceGenerateDirectlyCreatesConditions, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorGenerateDirectlyCreatesConditions, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -441,38 +442,41 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceGenerateDi
 
     // Generate hexes first
     {
-        OctreeHybridGenerateHexesByCellColor hex_op;
-        hex_op.Generate(modeler, Parameters(R"({
-            "type":"OctreeHybridGenerateHexesByCellColor",
+        GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
+        Parameters hex_p(R"({
+            "type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
             "model_part_name":"Out","color":1,"properties_id":1,
             "generated_entity":"Element3D8N","tag_refinement_level":true
-        })"));
+        })");
+        hex_op.ValidateParameters(hex_p);
+        hex_op.Generate(modeler, hex_p);
     }
 
     // Now generate boundary conditions
-    OctreeHybridGenerateBoundaryConditionsByFace bc_op;
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor bc_op;
     Parameters p(R"({
-        "type"             : "OctreeHybridGenerateBoundaryConditionsByFace",
+        "type"             : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
         "model_part_name"  : "Out",
         "color"            : 1,
         "properties_id"    : 1,
         "generated_entity" : "SurfaceCondition3D4N"
     })");
+    bc_op.ValidateParameters(p);
     bc_op.Generate(modeler, p);
 
     KRATOS_EXPECT_GT(model.GetModelPart("Out").NumberOfConditions(), std::size_t{0});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceNotExtractedThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorNotExtractedThrows, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     model.CreateModelPart("Out");
     auto modeler = MakeEmptyModeler(model, "Skin", "Out");
 
-    OctreeHybridGenerateBoundaryConditionsByFace bc_op;
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor bc_op;
     Parameters p(R"({
-        "type"             : "OctreeHybridGenerateBoundaryConditionsByFace",
+        "type"             : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
         "model_part_name"  : "Out",
         "color"            : 1,
         "properties_id"    : 1,
@@ -482,10 +486,10 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceNotExtract
 }
 
 // ===========================================================================
-// OctreeHybridGenerateHexesByCellColor::Generate — hanging-node constraint path
+// GenerateHybridOctreeHexahedraElementsWithCellColor::Generate — hanging-node constraint path
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorWithVariablesCreatesConstraints, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorWithVariablesCreatesConstraints, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -507,17 +511,18 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorWithVariablesCreat
     auto& r_data = modeler.GetData();
     r_data.mCellColor.assign(r_data.mCells.size(), 1);
 
-    OctreeHybridGenerateHexesByCellColor hex_op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
     Parameters p(R"({
-        "type"                 : "OctreeHybridGenerateHexesByCellColor",
-        "model_part_name"      : "Out",
-        "color"                : 1,
-        "properties_id"        : 1,
-        "generated_entity"     : "Element3D8N",
-        "tag_refinement_level" : true,
-        "constraint_name"      : "LinearMasterSlaveConstraint",
-        "variables"            : ["DISPLACEMENT_X"]
+        "type"                  : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "model_part_name"       : "Out",
+        "color"                 : 1,
+        "properties_id"         : 1,
+        "generated_entity"      : "Element3D8N",
+        "tag_refinement_level"  : true,
+        "constraint_type"       : "LinearMasterSlaveConstraint",
+        "constrained_variables" : ["DISPLACEMENT_X"]
     })");
+    hex_op.ValidateParameters(p);
     hex_op.Generate(modeler, p);
 
     // Uniform-depth box has no 2:1 transitions → zero hanging constraints expected,
@@ -525,7 +530,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorWithVariablesCreat
     KRATOS_EXPECT_GE(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorEmptyVariablesSkipsConstraints, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorEmptyVariablesSkipsConstraints, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -546,20 +551,21 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorEmptyVariablesSkip
     auto& r_data = modeler.GetData();
     r_data.mCellColor.assign(r_data.mCells.size(), 1);
 
-    OctreeHybridGenerateHexesByCellColor hex_op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
     Parameters p(R"({
-        "type"                 : "OctreeHybridGenerateHexesByCellColor",
-        "model_part_name"      : "Out",
-        "color"                : 1,
-        "properties_id"        : 1,
-        "generated_entity"     : "Element3D8N",
-        "tag_refinement_level" : true,
-        "constraint_name"      : "LinearMasterSlaveConstraint",
-        "variables"            : []
+        "type"                  : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "model_part_name"       : "Out",
+        "color"                 : 1,
+        "properties_id"         : 1,
+        "generated_entity"      : "Element3D8N",
+        "tag_refinement_level"  : true,
+        "constraint_type"       : "LinearMasterSlaveConstraint",
+        "constrained_variables" : []
     })");
+    hex_op.ValidateParameters(p);
     hex_op.Generate(modeler, p);
 
-    // Empty variables list → no constraints created
+    // Empty constrained_variables list → no constraints created
     KRATOS_EXPECT_EQ(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
 }
 
@@ -604,12 +610,14 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridReportMeshQualityExecuteDirectlyOnFilledPa
         color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
     }
     {
-        OctreeHybridGenerateHexesByCellColor hex_op;
-        hex_op.Generate(modeler, Parameters(R"({
-            "type":"OctreeHybridGenerateHexesByCellColor",
+        GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
+        Parameters hex_p(R"({
+            "type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
             "model_part_name":"Out","color":1,"properties_id":1,
             "generated_entity":"Element3D8N","tag_refinement_level":true
-        })"));
+        })");
+        hex_op.ValidateParameters(hex_p);
+        hex_op.Generate(modeler, hex_p);
     }
 
     OctreeHybridReportMeshQuality quality_op;
@@ -658,8 +666,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherColoringValidateParametersUnknownKey
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherEntityGenerationValidateParametersFillsDefaults, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateHexesByCellColor op;
-    Parameters p(R"({"type": "OctreeHybridGenerateHexesByCellColor"})");
+    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    Parameters p(R"({"type": "GenerateHybridOctreeHexahedraElementsWithCellColor"})");
     op.ValidateParameters(p);
 
     KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
@@ -669,8 +677,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherEntityGenerationValidateParametersFi
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherEntityGenerationValidateParametersUnknownKeyThrows, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateHexesByCellColor op;
-    Parameters p(R"({"type": "OctreeHybridGenerateHexesByCellColor", "unexpected": 0})");
+    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    Parameters p(R"({"type": "GenerateHybridOctreeHexahedraElementsWithCellColor", "unexpected": 0})");
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(op.ValidateParameters(p), "");
 }
 

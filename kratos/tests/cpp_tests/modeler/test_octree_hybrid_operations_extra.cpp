@@ -19,8 +19,8 @@
 #include "modeler/refine_operations/refine_uniform_hybrid_octree.h"
 #include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
-#include "modeler/entity_generation/octree_hybrid_generate_hexes_by_cell_color.h"
-#include "modeler/entity_generation/octree_hybrid_generate_boundary_conditions_by_face.h"
+#include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
@@ -139,86 +139,102 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideInfoReturnsBaseC
 }
 
 // ===========================================================================
-// OctreeHybridGenerateHexesByCellColor — GetDefaultParameters / Info
+// GenerateHybridOctreeHexahedraElementsWithCellColor — GetDefaultParameters / Info
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorDefaultParametersTypeKey, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefaultParametersTypeKey, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateHexesByCellColor op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridGenerateHexesByCellColor"});
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateHybridOctreeHexahedraElementsWithCellColor"});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorDefaultParametersAllKeys, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefaultParametersAllKeys, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateHexesByCellColor op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
     KRATOS_EXPECT_TRUE(p.Has("color"));
     KRATOS_EXPECT_TRUE(p.Has("properties_id"));
     KRATOS_EXPECT_TRUE(p.Has("generated_entity"));
     KRATOS_EXPECT_TRUE(p.Has("tag_refinement_level"));
-    KRATOS_EXPECT_TRUE(p.Has("constraint_name"));
-    KRATOS_EXPECT_TRUE(p.Has("variables"));
+    KRATOS_EXPECT_TRUE(p.Has("constraint_type"));
+    KRATOS_EXPECT_TRUE(p.Has("constrained_variables"));
+    KRATOS_EXPECT_TRUE(p.Has("initial_node_id"));
+    KRATOS_EXPECT_TRUE(p.Has("initial_element_id"));
+    KRATOS_EXPECT_TRUE(p.Has("initial_constraint_id"));
+    KRATOS_EXPECT_TRUE(p.Has("echo_level"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorDefaultParametersDefaults, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefaultParametersDefaults, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateHexesByCellColor op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
     KRATOS_EXPECT_EQ(p["color"].GetInt(), 1);
     KRATOS_EXPECT_EQ(p["properties_id"].GetInt(), 1);
     KRATOS_EXPECT_EQ(p["generated_entity"].GetString(), std::string{"Element3D8N"});
     KRATOS_EXPECT_TRUE(p["tag_refinement_level"].GetBool());
-    KRATOS_EXPECT_EQ(p["constraint_name"].GetString(), std::string{"LinearMasterSlaveConstraint"});
-    KRATOS_EXPECT_EQ(p["variables"].size(), std::size_t{0});
+    KRATOS_EXPECT_EQ(p["constraint_type"].GetString(), std::string{""});
+    KRATOS_EXPECT_EQ(p["constrained_variables"].size(), std::size_t{0});
+    KRATOS_EXPECT_EQ(p["initial_node_id"].GetInt(), 0);
+    KRATOS_EXPECT_EQ(p["initial_element_id"].GetInt(), 0);
+    KRATOS_EXPECT_EQ(p["initial_constraint_id"].GetInt(), 0);
+    KRATOS_EXPECT_EQ(p["echo_level"].GetInt(), 0);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateHexesByCellColorInfoReturnsBaseClassName, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateHexesByCellColor op;
+    GenerateHybridOctreeHexahedraElementsWithCellColor op;
     KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherEntityGeneration"});
 }
 
 // ===========================================================================
-// OctreeHybridGenerateBoundaryConditionsByFace — GetDefaultParameters / Info
+// GenerateHybridOctreeQuadrilateralConditionsWithFaceColor — GetDefaultParameters / Info
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceDefaultParametersTypeKey, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorDefaultParametersTypeKey, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateBoundaryConditionsByFace op;
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridGenerateBoundaryConditionsByFace"});
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor"});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceDefaultParametersAllKeys, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorDefaultParametersAllKeys, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateBoundaryConditionsByFace op;
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
     KRATOS_EXPECT_TRUE(p.Has("color"));
     KRATOS_EXPECT_TRUE(p.Has("properties_id"));
     KRATOS_EXPECT_TRUE(p.Has("generated_entity"));
-    KRATOS_EXPECT_TRUE(p.Has("constraint_name"));
-    KRATOS_EXPECT_TRUE(p.Has("variables"));
+    KRATOS_EXPECT_TRUE(p.Has("constraint_type"));
+    KRATOS_EXPECT_TRUE(p.Has("constrained_variables"));
+    KRATOS_EXPECT_TRUE(p.Has("initial_node_id"));
+    KRATOS_EXPECT_TRUE(p.Has("initial_condition_id"));
+    KRATOS_EXPECT_TRUE(p.Has("initial_constraint_id"));
+    KRATOS_EXPECT_TRUE(p.Has("echo_level"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceDefaultParametersDefaults, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorDefaultParametersDefaults, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateBoundaryConditionsByFace op;
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
     KRATOS_EXPECT_EQ(p["color"].GetInt(), 1);
     KRATOS_EXPECT_EQ(p["properties_id"].GetInt(), 1);
     KRATOS_EXPECT_EQ(p["generated_entity"].GetString(), std::string{"SurfaceCondition3D4N"});
-    KRATOS_EXPECT_EQ(p["constraint_name"].GetString(), std::string{"LinearMasterSlaveConstraint"});
-    KRATOS_EXPECT_EQ(p["variables"].size(), std::size_t{0});
+    KRATOS_EXPECT_EQ(p["constraint_type"].GetString(), std::string{""});
+    KRATOS_EXPECT_EQ(p["constrained_variables"].size(), std::size_t{0});
+    KRATOS_EXPECT_EQ(p["initial_node_id"].GetInt(), 0);
+    KRATOS_EXPECT_EQ(p["initial_condition_id"].GetInt(), 0);
+    KRATOS_EXPECT_EQ(p["initial_constraint_id"].GetInt(), 0);
+    KRATOS_EXPECT_EQ(p["echo_level"].GetInt(), 0);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateBoundaryConditionsByFaceInfoReturnsBaseClassName, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
-    OctreeHybridGenerateBoundaryConditionsByFace op;
+    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
     KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherEntityGeneration"});
 }
 

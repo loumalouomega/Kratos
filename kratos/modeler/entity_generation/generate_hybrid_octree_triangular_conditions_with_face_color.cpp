@@ -13,40 +13,47 @@
 // Project includes
 #include "includes/kratos_components.h"
 #include "utilities/model_part_utils.h"
-#include "modeler/entity_generation/octree_hybrid_generate_triangle_boundary_conditions_by_face.h"
-#include "modeler/octree_hybrid_mesher_modeler.h"
+#include "modeler/entity_generation/generate_hybrid_octree_triangular_conditions_with_face_color.h"
+#include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos
 {
 
-const Parameters OctreeHybridGenerateTriangleBoundaryConditionsByFace::GetDefaultParameters() const
+const Parameters GenerateHybridOctreeTriangularConditionsWithFaceColor::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"               : "OctreeHybridGenerateTriangleBoundaryConditionsByFace",
-        "model_part_name"    : "Undefined",
-        "color"              : 1,
-        "properties_id"      : 1,
-        "generated_entity"   : "SurfaceCondition3D3N"
+        "type"                  : "GenerateHybridOctreeTriangularConditionsWithFaceColor",
+        "model_part_name"       : "Undefined",
+        "color"                 : 1,
+        "properties_id"         : 1,
+        "generated_entity"      : "SurfaceCondition3D3N",
+        "initial_node_id"       : 0,
+        "initial_condition_id"  : 0,
+        "echo_level"            : 0
     })");
 }
 
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridGenerateTriangleBoundaryConditionsByFace::Generate(
-    OctreeHybridMesherModeler& rModeler,
+void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
+    OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters GenerationParameters) const
 {
     auto& r_data = rModeler.GetData();
     KRATOS_ERROR_IF(!r_data.IsExtracted())
-        << "OctreeHybridGenerateTriangleBoundaryConditionsByFace: hex mesh not yet extracted."
+        << "GenerateHybridOctreeTriangularConditionsWithFaceColor: hex mesh not yet extracted."
         << std::endl;
 
     ModelPart& r_mp = rModeler.CreateAndGetModelPart(
         GenerationParameters["model_part_name"].GetString());
     rModeler.SetStartIds(r_mp);
+    rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
+    rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
+
+    const int echo_level = GenerationParameters["echo_level"].GetInt();
 
     const int want_color = GenerationParameters["color"].GetInt();
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
@@ -56,7 +63,7 @@ void OctreeHybridGenerateTriangleBoundaryConditionsByFace::Generate(
 
     const std::string entity_name = GenerationParameters["generated_entity"].GetString();
     KRATOS_ERROR_IF(!KratosComponents<Condition>::Has(entity_name))
-        << "OctreeHybridGenerateTriangleBoundaryConditionsByFace: condition type '"
+        << "GenerateHybridOctreeTriangularConditionsWithFaceColor: condition type '"
         << entity_name << "' is not registered in KratosComponents." << std::endl;
     const Condition& r_proto = KratosComponents<Condition>::Get(entity_name);
 
@@ -93,8 +100,13 @@ void OctreeHybridGenerateTriangleBoundaryConditionsByFace::Generate(
     }
 
     new_nodes.Unique();
+    const std::size_t n_new_nodes = new_nodes.size();
     ModelPartUtils::AddNodesFromOrderedContainer(r_mp, new_nodes.begin(), new_nodes.end());
     r_mp.AddConditions(new_conditions.begin(), new_conditions.end());
+
+    KRATOS_INFO_IF("GenerateHybridOctreeTriangularConditionsWithFaceColor", echo_level > 0)
+        << "Generated " << new_conditions.size() << " conditions and " << n_new_nodes
+        << " nodes in ModelPart \"" << r_mp.FullName() << "\"." << std::endl;
 }
 
 } // namespace Kratos

@@ -22,7 +22,7 @@ namespace Kratos
 ///@{
 
 /**
- * @class OctreeHybridGenerateTetrahedraByCellColor
+ * @class GenerateHybridOctreeTetrahedraElementsWithCellColor
  * @ingroup KratosCore
  * @brief Entity-generation stage that emits tetrahedral elements from the dual/primal hex mesh
  *        by decomposing each selected hex cell into 6 Freudenthal tetrahedra.
@@ -39,31 +39,34 @@ namespace Kratos
  * conforming with no hanging nodes.
  *
  * Node de-duplication and batch insertion follow the same pattern as
- * @ref OctreeHybridGenerateHexesByCellColor.
+ * @ref GenerateHybridOctreeHexahedraElementsWithCellColor.
  *
  * ### Parameters schema
- * | Key                  | Type         | Default                          | Description                                          |
- * |----------------------|--------------|----------------------------------|------------------------------------------------------|
- * | `type`               | string       | `"OctreeHybridGenerateTetrahedraByCellColor"` | Registry lookup key.              |
- * | `model_part_name`    | string       | `"Undefined"`                    | ModelPart to create elements in.                     |
- * | `color`              | int          | `1`                              | Cell color to select (1 = inside, 0 = outside).      |
- * | `properties_id`      | int          | `1`                              | Properties ID assigned to each element.              |
- * | `generated_entity`   | string       | `"Element3D4N"`                  | Registered tetrahedral element type to instantiate.  |
- * | `tag_refinement_level` | bool       | `true`                           | Tag each tet element with `REFINEMENT_LEVEL` of its parent hex. |
+ * | Key                    | Type         | Default                          | Description                                          |
+ * |------------------------|--------------|----------------------------------|------------------------------------------------------|
+ * | `type`                 | string       | `"GenerateHybridOctreeTetrahedraElementsWithCellColor"` | Registry lookup key.              |
+ * | `model_part_name`      | string       | `"Undefined"`                    | ModelPart to create elements in.                     |
+ * | `color`                | int          | `1`                              | Cell color to select (1 = inside, 0 = outside).      |
+ * | `properties_id`        | int          | `1`                              | Properties ID assigned to each element.              |
+ * | `generated_entity`     | string       | `"Element3D4N"`                  | Registered tetrahedral element type to instantiate.  |
+ * | `tag_refinement_level` | bool         | `true`                           | Tag each tet element with `REFINEMENT_LEVEL` of its parent hex. |
+ * | `initial_node_id`      | int          | `0`                              | Explicit first node ID; `0` = auto.                  |
+ * | `initial_element_id`   | int          | `0`                              | Explicit first element ID; `0` = auto.               |
+ * | `echo_level`           | int          | `0`                              | Verbosity of `KRATOS_INFO` logging (`0` = silent).   |
  *
  * @see OctreeHybridMesherEntityGeneration
- * @see OctreeHybridGenerateHexesByCellColor
+ * @see GenerateHybridOctreeHexahedraElementsWithCellColor
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeHybridGenerateTetrahedraByCellColor
+class KRATOS_API(KRATOS_CORE) GenerateHybridOctreeTetrahedraElementsWithCellColor
     : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
-    OctreeHybridGenerateTetrahedraByCellColor() = default;
-    OctreeHybridGenerateTetrahedraByCellColor(OctreeHybridGenerateTetrahedraByCellColor const&) {}
+    GenerateHybridOctreeTetrahedraElementsWithCellColor() = default;
+    GenerateHybridOctreeTetrahedraElementsWithCellColor(GenerateHybridOctreeTetrahedraElementsWithCellColor const&) {}
 
     ///@}
     ///@name Operations
@@ -74,7 +77,7 @@ public:
      * @param rModeler             Owning modeler; provides data and entity-ID counters.
      * @param GenerationParameters Validated JSON parameters (see schema above).
      */
-    void Generate(OctreeHybridMesherModeler& rModeler, Parameters GenerationParameters) const override;
+    void Generate(OctreeHybridMeshGeneratorModeler& rModeler, Parameters GenerationParameters) const override;
 
     const Parameters GetDefaultParameters() const override;
 
@@ -85,10 +88,10 @@ private:
 
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics",
                                   OctreeHybridMesherEntityGeneration,
-                                  OctreeHybridGenerateTetrahedraByCellColor)
+                                  GenerateHybridOctreeTetrahedraElementsWithCellColor)
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All",
                                   OctreeHybridMesherEntityGeneration,
-                                  OctreeHybridGenerateTetrahedraByCellColor)
+                                  GenerateHybridOctreeTetrahedraElementsWithCellColor)
 
     ///@}
 };
