@@ -64,10 +64,13 @@ void OctreeHybridRefineInterfaceCells::Refine(
         // (RemoveOutsideElement, ClassifyInsideOutside, ProjectToIsoSurface) can
         // reuse it without re-parsing the ModelPart.
         r_data.mTriangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_surface);
+        const BoundingBox<Point>* p_bounding_box_override =
+            rModeler.HasOctreeBoundingBox() ? &rModeler.GetOctreeBoundingBox() : nullptr;
         r_data.mpOctree   = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
             r_surface,
             RefineParameters["refinement_depth"].GetInt(),
-            RefineParameters["adaptive"].GetBool());
+            RefineParameters["adaptive"].GetBool(),
+            p_bounding_box_override);
         // Mesh-type and projection settings are fixed at octree construction and
         // must not be overwritten by subsequent refinement entries in the list.
         r_data.mMeshType             = RefineParameters["mesh_type"].GetString();
