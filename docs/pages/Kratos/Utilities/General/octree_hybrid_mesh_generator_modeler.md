@@ -273,6 +273,7 @@ Registered coloring components:
 | `OctreeHybridColorCellsInTouch` | Color cells whose AABB intersects input-model-part geometry |
 | `OctreeHybridColorConnectedCellsInTouch` | Flood-fill connected cells touching input geometry |
 | `OctreeHybridColorCellsByLevel` | Color cells by octree refinement level |
+| `OctreeHybridColorCellsWithInsideCenter` | Color cells whose centre lies inside another ModelPart's surface |
 
 When using `mesh_type: "dual"` **without** `project_to_surface`, the coloring stage is
 responsible for the inside/outside carving.  When `project_to_surface: true`, the
@@ -760,6 +761,59 @@ Iterates `mCellLevel` and writes `color` to every entry where
     "color"     : 2,
     "min_level" : 4,
     "max_level" : 4
+}
+```
+
+---
+
+#### `OctreeHybridColorCellsWithInsideCenter`
+
+Colors cells whose centre (centroid of its 8 corner nodes) lies inside the surface
+defined by another ModelPart.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellsWithInsideCenter.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellsWithInsideCenter`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cells_with_inside_center.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellsWithInsideCenter"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Name of the ModelPart whose geometry defines the "inside" surface. |
+| `color` | int | `-1` | Label to write for cells whose centre is inside the surface. |
+| `input_entities` | string | `""` | Which entities to extract triangles from: `"geometries"`, `"elements"`, or `"conditions"`. Must be set explicitly. |
+| `tolerance` | double | `1.0e-12` | Geometric epsilon for the inside/outside test: a cell centre is inside when its signed distance to the surface is `>= -tolerance`. |
+| `bounding_box.min_point` / `bounding_box.max_point` | array[3] | `[]` / `[]` | Optional AABB pre-filter. When both are 3-vectors, only cells whose centre lies within this box are tested; cells outside are left unchanged. Empty (default) = no restriction. |
+
+**Behaviour:**
+
+1. Builds a triangle soup from `model_part_name`'s entities (selected by `input_entities`).
+2. For each cell (optionally restricted to those whose centre lies inside `bounding_box`),
+   computes the centroid of its 8 corner nodes.
+3. Computes the signed distance of each candidate centre to the triangle soup via
+   `OctreeHybridMeshUtility::ComputeNodeSignedDistance` (ray-cast crossing-parity sign,
+   closest-triangle distance magnitude; positive = inside).
+4. Cells whose centre signed distance is `>= -tolerance` (i.e.\ inside, or within
+   `tolerance` of the surface) are assigned `color`.
+
+If `mCellColor` has not been initialised it is resized and filled with `0` first.
+
+**Example JSON:**
+
+```json
+{
+    "type"            : "OctreeHybridColorCellsWithInsideCenter",
+    "model_part_name" : "MySurface",
+    "color"           : 1,
+    "input_entities"  : "geometries",
+    "tolerance"       : 1.0e-12,
+    "bounding_box"  : {
+        "min_point" : [],
+        "max_point" : []
+    }
 }
 ```
 
