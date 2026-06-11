@@ -226,12 +226,18 @@ public:
      *     "model_part_operations"   : [],
      *     "mdpa_file_name"          : "",
      *     "input_model_part_name"   : "",
+     *     "bounding_box_model_part" : "",
+     *     "bounding_box"            : { "min_point" : [], "max_point" : [] },
      *     "default_outside_color"   : 1,
      *     "output_files"            : [],
      *     "remove_orphan_nodes"     : true,
      *     "echo_level"              : 1
      * }
      * @endcode
+     * `"bounding_box"` (both `min_point` and `max_point` given as 3-vectors) and
+     * `"bounding_box_model_part"` (the name of another ModelPart in the `Model`) are mutually
+     * exclusive ways to override the octree's domain; see @ref ResolveOctreeBoundingBox. When
+     * neither is set, the domain is computed automatically from the input surface, as before.
      * The `refinement_settings_list` must start with an @ref OctreeHybridRefineInterfaceCells
      * entry (which builds the octree and records `mesh_type` / projection settings) and may be
      * followed by any number of @ref OctreeHybridRefineUniform or additional
@@ -292,6 +298,16 @@ public:
      * @return The bounding box of the octree
      */
     const BoundingBox<Point>& GetOctreeBoundingBox() const;
+
+    /**
+     * @brief Returns whether an explicit octree bounding box override was resolved
+     *        from the `"bounding_box"` or `"bounding_box_model_part"` parameters.
+     * @details Set by @ref ResolveOctreeBoundingBox during @ref Initialize. When `false`,
+     *          @ref GetOctreeBoundingBox returns a default-constructed (degenerate) box and
+     *          the octree build falls back to its auto-computed domain.
+     * @return `true` if an override is in effect.
+     */
+    bool HasOctreeBoundingBox() const;
 
     /**
      * @brief Returns or creates the ModelPart identified by @p rFullName.
@@ -445,9 +461,36 @@ private:
     /// The bounding box of the input model part
     BoundingBox<Kratos::Point> mInputBoundingBox;
 
+    /// Whether @ref mOctreeBoundingBox was set from `"bounding_box"` /
+    /// `"bounding_box_model_part"` (vs. left default for the auto-computed domain).
+    bool mOctreeBoundingBoxSet = false;
+
     ///@}
     ///@name Private Operations
     ///@{
+
+    /**
+     * @brief Resolves the octree bounding box override from `"bounding_box"` or
+     *        `"bounding_box_model_part"`, validating it against the input model part.
+     * @details Called from @ref Initialize, after @ref ReadModelParts (so
+     *          @ref GetInputModelPart is available).
+     *
+     * - `KRATOS_ERROR` if both `"bounding_box"` (non-empty `min_point`/`max_point`) and a
+     *   non-empty `"bounding_box_model_part"` are provided.
+     * - If `"bounding_box"` has both `min_point` and `max_point` of size 3, builds
+     *   @ref mOctreeBoundingBox directly from them.
+     * - Else if `"bounding_box_model_part"` is non-empty, looks it up in the `Model`
+     *   (`KRATOS_ERROR` if missing or empty) and builds @ref mOctreeBoundingBox from its
+     *   nodes.
+     * - Else, leaves @ref mOctreeBoundingBoxSet `false` (no override; existing
+     *   auto-computed-domain behaviour is unchanged).
+     *
+     * When an override is resolved, computes @ref mInputBoundingBox from
+     * @ref GetInputModelPart's nodes (`KRATOS_ERROR` if it has none) and `KRATOS_ERROR`s if
+     * @ref mOctreeBoundingBox does not fully contain it (within a relative tolerance of
+     * `1e-6` of the override box's diagonal).
+     */
+    void ResolveOctreeBoundingBox();
 
     /**
      * @brief This initializes de internal cartesian mesh data structure to be used for coloring
