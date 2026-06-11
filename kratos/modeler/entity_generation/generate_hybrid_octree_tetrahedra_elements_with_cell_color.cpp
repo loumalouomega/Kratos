@@ -39,29 +39,34 @@ const Parameters GenerateHybridOctreeTetrahedraElementsWithCellColor::GetDefault
 
 void GenerateHybridOctreeTetrahedraElementsWithCellColor::Generate(
     OctreeHybridMeshGeneratorModeler& rModeler,
-    Parameters GenerationParameters) const
+    Parameters GenerationParameters
+    ) const
 {
+    // Build tetrahedral elements from octree hexahedral cells, restricted to the requested cell color.
     auto& r_data = rModeler.GetData();
-    ModelPart& r_model_part = rModeler.CreateAndGetModelPart(
-        GenerationParameters["model_part_name"].GetString());
+    ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
     rModeler.SetStartIds(r_model_part);
     rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
     rModeler.OverrideStartElementId(GenerationParameters["initial_element_id"].GetInt());
 
+    // Extract parameters.
     const int echo_level = GenerationParameters["echo_level"].GetInt();
-
     const int want_color  = GenerationParameters["color"].GetInt();
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
+
+    // Reuse an existing Properties container if present in the hierarchy, otherwise create it.
     Properties::Pointer p_properties = r_model_part.RecursivelyHasProperties(properties_id)
         ? r_model_part.pGetProperties(properties_id)
         : r_model_part.CreateNewProperties(properties_id);
 
+    // Validate the requested element type exists in KratosComponents.
     const std::string entity_name = GenerationParameters["generated_entity"].GetString();
     KRATOS_ERROR_IF(!KratosComponents<Element>::Has(entity_name))
         << "GenerateHybridOctreeTetrahedraElementsWithCellColor: element type '"
         << entity_name << "' is not registered in KratosComponents." << std::endl;
     const Element& r_proto = KratosComponents<Element>::Get(entity_name);
 
+    // Optionally preserve octree refinement level metadata on the generated elements.
     const bool tag_level = GenerationParameters["tag_refinement_level"].GetBool();
 
     // Freudenthal 6-tet decomposition of a Hexahedra3D8 along the (0,6) main diagonal.
@@ -79,7 +84,9 @@ void GenerateHybridOctreeTetrahedraElementsWithCellColor::Generate(
     ModelPart::ElementsContainerType new_elements;
     Element::NodesArrayType tet_nodes(4);
 
+    // Iterate over all cells, but only generate elements for those matching the requested color tag.
     for (std::size_t c = 0; c < r_data.mCells.size(); ++c) {
+        // Only generate entities for cells matching the requested color tag.
         if (!r_data.mCellColor.empty() && r_data.mCellColor[c] != want_color) continue;
 
         // Materialise all 8 hex corner nodes (deduplication via mNodePtrs cache).
@@ -94,12 +101,14 @@ void GenerateHybridOctreeTetrahedraElementsWithCellColor::Generate(
             for (int v = 0; v < 4; ++v)
                 tet_nodes(v) = hex_ptrs[TET_CONN[t][v]];
             auto p_el = r_proto.Create(rModeler.NextElementId(), tet_nodes, p_properties);
+            // Preserve octree refinement level metadata when requested and available.
             if (tag_level && cell_level >= 0)
                 p_el->SetValue(REFINEMENT_LEVEL, cell_level);
             new_elements.push_back(p_el);
         }
     }
 
+    // Unique() avoids adding duplicated nodes collected from shared cell corners.
     new_nodes.Unique();
     const std::size_t n_new_nodes = new_nodes.size();
     ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());

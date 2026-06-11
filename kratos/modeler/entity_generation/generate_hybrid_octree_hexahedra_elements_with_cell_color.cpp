@@ -57,6 +57,7 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
     rModeler.OverrideStartElementId(GenerationParameters["initial_element_id"].GetInt());
     rModeler.OverrideStartConstraintId(GenerationParameters["initial_constraint_id"].GetInt());
 
+    // Get echo level for info messages.
     const int echo_level = GenerationParameters["echo_level"].GetInt();
 
     // Extract parameters.
@@ -116,9 +117,9 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
     const auto& r_var_list = GenerationParameters["constrained_variables"];
     if (constraint_type.empty() || r_var_list.size() == 0 || r_data.mHanging.empty()) return;
 
-    const int n_vars = static_cast<int>(r_var_list.size());
+    const unsigned int n_vars = r_var_list.size();
     std::vector<const Variable<double>*> vars(n_vars);
-    for (int vi = 0; vi < n_vars; ++vi) {
+    for (unsigned int vi = 0; vi < n_vars; ++vi) {
         const std::string& vname = r_var_list[vi].GetString();
         KRATOS_ERROR_IF_NOT(KratosComponents<Variable<double>>::Has(vname))
             << "GenerateHybridOctreeHexahedraElementsWithCellColor: variable '" << vname
@@ -126,6 +127,7 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
         vars[vi] = &KratosComponents<Variable<double>>::Get(vname);
     }
 
+    // Generate one binary LinearMasterSlaveConstraint per (master, variable) pair. The slave
     std::size_t n_constraints = 0;
     for (const auto& hc : r_data.mHanging) {
         // A null pointer means the node index was never materialised as a Kratos
@@ -143,7 +145,7 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
         }
         if (!all_masters_exist) continue;
 
-        for (int vi = 0; vi < n_vars; ++vi) {
+        for (unsigned int vi = 0; vi < n_vars; ++vi) {
             const Variable<double>& r_var = *vars[vi];
             // DOFs must be registered on the node before a constraint can
             // reference them — AddDof is a no-op if the DOF already exists.

@@ -50,8 +50,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
 {
     // Validate and assign defaults to the parameters.
     auto& r_data = rModeler.GetData();
-    KRATOS_ERROR_IF(!r_data.IsExtracted())
-        << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: hex mesh not yet extracted." << std::endl;
+    KRATOS_ERROR_IF(!r_data.IsExtracted()) << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: hex mesh not yet extracted." << std::endl;
 
     // Create the output ModelPart
     ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
@@ -60,6 +59,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
     rModeler.OverrideStartConstraintId(GenerationParameters["initial_constraint_id"].GetInt());
 
+    // Get echo level for info messages.
     const int echo_level = GenerationParameters["echo_level"].GetInt();
 
     // Extract parameters.
@@ -94,9 +94,9 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     ModelPart::NodesContainerType new_nodes;
     ModelPart::ConditionsContainerType new_conditions;
     Condition::NodesArrayType face_nodes(4);
-    for (const auto& bf : bfaces) {
+    for (const auto& r_bf : bfaces) {
         for (int k = 0; k < 4; ++k) {
-            Node::Pointer p_node = rModeler.GenerateOrRetrieveNode(r_model_part, new_nodes, bf[k]);
+            Node::Pointer p_node = rModeler.GenerateOrRetrieveNode(r_model_part, new_nodes, r_bf[k]);
             face_nodes(k) = p_node;
             // GenerateOrRetrieveNode only appends to new_nodes on first creation.
             // Nodes created by a prior stage (e.g. the hex generator) already exist
@@ -128,9 +128,9 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     const auto& r_var_list = GenerationParameters["constrained_variables"];
     if (constraint_type.empty() || r_var_list.size() == 0 || r_data.mHanging.empty()) return;
 
-    const int n_vars = static_cast<int>(r_var_list.size());
+    const unsigned int n_vars = r_var_list.size();
     std::vector<const Variable<double>*> vars(n_vars);
-    for (int vi = 0; vi < n_vars; ++vi) {
+    for (unsigned int vi = 0; vi < n_vars; ++vi) {
         const std::string& vname = r_var_list[vi].GetString();
         KRATOS_ERROR_IF_NOT(KratosComponents<Variable<double>>::Has(vname))
             << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: variable '" << vname
@@ -155,7 +155,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
         }
         if (!all_masters_exist) continue;
 
-        for (int vi = 0; vi < n_vars; ++vi) {
+        for (unsigned int vi = 0; vi < n_vars; ++vi) {
             const Variable<double>& r_var = *vars[vi];
             // DOFs must be registered on the node before a constraint can
             // reference them — AddDof is a no-op if the DOF already exists.

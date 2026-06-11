@@ -42,31 +42,36 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
     OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters GenerationParameters) const
 {
+    // Build triangular boundary conditions from octree boundary faces of cells with the requested color.
     auto& r_data = rModeler.GetData();
     KRATOS_ERROR_IF(!r_data.IsExtracted())
         << "GenerateHybridOctreeTriangularConditionsWithFaceColor: hex mesh not yet extracted."
         << std::endl;
 
+    // Create the output ModelPart
     ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
     rModeler.SetStartIds(r_model_part);
     rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
     rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
 
+    // Extract parameters.
     const int echo_level = GenerationParameters["echo_level"].GetInt();
-
     const int want_color = GenerationParameters["color"].GetInt();
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
+
+    // Reuse an existing Properties container if present in the hierarchy, otherwise create it.
     Properties::Pointer p_props = r_model_part.RecursivelyHasProperties(properties_id)
         ? r_model_part.pGetProperties(properties_id)
         : r_model_part.CreateNewProperties(properties_id);
 
+    // Validate the requested condition type exists in KratosComponents.
     const std::string entity_name = GenerationParameters["generated_entity"].GetString();
     KRATOS_ERROR_IF(!KratosComponents<Condition>::Has(entity_name))
         << "GenerateHybridOctreeTriangularConditionsWithFaceColor: condition type '"
         << entity_name << "' is not registered in KratosComponents." << std::endl;
     const Condition& r_proto = KratosComponents<Condition>::Get(entity_name);
 
-    // Colour-filter cells (same pattern as the quad BC generator).
+    // Keep only cells matching the requested color before boundary extraction.
     std::vector<std::array<int, 8>> active_cells;
     active_cells.reserve(r_data.mCells.size());
     for (std::size_t c = 0; c < r_data.mCells.size(); ++c) {
@@ -74,12 +79,14 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
         active_cells.push_back(r_data.mCells[c]);
     }
 
+    // Extract only external quad faces from the selected hexahedral cells.
     const auto bfaces = OctreeHybridMeshUtility::ExtractBoundaryFaces(active_cells);
 
     ModelPart::NodesContainerType new_nodes;
     ModelPart::ConditionsContainerType new_conditions;
     Condition::NodesArrayType tri_nodes(3);
 
+    // Each boundary face is a quad {n0, n1, n2, n3}.  Split into two triangles {n0, n1, n2} and {n0, n2, n3}.
     for (const auto& bf : bfaces) {
         // Split quad {n0, n1, n2, n3} along the (n0, n2) diagonal.
         // This diagonal is consistent with the (0,6)-main-diagonal Freudenthal
@@ -98,6 +105,7 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
         }
     }
 
+    // Remove duplicates introduced by shared face vertices before final insertion.
     new_nodes.Unique();
     const std::size_t n_new_nodes = new_nodes.size();
     ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
