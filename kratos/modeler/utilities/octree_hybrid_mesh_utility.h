@@ -20,6 +20,8 @@
 #include <vector>
 
 // Project includes
+#include "geometries/bounding_box.h"
+#include "geometries/point.h"
 #include "spatial_containers/octree_hybrid.h"
 #include "spatial_containers/octree_hybrid_cell.h"
 #include "spatial_containers/octree_hybrid_configure.h"
@@ -153,6 +155,11 @@ public:
      *          (see @ref BuildAdaptiveFromSurfaceMesh); when `false`, every cell
      *          containing a surface vertex is uniformly subdivided to
      *          @p RefinementDepth via @ref RefineInterfaceCells.
+     *          When @p pOverrideBoundingBox is non-null, its min/max points are used as the
+     *          octree's world-space domain instead of the geometry-derived extents (no
+     *          1% auto-padding is applied in the non-adaptive path; in the adaptive path
+     *          the centred reference cube is derived from this box instead of the
+     *          triangle-corner extents).
      *
      * @param rSurfaceMesh     ModelPart whose Geometries() container holds the
      *                         surface triangles (populated by StlIO::ReadModelPart).
@@ -163,12 +170,14 @@ public:
      *                         match the reference for real geometries.  When `false`
      *                         use simple interface-cell refinement (faster but less
      *                         resolution near high-curvature features).
+     * @param pOverrideBoundingBox  Optional world-space domain override (see @details).
      * @return Unique pointer to the built (but not yet 2:1-balanced) octree.
      */
     static std::unique_ptr<OctreeType> BuildFromSurfaceMesh(
         ModelPart& rSurfaceMesh,
         std::size_t RefinementDepth,
-        bool Adaptive = true);
+        bool Adaptive = true,
+        const BoundingBox<Point>* pOverrideBoundingBox = nullptr);
 
     /**
      * @brief Builds an OctreeHybrid using the reference HybridOctree_Hex **adaptive**
@@ -194,11 +203,15 @@ public:
      * @param rSurfaceMesh     ModelPart whose Geometries() container holds the triangles.
      * @param RefinementDepth  Maximum allowed refinement depth (clamped to
      *                         `OctreeHybridKratosConfiguration::MAX_DEPTH`).
+     * @param pOverrideBoundingBox  Optional world-space domain override: when non-null, its
+     *                              min/max points replace the triangle-corner extents used to
+     *                              derive the centred reference cube (`cube_lo`/`cube_side`).
      * @return Unique pointer to the built (but not yet 2:1-balanced) octree.
      */
     static std::unique_ptr<OctreeType> BuildAdaptiveFromSurfaceMesh(
         ModelPart& rSurfaceMesh,
-        std::size_t RefinementDepth);
+        std::size_t RefinementDepth,
+        const BoundingBox<Point>* pOverrideBoundingBox = nullptr);
 
     /**
      * @brief Extracts the **dual hex mesh** (the proper HybridOctree_Hex output)
