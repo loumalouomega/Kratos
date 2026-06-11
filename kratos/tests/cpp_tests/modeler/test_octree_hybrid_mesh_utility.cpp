@@ -622,6 +622,44 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityBuildFromSurfaceMeshLeafCountGr
     KRATOS_EXPECT_GT(octree3->GetLeafCount(), octree2->GetLeafCount());
 }
 
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityBuildFromSurfaceMeshUniformOverrideBoundingBox, KratosCoreFastSuite)
+{
+    Model model;
+    BuildBoxSurface(model.CreateModelPart("Skin"), 0.3, 0.7);
+
+    const BoundingBox<Point> override_bbox(Point(0.0, 0.0, 0.0), Point(1.0, 1.0, 1.0));
+    auto octree = Util::BuildFromSurfaceMesh(model.GetModelPart("Skin"), 3, false, &override_bbox);
+
+    double n_lo[3] = {0.0, 0.0, 0.0}, n_hi[3] = {1.0, 1.0, 1.0}, w_lo[3], w_hi[3];
+    octree->ScaleBackToOriginalCoordinate(n_lo, w_lo);
+    octree->ScaleBackToOriginalCoordinate(n_hi, w_hi);
+
+    // The override is used verbatim: no 1% auto-padding is applied.
+    for (int d = 0; d < 3; ++d) {
+        KRATOS_EXPECT_NEAR(w_lo[d], 0.0, 1e-12);
+        KRATOS_EXPECT_NEAR(w_hi[d], 1.0, 1e-12);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityBuildAdaptiveFromSurfaceMeshOverrideBoundingBox, KratosCoreFastSuite)
+{
+    Model model;
+    BuildBoxSurface(model.CreateModelPart("Skin"), 0.3, 0.7);
+
+    // Already a centred cube of side 2: cube_lo == min_point, cube_side == 2.
+    const BoundingBox<Point> override_bbox(Point(-1.0, -1.0, -1.0), Point(1.0, 1.0, 1.0));
+    auto octree = Util::BuildFromSurfaceMesh(model.GetModelPart("Skin"), 3, true, &override_bbox);
+
+    double n_lo[3] = {0.0, 0.0, 0.0}, n_hi[3] = {1.0, 1.0, 1.0}, w_lo[3], w_hi[3];
+    octree->ScaleBackToOriginalCoordinate(n_lo, w_lo);
+    octree->ScaleBackToOriginalCoordinate(n_hi, w_hi);
+
+    for (int d = 0; d < 3; ++d) {
+        KRATOS_EXPECT_NEAR(w_lo[d], -1.0, 1e-12);
+        KRATOS_EXPECT_NEAR(w_hi[d], 1.0, 1e-12);
+    }
+}
+
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityRefineAllCellsReachesTargetDepth, KratosCoreFastSuite)
 {
     OctreeType octree(4);
