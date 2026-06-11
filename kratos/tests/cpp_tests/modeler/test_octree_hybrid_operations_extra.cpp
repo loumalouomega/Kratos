@@ -45,12 +45,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinemen
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasElementSize, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinedCellSize, KratosCoreFastSuite)
 {
     OctreeHybridRefineUniform op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_TRUE(p.Has("element_size"));
-    KRATOS_EXPECT_NEAR(p["element_size"].GetDouble(), 0.0, 1e-15);
+    KRATOS_EXPECT_TRUE(p.Has("refined_cell_size"));
+    KRATOS_EXPECT_NEAR(p["refined_cell_size"].GetDouble(), 0.0, 1e-15);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformInfoReturnsBaseClassName, KratosCoreFastSuite)
@@ -83,7 +83,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersAllKe
     OctreeHybridRefineInterfaceCells op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("refinement_depth"));
-    KRATOS_EXPECT_TRUE(p.Has("element_size"));
+    KRATOS_EXPECT_TRUE(p.Has("refined_cell_size"));
     KRATOS_EXPECT_TRUE(p.Has("adaptive"));
     KRATOS_EXPECT_TRUE(p.Has("mesh_type"));
     KRATOS_EXPECT_TRUE(p.Has("project_to_surface"));
@@ -96,7 +96,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersDefau
     OctreeHybridRefineInterfaceCells op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
-    KRATOS_EXPECT_NEAR(p["element_size"].GetDouble(), 0.0, 1e-15);
+    KRATOS_EXPECT_NEAR(p["refined_cell_size"].GetDouble(), 0.0, 1e-15);
     KRATOS_EXPECT_TRUE(p["adaptive"].GetBool());
     KRATOS_EXPECT_EQ(p["mesh_type"].GetString(), std::string{"dual"});
     KRATOS_EXPECT_FALSE(p["project_to_surface"].GetBool());

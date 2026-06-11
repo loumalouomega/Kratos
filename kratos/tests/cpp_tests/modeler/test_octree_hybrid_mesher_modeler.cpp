@@ -1144,14 +1144,14 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsMultipleGeometries, Kr
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformElementSizeProducesElements, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinedCellSizeProducesElements, KratosCoreFastSuite)
 {
-    // element_size > 0 should override refinement_depth via ElementSizeToDepth
+    // refined_cell_size > 0 should override refinement_depth via ElementSizeToDepth
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     ModelPart& out = model.CreateModelPart("Output");
 
-    // Box is [0,1]^3 so element_size=0.25 → depth≥2; should produce elements
+    // Box is [0,1]^3 so refined_cell_size=0.25 → depth≥2; should produce elements
     Parameters settings(R"({
         "input_model_part_name" : "Skin",
         "output_model_part_name": "Output",
@@ -1159,7 +1159,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformElementSizeProducesElements, 
             { "type": "OctreeHybridRefineInterfaceCells",
               "refinement_depth": 1, "adaptive": false },
             { "type": "OctreeHybridRefineUniform",
-              "refinement_depth": 1, "element_size": 0.25 }
+              "refinement_depth": 1, "refined_cell_size": 0.25 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
@@ -1171,9 +1171,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformElementSizeProducesElements, 
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsElementSizeProducesElements, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefinedCellSizeProducesElements, KratosCoreFastSuite)
 {
-    // element_size > 0 should override refinement_depth for interface refinement
+    // refined_cell_size > 0 should override refinement_depth for interface refinement
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     ModelPart& out = model.CreateModelPart("Output");
@@ -1186,7 +1186,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsElementSizeProducesEle
               "refinement_depth": 1, "adaptive": false },
             { "type": "OctreeHybridRefineInterfaceCells",
               "input_model_part_name": "Skin",
-              "refinement_depth": 1, "element_size": 0.25 }
+              "refinement_depth": 1, "refined_cell_size": 0.25 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",

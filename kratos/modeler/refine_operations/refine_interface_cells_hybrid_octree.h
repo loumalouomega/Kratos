@@ -64,8 +64,8 @@ namespace Kratos {
  * |--------------------------|--------|---------|-------------------------------------|
  * | `type`                   | string | `"OctreeHybridRefineInterfaceCells"` | Registry key. |
  * | `input_model_part_name`  | string | `""`    | Surface model part.  On first call, empty → falls back to the modeler's top-level `input_model_part_name`.  On subsequent calls, empty → reuse the already-extracted main triangle soup. |
- * | `refinement_depth`       | int    | `5`     | Build depth (first call) or maximum refinement depth for interface cells (subsequent calls).  Overridden by `element_size` > 0 on subsequent calls. |
- * | `element_size`           | double | `0.0`   | Desired maximum cell size (world-space) for subsequent calls.  When > 0, overrides `refinement_depth` via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
+ * | `refinement_depth`       | int    | `5`     | Build depth (first call) or maximum refinement depth for interface cells (subsequent calls).  Overridden by `refined_cell_size` > 0 on subsequent calls. |
+ * | `refined_cell_size`      | double | `0.0`   | Desired maximum cell size (world-space) for subsequent calls.  When > 0, overrides `refinement_depth` via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
  * | `adaptive`               | bool   | `true`  | First call only: adaptive subdivision near the surface; globally uniform when false. |
  * | `mesh_type`              | string | `"dual"` | First call only: `"dual"` (conforming all-hex) or `"primal"` (leaf-hex with hanging-node constraints). |
  * | `project_to_surface`     | bool   | `false` | First call only: project extracted dual mesh onto the iso-surface. |
@@ -123,7 +123,7 @@ public:
      *     "type"                  : "OctreeHybridRefineInterfaceCells",
      *     "input_model_part_name" : "",
      *     "refinement_depth"      : 5,
-     *     "element_size"          : 0.0,
+     *     "refined_cell_size"     : 0.0,
      *     "adaptive"              : true,
      *     "mesh_type"             : "dual",
      *     "project_to_surface"    : false,

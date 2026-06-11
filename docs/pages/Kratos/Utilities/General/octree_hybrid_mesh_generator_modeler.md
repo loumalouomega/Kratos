@@ -537,7 +537,7 @@ feature-specific resolution.
 | `type` | string | `"OctreeHybridRefineInterfaceCells"` | Registry lookup key. |
 | `input_model_part_name` | string | `""` | Surface ModelPart name. First call: empty → falls back to modeler's top-level `input_model_part_name`. Subsequent calls: empty → reuse main triangle soup. |
 | `refinement_depth` | int | `5` | Build depth (first call) or maximum refinement depth for interface cells (subsequent calls). |
-| `element_size` | double | `0.0` | Subsequent calls only: desired cell size (world-space). When > 0, overrides `refinement_depth` via `ElementSizeToDepth`. |
+| `refined_cell_size` | double | `0.0` | Subsequent calls only: desired cell size (world-space). When > 0, overrides `refinement_depth` via `ElementSizeToDepth`. |
 | `adaptive` | bool | `true` | First call only: `true` = adaptive near-surface refinement; `false` = uniform to `refinement_depth`. |
 | `mesh_type` | string | `"dual"` | First call only: `"dual"` = conforming all-hex dual mesh; `"primal"` = one hex per leaf with hanging-node records. |
 | `project_to_surface` | bool | `false` | First call only. Dual mesh: when `true`, the built mesh is projected onto the iso-surface. |

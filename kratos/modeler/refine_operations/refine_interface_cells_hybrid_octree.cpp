@@ -28,7 +28,7 @@ const Parameters OctreeHybridRefineInterfaceCells::GetDefaultParameters() const
         "type"                  : "OctreeHybridRefineInterfaceCells",
         "input_model_part_name" : "",
         "refinement_depth"      : 5,
-        "element_size"          : 0.0,
+        "refined_cell_size"     : 0.0,
         "adaptive"              : true,
         "mesh_type"             : "dual",
         "project_to_surface"    : false,
@@ -81,10 +81,10 @@ void OctreeHybridRefineInterfaceCells::Refine(
     }
 
     // Subsequent calls: selectively subdivide cells near the interface at a finer
-    // level.  element_size takes priority over refinement_depth when set (> 0).
-    const double element_size = RefineParameters["element_size"].GetDouble();
-    const std::size_t target_depth = (element_size > 0.0)
-        ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, element_size, false)
+    // level.  refined_cell_size takes priority over refinement_depth when set (> 0).
+    const double refined_cell_size = RefineParameters["refined_cell_size"].GetDouble();
+    const std::size_t target_depth = (refined_cell_size > 0.0)
+        ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, refined_cell_size, false)
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
 
     // Re-initialize the octree's internal grid if the requested depth exceeds the

@@ -190,9 +190,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyIncreasesLeafCo
     // Now apply uniform refinement to a deeper level
     OctreeHybridRefineUniform uniform_op;
     Parameters p(R"({
-        "type"             : "OctreeHybridRefineUniform",
-        "refinement_depth" : 4,
-        "element_size"     : 0.0
+        "type"              : "OctreeHybridRefineUniform",
+        "refinement_depth"  : 4,
+        "refined_cell_size" : 0.0
     })");
     // Reset mesh so Refine can run (mpOctree must exist)
     modeler.GetData().mCells.clear();
@@ -211,9 +211,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyNoOctreeThrows,
 
     OctreeHybridRefineUniform op;
     Parameters p(R"({
-        "type"             : "OctreeHybridRefineUniform",
-        "refinement_depth" : 3,
-        "element_size"     : 0.0
+        "type"              : "OctreeHybridRefineUniform",
+        "refinement_depth"  : 3,
+        "refined_cell_size" : 0.0
     })");
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(op.Refine(modeler, p), "");
 }
@@ -250,7 +250,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyIncrease
     Parameters p(R"({
         "type"                  : "OctreeHybridRefineInterfaceCells",
         "refinement_depth"      : 4,
-        "element_size"          : 0.0,
+        "refined_cell_size"     : 0.0,
         "input_model_part_name" : ""
     })");
     interface_op.Refine(modeler, p);
@@ -268,7 +268,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyNoSurfac
     Parameters p(R"({
         "type"                  : "OctreeHybridRefineInterfaceCells",
         "refinement_depth"      : 3,
-        "element_size"          : 0.0,
+        "refined_cell_size"     : 0.0,
         "input_model_part_name" : ""
     })");
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(op.Refine(modeler, p), "");
@@ -944,7 +944,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineOperationValidateParametersFillsDefa
     op.ValidateParameters(p);
 
     KRATOS_EXPECT_TRUE(p.Has("refinement_depth"));
-    KRATOS_EXPECT_TRUE(p.Has("element_size"));
+    KRATOS_EXPECT_TRUE(p.Has("refined_cell_size"));
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
 }
 
