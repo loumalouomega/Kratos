@@ -1461,6 +1461,131 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelMinGreaterThanMaxThrows, 
 }
 
 // ===========================================================================
+// OctreeHybridColorCellsWithInsideCenter colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorCellsWithInsideCenter.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorCellsWithInsideCenter.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterColorsInsideSubset, KratosCoreFastSuite)
+{
+    // The octree spans [0,1]^3 (driven by the bbox-pin nodes), while the skin
+    // surface is the box [0.3,0.7]^3. Cells whose centre lies inside that box
+    // must be a non-empty, strict subset of the full cell set.
+    Model m1, m2;
+    BuildClosedBoxSurface(m1.CreateModelPart("Skin"));
+    BuildClosedBoxSurface(m2.CreateModelPart("Skin"));
+
+    ModelPart& out_all = RunModeler(m1, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[],
+        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Output","color":1}],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& out_inside = RunModeler(m2, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsWithInsideCenter",
+            "model_part_name":"Skin","color":2,"input_entities":"geometries"
+        }],
+        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Output","color":2}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out_inside.NumberOfElements(), 0u);
+    KRATOS_EXPECT_LT(out_inside.NumberOfElements(), out_all.NumberOfElements());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterBoundingBoxRestrictsCandidates, KratosCoreFastSuite)
+{
+    // Restricting the bounding_box to a sub-octant of the inside region must
+    // color a non-empty subset of the cells colored without the restriction.
+    Model m1, m2;
+    BuildClosedBoxSurface(m1.CreateModelPart("Skin"));
+    BuildClosedBoxSurface(m2.CreateModelPart("Skin"));
+
+    ModelPart& out_inside = RunModeler(m1, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsWithInsideCenter",
+            "model_part_name":"Skin","color":2,"input_entities":"geometries"
+        }],
+        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Output","color":2}],
+        "model_part_operations":[]
+    })");
+
+    ModelPart& out_bbox = RunModeler(m2, R"({
+        "input_model_part_name":"Skin","output_model_part_name":"Output",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsWithInsideCenter",
+            "model_part_name":"Skin","color":2,"input_entities":"geometries",
+            "bounding_box":{"min_point":[0.3,0.3,0.3],"max_point":[0.5,0.5,0.5]}
+        }],
+        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Output","color":2}],
+        "model_part_operations":[]
+    })");
+
+    KRATOS_EXPECT_GT(out_bbox.NumberOfElements(), 0u);
+    KRATOS_EXPECT_LT(out_bbox.NumberOfElements(), out_inside.NumberOfElements());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterUnsupportedInputEntitiesThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsWithInsideCenter",
+            "model_part_name":"Skin","color":2,"input_entities":"invalid"
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+    OctreeHybridMeshGeneratorModeler m(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterModelPartNotFoundThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsWithInsideCenter",
+            "model_part_name":"DoesNotExist","color":2,"input_entities":"geometries"
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+    OctreeHybridMeshGeneratorModeler m(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
+}
+
+// ===========================================================================
 // GenerateHybridOctreeTetrahedraElementsWithCellColor — registry and generation tests
 // ===========================================================================
 
