@@ -1327,7 +1327,6 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraCountIsHexTimes6,
 {
     const std::string common_settings = R"({
         "input_model_part_name"  : "Skin",
-        "output_model_part_name" : "Output",
         "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
@@ -1391,7 +1390,6 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraNodeSubsetFromHex
 {
     const std::string common_settings_str = R"({
         "input_model_part_name"  : "Skin",
-        "output_model_part_name" : "Output",
         "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
@@ -1479,7 +1477,6 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTriangleBCsCountIsTwic
 {
     const std::string common_str = R"({
         "input_model_part_name"  : "Skin",
-        "output_model_part_name" : "Output",
         "refine_operations_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
