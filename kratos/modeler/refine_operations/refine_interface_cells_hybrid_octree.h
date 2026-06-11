@@ -44,11 +44,11 @@ namespace Kratos {
  *
  * When `"input_model_part_name"` is empty on a subsequent call, the triangle soup already
  * stored in `OctreeHybridMesherData::mTriangles` (the main input surface) is reused.
- * Multiple entries may be chained in `refine_operations_list`, each targeting a
+ * Multiple entries may be chained in `refinement_settings_list`, each targeting a
  * **different model part**, to achieve feature-specific resolution:
  *
  * @code{.json}
- * "refine_operations_list": [
+ * "refinement_settings_list": [
  *   { "type": "OctreeHybridRefineInterfaceCells",
  *     "refinement_depth": 3, "adaptive": true, "mesh_type": "dual" },
  *   { "type": "OctreeHybridRefineInterfaceCells",

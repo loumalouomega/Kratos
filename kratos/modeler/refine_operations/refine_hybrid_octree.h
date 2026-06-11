@@ -56,7 +56,7 @@ class OctreeHybridMeshGeneratorModeler;
  * ```
  * BuildOctreeAndExtract():
  *   1. BuildFromSurfaceMesh()          ← initial octree build
- *   2. Dispatch refine_operations_list ← this base class is invoked here
+ *   2. Dispatch refinement_settings_list ← this base class is invoked here
  *   3. StrongConstrain2To1()
  *   4. ExtractDualHexMesh / ExtractPrimalHexMesh
  * ```
@@ -98,7 +98,7 @@ public:
     /**
      * @brief Performs the refinement on the modeler's octree.
      * @details This is the main do-work entry point called by the modeler's
-     * `refine_operations_list` dispatch.  It is `const` because operations are
+     * `refinement_settings_list` dispatch.  It is `const` because operations are
      * retrieved as shared stateless prototypes; all required context is passed via
      * @p rModeler and @p RefineParameters.
      *

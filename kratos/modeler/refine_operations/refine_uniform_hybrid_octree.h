@@ -46,7 +46,7 @@ namespace Kratos {
  *
  * ### Example JSON usage
  * @code{.json}
- * "refine_operations_list": [
+ * "refinement_settings_list": [
  *   { "type": "OctreeHybridRefineUniform", "refinement_depth": 4 }
  * ]
  * @endcode
