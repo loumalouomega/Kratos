@@ -53,9 +53,8 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     KRATOS_ERROR_IF(!r_data.IsExtracted())
         << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: hex mesh not yet extracted." << std::endl;
 
-    // Create the output ModelPart and set its start IDs for nodes, conditions, and
+    // Create the output ModelPart
     ModelPart& r_mp = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
-    rModeler.SetStartIds(r_mp);
     rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
     rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
     rModeler.OverrideStartConstraintId(GenerationParameters["initial_constraint_id"].GetInt());

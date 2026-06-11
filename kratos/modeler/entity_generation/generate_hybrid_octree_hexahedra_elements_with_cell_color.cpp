@@ -52,7 +52,6 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
     // Validate and assign defaults to the parameters.
     auto& r_data = rModeler.GetData();
     ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
-    rModeler.SetStartIds(r_model_part);
     rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
     rModeler.OverrideStartElementId(GenerationParameters["initial_element_id"].GetInt());
     rModeler.OverrideStartConstraintId(GenerationParameters["initial_constraint_id"].GetInt());

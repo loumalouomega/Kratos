@@ -49,7 +49,6 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
 
     ModelPart& r_mp = rModeler.CreateAndGetModelPart(
         GenerationParameters["model_part_name"].GetString());
-    rModeler.SetStartIds(r_mp);
     rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
     rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
 

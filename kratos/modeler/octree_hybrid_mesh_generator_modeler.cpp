@@ -146,6 +146,18 @@ Node::Pointer OctreeHybridMeshGeneratorModeler::GenerateOrRetrieveNode(
 /***********************************************************************************/
 /***********************************************************************************/
 
+void OctreeHybridMeshGeneratorModeler::Initialize()
+{
+    // Get the echo level
+    mEchoLevel = mParameters["echo_level"].GetInt();
+
+    // Read the model parts
+    ReadModelParts();
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 void OctreeHybridMeshGeneratorModeler::SetupModelPart()
 {
     // Initialize the model parts
@@ -207,8 +219,9 @@ void OctreeHybridMeshGeneratorModeler::ReadModelParts()
 
 void OctreeHybridMeshGeneratorModeler::ExecuteRefinementOperations()
 {
-    Timer::Start("EntityGeneration");
+    Timer::Start("Refinement");
 
+    // Retrieve the shared data struct that refinement operations read from and write to.  It holds the octree pointer, extracted node/cell arrays, per-cell colours, hanging-node constraint descriptors, and the node-pointer cache.
     Internals::OctreeHybridMesherData& r_data = *mpData;
 
     // Dispatch every entry in refine_operations_list.
@@ -218,7 +231,7 @@ void OctreeHybridMeshGeneratorModeler::ExecuteRefinementOperations()
     Dispatch<OctreeHybridRefineOperation>(
         "OctreeHybridRefineOperation", mParameters["refine_operations_list"],
         [&](const OctreeHybridRefineOperation& rProto, Parameters rParams) {
-            rProto.Refine(*this, rParams); });
+            rProto.Refine(*this, rParams); }, OperationType::Refine);
 
     KRATOS_ERROR_IF_NOT(r_data.mpOctree)
         << "OctreeHybridMeshGeneratorModeler: no octree was built. "
@@ -228,31 +241,29 @@ void OctreeHybridMeshGeneratorModeler::ExecuteRefinementOperations()
     // 2:1 balancing + mesh extraction.
     r_data.mpOctree->StrongConstrain2To1();
 
+    // If we consider a dual mesh, the elements are defined by the octree nodes.  If we consider a primal mesh, the elements are defined by the octree cells and the hanging nodes are stored as constraints.
     if (r_data.mMeshType == "dual") {
-        OctreeHybridMeshUtility::ExtractDualHexMesh(
-            *r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+        // Extract the dual mesh, which is fully conforming with transition templates and no hanging nodes.  Projection settings are fixed at octree build time and must not be changed by subsequent refinement entries in the list.
+        OctreeHybridMeshUtility::ExtractDualHexMesh(*r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
 
+        // If projection to surface is on and we have a triangle soup, remove outside elements, clear the buffer zone, and project to the surface.
         if (r_data.mProjectToSurface && !r_data.mTriangles.empty()) {
-            OctreeHybridMeshUtility::RemoveOutsideElement(
-                r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
-            OctreeHybridMeshUtility::ClearBufferZone(
-                r_data.mNodes, r_data.mCells, r_data.mCellLevel);
-            OctreeHybridMeshUtility::ProjectToIsoSurface(
-                r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel,
-                r_data.mProjectionIterations, r_data.mProjectionSmoothing);
+            OctreeHybridMeshUtility::RemoveOutsideElement(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+            OctreeHybridMeshUtility::ClearBufferZone(r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+            OctreeHybridMeshUtility::ProjectToIsoSurface(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mProjectionIterations, r_data.mProjectionSmoothing);
             r_data.mProjected = true;
         }
-    } else if (r_data.mMeshType == "primal") {
+    } else if (r_data.mMeshType == "primal") { // If we consider a primal mesh, the elements are defined by the octree cells and the hanging nodes are stored as constraints.
         OctreeHybridMeshUtility::ExtractPrimalHexMesh(
             *r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mHanging);
-    } else {
-        KRATOS_ERROR << "OctreeHybridMeshGeneratorModeler: unknown mesh_type '" << r_data.mMeshType
-                     << "'. Use 'dual' or 'primal'." << std::endl;
+    } else { // Unknown mesh type.
+        KRATOS_ERROR << "OctreeHybridMeshGeneratorModeler: unknown mesh_type '" << r_data.mMeshType << "'. Use 'dual' or 'primal'." << std::endl;
     }
 
+    // Initialise the node pointer cache to null.  This allows refinement operations to call GenerateOrRetrieveNode in any order without checking if the octree has been extracted yet.
     r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
     
-    Timer::Stop("EntityGeneration");
+    Timer::Stop("Refinement");
 }
 
 /***********************************************************************************/
@@ -262,10 +273,11 @@ void OctreeHybridMeshGeneratorModeler::ExecuteColoringOperations()
 {
     Timer::Start("MeshColoring");
 
+    // Dispatch every entry in coloring_settings_list.
     Dispatch<OctreeHybridMesherColoring>(
         "OctreeHybridMesherColoring", mParameters["coloring_settings_list"],
         [&](const OctreeHybridMesherColoring& rProto, Parameters rParams) {
-            rProto.Apply(*this, rParams); });
+            rProto.Apply(*this, rParams); }, OperationType::Coloring);
 
     Timer::Stop("MeshColoring");
 }
@@ -277,10 +289,11 @@ void OctreeHybridMeshGeneratorModeler::ExecuteEntityGenerationOperations()
 {
     Timer::Start("EntityGeneration");
 
+    // Dispatch every entry in entities_generator_list.
     Dispatch<OctreeHybridMesherEntityGeneration>(
         "OctreeHybridMesherEntityGeneration", mParameters["entities_generator_list"],
         [&](const OctreeHybridMesherEntityGeneration& rProto, Parameters rParams) {
-            rProto.Generate(*this, rParams); });
+            rProto.Generate(*this, rParams); }, OperationType::GenerateEntities);
 
     Timer::Stop("EntityGeneration");
 }
@@ -292,10 +305,11 @@ void OctreeHybridMeshGeneratorModeler::ExecuteModelPartOperations()
 {
     Timer::Start("ApplyOperations");
 
+    // Dispatch every entry in model_part_operations_list.
     Dispatch<OctreeHybridMesherOperation>(
         "OctreeHybridMesherOperation", mParameters["model_part_operations"],
         [&](const OctreeHybridMesherOperation& rProto, Parameters rParams) {
-            rProto.Execute(*this, rParams); });
+            rProto.Execute(*this, rParams); }, OperationType::ModelPartOperation);
 
     Timer::Stop("ApplyOperations");
 }
@@ -303,13 +317,18 @@ void OctreeHybridMeshGeneratorModeler::ExecuteModelPartOperations()
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMeshGeneratorModeler::Initialize()
+std::string OctreeHybridMeshGeneratorModeler::GeneratePercentageBar(const double Percentage)
 {
-    // Get the echo level
-    mEchoLevel = mParameters["echo_level"].GetInt();
-
-    // Read the model parts
-    ReadModelParts();
+    const int bar_width = 50;
+    int pos = static_cast<int>(bar_width * Percentage);
+    std::string bar = "[";
+    for (int i = 0; i < bar_width; ++i) {
+        if (i < pos) bar += "=";
+        else if (i == pos) bar += ">";
+        else bar += " ";
+    }
+    bar += "] " + std::to_string(static_cast<int>(Percentage * 100.0)) + "%";
+    return bar;
 }
 
 } // namespace Kratos

@@ -20,6 +20,8 @@
 #include "containers/model.h"
 #include "includes/define_registry.h"
 #include "modeler/modeler.h"
+#include "utilities/parallel_utilities.h"
+#include "utilities/reduction_utilities.h"
 #include "utilities/string_utilities.h"
 
 namespace Kratos 
@@ -130,6 +132,16 @@ public:
     /// Add to the Kratos registry
     KRATOS_REGISTRY_ADD_PROTOTYPE("Modelers.KratosMultiphysics", Modeler, OctreeHybridMeshGeneratorModeler)
     KRATOS_REGISTRY_ADD_PROTOTYPE("Modelers.All", Modeler, OctreeHybridMeshGeneratorModeler)
+
+    /// Define operation enum
+    enum class OperationType
+    {
+        UNDEFINED,
+        Refine,
+        Coloring,
+        GenerateEntities,
+        ModelPartOperation
+    };
 
     ///@}
     ///@name Life Cycle
@@ -324,7 +336,12 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first node ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartNodeId(IndexType Id) { if (Id > 0) mStartNodeId = Id; }
+    void OverrideStartNodeId(IndexType Id) 
+    { 
+        if (Id > 0) {
+            mStartNodeId = Id;
+        }
+    }
 
     /**
      * @brief Overrides the running element ID counter, if @p Id is non-zero.
@@ -333,7 +350,12 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first element ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartElementId(IndexType Id) { if (Id > 0) mStartElementId = Id; }
+    void OverrideStartElementId(IndexType Id) 
+    { 
+        if (Id > 0) {
+            mStartElementId = Id;
+        }
+    }
 
     /**
      * @brief Overrides the running condition ID counter, if @p Id is non-zero.
@@ -342,7 +364,12 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first condition ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartConditionId(IndexType Id) { if (Id > 0) mStartConditionId = Id; }
+    void OverrideStartConditionId(IndexType Id) 
+    { 
+        if (Id > 0) {
+            mStartConditionId = Id;
+        }
+    }
 
     /**
      * @brief Overrides the running master-slave constraint ID counter, if @p Id is non-zero.
@@ -351,38 +378,61 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first constraint ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartConstraintId(IndexType Id) { if (Id > 0) mStartConstraintId = Id; }
+    void OverrideStartConstraintId(IndexType Id) 
+    { 
+        if (Id > 0) {
+            mStartConstraintId = Id;
+        }
+    }
 
     /**
      * @brief Returns and advances the next unique element ID.
      * @return The next available element ID (post-incremented).
      */
-    IndexType NextElementId()    { return mStartElementId++; }
+    IndexType NextElementId()
+    { 
+        return mStartElementId++; 
+    }
 
     /**
      * @brief Returns and advances the next unique condition ID.
      * @return The next available condition ID (post-incremented).
      */
-    IndexType NextConditionId()  { return mStartConditionId++; }
+    IndexType NextConditionId()  
+    { 
+        return mStartConditionId++; 
+    }
 
     /**
      * @brief Returns and advances the next unique master-slave constraint ID.
      * @return The next available constraint ID (post-incremented).
      */
-    IndexType NextConstraintId() { return mStartConstraintId++; }
+    IndexType NextConstraintId() 
+    { 
+        return mStartConstraintId++; 
+    }
 
     ///@}
     ///@name Input and output
     ///@{
 
     /// @return The string `"OctreeHybridMeshGeneratorModeler"`.
-    std::string Info() const override { return "OctreeHybridMeshGeneratorModeler"; }
+    std::string Info() const override 
+    { 
+        return "OctreeHybridMeshGeneratorModeler"; 
+    }
 
     /// Prints `Info()` to @p rOStream.
-    void PrintInfo(std::ostream& rOStream) const override { rOStream << Info(); }
+    void PrintInfo(std::ostream& rOStream) const override 
+    { 
+        rOStream << Info(); 
+    }
 
     /// No data to print; provided to satisfy the `Modeler` interface.
-    void PrintData(std::ostream& rOStream) const override {}
+    void PrintData(std::ostream& rOStream) const override 
+    {
+        rOStream << "No data to print.";
+    }
 
     ///@}
 private:
@@ -394,6 +444,9 @@ private:
 
     /// The input model part
     ModelPart* mpInputModelPart = nullptr;
+
+    /// The names of the root model parts to be used in the output (for some post-process operations)
+    std::unordered_set<std::string> mRootModelPartsNames; 
 
     /// PIMPL handle to the shared mesh data.  Defined out-of-line because
     /// `OctreeHybridMesherData` includes `octree_hybrid_mesh_utility.h` which is heavy.
@@ -450,6 +503,55 @@ private:
     void ExecuteModelPartOperations();
 
     /**
+     * @brief Generates a percentage bar string based on the given percentage value.
+     * @param Percentage The percentage value for which the bar string is to be generated.
+     * @return A string representing the percentage bar.
+     */
+    std::string GeneratePercentageBar(const double Percentage);
+
+    /**
+     * @brief Generates a start message string based on the given operation type.
+     * @param Operation The type of operation for which the start message is to be generated.
+     * @return A string representing the start message for the specified operation.
+     */
+    std::string GenerateStartMessage(const OperationType Operation)
+    {
+        switch (Operation) {
+            case OperationType::Refine:
+                return "Refinement operation";
+            case OperationType::Coloring:
+                return "Coloring operation";
+            case OperationType::GenerateEntities:
+                return "Entity generation operation";
+            case OperationType::ModelPartOperation:
+                return "Model part operation";
+            default:
+                return "Operation";
+        }
+    }
+
+    /**
+     * @brief Generates an end message string based on the given operation type.
+     * @param Operation The type of operation for which the end message is to be generated.
+     * @return A string representing the end message for the specified operation.
+     */
+    std::string GenerateEndMessage(const OperationType Operation)
+    {
+        switch (Operation) {
+            case OperationType::Refine:
+                return "Refinement operation";
+            case OperationType::Coloring:
+                return "Coloring operation";
+            case OperationType::GenerateEntities:
+                return "Entity generation operation";
+            case OperationType::ModelPartOperation:
+                return "Model part operation";
+            default:
+                return "Operation";
+        }
+    }
+
+    /**
      * @brief Resolves a stage-list from JSON and invokes @p Invoke on each prototype.
      * @details For each entry in @p StageList:
      * 1. Reads `"type"` and, if it is not already a four-segment dot-separated Registry
@@ -467,19 +569,96 @@ private:
      * @param Invoke         Lambda that calls the component's do-work virtual.
      */
     template<class TBase, class TInvoke>
-    void Dispatch(const std::string& rRegistryRoot, Parameters StageList, TInvoke&& Invoke)
+    void Dispatch(
+        const std::string& rRegistryRoot,
+        Parameters StageList,
+        TInvoke&& Invoke,
+        const OperationType Operation = OperationType::UNDEFINED
+        )
     {
+        // Define the messages to be printed at the start and end of each operation, depending on the echo level
+        const std::string start_message = GenerateStartMessage(Operation);
+        const std::string end_message = GenerateEndMessage(Operation);
+
+        // Iterate over the operations parameters
+        const unsigned int number_of_operations = StageList.size();
+        unsigned int operation_counter = 0;
         for (Parameters stage_params : StageList) {
+            // Resolve the component from the registry
             std::string type = stage_params["type"].GetString();
             const auto segments = StringUtilities::SplitStringByDelimiter(type, '.');
-            const std::string full_path = (segments.size() == 4)
-                ? type
-                : rRegistryRoot + ".All." + type + ".Prototype";
-            KRATOS_ERROR_IF_NOT(Registry::HasValue(full_path))
-                << "The component '" << full_path << "' is not registered." << std::endl;
+            const std::string full_path = (segments.size() == 4) ? type : rRegistryRoot + ".All." + type + ".Prototype";
+            KRATOS_ERROR_IF_NOT(Registry::HasValue(full_path)) << "The component '" << full_path << "' is not registered." << std::endl;
             const TBase& r_prototype = Registry::GetValue<TBase>(full_path);
+
+            // Get the default parameters of the component (for potential use in specific pre-processing steps)
+            Parameters default_parameters = r_prototype.GetDefaultParameters();
+
+            // Defining the model part name if not defined and the component supports it
+            if (default_parameters.Has("model_part_name") && !stage_params.Has("model_part_name")) {
+                stage_params.AddString("model_part_name", GetInputModelPartName());
+            }
+
+            // Print the operation parameters
+            ++operation_counter;
+            KRATOS_INFO_IF(Info(), mEchoLevel > 0) << start_message << ", number: " << operation_counter << " with the following parameters:\n" << stage_params << "\n" << GeneratePercentageBar(static_cast<double>(operation_counter) / static_cast<double>(number_of_operations)) << std::endl;
+
+            // Validate the parameters in-place against the component's defaults
             r_prototype.ValidateParameters(stage_params);
+
+            // Specific settings or pre-processing steps depending on the operation type
+            if (Operation == OperationType::Coloring) {
+                if (default_parameters.Has("default_outside_color")) {
+                    if (!stage_params.Has("default_outside_color")) {
+                        stage_params.AddValue("default_outside_color", mParameters["default_outside_color"]);
+                    } else {
+                        stage_params["default_outside_color"].SetInt(mParameters["default_outside_color"].GetInt());
+                    }
+                }
+            } else if (Operation == OperationType::GenerateEntities) {
+                // Get the model part and its root, which holds the global id space
+                auto& r_model_part = CreateAndGetModelPart(stage_params["model_part_name"].GetString());
+                auto& r_root_model_part = r_model_part.GetRootModelPart();
+                mRootModelPartsNames.insert(r_root_model_part.Name());
+
+                // Compute the next available id (max existing id + 1, defaulting to 1) for
+                // each entity type and impose it on the stage so the generator simply
+                // takes the ids the modeler hands it instead of computing its own.
+                if (default_parameters.Has("initial_node_id")) {
+                    const std::size_t next_node_id = 1 + block_for_each<MaxReduction<std::size_t>>(
+                        r_root_model_part.Nodes(), [](Node& rNode) { return rNode.Id(); });
+                    stage_params["initial_node_id"].SetInt(next_node_id);
+                }
+                if (default_parameters.Has("initial_element_id")) {
+                    const std::size_t next_element_id = 1 + block_for_each<MaxReduction<std::size_t>>(
+                        r_root_model_part.Elements(), [](Element& rElement) { return rElement.Id(); });
+                    stage_params["initial_element_id"].SetInt(next_element_id);
+                }
+                if (default_parameters.Has("initial_condition_id")) {
+                    const std::size_t next_condition_id = 1 + block_for_each<MaxReduction<std::size_t>>(
+                        r_root_model_part.Conditions(), [](Condition& rCondition) { return rCondition.Id(); });
+                    stage_params["initial_condition_id"].SetInt(next_condition_id);
+                }
+                if (default_parameters.Has("initial_constraint_id")) {
+                    const std::size_t next_constraint_id = 1 + block_for_each<MaxReduction<std::size_t>>(
+                        r_root_model_part.MasterSlaveConstraints(), [](MasterSlaveConstraint& rConstraint) { return rConstraint.Id(); });
+                    stage_params["initial_constraint_id"].SetInt(next_constraint_id);
+                }
+            }
+
+            // Ensure consistent echo level
+            if (default_parameters.Has("echo_level")) {
+                if (!stage_params.Has("echo_level")) {
+                    stage_params.AddValue("echo_level", default_parameters["echo_level"]);
+                }
+                stage_params["echo_level"].SetInt(mEchoLevel);
+            }
+
+            // Invoke the component's do-work virtual
             Invoke(r_prototype, stage_params);
+
+            // Print the end of the operation
+            KRATOS_INFO_IF(Info(), mEchoLevel > 0) << end_message << " " << operation_counter << "/" << number_of_operations << " finished" << std::endl;
         }
     }
 
