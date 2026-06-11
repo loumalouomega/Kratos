@@ -308,6 +308,8 @@ Registered entity-generation components:
 | `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` | `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` | Create quad conditions on the outer surface; optionally generates a `"constraint_type"` constraint for primal mesh hanging nodes when `"constraint_type"` and `"constrained_variables"` are non-empty |
 | `GenerateHybridOctreeTetrahedraElementsWithCellColor` | `GenerateHybridOctreeTetrahedraElementsWithCellColor` | Decompose each colour-matched hex into 6 tetrahedral elements using the Freudenthal–Kuhn scheme (BCC lattice, §3.3.3) |
 | `GenerateHybridOctreeTriangularConditionsWithFaceColor` | `GenerateHybridOctreeTriangularConditionsWithFaceColor` | Create triangular conditions on the outer surface by splitting each boundary quad along the `(n₀, n₂)` diagonal (2 triangles per quad) |
+| `GenerateOctreeHybridConstraints` | `GenerateOctreeHybridConstraints` | Create one master-slave constraint per (master node x constrained variable) for every primal-mesh 2:1 transition hanging node, optionally filtered by `"color"` and/or `"face_color"` |
+| `GenerateOctreeHybridConstraintsBetweenColors` | `GenerateOctreeHybridConstraintsBetweenColors` | Tie geometrically coincident, non-conforming nodes between two colour blocks (`"color_block_a"` / `"color_block_b"`) with one master-slave constraint per (node pair x constrained variable) |
 
 ---
 
@@ -338,7 +340,7 @@ it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetDat
 | `mCells` | `vector<array<int,8>>` | `BuildOctreeAndExtract` | All stages | Hex connectivity (8 node indices per cell, Hexahedra3D8 ordering). |
 | `mCellLevel` | `vector<int>` | `BuildOctreeAndExtract` | Entity generation, quality report | Octree refinement level per cell (-1 for transition-template hexes). |
 | `mCellColor` | `vector<int>` | Coloring stages | Entity generation | Per-cell inside(1)/outside(0) label. Empty until coloring runs. |
-| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `GenerateHybridOctreeHexahedraElementsWithCellColor` (when `"constraint_type"` and `"constrained_variables"` are non-empty) | Hanging-node interpolation records (primal mesh only). |
+| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `GenerateHybridOctreeHexahedraElementsWithCellColor` (when `"constraint_type"` and `"constrained_variables"` are non-empty), `GenerateOctreeHybridConstraints` | Hanging-node interpolation records (primal mesh only). |
 | `mNodePtrs` | `vector<Node::Pointer>` | Entity generation (lazy) | Entity generation | De-duplication cache: mesh-node index -> ModelPart Node. Null until the node is first needed. |
 | `mProjected` | `bool` | `BuildOctreeAndExtract` | `OctreeHybridClassifyCellsInsideOutside` | True when surface projection has been applied; triggers the classification short-circuit. |
 
@@ -979,6 +981,148 @@ is therefore **conforming** at the boundary.
     "color"            : 1,
     "properties_id"    : 1,
     "generated_entity" : "SurfaceCondition3D3N"
+}
+```
+
+---
+
+#### `GenerateOctreeHybridConstraints`
+
+Standalone entity-generation stage that creates the **2:1 transition hanging-node**
+master-slave constraints of the **primal** mesh. It extracts the hanging-node-constraint
+logic that the per-entity generators (e.g.
+`GenerateHybridOctreeHexahedraElementsWithCellColor`) can optionally run inline, into its
+own pipeline entry, so that constraints can be generated independently of (and after) the
+element/condition generation stages.
+
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridConstraints.Prototype`
+
+**Class:** `Kratos::GenerateOctreeHybridConstraints`
+
+**Header:** `kratos/modeler/entity_generation/generate_octree_hybrid_constraints.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"GenerateOctreeHybridConstraints"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
+| `color` | int | `-1` | Restrict to hanging slaves that are corners of cells with this colour (`-1` = no filter). |
+| `face_color` | int | `-1` | Restrict to hanging slaves on the boundary of the cells with this colour, per `OctreeHybridMeshUtility::ExtractBoundaryFaces` (`-1` = no filter). |
+| `generated_entity` | string | `"LinearMasterSlaveConstraint"` | Registered MasterSlaveConstraint type name. |
+| `constrained_variables` | string array | `["TEMPERATURE"]` | Scalar DOF variable names to constrain at 2:1 transitions. |
+| `initial_node_id` | int | `0` | Explicit first node ID; `0` = auto. |
+| `initial_constraint_id` | int | `0` | Explicit first constraint ID; `0` = auto. |
+| `echo_level` | int | `0` | Verbosity of `KRATOS_INFO` logging (`0` = silent). |
+
+**Behaviour:**
+
+1. For every record `hc` in `mHanging` (populated only for the primal mesh):
+   - If `color != -1` and `mCellColor` is non-empty, `hc.SlaveNode` must be a corner of
+     at least one cell coloured `color`; otherwise the record is skipped.
+   - If `face_color != -1`, `hc.SlaveNode` must additionally lie on a boundary face
+     (per `ExtractBoundaryFaces`) of the cells coloured `face_color` (or of all cells if
+     `mCellColor` is empty); otherwise the record is skipped.
+2. `hc.SlaveNode` and every entry of `hc.MasterNodes` must already have a non-null
+   `mNodePtrs` entry (i.e. created by a prior entity-generation stage); otherwise the
+   record is skipped silently.
+3. For each variable in `constrained_variables` and each master `m`, registers the DOF
+   on both the slave and master `m` nodes (`Node::AddDof`, no-op if already present) and
+   creates one `generated_entity` constraint via `ModelPart::CreateNewMasterSlaveConstraint`
+   with master `m` as master, the slave node as slave, weight `hc.Weights[m]` and
+   constant `0.0`.
+4. If `mHanging` is empty (dual mesh, or no 2:1 transitions) or `constrained_variables`
+   is empty, no constraints are generated.
+
+**Example JSON:**
+
+```json
+{
+    "type"                  : "GenerateOctreeHybridConstraints",
+    "model_part_name"       : "StructureDomain",
+    "color"                 : 1,
+    "face_color"            : -1,
+    "generated_entity"      : "LinearMasterSlaveConstraint",
+    "constrained_variables" : ["TEMPERATURE"]
+}
+```
+
+---
+
+#### `GenerateOctreeHybridConstraintsBetweenColors`
+
+Entity-generation stage that ties together two **non-conforming** colour blocks of the
+hybrid octree mesh through master-slave constraints.
+
+`GenerateOrRetrieveNode` de-duplicates nodes through the shared `mNodePtrs` map keyed by
+mesh-node index, so two cells of different colours that share a mesh-node index already
+share the same `Node` — there is nothing to tie in that (conforming) case. This stage
+instead targets pairs of mesh-node indices that belong to different colour blocks
+(`color_block_a` / `color_block_b`), have **different** mesh-node indices, but are
+**geometrically coincident** (same `mNodes` coordinates within a fixed tolerance). For
+every such pair, one `generated_entity` constraint per `constrained_variables` entry is
+created, with the `color_block_a` node as master and the `color_block_b` node as slave
+(weight `1.0`, constant `0.0`, i.e. `u_slave = u_master`).
+
+Mesh-node indices shared by both blocks (the conforming case) and indices belonging to
+only one of the two blocks are ignored — they produce zero constraints. With the current
+dual/primal extraction (which always shares mesh-node indices at conforming interfaces),
+this stage is a no-op safeguard intended for future non-conforming meshes.
+
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridConstraintsBetweenColors.Prototype`
+
+**Class:** `Kratos::GenerateOctreeHybridConstraintsBetweenColors`
+
+**Header:** `kratos/modeler/entity_generation/generate_octree_hybrid_constraints_between_colors.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"GenerateOctreeHybridConstraintsBetweenColors"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
+| `color` | int | `-1` | Restrict matching to nodes that are also corners of cells with this colour (`-1` = no filter). |
+| `color_block_a` | int | `-1` | Colour of the master-side block. |
+| `color_block_b` | int | `-1` | Colour of the slave-side block. |
+| `generated_entity` | string | `""` | Registered MasterSlaveConstraint type name (**required**, no default). |
+| `constrained_variables` | string array | `[]` | Scalar DOF variable names to constrain across the interface. |
+| `initial_node_id` | int | `0` | Explicit first node ID; `0` = auto. |
+| `initial_constraint_id` | int | `0` | Explicit first constraint ID; `0` = auto. |
+| `echo_level` | int | `0` | Verbosity of `KRATOS_INFO` logging (`0` = silent). |
+
+**Behaviour:**
+
+1. **Membership sets** — for every cell `c`, the indices of its 8 corner nodes are added
+   to `nodes_a` if `mCellColor[c] == color_block_a`, and to `nodes_b` if
+   `mCellColor[c] == color_block_b`. If `color != -1`, a third set `nodes_region`
+   collects corners of cells coloured `color`.
+2. **Candidate filtering** — `nodes_a_only = nodes_a \ nodes_b` and
+   `nodes_b_only = nodes_b \ nodes_a` (indices in both sets are already shared `Node`s
+   and are dropped). When `color != -1`, both sets are further intersected with
+   `nodes_region`.
+3. **Geometric matching** — `nodes_a_only` and `nodes_b_only` indices are bucketed by
+   their (rounded) `mNodes` coordinates. For every coincident pair `(ia, ib)`, the
+   corresponding nodes are retrieved (or created) via `GenerateOrRetrieveNode`.
+4. **Constraint creation** — for each variable in `constrained_variables`, registers the
+   DOF on both nodes (`Node::AddDof`) and creates one `generated_entity` constraint with
+   `ia`'s node as master, `ib`'s node as slave, weight `1.0` and constant `0.0`.
+5. **Finalisation** — any newly created nodes are bulk-inserted into the target
+   ModelPart via `ModelPartUtils::AddNodesFromOrderedContainer`.
+
+If `mCellColor` is empty (no colouring stage has run) or `constrained_variables` is
+empty, no constraints are generated. `generated_entity` has no default and **must** be
+set explicitly; an empty value raises an error.
+
+**Example JSON:**
+
+```json
+{
+    "type"                  : "GenerateOctreeHybridConstraintsBetweenColors",
+    "model_part_name"       : "Interface",
+    "color_block_a"         : 1,
+    "color_block_b"         : 2,
+    "generated_entity"      : "LinearMasterSlaveConstraint",
+    "constrained_variables" : ["TEMPERATURE"]
 }
 ```
 
