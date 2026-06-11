@@ -305,6 +305,122 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerUnknownOperationThrows
 }
 
 // ===========================================================================
+// OctreeHybridMeshGeneratorModeler — bounding box override resolution
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerNoBoundingBoxOverride, KratosCoreFastSuite)
+{
+    Model model;
+    ModelPart& r_skin = model.CreateModelPart("Skin");
+    r_skin.CreateNewNode(1, 0.2, 0.2, 0.2);
+    r_skin.CreateNewNode(2, 0.8, 0.8, 0.8);
+
+    Parameters settings(R"({
+        "input_model_part_name" : "Skin"
+    })");
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.Initialize();
+
+    KRATOS_EXPECT_FALSE(modeler.HasOctreeBoundingBox());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerExplicitBoundingBoxResolved, KratosCoreFastSuite)
+{
+    Model model;
+    ModelPart& r_skin = model.CreateModelPart("Skin");
+    r_skin.CreateNewNode(1, 0.2, 0.2, 0.2);
+    r_skin.CreateNewNode(2, 0.8, 0.8, 0.8);
+
+    Parameters settings(R"({
+        "input_model_part_name" : "Skin",
+        "bounding_box" : {
+            "min_point" : [0.0, 0.0, 0.0],
+            "max_point" : [1.0, 1.0, 1.0]
+        }
+    })");
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.Initialize();
+
+    KRATOS_EXPECT_TRUE(modeler.HasOctreeBoundingBox());
+    const auto& r_min = modeler.GetOctreeBoundingBox().GetMinPoint();
+    const auto& r_max = modeler.GetOctreeBoundingBox().GetMaxPoint();
+    for (unsigned int i = 0; i < 3; ++i) {
+        KRATOS_EXPECT_NEAR(r_min[i], 0.0, 1e-12);
+        KRATOS_EXPECT_NEAR(r_max[i], 1.0, 1e-12);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerBoundingBoxModelPartResolved, KratosCoreFastSuite)
+{
+    Model model;
+    ModelPart& r_skin = model.CreateModelPart("Skin");
+    r_skin.CreateNewNode(1, 0.2, 0.2, 0.2);
+    r_skin.CreateNewNode(2, 0.8, 0.8, 0.8);
+
+    ModelPart& r_bbox = model.CreateModelPart("BBox");
+    r_bbox.CreateNewNode(1, 0.0, 0.0, 0.0);
+    r_bbox.CreateNewNode(2, 1.0, 1.0, 1.0);
+
+    Parameters settings(R"({
+        "input_model_part_name"   : "Skin",
+        "bounding_box_model_part" : "BBox"
+    })");
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.Initialize();
+
+    KRATOS_EXPECT_TRUE(modeler.HasOctreeBoundingBox());
+    const auto& r_min = modeler.GetOctreeBoundingBox().GetMinPoint();
+    const auto& r_max = modeler.GetOctreeBoundingBox().GetMaxPoint();
+    for (unsigned int i = 0; i < 3; ++i) {
+        KRATOS_EXPECT_NEAR(r_min[i], 0.0, 1e-12);
+        KRATOS_EXPECT_NEAR(r_max[i], 1.0, 1e-12);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerBothBoundingBoxSourcesThrows, KratosCoreFastSuite)
+{
+    Model model;
+    ModelPart& r_skin = model.CreateModelPart("Skin");
+    r_skin.CreateNewNode(1, 0.2, 0.2, 0.2);
+    r_skin.CreateNewNode(2, 0.8, 0.8, 0.8);
+
+    ModelPart& r_bbox = model.CreateModelPart("BBox");
+    r_bbox.CreateNewNode(1, 0.0, 0.0, 0.0);
+    r_bbox.CreateNewNode(2, 1.0, 1.0, 1.0);
+
+    Parameters settings(R"({
+        "input_model_part_name"   : "Skin",
+        "bounding_box_model_part" : "BBox",
+        "bounding_box" : {
+            "min_point" : [0.0, 0.0, 0.0],
+            "max_point" : [1.0, 1.0, 1.0]
+        }
+    })");
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.Initialize(), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerBoundingBoxConflictThrows, KratosCoreFastSuite)
+{
+    Model model;
+    ModelPart& r_skin = model.CreateModelPart("Skin");
+    r_skin.CreateNewNode(1, 0.2, 0.2, 0.2);
+    r_skin.CreateNewNode(2, 0.8, 0.8, 0.8);
+
+    Parameters settings(R"({
+        "input_model_part_name" : "Skin",
+        "bounding_box" : {
+            "min_point" : [0.3, 0.3, 0.3],
+            "max_point" : [0.7, 0.7, 0.7]
+        }
+    })");
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.Initialize(), "");
+}
+
+// ===========================================================================
 // OctreeHybridClassifyCellsInsideOutside colouring
 // ===========================================================================
 
