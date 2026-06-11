@@ -199,6 +199,9 @@ public:
      * 2. @ref ExecuteColoringOperations — dispatches `coloring_settings_list`.
      * 3. @ref ExecuteEntityGenerationOperations — dispatches `entities_generator_list`.
      * 4. @ref ExecuteModelPartOperations — dispatches `model_part_operations`.
+     *
+     * Afterwards, iterates `output_files` and calls @ref WriteOctreeVTK for every entry
+     * whose `"type"` is `"octree_vtk"` (pure debug output).
      */
     void SetupModelPart() override;
 
@@ -228,6 +231,7 @@ public:
      *     "mdpa_file_name"          : "",
      *     "input_model_part_name"   : "",
      *     "default_outside_color"   : 1,
+     *     "output_files"            : [],
      *     "remove_orphan_nodes"     : true,
      *     "echo_level"              : 1
      * }
@@ -236,6 +240,11 @@ public:
      * entry (which builds the octree and records `mesh_type` / projection settings) and may be
      * followed by any number of @ref OctreeHybridRefineUniform or additional
      * @ref OctreeHybridRefineInterfaceCells entries.
+     *
+     * Each entry of `output_files` is a debug-output request with a `"type"` key. The only
+     * currently supported type is `"octree_vtk"`, which dumps the raw octree leaves via
+     * @ref WriteOctreeVTK and requires a `"file_name"` key, e.g.
+     * `{ "type": "octree_vtk", "file_name": "octree.vtk" }`.
      * @return Parameters object with all keys set to their defaults.
      */
     const Parameters GetDefaultParameters() const override;
@@ -501,6 +510,17 @@ private:
      *          `Execute(*this, parameters)` virtual is called in list order.
      */
     void ExecuteModelPartOperations();
+
+    /**
+     * @brief  Writes the entire octree leaves as hex mesh in VTK format
+     * @details Pure debug/visualization helper, called from @ref SetupModelPart for every
+     *          entry of `output_files` whose `"type"` is `"octree_vtk"`. Delegates to
+     *          @ref OctreeHybridMeshUtility::WritePrimalVtk, which writes the raw,
+     *          non-conforming primal octree leaves (one hexahedron per leaf cell, with a
+     *          cell-data field `"level"` encoding the refinement level) of `GetData().mpOctree`.
+     * @param ThisParameters Parameters for the output. Required key: `"file_name"` (output .vtk path).
+     */
+    void WriteOctreeVTK(Parameters ThisParameters);
 
     /**
      * @brief Generates a percentage bar string based on the given percentage value.

@@ -72,6 +72,7 @@ const Parameters OctreeHybridMeshGeneratorModeler::GetDefaultParameters() const
         "mdpa_file_name"          : "",
         "input_model_part_name"   : "",
         "default_outside_color"   : 1,
+        "output_files"            : [],
         "remove_orphan_nodes"     : true,
         "echo_level"              : 1
     })");
@@ -190,6 +191,14 @@ void OctreeHybridMeshGeneratorModeler::SetupModelPart()
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing orphan nodes from model part: " << r_name << std::endl;
             remove_orphan_nodes_parameters["model_part_name"].SetString(r_name);
             // RemoveOrphanNodesModeler(*mpModel, remove_orphan_nodes_parameters).SetupModelPart();
+        }
+    }
+
+    // Write the output files
+    for (const auto& single_output_settings : mParameters["output_files"]){
+        const std::string type = single_output_settings["type"].GetString();
+        if( type == "octree_vtk"){
+            WriteOctreeVTK(single_output_settings);
         }
     }
 }
@@ -319,6 +328,25 @@ void OctreeHybridMeshGeneratorModeler::ExecuteModelPartOperations()
             rProto.Execute(*this, rParams); }, OperationType::ModelPartOperation);
 
     Timer::Stop("ApplyOperations");
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::WriteOctreeVTK(Parameters ThisParameters)
+{
+    KRATOS_TRY
+
+    KRATOS_ERROR_IF_NOT(ThisParameters.Has("file_name")) << "Missing \"file_name\" in \"octree_vtk\" output settings." << std::endl;
+
+    Internals::OctreeHybridMesherData& r_data = *mpData;
+    KRATOS_ERROR_IF_NOT(r_data.mpOctree) << "No octree has been built yet. Cannot write the octree VTK output." << std::endl;
+
+    const std::string file_name = ThisParameters["file_name"].GetString();
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Writing octree leaves to: " << file_name << std::endl;
+    OctreeHybridMeshUtility::WritePrimalVtk(*r_data.mpOctree, file_name);
+
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
