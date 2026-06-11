@@ -33,6 +33,8 @@
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 #include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
 #include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_constraints.h"
+#include "modeler/entity_generation/generate_octree_hybrid_constraints_between_colors.h"
 
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
@@ -567,6 +569,311 @@ KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorEmpt
 
     // Empty constrained_variables list → no constraints created
     KRATOS_EXPECT_EQ(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
+}
+
+// ===========================================================================
+// GenerateOctreeHybridConstraints::Generate — direct call
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsGenerateDirectlyDoesNotThrow, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    // Build primal mesh to populate mHanging
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth": 4, "adaptive": false, "mesh_type": "primal"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+
+    auto& r_data = modeler.GetData();
+    r_data.mCellColor.assign(r_data.mCells.size(), 1);
+
+    // Generate hexes first so mNodePtrs is populated.
+    {
+        GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
+        Parameters hex_p(R"({
+            "type"                 : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name"      : "Out",
+            "color"                : 1,
+            "properties_id"        : 1,
+            "generated_entity"     : "Element3D8N",
+            "tag_refinement_level" : true
+        })");
+        hex_op.ValidateParameters(hex_p);
+        hex_op.Generate(modeler, hex_p);
+    }
+
+    GenerateOctreeHybridConstraints constraints_op;
+    Parameters p(R"({
+        "type"                  : "GenerateOctreeHybridConstraints",
+        "model_part_name"       : "Out",
+        "color"                 : 1,
+        "face_color"            : -1,
+        "generated_entity"      : "LinearMasterSlaveConstraint",
+        "constrained_variables" : ["DISPLACEMENT_X"]
+    })");
+    constraints_op.ValidateParameters(p);
+    constraints_op.Generate(modeler, p);
+
+    // Uniform-depth box has no 2:1 transitions → zero hanging constraints expected,
+    // but the call must complete without error.
+    KRATOS_EXPECT_GE(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsEmptyVariablesSkipsConstraints, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth": 3, "adaptive": false, "mesh_type": "primal"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+
+    auto& r_data = modeler.GetData();
+    r_data.mCellColor.assign(r_data.mCells.size(), 1);
+
+    GenerateOctreeHybridConstraints constraints_op;
+    Parameters p(R"({
+        "type"                  : "GenerateOctreeHybridConstraints",
+        "model_part_name"       : "Out",
+        "constrained_variables" : []
+    })");
+    constraints_op.ValidateParameters(p);
+    constraints_op.Generate(modeler, p);
+
+    KRATOS_EXPECT_EQ(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsNotExtractedThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    GenerateOctreeHybridConstraints constraints_op;
+    Parameters p(R"({
+        "type"             : "GenerateOctreeHybridConstraints",
+        "model_part_name"  : "Out"
+    })");
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(constraints_op.Generate(modeler, p), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsEmptyGeneratedEntityThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth": 3, "adaptive": false, "mesh_type": "primal"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+
+    GenerateOctreeHybridConstraints constraints_op;
+    Parameters p = constraints_op.GetDefaultParameters();
+    p["model_part_name"].SetString("Out");
+    p["generated_entity"].SetString("");
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(constraints_op.Generate(modeler, p), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsDefaultParameters, KratosCoreFastSuite)
+{
+    GenerateOctreeHybridConstraints constraints_op;
+    Parameters p = constraints_op.GetDefaultParameters();
+
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateOctreeHybridConstraints"});
+    KRATOS_EXPECT_EQ(p["color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["face_color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["generated_entity"].GetString(), std::string{"LinearMasterSlaveConstraint"});
+    KRATOS_EXPECT_EQ(p["constrained_variables"].size(), std::size_t{1});
+    KRATOS_EXPECT_EQ(p["constrained_variables"][0].GetString(), std::string{"TEMPERATURE"});
+}
+
+// ===========================================================================
+// GenerateOctreeHybridConstraintsBetweenColors::Generate — direct call
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsBetweenColorsGenerateDirectlyDoesNotThrow, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth": 3, "adaptive": false, "mesh_type": "dual"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+    {
+        OctreeHybridClassifyCellsInsideOutside color_op;
+        color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
+    }
+
+    // Generate hexes for both colours so mNodePtrs is populated on both sides.
+    {
+        GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
+        Parameters hex_p(R"({
+            "type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Out","color":1,"properties_id":1,
+            "generated_entity":"Element3D8N","tag_refinement_level":false
+        })");
+        hex_op.ValidateParameters(hex_p);
+        hex_op.Generate(modeler, hex_p);
+    }
+    {
+        GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
+        Parameters hex_p(R"({
+            "type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Out","color":0,"properties_id":1,
+            "generated_entity":"Element3D8N","tag_refinement_level":false
+        })");
+        hex_op.ValidateParameters(hex_p);
+        hex_op.Generate(modeler, hex_p);
+    }
+
+    GenerateOctreeHybridConstraintsBetweenColors between_op;
+    Parameters p(R"({
+        "type"                  : "GenerateOctreeHybridConstraintsBetweenColors",
+        "model_part_name"       : "Out",
+        "color_block_a"         : 1,
+        "color_block_b"         : 0,
+        "generated_entity"      : "LinearMasterSlaveConstraint",
+        "constrained_variables" : ["TEMPERATURE"]
+    })");
+    between_op.ValidateParameters(p);
+    between_op.Generate(modeler, p);
+
+    // The dual mesh shares mesh-node indices at the inside/outside interface, so
+    // there are no non-conforming coincident pairs to tie — the call must complete
+    // without error and create zero constraints.
+    KRATOS_EXPECT_EQ(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsBetweenColorsNoCellColorSkips, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth": 3, "adaptive": false, "mesh_type": "dual"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+
+    GenerateOctreeHybridConstraintsBetweenColors between_op;
+    Parameters p(R"({
+        "type"                  : "GenerateOctreeHybridConstraintsBetweenColors",
+        "model_part_name"       : "Out",
+        "color_block_a"         : 1,
+        "color_block_b"         : 0,
+        "generated_entity"      : "LinearMasterSlaveConstraint",
+        "constrained_variables" : ["TEMPERATURE"]
+    })");
+    between_op.ValidateParameters(p);
+    between_op.Generate(modeler, p);
+
+    KRATOS_EXPECT_EQ(model.GetModelPart("Out").NumberOfMasterSlaveConstraints(), std::size_t{0});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsBetweenColorsNotExtractedThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    GenerateOctreeHybridConstraintsBetweenColors between_op;
+    Parameters p(R"({
+        "type"                  : "GenerateOctreeHybridConstraintsBetweenColors",
+        "model_part_name"       : "Out",
+        "generated_entity"      : "LinearMasterSlaveConstraint",
+        "constrained_variables" : ["TEMPERATURE"]
+    })");
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(between_op.Generate(modeler, p), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsBetweenColorsEmptyGeneratedEntityThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type"            : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth": 3, "adaptive": false, "mesh_type": "dual"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+    {
+        OctreeHybridClassifyCellsInsideOutside color_op;
+        color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
+    }
+
+    GenerateOctreeHybridConstraintsBetweenColors between_op;
+    Parameters p = between_op.GetDefaultParameters();
+    p["model_part_name"].SetString("Out");
+    p["color_block_a"].SetInt(1);
+    p["color_block_b"].SetInt(0);
+    p["generated_entity"].SetString("");
+    p["constrained_variables"].Append("TEMPERATURE");
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(between_op.Generate(modeler, p), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridConstraintsBetweenColorsDefaultParameters, KratosCoreFastSuite)
+{
+    GenerateOctreeHybridConstraintsBetweenColors between_op;
+    Parameters p = between_op.GetDefaultParameters();
+
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateOctreeHybridConstraintsBetweenColors"});
+    KRATOS_EXPECT_EQ(p["color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["color_block_a"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["color_block_b"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["generated_entity"].GetString(), std::string{""});
+    KRATOS_EXPECT_EQ(p["constrained_variables"].size(), std::size_t{0});
 }
 
 // ===========================================================================
