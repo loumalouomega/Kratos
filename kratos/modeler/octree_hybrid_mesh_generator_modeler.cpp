@@ -286,9 +286,6 @@ void OctreeHybridMeshGeneratorModeler::Initialize()
     // Read the model parts
     ReadModelParts();
 
-    // Resolve and validate the octree bounding box override, if any
-    ResolveOctreeBoundingBox();
-
     // Prepare the internal data structure
     KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Preparing Internal Data Structure" << std::endl;
     PreparingTheInternalDataStructure(GetInputModelPart());
@@ -605,7 +602,8 @@ void OctreeHybridMeshGeneratorModeler::ResolveOctreeBoundingBox()
 
 void OctreeHybridMeshGeneratorModeler::PreparingTheInternalDataStructure(ModelPart& rTheInputModelPart)
 {
-
+    // Resolve and validate the octree bounding box override, if any
+    ResolveOctreeBoundingBox();
 }
 
 /***********************************************************************************/
