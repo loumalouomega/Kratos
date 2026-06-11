@@ -13,7 +13,7 @@ summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine t
 1. [What this modeler does](#1-what-this-modeler-does)
 2. [Architecture: the Registry-prototype pattern](#2-architecture-the-registry-prototype-pattern)
 3. [Pipeline stages](#3-pipeline-stages)
-   - 3.1 [Octree generation and refinement — `refine_operations_list`](#31-octree-generation-and-refinement--refine_operations_list)
+   - 3.1 [Octree generation and refinement — `refinement_settings_list`](#31-octree-generation-and-refinement--refinement_settings_list)
    - 3.2 [Coloring — `coloring_settings_list`](#32-coloring--coloring_settings_list)
    - 3.3 [Entity generation — `entities_generator_list`](#33-entity-generation--entities_generator_list)
    - 3.4 [Operations — `model_part_operations`](#34-operations--model_part_operations)
@@ -147,7 +147,7 @@ of component objects.
 SetupModelPart()
     │
     ├─ 1. BuildOctreeAndExtract()
-    │      Dispatch<OctreeHybridRefineOperation>  [refine_operations_list]
+    │      Dispatch<OctreeHybridRefineOperation>  [refinement_settings_list]
     │      │  first entry must be OctreeHybridRefineInterfaceCells:
     │      │    • build + 2:1-balance octree
     │      │    • store mesh_type / projection settings in OctreeHybridMesherData
@@ -171,16 +171,16 @@ SetupModelPart()
 
 | # | Stage | Base class | JSON key | Purpose |
 |---|-------|-----------|----------|---------|
-| 1 | Octree generation + refinement | `OctreeHybridRefineOperation` | `refine_operations_list` | Build octree (via `OctreeHybridRefineInterfaceCells`), optional further refinement |
+| 1 | Octree generation + refinement | `OctreeHybridRefineOperation` | `refinement_settings_list` | Build octree (via `OctreeHybridRefineInterfaceCells`), optional further refinement |
 | 2 | Coloring | `OctreeHybridMesherColoring` | `coloring_settings_list` | Classify cells inside/outside |
 | 3 | Entity generation | `OctreeHybridMesherEntityGeneration` | `entities_generator_list` | Create nodes, elements, conditions, constraints |
 | 4 | Operations | `OctreeHybridMesherOperation` | `model_part_operations` | Post-processing (e.g. quality report) |
 
 ---
 
-### 3.1 Octree generation and refinement — `refine_operations_list`
+### 3.1 Octree generation and refinement — `refinement_settings_list`
 
-`BuildOctreeAndExtract` dispatches the full `refine_operations_list` before extracting the hex mesh.
+`BuildOctreeAndExtract` dispatches the full `refinement_settings_list` before extracting the hex mesh.
 The **first entry must be `OctreeHybridRefineInterfaceCells`** (which replaces the former `octree_generator` block);
 subsequent entries are optional and can apply additional refinement (e.g. `OctreeHybridRefineUniform`,
 `OctreeHybridRefineInterfaceCells`).
@@ -193,7 +193,7 @@ subsequent entries are optional and can apply additional refinement (e.g. `Octre
 
 **What it does:**
 
-1. Dispatches the `refine_operations_list`.  The first entry (`OctreeHybridRefineInterfaceCells`):
+1. Dispatches the `refinement_settings_list`.  The first entry (`OctreeHybridRefineInterfaceCells`):
    - Calls `OctreeHybridMeshUtility::ExtractTriangleSoup` to copy the surface triangles
      into world-space for later carving/projection/classification.
    - Calls `OctreeHybridMeshUtility::BuildFromSurfaceMesh` to build the adaptive octree.
@@ -203,7 +203,7 @@ subsequent entries are optional and can apply additional refinement (e.g. `Octre
      refined to `refinement_depth`.
    - Stores `mesh_type`, `project_to_surface`, `projection_iterations`, and
      `projection_smoothing` into `OctreeHybridMesherData` for use by the extraction pass.
-   - Any subsequent entries in `refine_operations_list` (e.g. `OctreeHybridRefineUniform`)
+   - Any subsequent entries in `refinement_settings_list` (e.g. `OctreeHybridRefineUniform`)
      further subdivide octree cells.
 2. Calls `StrongConstrain2To1` to enforce the 2:1 balance constraint across the whole tree.
 3. Depending on `mesh_type`:
@@ -446,7 +446,7 @@ The complete parameter block accepted by `OctreeHybridMeshGeneratorModeler`:
 
 ```json
 {
-    "refine_operations_list": [
+    "refinement_settings_list": [
         {
             "type"                 : "OctreeHybridRefineInterfaceCells",
             "input_model_part_name": "",
@@ -473,7 +473,7 @@ The complete parameter block accepted by `OctreeHybridMeshGeneratorModeler`:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `refine_operations_list` | array | `[]` | Ordered list of refine-operation descriptors. The first entry must be `OctreeHybridRefineInterfaceCells`; optional further entries refine the octree before mesh extraction. |
+| `refinement_settings_list` | array | `[]` | Ordered list of refine-operation descriptors. The first entry must be `OctreeHybridRefineInterfaceCells`; optional further entries refine the octree before mesh extraction. |
 | `coloring_settings_list` | array | `[]` | Ordered list of coloring stage descriptors. |
 | `entities_generator_list` | array | `[]` | Ordered list of entity-generation stage descriptors. |
 | `model_part_operations` | array | `[]` | Ordered list of post-processing operation descriptors. |
@@ -483,7 +483,7 @@ The complete parameter block accepted by `OctreeHybridMeshGeneratorModeler`:
 | `remove_orphan_nodes` | bool | `true` | Reserved: intended to remove nodes not belonging to any generated element, condition, or constraint after the entity-generation and operation stages. Not yet implemented. |
 | `echo_level` | int | `1` | Verbosity level (0 = silent, higher = more output). |
 
-**`OctreeHybridRefineInterfaceCells` keys** (first entry of `refine_operations_list`):
+**`OctreeHybridRefineInterfaceCells` keys** (first entry of `refinement_settings_list`):
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -518,7 +518,7 @@ remaining keys are specific to the component and are described in
 On the **first call** (no octree built yet): extracts a triangle soup from the surface,
 builds the adaptive or uniform octree via `BuildFromSurfaceMesh`, and stores `mesh_type`
 and projection settings for later use by `BuildOctreeAndExtract`.  **Must appear as the
-first entry** of `refine_operations_list`.
+first entry** of `refinement_settings_list`.
 
 On **subsequent calls**: selectively subdivides octree cells near the interface surface up
 to `refinement_depth`.  Multiple entries may target different model parts for
@@ -1191,7 +1191,7 @@ KM.StlIO("my_surface.stl", KM.Parameters('{"open_mode":"read"}')).ReadModelPart(
 # --- Configure and run the modeler ---
 settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
-    "refine_operations_list" : [
+    "refinement_settings_list" : [
         {
             "type"             : "OctreeHybridRefineInterfaceCells",
             "refinement_depth" : 5,
@@ -1243,7 +1243,7 @@ KM.StlIO("my_surface.stl", KM.Parameters('{"open_mode":"read"}')).ReadModelPart(
 
 settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
-    "refine_operations_list" : [
+    "refinement_settings_list" : [
         {
             "type"             : "OctreeHybridRefineInterfaceCells",
             "refinement_depth" : 4,
@@ -1301,7 +1301,7 @@ KM.StlIO("bunny.stl", KM.Parameters('{"open_mode":"read"}')).ReadModelPart(surfa
 
 settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
-    "refine_operations_list" : [
+    "refinement_settings_list" : [
         {
             "type"                 : "OctreeHybridRefineInterfaceCells",
             "refinement_depth"     : 5,
@@ -1353,7 +1353,7 @@ both a volume ModelPart and a boundary ModelPart in a single `SetupModelPart` ca
 ```python
 settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
-    "refine_operations_list" : [
+    "refinement_settings_list" : [
         {
             "type"             : "OctreeHybridRefineInterfaceCells",
             "refinement_depth" : 4,
@@ -1430,7 +1430,7 @@ KM.StlIO("my_surface.stl", KM.Parameters('{"open_mode":"read"}')).ReadModelPart(
 
 settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
-    "refine_operations_list" : [
+    "refinement_settings_list" : [
         {
             "type"             : "OctreeHybridRefineInterfaceCells",
             "refinement_depth" : 4,
