@@ -19,6 +19,7 @@
 #include "modeler/refine_operations/refine_uniform_hybrid_octree.h"
 #include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
+#include "modeler/coloring/octree_hybrid_color_cells_with_inside_center.h"
 #include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
 #include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
@@ -135,6 +136,48 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideDefaultParameter
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
     OctreeHybridClassifyCellsInsideOutside op;
+    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherColoring"});
+}
+
+// ===========================================================================
+// OctreeHybridColorCellsWithInsideCenter — GetDefaultParameters / Info
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterDefaultParametersTypeKey, KratosCoreFastSuite)
+{
+    OctreeHybridColorCellsWithInsideCenter op;
+    Parameters p = op.GetDefaultParameters();
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridColorCellsWithInsideCenter"});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterDefaultParametersAllKeys, KratosCoreFastSuite)
+{
+    OctreeHybridColorCellsWithInsideCenter op;
+    Parameters p = op.GetDefaultParameters();
+    KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
+    KRATOS_EXPECT_TRUE(p.Has("color"));
+    KRATOS_EXPECT_TRUE(p.Has("input_entities"));
+    KRATOS_EXPECT_TRUE(p.Has("tolerance"));
+    KRATOS_EXPECT_TRUE(p.Has("bounding_box"));
+    KRATOS_EXPECT_TRUE(p["bounding_box"].Has("min_point"));
+    KRATOS_EXPECT_TRUE(p["bounding_box"].Has("max_point"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterDefaultParametersDefaults, KratosCoreFastSuite)
+{
+    OctreeHybridColorCellsWithInsideCenter op;
+    Parameters p = op.GetDefaultParameters();
+    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
+    KRATOS_EXPECT_EQ(p["color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["input_entities"].GetString(), std::string{""});
+    KRATOS_EXPECT_NEAR(p["tolerance"].GetDouble(), 1.0e-12, 1e-20);
+    KRATOS_EXPECT_EQ(p["bounding_box"]["min_point"].size(), std::size_t{0});
+    KRATOS_EXPECT_EQ(p["bounding_box"]["max_point"].size(), std::size_t{0});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterInfoReturnsBaseClassName, KratosCoreFastSuite)
+{
+    OctreeHybridColorCellsWithInsideCenter op;
     KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherColoring"});
 }
 
