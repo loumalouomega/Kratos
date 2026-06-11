@@ -375,7 +375,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerStreamOperatorNonEmpty
     model.CreateModelPart("Out");
     Parameters params(R"({
         "input_model_part_name":"Skin",
-        "refine_operations_list":[],"coloring_settings_list":[],
+        "refinement_settings_list":[],"coloring_settings_list":[],
         "entities_generator_list":[],"model_part_operations":[]
     })");
     OctreeHybridMeshGeneratorModeler modeler(model, params);

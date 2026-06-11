@@ -73,7 +73,7 @@ OctreeHybridMeshGeneratorModeler MakeEmptyModeler(Model& rModel,
 {
     Parameters params(R"({
         "input_model_part_name": ")" + rInput + R"(",
-        "refine_operations_list":  [],
+        "refinement_settings_list":  [],
         "coloring_settings_list":  [],
         "entities_generator_list": [],
         "model_part_operations":   []
