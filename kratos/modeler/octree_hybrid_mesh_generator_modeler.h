@@ -601,7 +601,7 @@ private:
 
             // Print the operation parameters
             ++operation_counter;
-            KRATOS_INFO_IF(Info(), mEchoLevel > 0) << start_message << ", number: " << operation_counter << " with the following parameters:\n" << stage_params << "\n" << GeneratePercentageBar(static_cast<double>(operation_counter) / static_cast<double>(number_of_operations)) << std::endl;
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << start_message << ", number: " << operation_counter << " with the following parameters:\n" << stage_params << "\n" << GeneratePercentageBar(static_cast<double>(operation_counter) / static_cast<double>(number_of_operations)) << std::endl;
 
             // Validate the parameters in-place against the component's defaults
             r_prototype.ValidateParameters(stage_params);
@@ -658,8 +658,17 @@ private:
             Invoke(r_prototype, stage_params);
 
             // Print the end of the operation
-            KRATOS_INFO_IF(Info(), mEchoLevel > 0) << end_message << " " << operation_counter << "/" << number_of_operations << " finished" << std::endl;
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << end_message << " " << operation_counter << "/" << number_of_operations << " finished" << std::endl;
         }
+    }
+
+    /**
+     * @brief Returns the label of the modeler.
+     * @return The label as a string.
+     */
+    const std::string GetLabel() const 
+    {
+        return "::[OctreeHybridMeshGeneratorModeler]::"; 
     }
 
     ///@}

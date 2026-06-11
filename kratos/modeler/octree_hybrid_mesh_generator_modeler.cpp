@@ -185,7 +185,12 @@ void OctreeHybridMeshGeneratorModeler::SetupModelPart()
 
     // Remove orphan nodes (nodes not belonging to any element or condition not constraint generated)
     if (mParameters["remove_orphan_nodes"].GetBool()) {
-        // TODO
+        Parameters remove_orphan_nodes_parameters = Parameters(R"({"model_part_name" : ""})");
+        for (auto& r_name : mRootModelPartsNames) {
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing orphan nodes from model part: " << r_name << std::endl;
+            remove_orphan_nodes_parameters["model_part_name"].SetString(r_name);
+            // RemoveOrphanNodesModeler(*mpModel, remove_orphan_nodes_parameters).SetupModelPart();
+        }
     }
 }
 
@@ -206,7 +211,7 @@ void OctreeHybridMeshGeneratorModeler::ReadModelParts()
 
     const std::string data_file_name =  mParameters["mdpa_file_name"].GetString();
 
-    KRATOS_INFO_IF("::[OctreeHybridMeshGeneratorModeler]::", mEchoLevel > 0) << "Importing Cad Model from: " << data_file_name << std::endl;
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Importing Cad Model from: " << data_file_name << std::endl;
 
     // Load the mdpa
     if(data_file_name!="") {
@@ -238,8 +243,10 @@ void OctreeHybridMeshGeneratorModeler::ExecuteRefinementOperations()
         << "Ensure 'refine_operations_list' starts with an OctreeHybridRefineInterfaceCells entry."
         << std::endl;
 
-    // 2:1 balancing + mesh extraction.
+    // Ensure the octree is 2:1 balancing + mesh extraction.
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Ensuring the octree is 2-to-1 conforming starting" << std::endl;
     r_data.mpOctree->StrongConstrain2To1();
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Ensuring the octree is 2-to-1 conforming finished" << std::endl;
 
     // If we consider a dual mesh, the elements are defined by the octree nodes.  If we consider a primal mesh, the elements are defined by the octree cells and the hanging nodes are stored as constraints.
     if (r_data.mMeshType == "dual") {
