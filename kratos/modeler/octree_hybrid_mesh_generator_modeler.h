@@ -580,6 +580,9 @@ private:
         const std::string start_message = GenerateStartMessage(Operation);
         const std::string end_message = GenerateEndMessage(Operation);
 
+        // Saving the start ids (4 integers, node, element, condition, constraint)
+        std::unordered_map<std::string, std::array<std::size_t, 4>> start_ids;
+
         // Iterate over the operations parameters
         const unsigned int number_of_operations = StageList.size();
         unsigned int operation_counter = 0;
@@ -616,33 +619,75 @@ private:
                     }
                 }
             } else if (Operation == OperationType::GenerateEntities) {
-                // Get the model part and its root, which holds the global id space
+                // Get the model part
                 auto& r_model_part = CreateAndGetModelPart(stage_params["model_part_name"].GetString());
+
+                // Get the root model part
                 auto& r_root_model_part = r_model_part.GetRootModelPart();
                 mRootModelPartsNames.insert(r_root_model_part.Name());
 
-                // Compute the next available id (max existing id + 1, defaulting to 1) for
-                // each entity type and impose it on the stage so the generator simply
-                // takes the ids the modeler hands it instead of computing its own.
-                if (default_parameters.Has("initial_node_id")) {
-                    const std::size_t next_node_id = 1 + block_for_each<MaxReduction<std::size_t>>(
-                        r_root_model_part.Nodes(), [](Node& rNode) { return rNode.Id(); });
-                    stage_params["initial_node_id"].SetInt(next_node_id);
+                // Set the start ids
+                auto it_find = start_ids.find(r_root_model_part.Name());
+                // If the model part is not in the map, we add it and we calculate the start ids, otherwise we just update the start ids for the elements, conditions and constraints (the nodes are not updated because they are generated first and we want to keep the same start node id for all the entity generations of the same model part)
+                if (it_find == start_ids.end()) {
+                    auto& r_ids = start_ids[r_root_model_part.Name()];
+                    r_ids[0] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Nodes(), [](Node& rNode) {
+                        return rNode.Id();
+                    });
                 }
-                if (default_parameters.Has("initial_element_id")) {
-                    const std::size_t next_element_id = 1 + block_for_each<MaxReduction<std::size_t>>(
-                        r_root_model_part.Elements(), [](Element& rElement) { return rElement.Id(); });
-                    stage_params["initial_element_id"].SetInt(next_element_id);
+                auto& r_ids = start_ids[r_root_model_part.Name()];
+                r_ids[1] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Elements(), [](Element& rElement) {
+                    return rElement.Id();
+                });
+                r_ids[2] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Conditions(), [](Condition& rCondition) {
+                    return rCondition.Id();
+                });
+                r_ids[3] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.MasterSlaveConstraints(), [](MasterSlaveConstraint& rConstraint) {
+                    return rConstraint.Id();
+                });
+
+                // Set the initial node id
+                if (default_parameters.Has("initial_node_id") && r_ids[0] > 0) {
+                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial node id to " << r_ids[0] << std::endl;
+                    // If defined, update the initial node id
+                    if (stage_params.Has("initial_node_id")) {
+                        stage_params["initial_node_id"].SetInt(r_ids[0]);
+                    } else { // If not defined, set the initial node id
+                        stage_params.AddInt("initial_node_id", r_ids[0]);
+                    }
                 }
-                if (default_parameters.Has("initial_condition_id")) {
-                    const std::size_t next_condition_id = 1 + block_for_each<MaxReduction<std::size_t>>(
-                        r_root_model_part.Conditions(), [](Condition& rCondition) { return rCondition.Id(); });
-                    stage_params["initial_condition_id"].SetInt(next_condition_id);
+
+                // Set the initial element id
+                if (default_parameters.Has("initial_element_id") && r_ids[1] > 0) {
+                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial element id to " << r_ids[1] << std::endl;
+                    // If defined, update the initial element id
+                    if (stage_params.Has("initial_element_id")) {
+                        stage_params["initial_element_id"].SetInt(r_ids[1]);
+                    } else { // If not defined, set the initial element id
+                        stage_params.AddInt("initial_element_id", r_ids[1]);
+                    }
                 }
-                if (default_parameters.Has("initial_constraint_id")) {
-                    const std::size_t next_constraint_id = 1 + block_for_each<MaxReduction<std::size_t>>(
-                        r_root_model_part.MasterSlaveConstraints(), [](MasterSlaveConstraint& rConstraint) { return rConstraint.Id(); });
-                    stage_params["initial_constraint_id"].SetInt(next_constraint_id);
+
+                // Set the initial condition id
+                if (default_parameters.Has("initial_condition_id") && r_ids[2] > 0) {
+                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial condition id to " << r_ids[2] << std::endl;
+                    // If defined, update the initial condition id
+                    if (stage_params.Has("initial_condition_id")) {
+                        stage_params["initial_condition_id"].SetInt(r_ids[2]);
+                    } else { // If not defined, set the initial condition id
+                        stage_params.AddInt("initial_condition_id", r_ids[2]);
+                    }
+                }
+
+                // Set the initial constraint id
+                if (default_parameters.Has("initial_constraint_id") && r_ids[3] > 0) {
+                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial constraint id to " << r_ids[3] << std::endl;
+                    // If defined, update the initial constraint id
+                    if (stage_params.Has("initial_constraint_id")) {
+                        stage_params["initial_constraint_id"].SetInt(r_ids[3]);
+                    } else { // If not defined, set the initial constraint id
+                        stage_params.AddInt("initial_constraint_id", r_ids[3]);
+                    }
                 }
             }
 
@@ -656,6 +701,23 @@ private:
 
             // Invoke the component's do-work virtual
             Invoke(r_prototype, stage_params);
+
+            // Post-processing steps depending on the operation type
+            if (Operation == OperationType::GenerateEntities) {
+                // Get the model part
+                auto& r_model_part = CreateAndGetModelPart(stage_params["model_part_name"].GetString());
+
+                // Get the root model part
+                auto& r_root_model_part = r_model_part.GetRootModelPart();
+
+                // Get the ids from the map
+                auto& r_ids = start_ids[r_root_model_part.Name()];
+
+                // Update the entities counters (not nodes). NOTE: Check this is valid for hybrid meshes with multiple entity generation stages, and that the nodes are not generated in the entity generation stages (otherwise we should update also the node counter).
+                r_ids[1] = r_root_model_part.NumberOfElements();
+                r_ids[2] = r_root_model_part.NumberOfConditions();
+                r_ids[3] = r_root_model_part.NumberOfMasterSlaveConstraints();
+            }
 
             // Print the end of the operation
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << end_message << " " << operation_counter << "/" << number_of_operations << " finished" << std::endl;

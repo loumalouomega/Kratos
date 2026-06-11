@@ -47,8 +47,8 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
         << "GenerateHybridOctreeTriangularConditionsWithFaceColor: hex mesh not yet extracted."
         << std::endl;
 
-    ModelPart& r_mp = rModeler.CreateAndGetModelPart(
-        GenerationParameters["model_part_name"].GetString());
+    ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
+    rModeler.SetStartIds(r_model_part);
     rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
     rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
 
@@ -56,9 +56,9 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
 
     const int want_color = GenerationParameters["color"].GetInt();
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
-    Properties::Pointer p_props = r_mp.RecursivelyHasProperties(properties_id)
-        ? r_mp.pGetProperties(properties_id)
-        : r_mp.CreateNewProperties(properties_id);
+    Properties::Pointer p_props = r_model_part.RecursivelyHasProperties(properties_id)
+        ? r_model_part.pGetProperties(properties_id)
+        : r_model_part.CreateNewProperties(properties_id);
 
     const std::string entity_name = GenerationParameters["generated_entity"].GetString();
     KRATOS_ERROR_IF(!KratosComponents<Condition>::Has(entity_name))
@@ -90,7 +90,7 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
             // Triangle 0: {n0, n1, n2}  — Triangle 1: {n0, n2, n3}
             const int idx[3] = {quad[0], quad[1 + split], quad[2 + split]};
             for (int v = 0; v < 3; ++v) {
-                Node::Pointer p_node = rModeler.GenerateOrRetrieveNode(r_mp, new_nodes, idx[v]);
+                Node::Pointer p_node = rModeler.GenerateOrRetrieveNode(r_model_part, new_nodes, idx[v]);
                 tri_nodes(v) = p_node;
                 new_nodes.push_back(p_node);
             }
@@ -100,12 +100,12 @@ void GenerateHybridOctreeTriangularConditionsWithFaceColor::Generate(
 
     new_nodes.Unique();
     const std::size_t n_new_nodes = new_nodes.size();
-    ModelPartUtils::AddNodesFromOrderedContainer(r_mp, new_nodes.begin(), new_nodes.end());
-    r_mp.AddConditions(new_conditions.begin(), new_conditions.end());
+    ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
+    r_model_part.AddConditions(new_conditions.begin(), new_conditions.end());
 
     KRATOS_INFO_IF("GenerateHybridOctreeTriangularConditionsWithFaceColor", echo_level > 0)
         << "Generated " << new_conditions.size() << " conditions and " << n_new_nodes
-        << " nodes in ModelPart \"" << r_mp.FullName() << "\"." << std::endl;
+        << " nodes in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 }
 
 } // namespace Kratos

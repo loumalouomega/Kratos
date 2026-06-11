@@ -54,7 +54,8 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
         << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: hex mesh not yet extracted." << std::endl;
 
     // Create the output ModelPart
-    ModelPart& r_mp = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
+    ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
+    rModeler.SetStartIds(r_model_part);
     rModeler.OverrideStartNodeId(GenerationParameters["initial_node_id"].GetInt());
     rModeler.OverrideStartConditionId(GenerationParameters["initial_condition_id"].GetInt());
     rModeler.OverrideStartConstraintId(GenerationParameters["initial_constraint_id"].GetInt());
@@ -66,9 +67,9 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
     // Retrieve an existing Properties object if present (e.g. the hex-generation
     // step already created it on the same ModelPart), otherwise create a new one.
-    Properties::Pointer p_props = r_mp.HasProperties(properties_id)
-        ? r_mp.pGetProperties(properties_id)
-        : r_mp.CreateNewProperties(properties_id);
+    Properties::Pointer p_props = r_model_part.HasProperties(properties_id)
+        ? r_model_part.pGetProperties(properties_id)
+        : r_model_part.CreateNewProperties(properties_id);
     const Condition& r_proto = KratosComponents<Condition>::Get(
         GenerationParameters["generated_entity"].GetString());
 
@@ -95,7 +96,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     Condition::NodesArrayType face_nodes(4);
     for (const auto& bf : bfaces) {
         for (int k = 0; k < 4; ++k) {
-            Node::Pointer p_node = rModeler.GenerateOrRetrieveNode(r_mp, new_nodes, bf[k]);
+            Node::Pointer p_node = rModeler.GenerateOrRetrieveNode(r_model_part, new_nodes, bf[k]);
             face_nodes(k) = p_node;
             // GenerateOrRetrieveNode only appends to new_nodes on first creation.
             // Nodes created by a prior stage (e.g. the hex generator) already exist
@@ -113,12 +114,12 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     // duplicates before the batch add.
     new_nodes.Unique();
     const std::size_t n_new_nodes = new_nodes.size();
-    ModelPartUtils::AddNodesFromOrderedContainer(r_mp, new_nodes.begin(), new_nodes.end());
-    r_mp.AddConditions(new_conditions.begin(), new_conditions.end());
+    ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
+    r_model_part.AddConditions(new_conditions.begin(), new_conditions.end());
 
     KRATOS_INFO_IF("GenerateHybridOctreeQuadrilateralConditionsWithFaceColor", echo_level > 0)
         << "Generated " << new_conditions.size() << " conditions and " << n_new_nodes
-        << " nodes in ModelPart \"" << r_mp.FullName() << "\"." << std::endl;
+        << " nodes in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 
     // Optionally generate hanging-node constraints for primal meshes.
     // Triggered only when 'constraint_type' is non-empty, 'constrained_variables' is
@@ -165,7 +166,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
             // becomes one binary constraint whose contributions accumulate during
             // assembly.
             for (int m = 0; m < hc.NumMasters; ++m) {
-                r_mp.CreateNewMasterSlaveConstraint(
+                r_model_part.CreateNewMasterSlaveConstraint(
                     constraint_type, rModeler.NextConstraintId(),
                     *master_ptrs[m], r_var,
                     *p_slave, r_var,
@@ -177,7 +178,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
 
     KRATOS_INFO_IF("GenerateHybridOctreeQuadrilateralConditionsWithFaceColor", echo_level > 0)
         << "Generated " << n_constraints << " \"" << constraint_type
-        << "\" hanging-node constraints in ModelPart \"" << r_mp.FullName() << "\"." << std::endl;
+        << "\" hanging-node constraints in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 }
 
 } // namespace Kratos
