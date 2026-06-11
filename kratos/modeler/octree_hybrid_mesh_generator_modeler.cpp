@@ -99,19 +99,40 @@ std::string OctreeHybridMeshGeneratorModeler::GetInputModelPartName() const
 /***********************************************************************************/
 /***********************************************************************************/
 
+BoundingBox<Point>& OctreeHybridMeshGeneratorModeler::GetOctreeBoundingBox()
+{
+    return mOctreeBoundingBox;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+const BoundingBox<Point>& OctreeHybridMeshGeneratorModeler::GetOctreeBoundingBox() const
+{
+    return mOctreeBoundingBox;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 const Parameters OctreeHybridMeshGeneratorModeler::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "refinement_settings_list" : [],
-        "coloring_settings_list"   : [],
-        "entities_generator_list"  : [],
-        "model_part_operations"    : [],
-        "mdpa_file_name"           : "",
-        "input_model_part_name"    : "",
-        "default_outside_color"    : 1,
-        "output_files"             : [],
-        "remove_orphan_nodes"      : true,
-        "echo_level"               : 1
+        "refinement_settings_list"   : [],
+        "coloring_settings_list"     : [],
+        "entities_generator_list"    : [],
+        "model_part_operations"      : [],
+        "mdpa_file_name"             : "",
+        "input_model_part_name"      : "",
+        "bounding_box_model_part"    : "",
+        "bounding_box"  : {
+            "min_point" : [],
+            "max_point" : []
+        },
+        "default_outside_color"      : 1,
+        "output_files"               : [],
+        "remove_orphan_nodes"        : true,
+        "echo_level"                 : 1
     })");
 }
 
@@ -255,6 +276,11 @@ void OctreeHybridMeshGeneratorModeler::Initialize()
 
     // Read the model parts
     ReadModelParts();
+
+    // Prepare the internal data structure
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Preparing Internal Data Structure" << std::endl;
+    PreparingTheInternalDataStructure(GetInputModelPart());
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Internal Data Structure prepared" << std::endl;
 }
 
 /***********************************************************************************/
@@ -494,6 +520,14 @@ void OctreeHybridMeshGeneratorModeler::Dispatch(
         // Print the end of the operation
         KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << end_message << " " << operation_counter << "/" << number_of_operations << " finished" << std::endl;
     }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::PreparingTheInternalDataStructure(ModelPart& rTheInputModelPart)
+{
+    
 }
 
 /***********************************************************************************/

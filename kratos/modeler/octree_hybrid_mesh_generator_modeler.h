@@ -19,6 +19,7 @@
 // Project includes
 #include "includes/define_registry.h"
 #include "modeler/modeler.h"
+#include "geometries/bounding_box.h"
 
 namespace Kratos 
 {
@@ -245,7 +246,7 @@ public:
     const Parameters GetDefaultParameters() const override;
 
     ///@}
-    ///@name Component access API
+    ///@name Access
     ///@{
 
     /// These methods are part of the public interface that registered components call
@@ -279,6 +280,18 @@ public:
      * @return The model part name string (may be empty if not set).
      */
     std::string GetInputModelPartName() const;
+
+    /**
+     * @brief Returns the bounding box of the octree
+     * @return The bounding box of the octree
+     */
+     BoundingBox<Point>& GetOctreeBoundingBox();
+
+    /**
+     * @brief Returns the bounding box of the octree (const version)
+     * @return The bounding box of the octree
+     */
+    const BoundingBox<Point>& GetOctreeBoundingBox() const;
 
     /**
      * @brief Returns or creates the ModelPart identified by @p rFullName.
@@ -429,9 +442,18 @@ private:
     /// Running master-slave constraint ID counter.
     IndexType mStartConstraintId = 0;
 
+    /// The bounding box of the input model part
+    BoundingBox<Kratos::Point> mInputBoundingBox;
+
     ///@}
     ///@name Private Operations
     ///@{
+
+    /**
+     * @brief This initializes de internal cartesian mesh data structure to be used for coloring
+     * @param rTheInputModelPart The input model part
+     */
+    void PreparingTheInternalDataStructure(ModelPart& rTheInputModelPart);
 
     /**
      * @brief Dispatches `refinement_settings_list`, then balances and extracts the hex mesh.
