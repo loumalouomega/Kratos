@@ -16,6 +16,9 @@
 
 // Project includes
 #include "utilities/timer.h"
+#include "utilities/parallel_utilities.h"
+#include "utilities/reduction_utilities.h"
+#include "utilities/string_utilities.h"
 #include "includes/model_part_io.h"
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
@@ -54,6 +57,15 @@ OctreeHybridMeshGeneratorModeler::~OctreeHybridMeshGeneratorModeler() = default;
 /***********************************************************************************/
 /***********************************************************************************/
 
+Modeler::Pointer OctreeHybridMeshGeneratorModeler::Create(
+    Model& rModel, const Parameters ModelParameters) const
+{
+    return Kratos::make_shared<OctreeHybridMeshGeneratorModeler>(rModel, ModelParameters);
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 Internals::OctreeHybridMesherData& OctreeHybridMeshGeneratorModeler::GetData()
 {
     return *mpData;
@@ -62,19 +74,44 @@ Internals::OctreeHybridMesherData& OctreeHybridMeshGeneratorModeler::GetData()
 /***********************************************************************************/
 /***********************************************************************************/
 
+Model& OctreeHybridMeshGeneratorModeler::GetModel()
+{
+    return *mpModel;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+ModelPart& OctreeHybridMeshGeneratorModeler::GetInputModelPart()
+{
+    KRATOS_ERROR_IF_NOT(mpInputModelPart) << "Input model part not set.  Ensure that \"input_model_part_name\" is set in the parameters and that the model part exists in the Model." << std::endl;
+    return *mpInputModelPart;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+std::string OctreeHybridMeshGeneratorModeler::GetInputModelPartName() const
+{
+    return mpInputModelPart ? mpInputModelPart->FullName() : mParameters["input_model_part_name"].GetString();
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 const Parameters OctreeHybridMeshGeneratorModeler::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "refine_operations_list"  : [],
-        "coloring_settings_list"  : [],
-        "entities_generator_list" : [],
-        "model_part_operations"   : [],
-        "mdpa_file_name"          : "",
-        "input_model_part_name"   : "",
-        "default_outside_color"   : 1,
-        "output_files"            : [],
-        "remove_orphan_nodes"     : true,
-        "echo_level"              : 1
+        "refinement_settings_list" : [],
+        "coloring_settings_list"   : [],
+        "entities_generator_list"  : [],
+        "model_part_operations"    : [],
+        "mdpa_file_name"           : "",
+        "input_model_part_name"    : "",
+        "default_outside_color"    : 1,
+        "output_files"             : [],
+        "remove_orphan_nodes"      : true,
+        "echo_level"               : 1
     })");
 }
 
@@ -114,6 +151,70 @@ void OctreeHybridMeshGeneratorModeler::SetStartIds(ModelPart& rModelPart)
     mStartConditionId = std::max(cond_proposal, mStartConditionId == 0 ? std::size_t(1) : mStartConditionId);
     const std::size_t mpc_proposal = r_root_model_part.MasterSlaveConstraints().empty() ? 1 : r_root_model_part.MasterSlaveConstraints().back().Id() + 1;
     mStartConstraintId = std::max(mpc_proposal, mStartConstraintId == 0 ? std::size_t(1) : mStartConstraintId);
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::OverrideStartNodeId(IndexType Id)
+{
+    if (Id > 0) {
+        mStartNodeId = Id;
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::OverrideStartElementId(IndexType Id)
+{
+    if (Id > 0) {
+        mStartElementId = Id;
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::OverrideStartConditionId(IndexType Id)
+{
+    if (Id > 0) {
+        mStartConditionId = Id;
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::OverrideStartConstraintId(IndexType Id)
+{
+    if (Id > 0) {
+        mStartConstraintId = Id;
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+OctreeHybridMeshGeneratorModeler::IndexType OctreeHybridMeshGeneratorModeler::NextElementId()
+{
+    return mStartElementId++;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+OctreeHybridMeshGeneratorModeler::IndexType OctreeHybridMeshGeneratorModeler::NextConditionId()
+{
+    return mStartConditionId++;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+OctreeHybridMeshGeneratorModeler::IndexType OctreeHybridMeshGeneratorModeler::NextConstraintId()
+{
+    return mStartConstraintId++;
 }
 
 /***********************************************************************************/
@@ -165,23 +266,23 @@ void OctreeHybridMeshGeneratorModeler::SetupModelPart()
     Initialize();
 
     // Apply the refinement
-    if(mParameters.Has("refine_operations_list")) {
-        ExecuteRefinementOperations();
+    if(mParameters.Has("refinement_settings_list")) {
+        ApplyRefinement(mParameters["refinement_settings_list"]);
     }
 
     // Apply the coloring
     if(mParameters.Has("coloring_settings_list")) {
-        ExecuteColoringOperations();
+        ApplyColoring(mParameters["coloring_settings_list"], mParameters["default_outside_color"].GetInt());
     }
 
     // Generate the entities
     if(mParameters.Has("entities_generator_list")) {
-        ExecuteEntityGenerationOperations();
+        GenerateEntities(GetInputModelPart(), mParameters["entities_generator_list"]);
     }
 
     // Apply the operations
     if(mParameters.Has("model_part_operations")) {
-        ExecuteModelPartOperations();
+        ApplyOperations(mParameters["model_part_operations"]);
     }
 
     // Remove orphan nodes (nodes not belonging to any element or condition not constraint generated)
@@ -231,25 +332,192 @@ void OctreeHybridMeshGeneratorModeler::ReadModelParts()
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMeshGeneratorModeler::ExecuteRefinementOperations()
+const std::string OctreeHybridMeshGeneratorModeler::GetLabel() const
+{
+    return "::[OctreeHybridMeshGeneratorModeler]::";
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+template<class TBase, class TInvoke>
+void OctreeHybridMeshGeneratorModeler::Dispatch(
+    const std::string& rRegistryRoot,
+    Parameters StageList,
+    TInvoke&& Invoke,
+    const OperationType Operation
+    )
+{
+    // Define the messages to be printed at the start and end of each operation, depending on the echo level
+    const std::string start_message = GenerateStartMessage(Operation);
+    const std::string end_message = GenerateEndMessage(Operation);
+
+    // Saving the start ids (4 integers, node, element, condition, constraint)
+    std::unordered_map<std::string, std::array<std::size_t, 4>> start_ids;
+
+    // Iterate over the operations parameters
+    const unsigned int number_of_operations = StageList.size();
+    unsigned int operation_counter = 0;
+    for (Parameters stage_params : StageList) {
+        // Resolve the component from the registry
+        std::string type = stage_params["type"].GetString();
+        const auto segments = StringUtilities::SplitStringByDelimiter(type, '.');
+        const std::string full_path = (segments.size() == 4) ? type : rRegistryRoot + ".All." + type + ".Prototype";
+        KRATOS_ERROR_IF_NOT(Registry::HasValue(full_path)) << "The component '" << full_path << "' is not registered." << std::endl;
+        const TBase& r_prototype = Registry::GetValue<TBase>(full_path);
+
+        // Get the default parameters of the component (for potential use in specific pre-processing steps)
+        Parameters default_parameters = r_prototype.GetDefaultParameters();
+
+        // Defining the model part name if not defined and the component supports it
+        if (default_parameters.Has("model_part_name") && !stage_params.Has("model_part_name")) {
+            stage_params.AddString("model_part_name", GetInputModelPartName());
+        }
+
+        // Print the operation parameters
+        ++operation_counter;
+        KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << start_message << ", number: " << operation_counter << " with the following parameters:\n" << stage_params << "\n" << GeneratePercentageBar(static_cast<double>(operation_counter) / static_cast<double>(number_of_operations)) << std::endl;
+
+        // Validate the parameters in-place against the component's defaults
+        r_prototype.ValidateParameters(stage_params);
+
+        // Specific settings or pre-processing steps depending on the operation type
+        if (Operation == OperationType::Coloring) {
+            if (default_parameters.Has("default_outside_color")) {
+                if (!stage_params.Has("default_outside_color")) {
+                    stage_params.AddValue("default_outside_color", mParameters["default_outside_color"]);
+                } else {
+                    stage_params["default_outside_color"].SetInt(mParameters["default_outside_color"].GetInt());
+                }
+            }
+        } else if (Operation == OperationType::GenerateEntities) {
+            // Get the model part
+            auto& r_model_part = CreateAndGetModelPart(stage_params["model_part_name"].GetString());
+
+            // Get the root model part
+            auto& r_root_model_part = r_model_part.GetRootModelPart();
+            mRootModelPartsNames.insert(r_root_model_part.Name());
+
+            // Set the start ids
+            auto it_find = start_ids.find(r_root_model_part.Name());
+            // If the model part is not in the map, we add it and we calculate the start ids, otherwise we just update the start ids for the elements, conditions and constraints (the nodes are not updated because they are generated first and we want to keep the same start node id for all the entity generations of the same model part)
+            if (it_find == start_ids.end()) {
+                auto& r_ids = start_ids[r_root_model_part.Name()];
+                r_ids[0] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Nodes(), [](Node& rNode) {
+                    return rNode.Id();
+                });
+            }
+            auto& r_ids = start_ids[r_root_model_part.Name()];
+            r_ids[1] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Elements(), [](Element& rElement) {
+                return rElement.Id();
+            });
+            r_ids[2] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Conditions(), [](Condition& rCondition) {
+                return rCondition.Id();
+            });
+            r_ids[3] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.MasterSlaveConstraints(), [](MasterSlaveConstraint& rConstraint) {
+                return rConstraint.Id();
+            });
+
+            // Set the initial node id
+            if (default_parameters.Has("initial_node_id") && r_ids[0] > 0) {
+                KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial node id to " << r_ids[0] << std::endl;
+                // If defined, update the initial node id
+                if (stage_params.Has("initial_node_id")) {
+                    stage_params["initial_node_id"].SetInt(r_ids[0]);
+                } else { // If not defined, set the initial node id
+                    stage_params.AddInt("initial_node_id", r_ids[0]);
+                }
+            }
+
+            // Set the initial element id
+            if (default_parameters.Has("initial_element_id") && r_ids[1] > 0) {
+                KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial element id to " << r_ids[1] << std::endl;
+                // If defined, update the initial element id
+                if (stage_params.Has("initial_element_id")) {
+                    stage_params["initial_element_id"].SetInt(r_ids[1]);
+                } else { // If not defined, set the initial element id
+                    stage_params.AddInt("initial_element_id", r_ids[1]);
+                }
+            }
+
+            // Set the initial condition id
+            if (default_parameters.Has("initial_condition_id") && r_ids[2] > 0) {
+                KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial condition id to " << r_ids[2] << std::endl;
+                // If defined, update the initial condition id
+                if (stage_params.Has("initial_condition_id")) {
+                    stage_params["initial_condition_id"].SetInt(r_ids[2]);
+                } else { // If not defined, set the initial condition id
+                    stage_params.AddInt("initial_condition_id", r_ids[2]);
+                }
+            }
+
+            // Set the initial constraint id
+            if (default_parameters.Has("initial_constraint_id") && r_ids[3] > 0) {
+                KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial constraint id to " << r_ids[3] << std::endl;
+                // If defined, update the initial constraint id
+                if (stage_params.Has("initial_constraint_id")) {
+                    stage_params["initial_constraint_id"].SetInt(r_ids[3]);
+                } else { // If not defined, set the initial constraint id
+                    stage_params.AddInt("initial_constraint_id", r_ids[3]);
+                }
+            }
+        }
+
+        // Ensure consistent echo level
+        if (default_parameters.Has("echo_level")) {
+            if (!stage_params.Has("echo_level")) {
+                stage_params.AddValue("echo_level", default_parameters["echo_level"]);
+            }
+            stage_params["echo_level"].SetInt(mEchoLevel);
+        }
+
+        // Invoke the component's do-work virtual
+        Invoke(r_prototype, stage_params);
+
+        // Post-processing steps depending on the operation type
+        if (Operation == OperationType::GenerateEntities) {
+            // Get the model part
+            auto& r_model_part = CreateAndGetModelPart(stage_params["model_part_name"].GetString());
+
+            // Get the root model part
+            auto& r_root_model_part = r_model_part.GetRootModelPart();
+
+            // Get the ids from the map
+            auto& r_ids = start_ids[r_root_model_part.Name()];
+
+            // Update the entities counters (not nodes). NOTE: Check this is valid for hybrid meshes with multiple entity generation stages, and that the nodes are not generated in the entity generation stages (otherwise we should update also the node counter).
+            r_ids[1] = r_root_model_part.NumberOfElements();
+            r_ids[2] = r_root_model_part.NumberOfConditions();
+            r_ids[3] = r_root_model_part.NumberOfMasterSlaveConstraints();
+        }
+
+        // Print the end of the operation
+        KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << end_message << " " << operation_counter << "/" << number_of_operations << " finished" << std::endl;
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementParameters)
 {
     Timer::Start("Refinement");
 
     // Retrieve the shared data struct that refinement operations read from and write to.  It holds the octree pointer, extracted node/cell arrays, per-cell colours, hanging-node constraint descriptors, and the node-pointer cache.
     Internals::OctreeHybridMesherData& r_data = *mpData;
 
-    // Dispatch every entry in refine_operations_list.
+    // Dispatch every entry in refinement_settings_list.
     // The first entry must be OctreeHybridRefineInterfaceCells, which builds the
     // initial octree from the surface and records mesh_type / projection settings
     // in r_data.  Subsequent entries add deeper local or uniform refinement.
     Dispatch<OctreeHybridRefineOperation>(
-        "OctreeHybridRefineOperation", mParameters["refine_operations_list"],
+        "OctreeHybridRefineOperation", RefinementParameters,
         [&](const OctreeHybridRefineOperation& rProto, Parameters rParams) {
             rProto.Refine(*this, rParams); }, OperationType::Refine);
 
     KRATOS_ERROR_IF_NOT(r_data.mpOctree)
         << "OctreeHybridMeshGeneratorModeler: no octree was built. "
-        << "Ensure 'refine_operations_list' starts with an OctreeHybridRefineInterfaceCells entry."
+        << "Ensure 'refinement_settings_list' starts with an OctreeHybridRefineInterfaceCells entry."
         << std::endl;
 
     // Ensure the octree is 2:1 balancing + mesh extraction.
@@ -285,13 +553,20 @@ void OctreeHybridMeshGeneratorModeler::ExecuteRefinementOperations()
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMeshGeneratorModeler::ExecuteColoringOperations()
+void OctreeHybridMeshGeneratorModeler::ApplyColoring(
+    Parameters ColoringParameters,
+    const int OutsideColor
+    )
 {
     Timer::Start("MeshColoring");
 
+    // Initialize the cell colors to the default outside color before dispatching the coloring operations, so that custom coloring operations can assume a known initial state and only update cells they want to mark as inside or belonging to a feature.  This also ensures that any cells left uncolored by the coloring operations are safely classified as outside.
+    Internals::OctreeHybridMesherData& r_data = *mpData;
+    r_data.mCellColor.assign(r_data.mCells.size(), OutsideColor);
+
     // Dispatch every entry in coloring_settings_list.
     Dispatch<OctreeHybridMesherColoring>(
-        "OctreeHybridMesherColoring", mParameters["coloring_settings_list"],
+        "OctreeHybridMesherColoring", ColoringParameters,
         [&](const OctreeHybridMesherColoring& rProto, Parameters rParams) {
             rProto.Apply(*this, rParams); }, OperationType::Coloring);
 
@@ -301,13 +576,16 @@ void OctreeHybridMeshGeneratorModeler::ExecuteColoringOperations()
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMeshGeneratorModeler::ExecuteEntityGenerationOperations()
+void OctreeHybridMeshGeneratorModeler::GenerateEntities(
+    ModelPart& rTheVolumeModelPart,
+    Parameters EntityGeneratorParameters
+    )
 {
     Timer::Start("EntityGeneration");
 
     // Dispatch every entry in entities_generator_list.
     Dispatch<OctreeHybridMesherEntityGeneration>(
-        "OctreeHybridMesherEntityGeneration", mParameters["entities_generator_list"],
+        "OctreeHybridMesherEntityGeneration", EntityGeneratorParameters,
         [&](const OctreeHybridMesherEntityGeneration& rProto, Parameters rParams) {
             rProto.Generate(*this, rParams); }, OperationType::GenerateEntities);
 
@@ -317,13 +595,13 @@ void OctreeHybridMeshGeneratorModeler::ExecuteEntityGenerationOperations()
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMeshGeneratorModeler::ExecuteModelPartOperations()
+void OctreeHybridMeshGeneratorModeler::ApplyOperations(Parameters OperationParameters)
 {
     Timer::Start("ApplyOperations");
 
     // Dispatch every entry in model_part_operations_list.
     Dispatch<OctreeHybridMesherOperation>(
-        "OctreeHybridMesherOperation", mParameters["model_part_operations"],
+        "OctreeHybridMesherOperation", OperationParameters,
         [&](const OctreeHybridMesherOperation& rProto, Parameters rParams) {
             rProto.Execute(*this, rParams); }, OperationType::ModelPartOperation);
 
@@ -352,6 +630,85 @@ void OctreeHybridMeshGeneratorModeler::WriteOctreeVTK(Parameters ThisParameters)
 /***********************************************************************************/
 /***********************************************************************************/
 
+std::string OctreeHybridMeshGeneratorModeler::GenerateStartMessage(const OperationType Operation)
+{
+    switch (Operation) {
+        case OperationType::Refine:
+            return "Refinement operation";
+        case OperationType::Coloring:
+            return "Coloring operation";
+        case OperationType::GenerateEntities:
+            return "Entity generation operation";
+        case OperationType::ModelPartOperation:
+            return "Model part operation";
+        default:
+            return "Operation";
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+std::string OctreeHybridMeshGeneratorModeler::GenerateEndMessage(const OperationType Operation)
+{
+    switch (Operation) {
+        case OperationType::Refine:
+            return "Refinement operation";
+        case OperationType::Coloring:
+            return "Coloring operation";
+        case OperationType::GenerateEntities:
+            return "Entity generation operation";
+        case OperationType::ModelPartOperation:
+            return "Model part operation";
+        default:
+                return "Operation";
+    }
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+std::string OctreeHybridMeshGeneratorModeler::Info() const
+{
+    return "OctreeHybridMeshGeneratorModeler";
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::PrintInfo(std::ostream& rOStream) const
+{
+    rOStream << Info();
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::PrintData(std::ostream& rOStream) const
+{
+    const Internals::OctreeHybridMesherData& r_data = *mpData;
+
+    rOStream << "Input model part: " << GetInputModelPartName() << "\n";
+    rOStream << "Mesh type: " << r_data.mMeshType << "\n";
+    if (r_data.IsExtracted()) {
+        rOStream << "Extracted mesh: " << r_data.mNodes.size() << " nodes, " << r_data.mCells.size() << " hexahedra";
+        if (!r_data.mCellColor.empty()) {
+            rOStream << ", coloured";
+        }
+        if (!r_data.mHanging.empty()) {
+            rOStream << ", " << r_data.mHanging.size() << " hanging-node constraints";
+        }
+        rOStream << "\n";
+        rOStream << "Projected to surface: " << (r_data.mProjected ? "yes" : "no") << "\n";
+    } else {
+        rOStream << "Mesh not yet extracted.\n";
+    }
+    rOStream << "Echo level: " << mEchoLevel;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 std::string OctreeHybridMeshGeneratorModeler::GeneratePercentageBar(const double Percentage)
 {
     const int bar_width = 50;
@@ -364,6 +721,21 @@ std::string OctreeHybridMeshGeneratorModeler::GeneratePercentageBar(const double
     }
     bar += "] " + std::to_string(static_cast<int>(Percentage * 100.0)) + "%";
     return bar;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+std::ostream& operator<<(
+    std::ostream& rOStream,
+    const OctreeHybridMeshGeneratorModeler& rThis
+    )
+{
+    rThis.PrintInfo(rOStream);
+    rOStream << std::endl;
+    rThis.PrintData(rOStream);
+
+    return rOStream;
 }
 
 } // namespace Kratos

@@ -17,12 +17,8 @@
 // External includes
 
 // Project includes
-#include "containers/model.h"
 #include "includes/define_registry.h"
 #include "modeler/modeler.h"
-#include "utilities/parallel_utilities.h"
-#include "utilities/reduction_utilities.h"
-#include "utilities/string_utilities.h"
 
 namespace Kratos 
 {
@@ -53,12 +49,12 @@ namespace Internals { class OctreeHybridMesherData; }
  *
  * | Step | Private method | What happens |
  * |------|---------------|-------------|
- * | 1 | @ref ExecuteRefinementOperations | Dispatches each @ref OctreeHybridRefineOperation in `refine_operations_list` (the first must be @ref OctreeHybridRefineInterfaceCells, which builds the initial octree and records `mesh_type` / projection settings; further entries add deeper refinement).  Then calls `StrongConstrain2To1` and extracts the conforming *dual* or non-conforming *primal* hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
- * | 2 | @ref ExecuteColoringOperations | Dispatches `coloring_settings_list`; classifies cells as inside (1) or outside (0) the surface. |
- * | 3 | @ref ExecuteEntityGenerationOperations | Dispatches `entities_generator_list`; emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
- * | 4 | @ref ExecuteModelPartOperations | Dispatches `model_part_operations`; post-processing passes (e.g. mesh-quality reports). |
+ * | 1 | @ref ApplyRefinement | Dispatches each @ref OctreeHybridRefineOperation in `refinement_settings_list` (the first must be @ref OctreeHybridRefineInterfaceCells, which builds the initial octree and records `mesh_type` / projection settings; further entries add deeper refinement).  Then calls `StrongConstrain2To1` and extracts the conforming *dual* or non-conforming *primal* hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
+ * | 2 | @ref ApplyColoring | Dispatches `coloring_settings_list`; classifies cells as inside (1) or outside (0) the surface. |
+ * | 3 | @ref GenerateEntities | Dispatches `entities_generator_list`; emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
+ * | 4 | @ref ApplyOperations | Dispatches `model_part_operations`; post-processing passes (e.g. mesh-quality reports). |
  *
- * Every component in `refine_operations_list` and stages 3–5 is a Registry prototype: the
+ * Every component in `refinement_settings_list` and stages 3–5 is a Registry prototype: the
  * modeler resolves its `"type"` string to the registered prototype via
  * `Registry::GetValue<Base>(path)` and calls the stateless `const` do-work virtual with
  * `(*this, parameters)`.  No factory files are needed; components self-register at
@@ -86,7 +82,7 @@ namespace Internals { class OctreeHybridMesherData; }
  * # ... populate "Surface" ModelPart from an STL ...
  * settings = KM.Parameters('''{
  *     "input_model_part_name"  : "Surface",
- *     "refine_operations_list" : [
+ *     "refinement_settings_list" : [
  *         { "type": "OctreeHybridRefineInterfaceCells",
  *           "refinement_depth": 3 },
  *         { "type": "OctreeHybridRefineInterfaceCells",
@@ -133,14 +129,16 @@ public:
     KRATOS_REGISTRY_ADD_PROTOTYPE("Modelers.KratosMultiphysics", Modeler, OctreeHybridMeshGeneratorModeler)
     KRATOS_REGISTRY_ADD_PROTOTYPE("Modelers.All", Modeler, OctreeHybridMeshGeneratorModeler)
 
-    /// Define operation enum
+    /**
+     * @brief Operation kind executed in each meshing stage.
+     */
     enum class OperationType
     {
-        UNDEFINED,
-        Refine,
-        Coloring,
-        GenerateEntities,
-        ModelPartOperation
+        UNDEFINED,          /// No operation assigned.
+        Refine,             /// Octree refinement and adaptation.
+        Coloring,           /// Coloring pass for parallel-safe partitioning/grouping.
+        GenerateEntities,   /// Creation of mesh entities (nodes/elements/conditions).
+        ModelPartOperation  /// Operations that move/assign entities between model parts.
     };
 
     ///@}
@@ -182,10 +180,7 @@ public:
      * @return A `shared_ptr` to a freshly constructed `OctreeHybridMeshGeneratorModeler`.
      */
     Modeler::Pointer Create(
-        Model& rModel, const Parameters ModelParameters) const override
-    {
-        return Kratos::make_shared<OctreeHybridMeshGeneratorModeler>(rModel, ModelParameters);
-    }
+        Model& rModel, const Parameters ModelParameters) const override;
 
     ///@}
     ///@name Modeler stages
@@ -194,11 +189,11 @@ public:
     /**
      * @brief Runs the full meshing pipeline.
      * @details Delegates to four sequential private stage methods:
-     * 1. @ref ExecuteRefinementOperations — dispatches `refine_operations_list`, then
+     * 1. @ref ApplyRefinement — dispatches `refinement_settings_list`, then
      *    balances and extracts the hex mesh.
-     * 2. @ref ExecuteColoringOperations — dispatches `coloring_settings_list`.
-     * 3. @ref ExecuteEntityGenerationOperations — dispatches `entities_generator_list`.
-     * 4. @ref ExecuteModelPartOperations — dispatches `model_part_operations`.
+     * 2. @ref ApplyColoring — dispatches `coloring_settings_list`.
+     * 3. @ref GenerateEntities — dispatches `entities_generator_list`.
+     * 4. @ref ApplyOperations — dispatches `model_part_operations`.
      *
      * Afterwards, iterates `output_files` and calls @ref WriteOctreeVTK for every entry
      * whose `"type"` is `"octree_vtk"` (pure debug output).
@@ -224,7 +219,7 @@ public:
      * @details Full schema:
      * @code{.json}
      * {
-     *     "refine_operations_list"  : [],
+     *     "refinement_settings_list"  : [],
      *     "coloring_settings_list"  : [],
      *     "entities_generator_list" : [],
      *     "model_part_operations"   : [],
@@ -236,7 +231,7 @@ public:
      *     "echo_level"              : 1
      * }
      * @endcode
-     * The `refine_operations_list` must start with an @ref OctreeHybridRefineInterfaceCells
+     * The `refinement_settings_list` must start with an @ref OctreeHybridRefineInterfaceCells
      * entry (which builds the octree and records `mesh_type` / projection settings) and may be
      * followed by any number of @ref OctreeHybridRefineUniform or additional
      * @ref OctreeHybridRefineInterfaceCells entries.
@@ -269,20 +264,13 @@ public:
      * @brief Returns the owning model.
      * @return Reference to the `Model` that was passed to the constructor.
      */
-    Model& GetModel() 
-    { 
-        return *mpModel; 
-    }
+    Model& GetModel();
 
     /**
      * @brief Returns the input model part
      * @return The input model part
      */
-    ModelPart& GetInputModelPart()
-    {
-        KRATOS_ERROR_IF_NOT(mpInputModelPart) << "Input model part not set.  Ensure that \"input_model_part_name\" is set in the parameters and that the model part exists in the Model." << std::endl;
-        return *mpInputModelPart;
-    }
+    ModelPart& GetInputModelPart();
 
     /**
      * @brief Returns the top-level `input_model_part_name` from the modeler parameters.
@@ -290,10 +278,7 @@ public:
      *          `input_model_part_name` is empty on the first call (octree build).
      * @return The model part name string (may be empty if not set).
      */
-    std::string GetInputModelPartName() const 
-    { 
-        return mpInputModelPart ? mpInputModelPart->FullName() : mParameters["input_model_part_name"].GetString(); 
-    }
+    std::string GetInputModelPartName() const;
 
     /**
      * @brief Returns or creates the ModelPart identified by @p rFullName.
@@ -345,12 +330,7 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first node ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartNodeId(IndexType Id) 
-    { 
-        if (Id > 0) {
-            mStartNodeId = Id;
-        }
-    }
+    void OverrideStartNodeId(IndexType Id);
 
     /**
      * @brief Overrides the running element ID counter, if @p Id is non-zero.
@@ -359,12 +339,7 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first element ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartElementId(IndexType Id) 
-    { 
-        if (Id > 0) {
-            mStartElementId = Id;
-        }
-    }
+    void OverrideStartElementId(IndexType Id);
 
     /**
      * @brief Overrides the running condition ID counter, if @p Id is non-zero.
@@ -373,12 +348,7 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first condition ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartConditionId(IndexType Id) 
-    { 
-        if (Id > 0) {
-            mStartConditionId = Id;
-        }
-    }
+    void OverrideStartConditionId(IndexType Id);
 
     /**
      * @brief Overrides the running master-slave constraint ID counter, if @p Id is non-zero.
@@ -387,61 +357,47 @@ public:
      *          value computed by @ref SetStartIds" and is therefore a no-op.
      * @param Id Requested first constraint ID, or `0` to leave the counter untouched.
      */
-    void OverrideStartConstraintId(IndexType Id) 
-    { 
-        if (Id > 0) {
-            mStartConstraintId = Id;
-        }
-    }
+    void OverrideStartConstraintId(IndexType Id);
 
     /**
      * @brief Returns and advances the next unique element ID.
      * @return The next available element ID (post-incremented).
      */
-    IndexType NextElementId()
-    { 
-        return mStartElementId++; 
-    }
+    IndexType NextElementId();
 
     /**
      * @brief Returns and advances the next unique condition ID.
      * @return The next available condition ID (post-incremented).
      */
-    IndexType NextConditionId()  
-    { 
-        return mStartConditionId++; 
-    }
+    IndexType NextConditionId();
 
     /**
      * @brief Returns and advances the next unique master-slave constraint ID.
      * @return The next available constraint ID (post-incremented).
      */
-    IndexType NextConstraintId() 
-    { 
-        return mStartConstraintId++; 
-    }
+    IndexType NextConstraintId();
 
     ///@}
     ///@name Input and output
     ///@{
 
     /// @return The string `"OctreeHybridMeshGeneratorModeler"`.
-    std::string Info() const override 
-    { 
-        return "OctreeHybridMeshGeneratorModeler"; 
-    }
+    std::string Info() const override;
 
     /// Prints `Info()` to @p rOStream.
-    void PrintInfo(std::ostream& rOStream) const override 
-    { 
-        rOStream << Info(); 
-    }
+    void PrintInfo(std::ostream& rOStream) const override;
 
-    /// No data to print; provided to satisfy the `Modeler` interface.
-    void PrintData(std::ostream& rOStream) const override 
-    {
-        rOStream << "No data to print.";
-    }
+    /**
+     * @brief Prints a summary of the modeler's current state to @p rOStream.
+     * @details Reports the input ModelPart name, the `mesh_type` ("dual"/"primal")
+     *          recorded by @ref ApplyRefinement, whether the hex mesh has
+     *          already been extracted (and if so its node/hexahedra/hanging-constraint
+     *          counts and whether it was projected onto the input surface), and the
+     *          configured echo level. Defined out-of-line because the relevant data
+     *          lives in the PIMPL @ref Internals::OctreeHybridMesherData struct.
+     * @param rOStream Output stream.
+     */
+    void PrintData(std::ostream& rOStream) const override;
 
     ///@}
 private:
@@ -478,7 +434,7 @@ private:
     ///@{
 
     /**
-     * @brief Dispatches `refine_operations_list`, then balances and extracts the hex mesh.
+     * @brief Dispatches `refinement_settings_list`, then balances and extracts the hex mesh.
      * @details Calls @ref OctreeHybridRefineOperation::Refine on every entry (the first must
      *          be @ref OctreeHybridRefineInterfaceCells).  After all refinement passes, calls
      *          `StrongConstrain2To1` and then:
@@ -487,29 +443,41 @@ private:
      *          - **`mMeshType == "primal"`**: `ExtractPrimalHexMesh`, which also fills
      *            `OctreeHybridMesherData::mHanging` with 2:1 transition constraints.
      *          Initialises `mNodePtrs` to null after extraction.
+     * @param RefinementParameters Parameters for the refinement
      */
-    void ExecuteRefinementOperations();
+    void ApplyRefinement(Parameters RefinementParameters);
 
     /**
      * @brief Dispatches `coloring_settings_list` via @ref OctreeHybridMesherColoring.
      * @details Each entry's `"type"` is resolved to a registered prototype and its
      *          `Apply(*this, parameters)` virtual is called in list order.
+     * @param ColoringParameters Parameters for the coloring
+     * @param OutsideColor The color for the outside
      */
-    void ExecuteColoringOperations();
+    void ApplyColoring(
+        Parameters ColoringParameters,
+        const int OutsideColor
+        );
 
     /**
      * @brief Dispatches `entities_generator_list` via @ref OctreeHybridMesherEntityGeneration.
      * @details Each entry's `"type"` is resolved to a registered prototype and its
      *          `Generate(*this, parameters)` virtual is called in list order.
+     * @param rTheVolumeModelPart The model part in which the entities will be created
+     * @param EntityGeneratorParameters Parameters for the entity generator
      */
-    void ExecuteEntityGenerationOperations();
+    void GenerateEntities(
+        ModelPart& rTheVolumeModelPart,
+        Parameters EntityGeneratorParameters
+        );
 
     /**
      * @brief Dispatches `model_part_operations` via @ref OctreeHybridMesherOperation.
      * @details Each entry's `"type"` is resolved to a registered prototype and its
      *          `Execute(*this, parameters)` virtual is called in list order.
+     * @param OperationParameters Parameters for the operation
      */
-    void ExecuteModelPartOperations();
+    void ApplyOperations(Parameters OperationParameters);
 
     /**
      * @brief  Writes the entire octree leaves as hex mesh in VTK format
@@ -534,42 +502,14 @@ private:
      * @param Operation The type of operation for which the start message is to be generated.
      * @return A string representing the start message for the specified operation.
      */
-    std::string GenerateStartMessage(const OperationType Operation)
-    {
-        switch (Operation) {
-            case OperationType::Refine:
-                return "Refinement operation";
-            case OperationType::Coloring:
-                return "Coloring operation";
-            case OperationType::GenerateEntities:
-                return "Entity generation operation";
-            case OperationType::ModelPartOperation:
-                return "Model part operation";
-            default:
-                return "Operation";
-        }
-    }
+    std::string GenerateStartMessage(const OperationType Operation);
 
     /**
      * @brief Generates an end message string based on the given operation type.
      * @param Operation The type of operation for which the end message is to be generated.
      * @return A string representing the end message for the specified operation.
      */
-    std::string GenerateEndMessage(const OperationType Operation)
-    {
-        switch (Operation) {
-            case OperationType::Refine:
-                return "Refinement operation";
-            case OperationType::Coloring:
-                return "Coloring operation";
-            case OperationType::GenerateEntities:
-                return "Entity generation operation";
-            case OperationType::ModelPartOperation:
-                return "Model part operation";
-            default:
-                return "Operation";
-        }
-    }
+    std::string GenerateEndMessage(const OperationType Operation);
 
     /**
      * @brief Resolves a stage-list from JSON and invokes @p Invoke on each prototype.
@@ -594,164 +534,20 @@ private:
         Parameters StageList,
         TInvoke&& Invoke,
         const OperationType Operation = OperationType::UNDEFINED
-        )
-    {
-        // Define the messages to be printed at the start and end of each operation, depending on the echo level
-        const std::string start_message = GenerateStartMessage(Operation);
-        const std::string end_message = GenerateEndMessage(Operation);
-
-        // Saving the start ids (4 integers, node, element, condition, constraint)
-        std::unordered_map<std::string, std::array<std::size_t, 4>> start_ids;
-
-        // Iterate over the operations parameters
-        const unsigned int number_of_operations = StageList.size();
-        unsigned int operation_counter = 0;
-        for (Parameters stage_params : StageList) {
-            // Resolve the component from the registry
-            std::string type = stage_params["type"].GetString();
-            const auto segments = StringUtilities::SplitStringByDelimiter(type, '.');
-            const std::string full_path = (segments.size() == 4) ? type : rRegistryRoot + ".All." + type + ".Prototype";
-            KRATOS_ERROR_IF_NOT(Registry::HasValue(full_path)) << "The component '" << full_path << "' is not registered." << std::endl;
-            const TBase& r_prototype = Registry::GetValue<TBase>(full_path);
-
-            // Get the default parameters of the component (for potential use in specific pre-processing steps)
-            Parameters default_parameters = r_prototype.GetDefaultParameters();
-
-            // Defining the model part name if not defined and the component supports it
-            if (default_parameters.Has("model_part_name") && !stage_params.Has("model_part_name")) {
-                stage_params.AddString("model_part_name", GetInputModelPartName());
-            }
-
-            // Print the operation parameters
-            ++operation_counter;
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << start_message << ", number: " << operation_counter << " with the following parameters:\n" << stage_params << "\n" << GeneratePercentageBar(static_cast<double>(operation_counter) / static_cast<double>(number_of_operations)) << std::endl;
-
-            // Validate the parameters in-place against the component's defaults
-            r_prototype.ValidateParameters(stage_params);
-
-            // Specific settings or pre-processing steps depending on the operation type
-            if (Operation == OperationType::Coloring) {
-                if (default_parameters.Has("default_outside_color")) {
-                    if (!stage_params.Has("default_outside_color")) {
-                        stage_params.AddValue("default_outside_color", mParameters["default_outside_color"]);
-                    } else {
-                        stage_params["default_outside_color"].SetInt(mParameters["default_outside_color"].GetInt());
-                    }
-                }
-            } else if (Operation == OperationType::GenerateEntities) {
-                // Get the model part
-                auto& r_model_part = CreateAndGetModelPart(stage_params["model_part_name"].GetString());
-
-                // Get the root model part
-                auto& r_root_model_part = r_model_part.GetRootModelPart();
-                mRootModelPartsNames.insert(r_root_model_part.Name());
-
-                // Set the start ids
-                auto it_find = start_ids.find(r_root_model_part.Name());
-                // If the model part is not in the map, we add it and we calculate the start ids, otherwise we just update the start ids for the elements, conditions and constraints (the nodes are not updated because they are generated first and we want to keep the same start node id for all the entity generations of the same model part)
-                if (it_find == start_ids.end()) {
-                    auto& r_ids = start_ids[r_root_model_part.Name()];
-                    r_ids[0] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Nodes(), [](Node& rNode) {
-                        return rNode.Id();
-                    });
-                }
-                auto& r_ids = start_ids[r_root_model_part.Name()];
-                r_ids[1] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Elements(), [](Element& rElement) {
-                    return rElement.Id();
-                });
-                r_ids[2] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Conditions(), [](Condition& rCondition) {
-                    return rCondition.Id();
-                });
-                r_ids[3] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.MasterSlaveConstraints(), [](MasterSlaveConstraint& rConstraint) {
-                    return rConstraint.Id();
-                });
-
-                // Set the initial node id
-                if (default_parameters.Has("initial_node_id") && r_ids[0] > 0) {
-                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial node id to " << r_ids[0] << std::endl;
-                    // If defined, update the initial node id
-                    if (stage_params.Has("initial_node_id")) {
-                        stage_params["initial_node_id"].SetInt(r_ids[0]);
-                    } else { // If not defined, set the initial node id
-                        stage_params.AddInt("initial_node_id", r_ids[0]);
-                    }
-                }
-
-                // Set the initial element id
-                if (default_parameters.Has("initial_element_id") && r_ids[1] > 0) {
-                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial element id to " << r_ids[1] << std::endl;
-                    // If defined, update the initial element id
-                    if (stage_params.Has("initial_element_id")) {
-                        stage_params["initial_element_id"].SetInt(r_ids[1]);
-                    } else { // If not defined, set the initial element id
-                        stage_params.AddInt("initial_element_id", r_ids[1]);
-                    }
-                }
-
-                // Set the initial condition id
-                if (default_parameters.Has("initial_condition_id") && r_ids[2] > 0) {
-                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial condition id to " << r_ids[2] << std::endl;
-                    // If defined, update the initial condition id
-                    if (stage_params.Has("initial_condition_id")) {
-                        stage_params["initial_condition_id"].SetInt(r_ids[2]);
-                    } else { // If not defined, set the initial condition id
-                        stage_params.AddInt("initial_condition_id", r_ids[2]);
-                    }
-                }
-
-                // Set the initial constraint id
-                if (default_parameters.Has("initial_constraint_id") && r_ids[3] > 0) {
-                    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Setting the initial constraint id to " << r_ids[3] << std::endl;
-                    // If defined, update the initial constraint id
-                    if (stage_params.Has("initial_constraint_id")) {
-                        stage_params["initial_constraint_id"].SetInt(r_ids[3]);
-                    } else { // If not defined, set the initial constraint id
-                        stage_params.AddInt("initial_constraint_id", r_ids[3]);
-                    }
-                }
-            }
-
-            // Ensure consistent echo level
-            if (default_parameters.Has("echo_level")) {
-                if (!stage_params.Has("echo_level")) {
-                    stage_params.AddValue("echo_level", default_parameters["echo_level"]);
-                }
-                stage_params["echo_level"].SetInt(mEchoLevel);
-            }
-
-            // Invoke the component's do-work virtual
-            Invoke(r_prototype, stage_params);
-
-            // Post-processing steps depending on the operation type
-            if (Operation == OperationType::GenerateEntities) {
-                // Get the model part
-                auto& r_model_part = CreateAndGetModelPart(stage_params["model_part_name"].GetString());
-
-                // Get the root model part
-                auto& r_root_model_part = r_model_part.GetRootModelPart();
-
-                // Get the ids from the map
-                auto& r_ids = start_ids[r_root_model_part.Name()];
-
-                // Update the entities counters (not nodes). NOTE: Check this is valid for hybrid meshes with multiple entity generation stages, and that the nodes are not generated in the entity generation stages (otherwise we should update also the node counter).
-                r_ids[1] = r_root_model_part.NumberOfElements();
-                r_ids[2] = r_root_model_part.NumberOfConditions();
-                r_ids[3] = r_root_model_part.NumberOfMasterSlaveConstraints();
-            }
-
-            // Print the end of the operation
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << end_message << " " << operation_counter << "/" << number_of_operations << " finished" << std::endl;
-        }
-    }
+        );
 
     /**
      * @brief Returns the label of the modeler.
      * @return The label as a string.
      */
-    const std::string GetLabel() const 
-    {
-        return "::[OctreeHybridMeshGeneratorModeler]::"; 
-    }
+    const std::string GetLabel() const;
+
+    ///@}
+    ///@name Serializer
+    ///@{
+
+    friend class Serializer;
+    // TODO: Add serialization methods
 
     ///@}
 };
@@ -761,18 +557,26 @@ private:
 ///@{
 
 /**
+ * @brief Stream extraction operator for @ref OctreeHybridMeshGeneratorModeler.
+ * @param rIStream Input stream.
+ * @param rThis    Modeler to read into.
+ * @return Reference to @p rIStream for chaining.
+ */
+inline std::istream& operator >> (
+    std::istream& rIStream,
+    OctreeHybridMeshGeneratorModeler& rThis
+    );
+
+/**
  * @brief Stream insertion operator for @ref OctreeHybridMeshGeneratorModeler.
  * @param rOStream Output stream.
  * @param rThis    Modeler whose `Info()` string is written.
  * @return Reference to @p rOStream for chaining.
  */
-inline std::ostream& operator<<(std::ostream& rOStream, const OctreeHybridMeshGeneratorModeler& rThis)
-{
-    rThis.PrintInfo(rOStream);
-    rOStream << std::endl;
-    rThis.PrintData(rOStream);
-    return rOStream;
-}
+std::ostream& operator<<(
+    std::ostream& rOStream,
+    const OctreeHybridMeshGeneratorModeler& rThis
+    );
 
 ///@}
 
