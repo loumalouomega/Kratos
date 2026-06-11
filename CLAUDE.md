@@ -76,6 +76,8 @@ Never invoke CMake directly. Use the wrapper scripts:
 
 Copy the template, customize compilers, Python path, and `KRATOS_APPLICATIONS`, then use that copy. The VS Code `Build` task calls `build/configure.*`.
 
+**ALWAYS build by running `build/configure.sh` (e.g. `bash build/configure.sh`). NEVER call `cmake` or `cmake --build` directly/manually**, even to "just rebuild one target" or "just refresh the cache after adding/renaming files" — `configure.sh` already wipes `CMakeCache.txt`/`CMakeFiles`/`cmake_install.cmake`, reconfigures, and builds+installs in one step, and it sets up environment variables (e.g. `BOOST_ROOT`) that a bare `cmake` invocation will not have.
+
 ### Key CMake Variables
 
 | Variable | Description |
