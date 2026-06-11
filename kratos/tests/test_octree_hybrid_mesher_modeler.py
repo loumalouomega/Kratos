@@ -993,15 +993,19 @@ class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
             "model_part_operations":[]}""")
         n_all = model.GetModelPart("All").NumberOfElements()
 
-        # Non-adaptive uniform depth=4: all cells are at level 4; no templates (no transitions).
+        # Cells with non-positive level: level 0 (unrefined root cells), -1
+        # (2:1-balancing transition templates) and -2 (surface-projection
+        # buffer cells). Even a "non-adaptive" depth=4 mesh produces 2:1
+        # transitions between the depth-3/4 shells, hence template hexes.
+        n_nonpositive = self._run(min_level=-2, max_level=0, color=3).NumberOfElements()
+
         out = self._run(min_level=1, max_level=100)
         n_colored = out.NumberOfElements()
-        print(f"\n[OctreeHybridColorCellsByLevel] all={n_all} level_1_to_100={n_colored}")
+        print(f"\n[OctreeHybridColorCellsByLevel] all={n_all} non_positive={n_nonpositive} level_1_to_100={n_colored}")
         self.assertGreater(n_colored, 0)
-        # For a uniform non-adaptive mesh there are no template hexes, so coloring
-        # all levels ≥1 should capture all cells.
-        self.assertEqual(n_colored, n_all,
-                         "Wide level range should cover all cells in a uniform mesh")
+        # Levels 1-100 and non-positive levels (0, -1, -2) together must cover every cell.
+        self.assertEqual(n_colored + n_nonpositive, n_all,
+                         "Levels 1-100 and non-positive levels together should cover all cells")
 
     def test_template_hexes_captured_by_negative_level(self):
         """Including min_level=-1 captures transition-template hexes in an adaptive mesh."""
