@@ -216,6 +216,71 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerDualCarveBbox, KratosC
     }
 }
 
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerDualExplicitBoundingBoxOverride, KratosCoreFastSuite)
+{
+    constexpr double lo = 0.3, hi = 0.7;
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"), lo, hi);
+
+    // Skin's own node bounding box is [0,0,0]-[1,1,1] (the bbox-pin nodes), which
+    // the override below fully contains.
+    constexpr double override_lo = -0.5, override_hi = 1.5;
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "bounding_box" : {
+            "min_point" : [-0.5, -0.5, -0.5],
+            "max_point" : [1.5, 1.5, 1.5]
+        },
+        "refinement_settings_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 3, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
+        "model_part_operations"  : []
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+
+    // All output nodes must lie within the explicit override domain.
+    for (const auto& r_node : out.Nodes()) {
+        KRATOS_EXPECT_GE(r_node.X(), override_lo - 1e-9);
+        KRATOS_EXPECT_LE(r_node.X(), override_hi + 1e-9);
+        KRATOS_EXPECT_GE(r_node.Y(), override_lo - 1e-9);
+        KRATOS_EXPECT_LE(r_node.Y(), override_hi + 1e-9);
+        KRATOS_EXPECT_GE(r_node.Z(), override_lo - 1e-9);
+        KRATOS_EXPECT_LE(r_node.Z(), override_hi + 1e-9);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerSetupModelPartBoundingBoxConflictThrows, KratosCoreFastSuite)
+{
+    constexpr double lo = 0.3, hi = 0.7;
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"), lo, hi);
+
+    // Skin's own node bounding box is [0,0,0]-[1,1,1] (the bbox-pin nodes); this
+    // override does not contain it.
+    Parameters settings(R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "bounding_box" : {
+            "min_point" : [0.3, 0.3, 0.3],
+            "max_point" : [0.7, 0.7, 0.7]
+        },
+        "refinement_settings_list" : [{ "type": "OctreeHybridRefineInterfaceCells",
+                                      "refinement_depth": 3, "adaptive": false }],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
+        "model_part_operations"  : []
+    })");
+    settings.RemoveValue("output_model_part_name");
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
+}
+
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerDefaultParametersValid, KratosCoreFastSuite)
 {
     OctreeHybridMeshGeneratorModeler m;
