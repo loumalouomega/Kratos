@@ -56,7 +56,7 @@ struct AdaptiveRefineData {
     std::array<std::vector<int>,5> refine_tri;
 };
 
-AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
+AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh, const BoundingBox<Point>* pOverrideBoundingBox = nullptr)
 {
     constexpr double PI = 3.1415926535897932384626433;
     AdaptiveRefineData data;
@@ -83,6 +83,15 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
     }
     const int nTri = static_cast<int>(data.tri_geom.size());
     if (nTri == 0) return data;
+
+    // An explicit domain override replaces the geometry-derived extents used to
+    // derive the centred reference cube below.
+    if (pOverrideBoundingBox) {
+        for (int d = 0; d < 3; ++d) {
+            lo[d] = (*pOverrideBoundingBox).GetMinPoint()[d];
+            hi[d] = (*pOverrideBoundingBox).GetMaxPoint()[d];
+        }
+    }
 
     // --- Reference cube: centred, side = largest extent (START_POINT/BOX_LENGTH)
     double L = hi[0]-lo[0];
@@ -215,21 +224,23 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh)
 auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
     ModelPart& rSurfaceMesh,
     std::size_t RefinementDepth,
-    bool Adaptive) -> std::unique_ptr<OctreeType>
+    bool Adaptive,
+    const BoundingBox<Point>* pOverrideBoundingBox) -> std::unique_ptr<OctreeType>
 {
     KRATOS_ERROR_IF(RefinementDepth < 1 || RefinementDepth > ConfigurationType::MAX_DEPTH)
         << "OctreeHybridMeshUtility: RefinementDepth must be in [1, "
         << ConfigurationType::MAX_DEPTH << "], got " << RefinementDepth << std::endl;
 
     if (Adaptive)
-        return BuildAdaptiveFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
+        return BuildAdaptiveFromSurfaceMesh(rSurfaceMesh, RefinementDepth, pOverrideBoundingBox);
 
     // ----------------------------------------------------------------- //
     //  Uniform refinement (legacy path): every leaf whose box intersects
     //  any triangle is split to RefinementDepth.  Domain is the 1 %-padded
-    //  axis-aligned bounding box.  Kept for the transition-template unit
-    //  tests, whose synthetic flat patches carry no curvature and so would
-    //  not refine under the adaptive criterion.
+    //  axis-aligned bounding box (or pOverrideBoundingBox verbatim, if given).
+    //  Kept for the transition-template unit tests, whose synthetic flat
+    //  patches carry no curvature and so would not refine under the adaptive
+    //  criterion.
     // ----------------------------------------------------------------- //
     double lo[3] = { std::numeric_limits<double>::max(),
                      std::numeric_limits<double>::max(),
@@ -238,18 +249,25 @@ auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
                      std::numeric_limits<double>::lowest(),
                      std::numeric_limits<double>::lowest() };
 
-    for (const auto& r_node : rSurfaceMesh.Nodes()) {
-        lo[0] = std::min(lo[0], r_node.X()); hi[0] = std::max(hi[0], r_node.X());
-        lo[1] = std::min(lo[1], r_node.Y()); hi[1] = std::max(hi[1], r_node.Y());
-        lo[2] = std::min(lo[2], r_node.Z()); hi[2] = std::max(hi[2], r_node.Z());
-    }
-    // Inflate the bounding box by 1 % per side so surface triangles that
-    // touch the exact domain boundary are still enclosed rather than clipped
-    // by the octree's root cell.
-    for (std::size_t d = 0; d < 3; ++d) {
-        const double span = hi[d] - lo[d];
-        lo[d] -= 0.01 * span;
-        hi[d] += 0.01 * span;
+    if (pOverrideBoundingBox) {
+        for (int d = 0; d < 3; ++d) {
+            lo[d] = (*pOverrideBoundingBox).GetMinPoint()[d];
+            hi[d] = (*pOverrideBoundingBox).GetMaxPoint()[d];
+        }
+    } else {
+        for (const auto& r_node : rSurfaceMesh.Nodes()) {
+            lo[0] = std::min(lo[0], r_node.X()); hi[0] = std::max(hi[0], r_node.X());
+            lo[1] = std::min(lo[1], r_node.Y()); hi[1] = std::max(hi[1], r_node.Y());
+            lo[2] = std::min(lo[2], r_node.Z()); hi[2] = std::max(hi[2], r_node.Z());
+        }
+        // Inflate the bounding box by 1 % per side so surface triangles that
+        // touch the exact domain boundary are still enclosed rather than clipped
+        // by the octree's root cell.
+        for (std::size_t d = 0; d < 3; ++d) {
+            const double span = hi[d] - lo[d];
+            lo[d] -= 0.01 * span;
+            hi[d] += 0.01 * span;
+        }
     }
 
     auto p_octree = std::make_unique<OctreeType>(RefinementDepth);
@@ -291,9 +309,10 @@ auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
 
 auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
     ModelPart& rSurfaceMesh,
-    std::size_t RefinementDepth) -> std::unique_ptr<OctreeType>
+    std::size_t RefinementDepth,
+    const BoundingBox<Point>* pOverrideBoundingBox) -> std::unique_ptr<OctreeType>
 {
-    const AdaptiveRefineData data = BuildRefineSets(rSurfaceMesh);
+    const AdaptiveRefineData data = BuildRefineSets(rSurfaceMesh, pOverrideBoundingBox);
     KRATOS_ERROR_IF(data.tri_geom.empty())
         << "OctreeHybridMeshUtility: surface ModelPart has no triangles." << std::endl;
 
