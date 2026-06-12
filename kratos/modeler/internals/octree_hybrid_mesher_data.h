@@ -69,6 +69,12 @@ public:
     /// Per-cell inside(1)/outside(0) classification (empty until coloured).
     std::vector<int> mCellColor;
 
+    /// Per-cell, per-local-face interface colour (6 faces, `FACE_FIDC`/Hexahedra3D8
+    /// ordering as used by @ref OctreeHybridMeshUtility::ExtractBoundaryFaces and
+    /// @ref OctreeHybridMeshUtility::ComputeCellFaceNeighbors); empty until a
+    /// face-coloring stage runs.
+    std::vector<std::array<int, 6>> mCellFaceColor;
+
     /// Hanging-node constraints at 2:1 transitions (primal mesh only).
     std::vector<HangingConstraint> mHanging;
 
