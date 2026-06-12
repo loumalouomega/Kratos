@@ -47,12 +47,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinemen
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinedCellSize, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasMaxVoxelSize, KratosCoreFastSuite)
 {
     RefineUniformOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_TRUE(p.Has("refined_cell_size"));
-    KRATOS_EXPECT_NEAR(p["refined_cell_size"].GetDouble(), 0.0, 1e-15);
+    KRATOS_EXPECT_TRUE(p.Has("max_voxel_size"));
+    KRATOS_EXPECT_NEAR(p["max_voxel_size"].GetDouble(), 0.0, 1e-15);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformInfoReturnsBaseClassName, KratosCoreFastSuite)

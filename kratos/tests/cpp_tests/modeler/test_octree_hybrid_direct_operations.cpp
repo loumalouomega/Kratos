@@ -193,7 +193,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyIncreasesLeafCo
     Parameters p(R"({
         "type"              : "RefineUniformOctreeHybrid",
         "refinement_depth"  : 4,
-        "refined_cell_size" : 0.0
+        "max_voxel_size"    : 0.0
     })");
     // Reset mesh so Refine can run (mpOctree must exist)
     modeler.GetData().mCells.clear();
@@ -214,7 +214,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyNoOctreeThrows,
     Parameters p(R"({
         "type"              : "RefineUniformOctreeHybrid",
         "refinement_depth"  : 3,
-        "refined_cell_size" : 0.0
+        "max_voxel_size"    : 0.0
     })");
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(op.Refine(modeler, p), "");
 }
@@ -1100,7 +1100,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineOperationValidateParametersFillsDefa
     op.ValidateParameters(p);
 
     KRATOS_EXPECT_TRUE(p.Has("refinement_depth"));
-    KRATOS_EXPECT_TRUE(p.Has("refined_cell_size"));
+    KRATOS_EXPECT_TRUE(p.Has("max_voxel_size"));
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
 }
 

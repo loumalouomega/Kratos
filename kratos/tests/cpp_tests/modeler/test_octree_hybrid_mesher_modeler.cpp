@@ -1152,14 +1152,14 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsMultipleGeometries, Kr
     KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinedCellSizeProducesElements, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformMaxVoxelSizeProducesElements, KratosCoreFastSuite)
 {
-    // refined_cell_size > 0 should override refinement_depth via ElementSizeToDepth
+    // max_voxel_size > 0 should override refinement_depth via ElementSizeToDepth
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
     ModelPart& out = model.CreateModelPart("Output");
 
-    // Box is [0,1]^3 so refined_cell_size=0.25 → depth≥2; should produce elements
+    // Box is [0,1]^3 so max_voxel_size=0.25 → depth≥2; should produce elements
     Parameters settings(R"({
         "input_model_part_name" : "Skin",
         "output_model_part_name": "Output",
@@ -1167,7 +1167,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinedCellSizeProducesElemen
             { "type": "RefineInterfaceCellsOctreeHybrid",
               "refinement_depth": 1, "adaptive": false },
             { "type": "RefineUniformOctreeHybrid",
-              "refinement_depth": 1, "refined_cell_size": 0.25 }
+              "refinement_depth": 1, "max_voxel_size": 0.25 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
