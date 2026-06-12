@@ -617,17 +617,17 @@ void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementPara
     Internals::OctreeHybridMesherData& r_data = *mpData;
 
     // Dispatch every entry in refinement_settings_list.
-    // The first entry must be OctreeHybridRefineInterfaceCells, which builds the
+    // The first entry must be RefineInterfaceCellsOctreeHybrid, which builds the
     // initial octree from the surface and records mesh_type / projection settings
     // in r_data.  Subsequent entries add deeper local or uniform refinement.
-    Dispatch<OctreeHybridRefineOperation>(
-        "OctreeHybridRefineOperation", RefinementParameters,
-        [&](const OctreeHybridRefineOperation& rProto, Parameters rParams) {
+    Dispatch<RefineOctreeHybrid>(
+        "RefineOctreeHybrid", RefinementParameters,
+        [&](const RefineOctreeHybrid& rProto, Parameters rParams) {
             rProto.Refine(*this, rParams); }, OperationType::Refine);
 
     KRATOS_ERROR_IF_NOT(r_data.mpOctree)
         << "OctreeHybridMeshGeneratorModeler: no octree was built. "
-        << "Ensure 'refinement_settings_list' starts with an OctreeHybridRefineInterfaceCells entry."
+        << "Ensure 'refinement_settings_list' starts with an RefineInterfaceCellsOctreeHybrid entry."
         << std::endl;
 
     // Ensure the octree is 2:1 balancing + mesh extraction.

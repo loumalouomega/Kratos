@@ -31,7 +31,7 @@ namespace Kratos {
 class OctreeHybridMeshGeneratorModeler;
 
 /**
- * @class OctreeHybridRefineOperation
+ * @class RefineOctreeHybrid
  * @ingroup KratosCore
  * @brief Base class for octree refinement operations dispatched by @ref OctreeHybridMeshGeneratorModeler.
  * @details Refinement operations run inside `BuildOctreeAndExtract()` **after** the initial
@@ -42,7 +42,7 @@ class OctreeHybridMeshGeneratorModeler;
  * The design mirrors the Registry-prototype pattern used by @ref OctreeHybridMesherColoring,
  * @ref OctreeHybridMesherEntityGeneration, and @ref OctreeHybridMesherOperation: each
  * concrete derived class registers itself via `KRATOS_REGISTRY_ADD_PROTOTYPE` under two paths —
- * `"OctreeHybridRefineOperation.KratosMultiphysics"` and `"OctreeHybridRefineOperation.All"`.
+ * `"RefineOctreeHybrid.KratosMultiphysics"` and `"RefineOctreeHybrid.All"`.
  * The modeler retrieves a shared, stateless prototype and calls @ref Refine on it.
  * Because instances may be shared, @ref Refine is declared `const` and all context is
  * passed through the `OctreeHybridMeshGeneratorModeler&` and `Parameters` arguments.
@@ -62,34 +62,34 @@ class OctreeHybridMeshGeneratorModeler;
  * ```
  *
  * @see OctreeHybridMeshGeneratorModeler
- * @see OctreeHybridRefineUniform
- * @see OctreeHybridRefineInterfaceCells
+ * @see RefineUniformOctreeHybrid
+ * @see RefineInterfaceCellsOctreeHybrid
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeHybridRefineOperation
+class KRATOS_API(KRATOS_CORE) RefineOctreeHybrid
 {
 public:
     ///@name Type Definitions
     ///@{
 
-    /// Pointer definition of OctreeHybridRefineOperation.
-    KRATOS_CLASS_POINTER_DEFINITION(OctreeHybridRefineOperation);
+    /// Pointer definition of RefineOctreeHybrid.
+    KRATOS_CLASS_POINTER_DEFINITION(RefineOctreeHybrid);
 
     ///@}
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeHybridRefineOperation() = default;
+    RefineOctreeHybrid() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The operation to copy.  No data members need copying in the base.
      */
-    OctreeHybridRefineOperation(OctreeHybridRefineOperation const& rOther) {}
+    RefineOctreeHybrid(RefineOctreeHybrid const& rOther) {}
 
     /// Virtual destructor.
-    virtual ~OctreeHybridRefineOperation() = default;
+    virtual ~RefineOctreeHybrid() = default;
 
     ///@}
     ///@name Operations
@@ -112,7 +112,7 @@ public:
      */
     virtual void Refine(OctreeHybridMeshGeneratorModeler& rModeler, Parameters RefineParameters) const
     {
-        KRATOS_ERROR << "Calling base OctreeHybridRefineOperation::Refine. "
+        KRATOS_ERROR << "Calling base RefineOctreeHybrid::Refine. "
                      << "Please override it in the derived class." << std::endl;
     }
 
@@ -145,9 +145,9 @@ public:
 
     /**
      * @brief Returns a string identifying this operation.
-     * @return `"OctreeHybridRefineOperation"` in the base; derived classes return their name.
+     * @return `"RefineOctreeHybrid"` in the base; derived classes return their name.
      */
-    virtual std::string Info() const { return "OctreeHybridRefineOperation"; }
+    virtual std::string Info() const { return "RefineOctreeHybrid"; }
 
     ///@}
 private:
@@ -155,9 +155,9 @@ private:
     ///@{
 
     /// Self-registers the base class prototype at the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridRefineOperation.KratosMultiphysics", OctreeHybridRefineOperation, OctreeHybridRefineOperation)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("RefineOctreeHybrid.KratosMultiphysics", RefineOctreeHybrid, RefineOctreeHybrid)
     /// Self-registers the base class prototype at the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridRefineOperation.All", OctreeHybridRefineOperation, OctreeHybridRefineOperation)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("RefineOctreeHybrid.All", RefineOctreeHybrid, RefineOctreeHybrid)
 
     ///@}
 };
@@ -167,12 +167,12 @@ private:
 ///@{
 
 /**
- * @brief Stream insertion operator for @ref OctreeHybridRefineOperation.
+ * @brief Stream insertion operator for @ref RefineOctreeHybrid.
  * @param rOStream Output stream to write to.
  * @param rThis    The operation whose @ref Info string is printed.
  * @return Reference to @p rOStream for chaining.
  */
-inline std::ostream& operator<<(std::ostream& rOStream, const OctreeHybridRefineOperation& rThis)
+inline std::ostream& operator<<(std::ostream& rOStream, const RefineOctreeHybrid& rThis)
 {
     rOStream << rThis.Info();
     return rOStream;

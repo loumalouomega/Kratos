@@ -338,9 +338,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityProjectToIsoSurfaceRunsWithoutE
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineOperationStreamOperatorNonEmpty, KratosCoreFastSuite)
 {
-    OctreeHybridRefineUniform op;
+    RefineUniformOctreeHybrid op;
     std::ostringstream ss;
-    ss << static_cast<const OctreeHybridRefineOperation&>(op);
+    ss << static_cast<const RefineOctreeHybrid&>(op);
     KRATOS_EXPECT_FALSE(ss.str().empty());
 }
 

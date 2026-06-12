@@ -25,7 +25,7 @@ namespace Kratos {
 ///@{
 
 /**
- * @class OctreeHybridRefineInterfaceCells
+ * @class RefineInterfaceCellsOctreeHybrid
  * @ingroup KratosCore
  * @brief Builds the initial octree from a surface (first call) and selectively refines
  *        cells near it on subsequent calls.
@@ -49,9 +49,9 @@ namespace Kratos {
  *
  * @code{.json}
  * "refinement_settings_list": [
- *   { "type": "OctreeHybridRefineInterfaceCells",
+ *   { "type": "RefineInterfaceCellsOctreeHybrid",
  *     "refinement_depth": 3, "adaptive": true, "mesh_type": "dual" },
- *   { "type": "OctreeHybridRefineInterfaceCells",
+ *   { "type": "RefineInterfaceCellsOctreeHybrid",
  *     "input_model_part_name": "InnerWall", "refinement_depth": 6 }
  * ]
  * @endcode
@@ -62,7 +62,7 @@ namespace Kratos {
  * ### Parameters schema
  * | Key                      | Type   | Default | Description                         |
  * |--------------------------|--------|---------|-------------------------------------|
- * | `type`                   | string | `"OctreeHybridRefineInterfaceCells"` | Registry key. |
+ * | `type`                   | string | `"RefineInterfaceCellsOctreeHybrid"` | Registry key. |
  * | `input_model_part_name`  | string | `""`    | Surface model part.  On first call, empty → falls back to the modeler's top-level `input_model_part_name`.  On subsequent calls, empty → reuse the already-extracted main triangle soup. |
  * | `refinement_depth`       | int    | `5`     | Build depth (first call) or maximum refinement depth for interface cells (subsequent calls).  Overridden by `refined_cell_size` > 0 on subsequent calls. |
  * | `refined_cell_size`      | double | `0.0`   | Desired maximum cell size (world-space) for subsequent calls.  When > 0, overrides `refinement_depth` via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
@@ -72,26 +72,26 @@ namespace Kratos {
  * | `projection_iterations`  | int    | `20000` | First call only: maximum projection iterations. |
  * | `projection_smoothing`   | int    | `1000`  | First call only: smoothing iterations in the projection step. |
  *
- * @see OctreeHybridRefineOperation
- * @see OctreeHybridRefineUniform
+ * @see RefineOctreeHybrid
+ * @see RefineUniformOctreeHybrid
  * @see OctreeHybridMeshUtility::BuildFromSurfaceMesh
  * @see OctreeHybridMeshUtility::RefineInterfaceCells
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeHybridRefineInterfaceCells : public OctreeHybridRefineOperation
+class KRATOS_API(KRATOS_CORE) RefineInterfaceCellsOctreeHybrid : public RefineOctreeHybrid
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeHybridRefineInterfaceCells() = default;
+    RefineInterfaceCellsOctreeHybrid() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The instance to copy.  No data members to copy.
      */
-    OctreeHybridRefineInterfaceCells(OctreeHybridRefineInterfaceCells const& rOther) {}
+    RefineInterfaceCellsOctreeHybrid(RefineInterfaceCellsOctreeHybrid const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -120,7 +120,7 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"                  : "OctreeHybridRefineInterfaceCells",
+     *     "type"                  : "RefineInterfaceCellsOctreeHybrid",
      *     "input_model_part_name" : "",
      *     "refinement_depth"      : 5,
      *     "refined_cell_size"     : 0.0,
@@ -141,9 +141,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridRefineOperation.KratosMultiphysics", OctreeHybridRefineOperation, OctreeHybridRefineInterfaceCells)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("RefineOctreeHybrid.KratosMultiphysics", RefineOctreeHybrid, RefineInterfaceCellsOctreeHybrid)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridRefineOperation.All", OctreeHybridRefineOperation, OctreeHybridRefineInterfaceCells)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("RefineOctreeHybrid.All", RefineOctreeHybrid, RefineInterfaceCellsOctreeHybrid)
 
     ///@}
 };

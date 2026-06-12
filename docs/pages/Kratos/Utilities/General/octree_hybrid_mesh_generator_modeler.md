@@ -149,8 +149,8 @@ of component objects.
 SetupModelPart()
     │
     ├─ 1. BuildOctreeAndExtract()
-    │      Dispatch<OctreeHybridRefineOperation>  [refinement_settings_list]
-    │      │  first entry must be OctreeHybridRefineInterfaceCells:
+    │      Dispatch<RefineOctreeHybrid>  [refinement_settings_list]
+    │      │  first entry must be RefineInterfaceCellsOctreeHybrid:
     │      │    • build + 2:1-balance octree
     │      │    • store mesh_type / projection settings in OctreeHybridMesherData
     │      │  subsequent entries (optional): further adaptive / interface refinement
@@ -173,7 +173,7 @@ SetupModelPart()
 
 | # | Stage | Base class | JSON key | Purpose |
 |---|-------|-----------|----------|---------|
-| 1 | Octree generation + refinement | `OctreeHybridRefineOperation` | `refinement_settings_list` | Build octree (via `OctreeHybridRefineInterfaceCells`), optional further refinement |
+| 1 | Octree generation + refinement | `RefineOctreeHybrid` | `refinement_settings_list` | Build octree (via `RefineInterfaceCellsOctreeHybrid`), optional further refinement |
 | 2 | Coloring | `OctreeHybridMesherColoring` | `coloring_settings_list` | Classify cells inside/outside |
 | 3 | Entity generation | `OctreeHybridMesherEntityGeneration` | `entities_generator_list` | Create nodes, elements, conditions, constraints |
 | 4 | Operations | `OctreeHybridMesherOperation` | `model_part_operations` | Post-processing (e.g. quality report) |
@@ -183,19 +183,19 @@ SetupModelPart()
 ### 3.1 Octree generation and refinement — `refinement_settings_list`
 
 `BuildOctreeAndExtract` dispatches the full `refinement_settings_list` before extracting the hex mesh.
-The **first entry must be `OctreeHybridRefineInterfaceCells`** (which replaces the former `octree_generator` block);
-subsequent entries are optional and can apply additional refinement (e.g. `OctreeHybridRefineUniform`,
-`OctreeHybridRefineInterfaceCells`).
+The **first entry must be `RefineInterfaceCellsOctreeHybrid`** (which replaces the former `octree_generator` block);
+subsequent entries are optional and can apply additional refinement (e.g. `RefineUniformOctreeHybrid`,
+`RefineInterfaceCellsOctreeHybrid`).
 
 **Inputs:**
 
 - The surface `ModelPart` identified by `input_model_part_name` inside the
-  `OctreeHybridRefineInterfaceCells` entry (falls back to the top-level `input_model_part_name`).
+  `RefineInterfaceCellsOctreeHybrid` entry (falls back to the top-level `input_model_part_name`).
   The model part must contain `Triangle3D3` geometries (typically loaded via `StlIO::ReadModelPart`).
 
 **What it does:**
 
-1. Dispatches the `refinement_settings_list`.  The first entry (`OctreeHybridRefineInterfaceCells`):
+1. Dispatches the `refinement_settings_list`.  The first entry (`RefineInterfaceCellsOctreeHybrid`):
    - Calls `OctreeHybridMeshUtility::ExtractTriangleSoup` to copy the surface triangles
      into world-space for later carving/projection/classification.
    - Calls `OctreeHybridMeshUtility::BuildFromSurfaceMesh` to build the adaptive octree.
@@ -205,7 +205,7 @@ subsequent entries are optional and can apply additional refinement (e.g. `Octre
      refined to `refinement_depth`.
    - Stores `mesh_type`, `project_to_surface`, `projection_iterations`, and
      `projection_smoothing` into `OctreeHybridMesherData` for use by the extraction pass.
-   - Any subsequent entries in `refinement_settings_list` (e.g. `OctreeHybridRefineUniform`)
+   - Any subsequent entries in `refinement_settings_list` (e.g. `RefineUniformOctreeHybrid`)
      further subdivide octree cells.
 2. Calls `StrongConstrain2To1` to enforce the 2:1 balance constraint across the whole tree.
 3. Depending on `mesh_type`:
@@ -235,7 +235,7 @@ subsequent entries are optional and can apply additional refinement (e.g. `Octre
 4. Initialises `OctreeHybridMesherData::mNodePtrs` (size = number of nodes, all null) for
    lazy de-duplication during entity generation.
 
-**Key parameter decisions (set inside `OctreeHybridRefineInterfaceCells`):**
+**Key parameter decisions (set inside `RefineInterfaceCellsOctreeHybrid`):**
 
 | `mesh_type` | `adaptive` | `project_to_surface` | Result |
 |------------|-----------|----------------------|--------|
@@ -458,7 +458,7 @@ The complete parameter block accepted by `OctreeHybridMeshGeneratorModeler`:
 {
     "refinement_settings_list": [
         {
-            "type"                 : "OctreeHybridRefineInterfaceCells",
+            "type"                 : "RefineInterfaceCellsOctreeHybrid",
             "input_model_part_name": "",
             "refinement_depth"     : 5,
             "adaptive"             : true,
@@ -483,21 +483,21 @@ The complete parameter block accepted by `OctreeHybridMeshGeneratorModeler`:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `refinement_settings_list` | array | `[]` | Ordered list of refine-operation descriptors. The first entry must be `OctreeHybridRefineInterfaceCells`; optional further entries refine the octree before mesh extraction. |
+| `refinement_settings_list` | array | `[]` | Ordered list of refine-operation descriptors. The first entry must be `RefineInterfaceCellsOctreeHybrid`; optional further entries refine the octree before mesh extraction. |
 | `coloring_settings_list` | array | `[]` | Ordered list of coloring stage descriptors. |
 | `entities_generator_list` | array | `[]` | Ordered list of entity-generation stage descriptors. |
 | `model_part_operations` | array | `[]` | Ordered list of post-processing operation descriptors. |
 | `mdpa_file_name` | string | `""` | Optional path to an `.mdpa` file used to populate `input_model_part_name` during `Initialize`. If empty, the input ModelPart is assumed to be populated already. |
-| `input_model_part_name` | string | `""` | Name of the surface ModelPart to mesh. Used as fallback when `OctreeHybridRefineInterfaceCells.input_model_part_name` is empty. |
+| `input_model_part_name` | string | `""` | Name of the surface ModelPart to mesh. Used as fallback when `RefineInterfaceCellsOctreeHybrid.input_model_part_name` is empty. |
 | `default_outside_color` | int | `1` | Reserved for future use (mirrors `VoxelMeshGeneratorModeler`); not yet consumed by the coloring pipeline. |
 | `remove_orphan_nodes` | bool | `true` | Reserved: intended to remove nodes not belonging to any generated element, condition, or constraint after the entity-generation and operation stages. Not yet implemented. |
 | `echo_level` | int | `1` | Verbosity level (0 = silent, higher = more output). |
 
-**`OctreeHybridRefineInterfaceCells` keys** (first entry of `refinement_settings_list`):
+**`RefineInterfaceCellsOctreeHybrid` keys** (first entry of `refinement_settings_list`):
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"OctreeHybridRefineInterfaceCells"` | Registry lookup key. |
+| `type` | string | `"RefineInterfaceCellsOctreeHybrid"` | Registry lookup key. |
 | `input_model_part_name` | string | `""` | Name of the surface ModelPart.  If empty, falls back to the top-level `input_model_part_name`. |
 | `refinement_depth` | int | `5` | Maximum octree refinement level near the surface.  Range: `[1, MAX_DEPTH=10]`. |
 | `adaptive` | bool | `true` | `true` = curvature + thickness adaptive refinement (matches HybridOctree_Hex reference cell-for-cell); `false` = uniform refinement of all surface-intersecting cells. |
@@ -523,7 +523,7 @@ remaining keys are specific to the component and are described in
 
 ### 7.0 Refine operations
 
-#### `OctreeHybridRefineInterfaceCells`
+#### `RefineInterfaceCellsOctreeHybrid`
 
 On the **first call** (no octree built yet): extracts a triangle soup from the surface,
 builds the adaptive or uniform octree via `BuildFromSurfaceMesh`, and stores `mesh_type`
@@ -534,9 +534,9 @@ On **subsequent calls**: selectively subdivides octree cells near the interface 
 to `refinement_depth`.  Multiple entries may target different model parts for
 feature-specific resolution.
 
-**Registry path:** `OctreeHybridRefineOperation.All.OctreeHybridRefineInterfaceCells.Prototype`
+**Registry path:** `RefineOctreeHybrid.All.RefineInterfaceCellsOctreeHybrid.Prototype`
 
-**Class:** `Kratos::OctreeHybridRefineInterfaceCells`
+**Class:** `Kratos::RefineInterfaceCellsOctreeHybrid`
 
 **Header:** `kratos/modeler/refine_operations/refine_interface_cells_hybrid_octree.h`
 
@@ -544,7 +544,7 @@ feature-specific resolution.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"OctreeHybridRefineInterfaceCells"` | Registry lookup key. |
+| `type` | string | `"RefineInterfaceCellsOctreeHybrid"` | Registry lookup key. |
 | `input_model_part_name` | string | `""` | Surface ModelPart name. First call: empty → falls back to modeler's top-level `input_model_part_name`. Subsequent calls: empty → reuse main triangle soup. |
 | `refinement_depth` | int | `5` | Build depth (first call) or maximum refinement depth for interface cells (subsequent calls). |
 | `refined_cell_size` | double | `0.0` | Subsequent calls only: desired cell size (world-space). When > 0, overrides `refinement_depth` via `ElementSizeToDepth`. |
@@ -570,7 +570,7 @@ feature-specific resolution.
 
 ```json
 {
-    "type"             : "OctreeHybridRefineInterfaceCells",
+    "type"             : "RefineInterfaceCellsOctreeHybrid",
     "refinement_depth" : 5,
     "adaptive"         : true,
     "mesh_type"        : "dual"
@@ -581,7 +581,7 @@ feature-specific resolution.
 
 ```json
 {
-    "type"             : "OctreeHybridRefineInterfaceCells",
+    "type"             : "RefineInterfaceCellsOctreeHybrid",
     "refinement_depth" : 4,
     "adaptive"         : true,
     "mesh_type"        : "primal"
@@ -592,7 +592,7 @@ feature-specific resolution.
 
 ```json
 {
-    "type"                 : "OctreeHybridRefineInterfaceCells",
+    "type"                 : "RefineInterfaceCellsOctreeHybrid",
     "refinement_depth"     : 5,
     "adaptive"             : true,
     "mesh_type"            : "dual",
@@ -1585,7 +1585,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
     "refinement_settings_list" : [
         {
-            "type"             : "OctreeHybridRefineInterfaceCells",
+            "type"             : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth" : 5,
             "adaptive"         : true,
             "mesh_type"        : "dual"
@@ -1637,7 +1637,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
     "refinement_settings_list" : [
         {
-            "type"             : "OctreeHybridRefineInterfaceCells",
+            "type"             : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth" : 4,
             "adaptive"         : true,
             "mesh_type"        : "primal"
@@ -1695,7 +1695,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
     "refinement_settings_list" : [
         {
-            "type"                 : "OctreeHybridRefineInterfaceCells",
+            "type"                 : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth"     : 5,
             "adaptive"             : true,
             "mesh_type"            : "dual",
@@ -1747,7 +1747,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
     "refinement_settings_list" : [
         {
-            "type"             : "OctreeHybridRefineInterfaceCells",
+            "type"             : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth" : 4,
             "adaptive"         : true,
             "mesh_type"        : "dual"
@@ -1824,7 +1824,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
     "refinement_settings_list" : [
         {
-            "type"             : "OctreeHybridRefineInterfaceCells",
+            "type"             : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth" : 4,
             "adaptive"         : false,
             "mesh_type"        : "dual"
@@ -1880,7 +1880,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Surface",
     "refinement_settings_list" : [
         {
-            "type"             : "OctreeHybridRefineInterfaceCells",
+            "type"             : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth" : 4,
             "adaptive"         : true,
             "mesh_type"        : "dual"
@@ -1947,7 +1947,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Skin",
     "refinement_settings_list" : [
         {
-            "type"             : "OctreeHybridRefineInterfaceCells",
+            "type"             : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth" : 4,
             "adaptive"         : false
         }
@@ -1995,7 +1995,7 @@ settings = KM.Parameters("""{
     "input_model_part_name"  : "Skin",
     "refinement_settings_list" : [
         {
-            "type"             : "OctreeHybridRefineInterfaceCells",
+            "type"             : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth" : 4,
             "adaptive"         : false
         }
@@ -2419,7 +2419,7 @@ Tests for the Registry-prototype dispatch mechanism inside `OctreeHybridMeshGene
 
 | Test | Assertion |
 |------|-----------|
-| `test_all_base_prototypes_registered` | All four abstract base-class prototypes (`OctreeHybridRefineOperation`, `OctreeHybridMesherColoring`, `OctreeHybridMesherEntityGeneration`, `OctreeHybridMesherOperation`) are in the Registry. |
+| `test_all_base_prototypes_registered` | All four abstract base-class prototypes (`RefineOctreeHybrid`, `OctreeHybridMesherColoring`, `OctreeHybridMesherEntityGeneration`, `OctreeHybridMesherOperation`) are in the Registry. |
 | `test_all_concrete_prototypes_registered` | All nine concrete components are in the Registry (including all five coloring stages). |
 | `test_full_path_dispatch_works` | A four-segment dot-separated full Registry path in the `"type"` field is accepted and dispatched correctly. |
 | `test_unknown_operation_type_raises` | An unknown operation type name triggers a Registry-not-found error. |
@@ -2483,7 +2483,7 @@ It requires `KratosMultiphysics`, `pyvista`, and optionally `trame`/`ipywidgets`
 ## 12. Known limitations
 
 1. **No surface projection for the primal mesh.** `project_to_surface: true` in the
-   `OctreeHybridRefineInterfaceCells` entry is silently ignored when `mesh_type: "primal"`.
+   `RefineInterfaceCellsOctreeHybrid` entry is silently ignored when `mesh_type: "primal"`.
    The boundary of a primal mesh follows the octree grid and is not projected onto the
    input surface.  Use `mesh_type: "dual"` with `project_to_surface: true` for a
    surface-fitted boundary.
@@ -2521,7 +2521,7 @@ It requires `KratosMultiphysics`, `pyvista`, and optionally `trame`/`ipywidgets`
    §13.2 for a detailed explanation.
 
 7. **Coloring required before entity generation.** Even when `project_to_surface: true`
-   is set in `OctreeHybridRefineInterfaceCells` (which already removes outside cells),
+   is set in `RefineInterfaceCellsOctreeHybrid` (which already removes outside cells),
    `OctreeHybridClassifyCellsInsideOutside` must still appear in `coloring_settings_list`
    so that `mCellColor` is populated.
    `GenerateHybridOctreeHexahedraElementsWithCellColor` filters on `mCellColor` and will produce no elements

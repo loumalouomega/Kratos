@@ -50,7 +50,7 @@ namespace Internals { class OctreeHybridMesherData; }
  *
  * | Step | Private method | What happens |
  * |------|---------------|-------------|
- * | 1 | @ref ApplyRefinement | Dispatches each @ref OctreeHybridRefineOperation in `refinement_settings_list` (the first must be @ref OctreeHybridRefineInterfaceCells, which builds the initial octree and records `mesh_type` / projection settings; further entries add deeper refinement).  Then calls `StrongConstrain2To1` and extracts the conforming *dual* or non-conforming *primal* hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
+ * | 1 | @ref ApplyRefinement | Dispatches each @ref RefineOctreeHybrid in `refinement_settings_list` (the first must be @ref RefineInterfaceCellsOctreeHybrid, which builds the initial octree and records `mesh_type` / projection settings; further entries add deeper refinement).  Then calls `StrongConstrain2To1` and extracts the conforming *dual* or non-conforming *primal* hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
  * | 2 | @ref ApplyColoring | Dispatches `coloring_settings_list`; classifies cells as inside (1) or outside (0) the surface. |
  * | 3 | @ref GenerateEntities | Dispatches `entities_generator_list`; emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
  * | 4 | @ref ApplyOperations | Dispatches `model_part_operations`; post-processing passes (e.g. mesh-quality reports). |
@@ -62,7 +62,7 @@ namespace Internals { class OctreeHybridMesherData; }
  * static-init time through `KRATOS_REGISTRY_ADD_PROTOTYPE`.
  *
  * ### Mesh topologies
- * The `"mesh_type"` key in the first @ref OctreeHybridRefineInterfaceCells operation selects the topology:
+ * The `"mesh_type"` key in the first @ref RefineInterfaceCellsOctreeHybrid operation selects the topology:
  * - **`"dual"`** (default): a fully *conforming* mesh produced by the dual extraction +
  *   transition-template algorithm (see @ref OctreeHybridMeshUtility).  No hanging nodes.
  * - **`"primal"`**: one hexahedron per octree leaf, sharing finest-grid corner nodes.
@@ -84,9 +84,9 @@ namespace Internals { class OctreeHybridMesherData; }
  * settings = KM.Parameters('''{
  *     "input_model_part_name"  : "Surface",
  *     "refinement_settings_list" : [
- *         { "type": "OctreeHybridRefineInterfaceCells",
+ *         { "type": "RefineInterfaceCellsOctreeHybrid",
  *           "refinement_depth": 3 },
- *         { "type": "OctreeHybridRefineInterfaceCells",
+ *         { "type": "RefineInterfaceCellsOctreeHybrid",
  *           "input_model_part_name": "Surface",
  *           "refinement_depth": 5 }
  *     ],
@@ -238,10 +238,10 @@ public:
      * `"bounding_box_model_part"` (the name of another ModelPart in the `Model`) are mutually
      * exclusive ways to override the octree's domain; see @ref ResolveOctreeBoundingBox. When
      * neither is set, the domain is computed automatically from the input surface, as before.
-     * The `refinement_settings_list` must start with an @ref OctreeHybridRefineInterfaceCells
+     * The `refinement_settings_list` must start with an @ref RefineInterfaceCellsOctreeHybrid
      * entry (which builds the octree and records `mesh_type` / projection settings) and may be
-     * followed by any number of @ref OctreeHybridRefineUniform or additional
-     * @ref OctreeHybridRefineInterfaceCells entries.
+     * followed by any number of @ref RefineUniformOctreeHybrid or additional
+     * @ref RefineInterfaceCellsOctreeHybrid entries.
      *
      * Each entry of `output_files` is a debug-output request with a `"type"` key. The only
      * currently supported type is `"octree_vtk"`, which dumps the raw octree leaves via
@@ -281,7 +281,7 @@ public:
 
     /**
      * @brief Returns the top-level `input_model_part_name` from the modeler parameters.
-     * @details Used by @ref OctreeHybridRefineInterfaceCells as a fallback when its own
+     * @details Used by @ref RefineInterfaceCellsOctreeHybrid as a fallback when its own
      *          `input_model_part_name` is empty on the first call (octree build).
      * @return The model part name string (may be empty if not set).
      */
@@ -503,8 +503,8 @@ private:
 
     /**
      * @brief Dispatches `refinement_settings_list`, then balances and extracts the hex mesh.
-     * @details Calls @ref OctreeHybridRefineOperation::Refine on every entry (the first must
-     *          be @ref OctreeHybridRefineInterfaceCells).  After all refinement passes, calls
+     * @details Calls @ref RefineOctreeHybrid::Refine on every entry (the first must
+     *          be @ref RefineInterfaceCellsOctreeHybrid).  After all refinement passes, calls
      *          `StrongConstrain2To1` and then:
      *          - **`mMeshType == "dual"`**: `ExtractDualHexMesh`; optionally
      *            `RemoveOutsideElement` + `ClearBufferZone` + `ProjectToIsoSurface`.

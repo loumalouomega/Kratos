@@ -29,19 +29,19 @@
 namespace Kratos::Testing {
 
 // ===========================================================================
-// OctreeHybridRefineUniform — GetDefaultParameters / Info
+// RefineUniformOctreeHybrid — GetDefaultParameters / Info
 // ===========================================================================
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersTypeKey, KratosCoreFastSuite)
 {
-    OctreeHybridRefineUniform op;
+    RefineUniformOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridRefineUniform"});
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"RefineUniformOctreeHybrid"});
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinementDepth, KratosCoreFastSuite)
 {
-    OctreeHybridRefineUniform op;
+    RefineUniformOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("refinement_depth"));
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
@@ -49,7 +49,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinemen
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinedCellSize, KratosCoreFastSuite)
 {
-    OctreeHybridRefineUniform op;
+    RefineUniformOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("refined_cell_size"));
     KRATOS_EXPECT_NEAR(p["refined_cell_size"].GetDouble(), 0.0, 1e-15);
@@ -57,24 +57,24 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformDefaultParametersHasRefinedCe
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
-    OctreeHybridRefineUniform op;
-    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridRefineOperation"});
+    RefineUniformOctreeHybrid op;
+    KRATOS_EXPECT_EQ(op.Info(), std::string{"RefineOctreeHybrid"});
 }
 
 // ===========================================================================
-// OctreeHybridRefineInterfaceCells — GetDefaultParameters / Info
+// RefineInterfaceCellsOctreeHybrid — GetDefaultParameters / Info
 // ===========================================================================
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersTypeKey, KratosCoreFastSuite)
 {
-    OctreeHybridRefineInterfaceCells op;
+    RefineInterfaceCellsOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridRefineInterfaceCells"});
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"RefineInterfaceCellsOctreeHybrid"});
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersHasInputModelPartName, KratosCoreFastSuite)
 {
-    OctreeHybridRefineInterfaceCells op;
+    RefineInterfaceCellsOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("input_model_part_name"));
     KRATOS_EXPECT_EQ(p["input_model_part_name"].GetString(), std::string{""});
@@ -82,7 +82,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersHasIn
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersAllKeys, KratosCoreFastSuite)
 {
-    OctreeHybridRefineInterfaceCells op;
+    RefineInterfaceCellsOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("refinement_depth"));
     KRATOS_EXPECT_TRUE(p.Has("refined_cell_size"));
@@ -95,7 +95,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersAllKe
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersDefaults, KratosCoreFastSuite)
 {
-    OctreeHybridRefineInterfaceCells op;
+    RefineInterfaceCellsOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_EQ(p["refinement_depth"].GetInt(), 5);
     KRATOS_EXPECT_NEAR(p["refined_cell_size"].GetDouble(), 0.0, 1e-15);
@@ -108,8 +108,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersDefau
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
-    OctreeHybridRefineInterfaceCells op;
-    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridRefineOperation"});
+    RefineInterfaceCellsOctreeHybrid op;
+    KRATOS_EXPECT_EQ(op.Info(), std::string{"RefineOctreeHybrid"});
 }
 
 // ===========================================================================

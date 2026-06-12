@@ -22,10 +22,10 @@
 
 namespace Kratos {
 
-const Parameters OctreeHybridRefineInterfaceCells::GetDefaultParameters() const
+const Parameters RefineInterfaceCellsOctreeHybrid::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"                     : "OctreeHybridRefineInterfaceCells",
+        "type"                     : "RefineInterfaceCellsOctreeHybrid",
         "input_model_part_name"    : "",
         "refinement_depth"         : 5,
         "refined_cell_size"        : 0.0,
@@ -41,7 +41,7 @@ const Parameters OctreeHybridRefineInterfaceCells::GetDefaultParameters() const
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridRefineInterfaceCells::Refine(
+void RefineInterfaceCellsOctreeHybrid::Refine(
     OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters RefineParameters) const
 {
@@ -56,7 +56,7 @@ void OctreeHybridRefineInterfaceCells::Refine(
         std::string surface_name = op_surface_name;
         if (surface_name.empty()) surface_name = rModeler.GetInputModelPartName();
         KRATOS_ERROR_IF(surface_name.empty())
-            << "OctreeHybridRefineInterfaceCells: no input surface model part specified. "
+            << "RefineInterfaceCellsOctreeHybrid: no input surface model part specified. "
             << "Set 'input_model_part_name' on the operation or the modeler's top-level key."
             << std::endl;
 

@@ -25,7 +25,7 @@ namespace Kratos {
 ///@{
 
 /**
- * @class OctreeHybridRefineUniform
+ * @class RefineUniformOctreeHybrid
  * @ingroup KratosCore
  * @brief Refinement operation that subdivides **all** octree leaves to a prescribed depth.
  * @details This operation iterates over the current leaf set and repeatedly subdivides
@@ -34,42 +34,42 @@ namespace Kratos {
  * proximity of cells to the input surface.
  *
  * It is typically used when a uniform background mesh is desired, either as a standalone
- * refinement pass or in combination with @ref OctreeHybridRefineInterfaceCells (which
+ * refinement pass or in combination with @ref RefineInterfaceCellsOctreeHybrid (which
  * adds extra resolution near specific surfaces).
  *
  * ### Parameters schema
  * | Key                | Type   | Default | Description                              |
  * |--------------------|--------|---------|------------------------------------------|
- * | `type`             | string | `"OctreeHybridRefineUniform"` | Registry lookup key. |
+ * | `type`             | string | `"RefineUniformOctreeHybrid"` | Registry lookup key. |
  * | `refinement_depth`  | int    | `5`     | Target refinement depth.  Used when `refined_cell_size` is 0. |
  * | `refined_cell_size` | double | `0.0`   | Desired maximum cell size in world-space units.  When > 0, overrides `refinement_depth` and the equivalent depth is computed via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
  *
  * ### Example JSON usage
  * @code{.json}
  * "refinement_settings_list": [
- *   { "type": "OctreeHybridRefineUniform", "refinement_depth": 4 }
+ *   { "type": "RefineUniformOctreeHybrid", "refinement_depth": 4 }
  * ]
  * @endcode
  *
- * @see OctreeHybridRefineOperation
- * @see OctreeHybridRefineInterfaceCells
+ * @see RefineOctreeHybrid
+ * @see RefineInterfaceCellsOctreeHybrid
  * @see OctreeHybridMeshUtility::RefineAllCells
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) OctreeHybridRefineUniform : public OctreeHybridRefineOperation
+class KRATOS_API(KRATOS_CORE) RefineUniformOctreeHybrid : public RefineOctreeHybrid
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    OctreeHybridRefineUniform() = default;
+    RefineUniformOctreeHybrid() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The instance to copy.  No data members to copy.
      */
-    OctreeHybridRefineUniform(OctreeHybridRefineUniform const& rOther) {}
+    RefineUniformOctreeHybrid(RefineUniformOctreeHybrid const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -91,7 +91,7 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"              : "OctreeHybridRefineUniform",
+     *     "type"              : "RefineUniformOctreeHybrid",
      *     "refinement_depth"  : 5,
      *     "refined_cell_size" : 0.0
      * }
@@ -106,9 +106,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridRefineOperation.KratosMultiphysics", OctreeHybridRefineOperation, OctreeHybridRefineUniform)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("RefineOctreeHybrid.KratosMultiphysics", RefineOctreeHybrid, RefineUniformOctreeHybrid)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridRefineOperation.All", OctreeHybridRefineOperation, OctreeHybridRefineUniform)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("RefineOctreeHybrid.All", RefineOctreeHybrid, RefineUniformOctreeHybrid)
 
     ///@}
 };

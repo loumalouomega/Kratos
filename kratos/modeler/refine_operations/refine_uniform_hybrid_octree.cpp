@@ -22,10 +22,10 @@
 
 namespace Kratos {
 
-const Parameters OctreeHybridRefineUniform::GetDefaultParameters() const
+const Parameters RefineUniformOctreeHybrid::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"             : "OctreeHybridRefineUniform",
+        "type"             : "RefineUniformOctreeHybrid",
         "refinement_depth"  : 5,
         "refined_cell_size" : 0.0
     })");
@@ -34,13 +34,13 @@ const Parameters OctreeHybridRefineUniform::GetDefaultParameters() const
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridRefineUniform::Refine(
+void RefineUniformOctreeHybrid::Refine(
     OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters RefineParameters) const
 {
     Internals::OctreeHybridMesherData& r_data = rModeler.GetData();
     KRATOS_ERROR_IF_NOT(r_data.mpOctree)
-        << "OctreeHybridRefineUniform: octree has not been built yet." << std::endl;
+        << "RefineUniformOctreeHybrid: octree has not been built yet." << std::endl;
 
     // refined_cell_size takes priority over refinement_depth when explicitly set (> 0).
     // The default value of 0.0 signals "not specified", so the explicit depth
