@@ -26,8 +26,8 @@ const Parameters RefineUniformOctreeHybrid::GetDefaultParameters() const
 {
     return Parameters(R"({
         "type"             : "RefineUniformOctreeHybrid",
-        "refinement_depth"  : 5,
-        "refined_cell_size" : 0.0
+        "refinement_depth" : 5,
+        "max_voxel_size"   : 0.0
     })");
 }
 
@@ -42,12 +42,12 @@ void RefineUniformOctreeHybrid::Refine(
     KRATOS_ERROR_IF_NOT(r_data.mpOctree)
         << "RefineUniformOctreeHybrid: octree has not been built yet." << std::endl;
 
-    // refined_cell_size takes priority over refinement_depth when explicitly set (> 0).
+    // max_voxel_size takes priority over refinement_depth when explicitly set (> 0).
     // The default value of 0.0 signals "not specified", so the explicit depth
     // parameter is used as the fallback.
-    const double refined_cell_size = RefineParameters["refined_cell_size"].GetDouble();
-    const std::size_t target_depth = (refined_cell_size > 0.0)
-        ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, refined_cell_size, false)
+    const double max_voxel_size = RefineParameters["max_voxel_size"].GetDouble();
+    const std::size_t target_depth = (max_voxel_size > 0.0)
+        ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, max_voxel_size, false)
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
 
     // OctreeType is constructed with a fixed maximum depth at build time.  If

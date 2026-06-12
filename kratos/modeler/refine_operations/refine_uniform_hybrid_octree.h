@@ -41,8 +41,8 @@ namespace Kratos {
  * | Key                | Type   | Default | Description                              |
  * |--------------------|--------|---------|------------------------------------------|
  * | `type`             | string | `"RefineUniformOctreeHybrid"` | Registry lookup key. |
- * | `refinement_depth`  | int    | `5`     | Target refinement depth.  Used when `refined_cell_size` is 0. |
- * | `refined_cell_size` | double | `0.0`   | Desired maximum cell size in world-space units.  When > 0, overrides `refinement_depth` and the equivalent depth is computed via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
+ * | `refinement_depth`  | int    | `5`     | Target refinement depth.  Used when `max_voxel_size` is 0. |
+ * | `max_voxel_size` | double | `0.0`   | Desired maximum cell size in world-space units.  When > 0, overrides `refinement_depth` and the equivalent depth is computed via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
  *
  * ### Example JSON usage
  * @code{.json}
@@ -93,7 +93,7 @@ public:
      * {
      *     "type"              : "RefineUniformOctreeHybrid",
      *     "refinement_depth"  : 5,
-     *     "refined_cell_size" : 0.0
+     *     "max_voxel_size" : 0.0
      * }
      * @endcode
      * @return A Parameters object with all accepted keys and their default values.
