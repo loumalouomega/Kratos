@@ -277,6 +277,10 @@ Registered coloring components:
 | `OctreeHybridColorCellsByLevel` | Color cells by octree refinement level |
 | `OctreeHybridColorCellsWithInsideCenter` | Color cells whose centre lies inside another ModelPart's surface |
 | `OctreeHybridColorCellFacesBetweenColors` | Color hex-cell faces lying on the interface between two `mCellColor` regions |
+| `OctreeHybridColorCellsInBoundingBox` | Color cells whose centroid lies inside (or outside) an axis-aligned bounding box |
+| `OctreeHybridColorCellsFacesInBoundingBox` | Color hex-cell faces whose centroid lies inside (or outside) an axis-aligned bounding box |
+| `OctreeHybridColorOuterCellFaces` | Color hex-cell faces with no neighbouring cell (outer boundary of the extracted mesh) |
+| `OctreeHybridColorCellFaces` | Color hex-cell faces by distance to an intersecting surface, or unconditionally as a manual override |
 
 When using `mesh_type: "dual"` **without** `project_to_surface`, the coloring stage is
 responsible for the inside/outside carving.  When `project_to_surface: true`, the
@@ -876,6 +880,213 @@ A typical pipeline runs this stage after `OctreeHybridClassifyCellsInsideOutside
 (which sets `mCellColor` to `1` inside / `0` outside), so that `color` is written on
 every face of an inside cell that borders an outside cell or the outer boundary of
 the extracted mesh.
+
+---
+
+#### `OctreeHybridColorCellsInBoundingBox`
+
+Colors cells (`OctreeHybridMesherData::mCellColor`) whose centroid lies inside, or
+optionally outside, an axis-aligned bounding box.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellsInBoundingBox.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellsInBoundingBox`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cells_in_bounding_box.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellsInBoundingBox"` | Registry lookup key. |
+| `color` | int | `-1` | Label to write on the selected cells. |
+| `model_part_name` | string | `"Undefined"` | Used to derive the bounding box from the ModelPart's node coordinates when `min_point`/`max_point` are not both 3-vectors. |
+| `min_point` / `max_point` | array[3] | `[]` / `[]` | Explicit bounding-box corners. When both are 3-vectors they take precedence over `model_part_name`. |
+| `inside_bounding_box` | bool | `false` | `true`: color cells whose centroid lies *inside* `[min_point, max_point]`. `false`: color cells whose centroid lies *outside*. |
+
+**Behaviour:**
+
+1. If `mCellColor` has not been initialised (or its size differs from `mCells.size()`),
+   it is resized and filled with `0`.
+2. The bounding box is resolved from `min_point`/`max_point` if both are 3-vectors,
+   otherwise from the AABB of `model_part_name`'s nodes.
+3. For each cell, the centroid of its 8 corner nodes is computed. If
+   `(centroid inside the box) == inside_bounding_box`, `mCellColor[c]` is set to
+   `color`.
+
+**Example JSON:**
+
+```json
+{
+    "type"                : "OctreeHybridColorCellsInBoundingBox",
+    "color"               : 2,
+    "min_point"           : [0.3, 0.3, 0.3],
+    "max_point"           : [0.5, 0.5, 0.5],
+    "inside_bounding_box" : true
+}
+```
+
+---
+
+#### `OctreeHybridColorCellsFacesInBoundingBox`
+
+Colors hex-cell faces (`OctreeHybridMesherData::mCellFaceColor`) whose centroid lies
+inside, or optionally outside, an axis-aligned bounding box.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellsFacesInBoundingBox.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellsFacesInBoundingBox`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cells_faces_in_bounding_box.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellsFacesInBoundingBox"` | Registry lookup key. |
+| `color` | int | `-1` | Label to write on the selected faces. |
+| `model_part_name` | string | `"Undefined"` | Used to derive the bounding box from the ModelPart's node coordinates when `min_point`/`max_point` are not both 3-vectors. |
+| `min_point` / `max_point` | array[3] | `[]` / `[]` | Explicit bounding-box corners. When both are 3-vectors they take precedence over `model_part_name`. |
+| `inside_bounding_box` | bool | `false` | `true`: color faces whose centroid lies *inside* `[min_point, max_point]`. `false`: color faces whose centroid lies *outside*. |
+
+**Behaviour:**
+
+1. If `mCellFaceColor` has not been initialised (or its size differs from `mCells.size()`),
+   it is resized and filled with `{0,0,0,0,0,0}` per cell.
+2. The bounding box is resolved from `min_point`/`max_point` if both are 3-vectors,
+   otherwise from the AABB of `model_part_name`'s nodes.
+3. For every cell `c` and every one of its 6 local faces `f` (`FACE_FIDC`/Hexahedra3D8
+   ordering), the centroid of the face's 4 corner nodes is computed. If
+   `(centroid inside the box) == inside_bounding_box`, `mCellFaceColor[c][f]` is set
+   to `color`.
+
+**Example JSON:**
+
+```json
+{
+    "type"                : "OctreeHybridColorCellsFacesInBoundingBox",
+    "color"               : 5,
+    "min_point"           : [0.3, 0.3, 0.3],
+    "max_point"           : [0.5, 0.5, 0.5],
+    "inside_bounding_box" : true
+}
+```
+
+---
+
+#### `OctreeHybridColorOuterCellFaces`
+
+Colors hex-cell faces (`OctreeHybridMesherData::mCellFaceColor`) that lie on the outer
+boundary of the extracted mesh — faces with no neighbouring cell at all.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorOuterCellFaces.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorOuterCellFaces`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_outer_cell_faces.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorOuterCellFaces"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Unused; kept for schema consistency, auto-filled by the modeler dispatch loop. |
+| `color` | int | `-1` | Face label to write on the outer faces of cells with `cell_color`. |
+| `cell_color` | int | `-1` | Only cells currently carrying this label in `mCellColor` are tested. |
+
+**Behaviour:**
+
+1. If `mCellColor` has not been initialised (or its size differs from `mCells.size()`),
+   it is resized and filled with `0`. Likewise `mCellFaceColor` is resized and filled
+   with `{0,0,0,0,0,0}` per cell if needed.
+2. For each cell `c` with `mCellColor[c] == cell_color`, and for each of its 6 local
+   faces `f` (`FACE_FIDC`/Hexahedra3D8 ordering), the face-neighbour cell is looked up
+   via `OctreeHybridMeshUtility::ComputeCellFaceNeighbors`. When `f` has no neighbour,
+   `mCellFaceColor[c][f]` is set to `color`.
+
+Unlike `OctreeHybridColorCellFacesBetweenColors`, this stage does not compare the
+neighbour's colour: a face is "outer" purely because it has no neighbouring hex cell,
+regardless of `default_outside_color`.
+
+**Example JSON:**
+
+```json
+{
+    "type"       : "OctreeHybridColorOuterCellFaces",
+    "color"      : 3,
+    "cell_color" : 1
+}
+```
+
+A typical pipeline runs this stage after `OctreeHybridClassifyCellsInsideOutside`,
+so that `cell_color` already identifies the region whose outer faces should be
+tagged — typically for boundary-condition generation via
+`GenerateHybridOctreeQuadrilateralConditionsWithFaceColor`.
+
+---
+
+#### `OctreeHybridColorCellFaces`
+
+Colors hex-cell faces (`OctreeHybridMesherData::mCellFaceColor`) by their distance to
+an intersecting surface, or unconditionally as a manual override.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellFaces.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellFaces`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cell_faces.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellFaces"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Name of the ModelPart whose geometry defines the reference surface. Only required for the automatic strategy. |
+| `color` | int | `-1` | Face label to write on the selected faces. |
+| `input_entities` | string | `""` | `""` selects the manual strategy (no geometry test). `"geometries"`, `"elements"`, or `"conditions"` select the automatic, distance-based strategy. Any other non-empty value throws. |
+| `tolerance` | double | `1.0e-12` | Automatic strategy only: a candidate face is coloured when the absolute value of its signed distance to the reference surface is at most `tolerance`. |
+| `bounding_box.min_point` / `bounding_box.max_point` | array[3] | `[]` / `[]` | Optional AABB pre-filter. When both are 3-vectors, only faces whose centroid lies within this box are candidates. Empty (default) = no restriction. |
+
+**Behaviour:**
+
+1. If `mCellFaceColor` has not been initialised (or its size differs from `mCells.size()`),
+   it is resized and filled with `{0,0,0,0,0,0}` per cell.
+2. For every cell `c` and every one of its 6 local faces `f` (`FACE_FIDC`/Hexahedra3D8
+   ordering), the centroid of the face's 4 corner nodes is computed and, if
+   `bounding_box` is set, filtered against it; the survivors are the candidate faces.
+3. **Manual strategy** (`input_entities == ""`): every candidate face is coloured with
+   `color` directly, with no geometry test.
+4. **Automatic strategy** (`input_entities` non-empty): a triangle soup is built from
+   `model_part_name`'s entities (selected by `input_entities`), and the signed
+   distance of every candidate face centroid to that soup is computed via
+   `OctreeHybridMeshUtility::ComputeNodeSignedDistance`. A candidate face is coloured
+   with `color` when the absolute value of its signed distance is at most `tolerance`.
+
+**Example JSON — automatic, distance-based:**
+
+```json
+{
+    "type"            : "OctreeHybridColorCellFaces",
+    "model_part_name" : "Skin",
+    "color"           : 5,
+    "input_entities"  : "geometries",
+    "tolerance"       : 1.0e-6
+}
+```
+
+**Example JSON — manual, restricted to a region:**
+
+```json
+{
+    "type"            : "OctreeHybridColorCellFaces",
+    "color"           : 5,
+    "input_entities"  : "",
+    "bounding_box"  : {
+        "min_point" : [0.0, 0.0, 0.95],
+        "max_point" : [1.0, 1.0, 1.0]
+    }
+}
+```
 
 ---
 
@@ -1768,6 +1979,68 @@ modeler.SetupModelPart()
 After `SetupModelPart`, every entry of `mCellFaceColor` for an inside cell (`mCellColor
 == 1`) that touches an outside cell (`mCellColor == 0`), or the outer boundary of the
 domain, is set to `2`; all other entries remain `0`.
+
+---
+
+### 8.9 Boundary conditions on the outer domain boundary
+
+`OctreeHybridColorOuterCellFaces` marks, for every cell with a given `mCellColor`, the
+local faces that have no neighbouring cell — i.e. the outer boundary of the extracted
+hex mesh. Combined with `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor`,
+this generates boundary conditions on the outer faces of the domain, regardless of
+whether those faces also lie on the input skin surface.
+
+```python
+settings = KM.Parameters("""{
+    "input_model_part_name"  : "Skin",
+    "refinement_settings_list" : [
+        {
+            "type"             : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth" : 4,
+            "adaptive"         : false
+        }
+    ],
+    "coloring_settings_list" : [
+        {
+            "type"       : "OctreeHybridColorCellsByLevel",
+            "color"      : 1,
+            "min_level"  : -10,
+            "max_level"  : 100
+        },
+        {
+            "type"       : "OctreeHybridColorOuterCellFaces",
+            "color"      : 3,
+            "cell_color" : 1
+        }
+    ],
+    "entities_generator_list" : [
+        {
+            "type"            : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name" : "Volume",
+            "color"           : 1,
+            "properties_id"   : 1
+        },
+        {
+            "type"             : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+            "model_part_name"  : "Boundary",
+            "color"            : 3,
+            "properties_id"    : 1,
+            "generated_entity" : "SurfaceCondition3D4N"
+        }
+    ],
+    "model_part_operations" : []
+}""")
+
+modeler = KM.OctreeHybridMeshGeneratorModeler(model, settings)
+modeler.SetupModelPart()
+```
+
+`OctreeHybridColorCellsByLevel` with a `[-10, 100]` level range colours every cell
+(including the negative-level transition/buffer cells) with `mCellColor == 1`, so
+`OctreeHybridColorOuterCellFaces` colours every face on the outer boundary of the
+extracted hex mesh with `3`. `Boundary` then contains the quad conditions covering
+the entire outer domain boundary, sharing nodes with `Volume` via the `mNodePtrs`
+de-duplication cache.
 
 ---
 
