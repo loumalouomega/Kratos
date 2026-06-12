@@ -35,6 +35,7 @@ summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine t
    - 8.5 [Quality report](#85-quality-report)
    - 8.6 [Tetrahedral mesh (BCC Freudenthal decomposition)](#86-tetrahedral-mesh-bcc-freudenthal-decomposition)
    - 8.7 [Contact detection between coloured regions](#87-contact-detection-between-coloured-regions)
+   - 8.8 [Coloring interface faces between regions](#88-coloring-interface-faces-between-regions)
 9. [API reference](#9-api-reference)
 10. [Registration and instantiation](#10-registration-and-instantiation)
 11. [Testing](#11-testing)
@@ -275,6 +276,7 @@ Registered coloring components:
 | `OctreeHybridColorConnectedCellsInTouch` | Flood-fill connected cells touching input geometry |
 | `OctreeHybridColorCellsByLevel` | Color cells by octree refinement level |
 | `OctreeHybridColorCellsWithInsideCenter` | Color cells whose centre lies inside another ModelPart's surface |
+| `OctreeHybridColorCellFacesBetweenColors` | Color hex-cell faces lying on the interface between two `mCellColor` regions |
 
 When using `mesh_type: "dual"` **without** `project_to_surface`, the coloring stage is
 responsible for the inside/outside carving.  When `project_to_surface: true`, the
@@ -343,6 +345,7 @@ it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetDat
 | `mCells` | `vector<array<int,8>>` | `BuildOctreeAndExtract` | All stages | Hex connectivity (8 node indices per cell, Hexahedra3D8 ordering). |
 | `mCellLevel` | `vector<int>` | `BuildOctreeAndExtract` | Entity generation, quality report | Octree refinement level per cell (-1 for transition-template hexes). |
 | `mCellColor` | `vector<int>` | Coloring stages | Entity generation | Per-cell inside(1)/outside(0) label. Empty until coloring runs. |
+| `mCellFaceColor` | `vector<array<int,6>>` | `OctreeHybridColorCellFacesBetweenColors` | Entity generation | Per-cell, per-local-face interface label (`FACE_FIDC`/Hexahedra3D8 ordering). Empty until a face-coloring stage runs. |
 | `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `GenerateHybridOctreeHexahedraElementsWithCellColor` (when `"constraint_type"` and `"constrained_variables"` are non-empty), `GenerateOctreeHybridConstraints` | Hanging-node interpolation records (primal mesh only). |
 | `mNodePtrs` | `vector<Node::Pointer>` | Entity generation (lazy) | Entity generation | De-duplication cache: mesh-node index -> ModelPart Node. Null until the node is first needed. |
 | `mProjected` | `bool` | `BuildOctreeAndExtract` | `OctreeHybridClassifyCellsInsideOutside` | True when surface projection has been applied; triggers the classification short-circuit. |
@@ -818,6 +821,61 @@ If `mCellColor` has not been initialised it is resized and filled with `0` first
     }
 }
 ```
+
+---
+
+#### `OctreeHybridColorCellFacesBetweenColors`
+
+Colors hex-cell faces (`OctreeHybridMesherData::mCellFaceColor`) that lie on the
+interface between two `mCellColor` regions — the octree-hybrid analogue of the
+voxel mesher's `ColorCellFacesBetweenColors`.
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellFacesBetweenColors.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellFacesBetweenColors`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cell_faces_between_colors.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellFacesBetweenColors"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Unused; kept for schema consistency, auto-filled by the modeler dispatch loop. |
+| `color` | int | `-1` | Face label to write on the interface faces of cells with `cell_color`. |
+| `cell_color` | int | `-1` | Only cells currently carrying this label in `mCellColor` are tested. |
+| `outside_color` | int | `0` | A face is on the interface when the neighbouring cell (or the implicit outer-boundary neighbour) carries this label. |
+| `default_outside_color` | int | `0` | Colour assumed for the implicit neighbour of faces on the outer boundary of the extracted mesh (no neighbour cell). Normally overridden by the modeler's top-level `"default_outside_color"`. |
+
+**Behaviour:**
+
+1. If `mCellColor` has not been initialised (or its size differs from `mCells.size()`),
+   it is resized and filled with `0`. Likewise `mCellFaceColor` is resized and filled
+   with `{0,0,0,0,0,0}` per cell if needed.
+2. If `color == outside_color`, the stage returns immediately without modifying
+   `mCellFaceColor` (every transition would be a no-op).
+3. For each cell `c` with `mCellColor[c] == cell_color`, and for each of its 6 local
+   faces `f` (`FACE_FIDC`/Hexahedra3D8 ordering), the face-neighbour cell is looked up
+   via `OctreeHybridMeshUtility::ComputeCellFaceNeighbors`. The neighbour colour is
+   `mCellColor[neighbour]` for an interior face, or `default_outside_color` for a face
+   on the outer boundary of the mesh (no neighbour). When the neighbour colour equals
+   `outside_color`, `mCellFaceColor[c][f]` is set to `color`.
+
+**Example JSON:**
+
+```json
+{
+    "type"          : "OctreeHybridColorCellFacesBetweenColors",
+    "color"         : 2,
+    "cell_color"    : 1,
+    "outside_color" : 0
+}
+```
+
+A typical pipeline runs this stage after `OctreeHybridClassifyCellsInsideOutside`
+(which sets `mCellColor` to `1` inside / `0` outside), so that `color` is written on
+every face of an inside cell that borders an outside cell or the outer boundary of
+the extracted mesh.
 
 ---
 
@@ -1662,6 +1720,54 @@ print(f"Contact nodes     : {contact_mp.NumberOfNodes()}")
 the subset of `"Volume.Skin"` conditions (and their nodes) whose octree neighbour cell
 has colour `0`. Conditions on the outer boundary of the octree domain (no neighbour
 cell) are not added to any contact ModelPart.
+
+---
+
+### 8.8 Coloring interface faces between regions
+
+`OctreeHybridColorCellFacesBetweenColors` writes a per-face label into
+`OctreeHybridMesherData::mCellFaceColor` for every face of an inside (`color: 1`) cell
+that borders an outside (`color: 0`) cell or the outer boundary of the extracted mesh.
+This populates the face-level data that a downstream face-color-aware consumer would
+filter on, in the same spirit as the voxel mesher's `ColorCellFacesBetweenColors`.
+
+```python
+settings = KM.Parameters("""{
+    "input_model_part_name"  : "Skin",
+    "refinement_settings_list" : [
+        {
+            "type"             : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth" : 4,
+            "adaptive"         : false
+        }
+    ],
+    "coloring_settings_list" : [
+        { "type" : "OctreeHybridClassifyCellsInsideOutside" },
+        {
+            "type"          : "OctreeHybridColorCellFacesBetweenColors",
+            "color"         : 2,
+            "cell_color"    : 1,
+            "outside_color" : 0
+        }
+    ],
+    "entities_generator_list" : [
+        {
+            "type"            : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name" : "Volume",
+            "color"           : 1,
+            "properties_id"   : 1
+        }
+    ],
+    "model_part_operations" : []
+}""")
+
+modeler = KM.OctreeHybridMeshGeneratorModeler(model, settings)
+modeler.SetupModelPart()
+```
+
+After `SetupModelPart`, every entry of `mCellFaceColor` for an inside cell (`mCellColor
+== 1`) that touches an outside cell (`mCellColor == 0`), or the outer boundary of the
+domain, is set to `2`; all other entries remain `0`.
 
 ---
 
