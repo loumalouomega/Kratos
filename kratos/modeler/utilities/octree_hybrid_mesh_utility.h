@@ -645,6 +645,23 @@ public:
         const std::vector<std::array<int,8>>& rCells);
 
     /**
+     * @brief Computes, for every (cell, local face) pair, the index of the
+     *        neighbouring cell that shares that face.
+     * @details Local faces follow the same `FACE_FIDC`/Hexahedra3D8 ordering used
+     *          by @ref ExtractBoundaryFaces: two faces are considered the same when
+     *          their 4 global node indices match as a set (order-independent).
+     *          Each face is shared by at most two hexahedra. A face on the outer
+     *          boundary of the mesh (shared by exactly one hexahedron) gets `-1`.
+     * @param rCells  Hexahedra connectivity (`N × 8` node indices into the mesh
+     *                node array).
+     * @return        `N`-sized vector; entry `[c][f]` is the index of the cell
+     *                 sharing local face `f` of cell `c`, or `-1` if `f` lies on
+     *                 the mesh boundary.
+     */
+    static std::vector<std::array<int,6>> ComputeCellFaceNeighbors(
+        const std::vector<std::array<int,8>>& rCells);
+
+    /**
      * @brief Buffer-zone clearance — port of paper Section 2.3 hemisphere restriction.
      * @details Identifies boundary hexes that form a "fold" (their incident face
      *          normals do not fit any open hemisphere) and removes the most-boundary

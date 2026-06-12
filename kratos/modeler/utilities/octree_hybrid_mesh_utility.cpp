@@ -2220,6 +2220,33 @@ auto OctreeHybridMeshUtility::ExtractBoundaryFaces(
 /***********************************************************************************/
 /***********************************************************************************/
 
+auto OctreeHybridMeshUtility::ComputeCellFaceNeighbors(
+    const std::vector<std::array<int,8>>& rCells) -> std::vector<std::array<int,6>>
+{
+    const int n_cells = static_cast<int>(rCells.size());
+    std::vector<std::array<int,6>> neighbors(n_cells);
+    for (auto& r_cell_neighbors : neighbors) r_cell_neighbors.fill(-1);
+
+    std::map<std::array<int,4>, std::pair<int,int>> first;  // sorted face key -> (cell, local face)
+    for (int c = 0; c < n_cells; ++c)
+        for (int f = 0; f < 6; ++f) {
+            std::array<int,4> key = { rCells[c][FACE_FIDC[f][0]], rCells[c][FACE_FIDC[f][1]],
+                                    rCells[c][FACE_FIDC[f][2]], rCells[c][FACE_FIDC[f][3]] };
+            std::sort(key.begin(), key.end());
+            auto it = first.find(key);
+            if (it == first.end()) {
+                first.emplace(key, std::make_pair(c, f));
+            } else {
+                neighbors[c][f] = it->second.first;
+                neighbors[it->second.first][it->second.second] = c;
+            }
+        }
+    return neighbors;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 void OctreeHybridMeshUtility::ClearBufferZone(
     const std::vector<std::array<double,3>>& rNodes,
     std::vector<std::array<int,8>>& rCells,
