@@ -11,6 +11,7 @@
 //
 
 // System includes
+#include <algorithm>
 #include <cmath>
 #include <set>
 
@@ -27,6 +28,10 @@
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 #include "modeler/coloring/octree_hybrid_color_cell_faces_between_colors.h"
+#include "modeler/coloring/octree_hybrid_color_cell_faces.h"
+#include "modeler/coloring/octree_hybrid_color_outer_cell_faces.h"
+#include "modeler/coloring/octree_hybrid_color_cells_in_bounding_box.h"
+#include "modeler/coloring/octree_hybrid_color_cells_faces_in_bounding_box.h"
 #include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
 #include "modeler/entity_generation/generate_hybrid_octree_tetrahedra_elements_with_cell_color.h"
 #include "modeler/entity_generation/generate_hybrid_octree_triangular_conditions_with_face_color.h"
@@ -1729,6 +1734,345 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesBetweenColorsDefaultOutsideC
         }
     }
     KRATOS_EXPECT_GT(n_colored_faces, 0u);
+}
+
+// ===========================================================================
+// OctreeHybridColorCellsInBoundingBox colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInBoundingBoxRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorCellsInBoundingBox.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorCellsInBoundingBox.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInBoundingBoxDefaultParameters, KratosCoreFastSuite)
+{
+    OctreeHybridColorCellsInBoundingBox op;
+    const Parameters p = op.GetDefaultParameters();
+
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridColorCellsInBoundingBox"});
+    KRATOS_EXPECT_EQ(p["color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
+    KRATOS_EXPECT_EQ(p["min_point"].size(), 0);
+    KRATOS_EXPECT_EQ(p["max_point"].size(), 0);
+    KRATOS_EXPECT_FALSE(p["inside_bounding_box"].GetBool());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInBoundingBoxInsideAndOutsideArePartition, KratosCoreFastSuite)
+{
+    // The octree spans [0,1]^3 (driven by the bbox-pin nodes). Colouring the
+    // sub-region [0.3,0.5]^3 must be a non-empty, strict subset of all cells,
+    // and the inside/outside selections must partition the full cell set.
+    Model m1, m2;
+    BuildClosedBoxSurface(m1.CreateModelPart("Skin"));
+    BuildClosedBoxSurface(m2.CreateModelPart("Skin"));
+
+    Parameters settings_inside(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsInBoundingBox",
+            "color":2,"min_point":[0.3,0.3,0.3],"max_point":[0.5,0.5,0.5],
+            "inside_bounding_box":true
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+
+    Parameters settings_outside(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsInBoundingBox",
+            "color":2,"min_point":[0.3,0.3,0.3],"max_point":[0.5,0.5,0.5],
+            "inside_bounding_box":false
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+
+    OctreeHybridMeshGeneratorModeler modeler_inside(m1, settings_inside);
+    modeler_inside.SetupModelPart();
+    OctreeHybridMeshGeneratorModeler modeler_outside(m2, settings_outside);
+    modeler_outside.SetupModelPart();
+
+    const auto& r_data_inside  = modeler_inside.GetData();
+    const auto& r_data_outside = modeler_outside.GetData();
+
+    const std::size_t n_inside = std::count(r_data_inside.mCellColor.begin(), r_data_inside.mCellColor.end(), 2);
+    const std::size_t n_outside = std::count(r_data_outside.mCellColor.begin(), r_data_outside.mCellColor.end(), 2);
+
+    KRATOS_EXPECT_GT(n_inside, 0u);
+    KRATOS_EXPECT_GT(n_outside, 0u);
+    KRATOS_EXPECT_LT(n_inside, r_data_inside.mCellColor.size());
+    KRATOS_EXPECT_EQ(n_inside + n_outside, r_data_inside.mCellColor.size());
+}
+
+// ===========================================================================
+// OctreeHybridColorCellsFacesInBoundingBox colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsFacesInBoundingBoxRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorCellsFacesInBoundingBox.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorCellsFacesInBoundingBox.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsFacesInBoundingBoxDefaultParameters, KratosCoreFastSuite)
+{
+    OctreeHybridColorCellsFacesInBoundingBox op;
+    const Parameters p = op.GetDefaultParameters();
+
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridColorCellsFacesInBoundingBox"});
+    KRATOS_EXPECT_EQ(p["color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
+    KRATOS_EXPECT_EQ(p["min_point"].size(), 0);
+    KRATOS_EXPECT_EQ(p["max_point"].size(), 0);
+    KRATOS_EXPECT_FALSE(p["inside_bounding_box"].GetBool());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsFacesInBoundingBoxColorsFacesInsideSubset, KratosCoreFastSuite)
+{
+    // All 6 faces of every cell are candidates; only those whose centroid
+    // lies inside the [0.3,0.5]^3 sub-region must be coloured.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellsFacesInBoundingBox",
+            "color":5,"min_point":[0.3,0.3,0.3],"max_point":[0.5,0.5,0.5],
+            "inside_bounding_box":true
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.SetupModelPart();
+
+    const auto& r_data = modeler.GetData();
+    KRATOS_EXPECT_EQ(r_data.mCellFaceColor.size(), r_data.mCells.size());
+
+    std::size_t n_colored = 0;
+    const std::size_t n_total = r_data.mCellFaceColor.size() * 6;
+    for (const auto& r_faces : r_data.mCellFaceColor)
+        for (int f = 0; f < 6; ++f)
+            if (r_faces[f] == 5) ++n_colored;
+
+    KRATOS_EXPECT_GT(n_colored, 0u);
+    KRATOS_EXPECT_LT(n_colored, n_total);
+}
+
+// ===========================================================================
+// OctreeHybridColorOuterCellFaces colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorOuterCellFacesRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorOuterCellFaces.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorOuterCellFaces.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorOuterCellFacesDefaultParameters, KratosCoreFastSuite)
+{
+    OctreeHybridColorOuterCellFaces op;
+    const Parameters p = op.GetDefaultParameters();
+
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridColorOuterCellFaces"});
+    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
+    KRATOS_EXPECT_EQ(p["color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["cell_color"].GetInt(), -1);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorOuterCellFacesColorsOuterBoundary, KratosCoreFastSuite)
+{
+    // OctreeHybridColorCellsByLevel with a [-10, 100] level range colours every
+    // cell (including the negative-level transition/buffer cells) with
+    // cell_color == 1. OctreeHybridColorOuterCellFaces must then colour, for
+    // every such cell, the local faces with no neighbouring cell — i.e. the
+    // outer boundary of the extracted hex mesh.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[
+            {"type":"OctreeHybridColorCellsByLevel","color":1,"min_level":-10,"max_level":100},
+            {"type":"OctreeHybridColorOuterCellFaces","color":3,"cell_color":1}
+        ],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.SetupModelPart();
+
+    const auto& r_data = modeler.GetData();
+    const auto neighbors = OctreeHybridMeshUtility::ComputeCellFaceNeighbors(r_data.mCells);
+
+    std::size_t n_colored_faces = 0;
+    for (std::size_t c = 0; c < r_data.mCells.size(); ++c) {
+        for (int f = 0; f < 6; ++f) {
+            if (neighbors[c][f] == -1) {
+                KRATOS_EXPECT_EQ(r_data.mCellFaceColor[c][f], 3);
+                ++n_colored_faces;
+            } else {
+                KRATOS_EXPECT_EQ(r_data.mCellFaceColor[c][f], 0);
+            }
+        }
+    }
+    KRATOS_EXPECT_GT(n_colored_faces, 0u);
+}
+
+// ===========================================================================
+// OctreeHybridColorCellFaces colouring
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesRegistered, KratosCoreFastSuite)
+{
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.All.OctreeHybridColorCellFaces.Prototype"));
+    KRATOS_EXPECT_TRUE(Registry::HasValue(
+        "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridColorCellFaces.Prototype"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesDefaultParameters, KratosCoreFastSuite)
+{
+    OctreeHybridColorCellFaces op;
+    const Parameters p = op.GetDefaultParameters();
+
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridColorCellFaces"});
+    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
+    KRATOS_EXPECT_EQ(p["color"].GetInt(), -1);
+    KRATOS_EXPECT_EQ(p["input_entities"].GetString(), std::string{""});
+    KRATOS_EXPECT_NEAR(p["tolerance"].GetDouble(), 1.0e-12, 1.0e-20);
+    KRATOS_EXPECT_EQ(p["bounding_box"]["min_point"].size(), 0);
+    KRATOS_EXPECT_EQ(p["bounding_box"]["max_point"].size(), 0);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesManualColorsBoundingBoxFaces, KratosCoreFastSuite)
+{
+    // input_entities == "" selects the manual strategy: every candidate face
+    // (after the bounding_box pre-filter) is coloured directly, with no
+    // geometry test.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellFaces",
+            "color":7,"input_entities":"",
+            "bounding_box":{"min_point":[0.3,0.3,0.3],"max_point":[0.7,0.7,0.7]}
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.SetupModelPart();
+
+    const auto& r_data = modeler.GetData();
+    KRATOS_EXPECT_EQ(r_data.mCellFaceColor.size(), r_data.mCells.size());
+
+    std::size_t n_colored = 0;
+    const std::size_t n_total = r_data.mCellFaceColor.size() * 6;
+    for (const auto& r_faces : r_data.mCellFaceColor)
+        for (int f = 0; f < 6; ++f)
+            if (r_faces[f] == 7) ++n_colored;
+
+    KRATOS_EXPECT_GT(n_colored, 0u);
+    KRATOS_EXPECT_LT(n_colored, n_total);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesAutomaticColorsSkinFaces, KratosCoreFastSuite)
+{
+    // input_entities == "geometries" selects the automatic, distance-based
+    // strategy: faces whose centroid is within tolerance of the skin surface
+    // must be coloured, while far-away faces must not.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellFaces",
+            "model_part_name":"Skin","color":4,
+            "input_entities":"geometries","tolerance":0.05
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.SetupModelPart();
+
+    const auto& r_data = modeler.GetData();
+    std::size_t n_colored = 0;
+    const std::size_t n_total = r_data.mCellFaceColor.size() * 6;
+    for (const auto& r_faces : r_data.mCellFaceColor)
+        for (int f = 0; f < 6; ++f)
+            if (r_faces[f] == 4) ++n_colored;
+
+    KRATOS_EXPECT_GT(n_colored, 0u);
+    KRATOS_EXPECT_LT(n_colored, n_total);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesUnsupportedInputEntitiesThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellFaces",
+            "model_part_name":"Skin","color":4,"input_entities":"invalid"
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+    OctreeHybridMeshGeneratorModeler m(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesModelPartNotFoundThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    Parameters settings(R"({
+        "input_model_part_name":"Skin",
+        "refinement_settings_list":[{"type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":4,"adaptive":false}],
+        "coloring_settings_list":[{
+            "type":"OctreeHybridColorCellFaces",
+            "model_part_name":"DoesNotExist","color":4,"input_entities":"geometries"
+        }],
+        "entities_generator_list":[],
+        "model_part_operations":[]
+    })");
+    OctreeHybridMeshGeneratorModeler m(model, settings);
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(m.SetupModelPart(), "");
 }
 
 // ===========================================================================
