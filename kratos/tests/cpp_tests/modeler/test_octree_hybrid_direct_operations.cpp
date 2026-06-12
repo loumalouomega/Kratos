@@ -38,6 +38,7 @@
 
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
+#include "modeler/operation/octree_hybrid_find_contacts_in_skin_model_part.h"
 
 namespace Kratos::Testing {
 
@@ -930,6 +931,161 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridReportMeshQualityExecuteDirectlyOnFilledPa
     OctreeHybridReportMeshQuality quality_op;
     Parameters p(R"({"type":"OctreeHybridReportMeshQuality","model_part_name":"Out"})");
     quality_op.Execute(modeler, p); // must not throw
+}
+
+// ===========================================================================
+// OctreeHybridFindContactsInSkinModelPart::Execute — direct call
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridFindContactsInSkinModelPartNoContactModelPartsDoesNotThrow, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":3,"adaptive":false,"mesh_type":"dual"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+    {
+        OctreeHybridClassifyCellsInsideOutside color_op;
+        color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
+    }
+    {
+        GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
+        Parameters hex_p(R"({
+            "type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Out","color":1,"properties_id":1,
+            "generated_entity":"Element3D8N","tag_refinement_level":true
+        })");
+        hex_op.ValidateParameters(hex_p);
+        hex_op.Generate(modeler, hex_p);
+    }
+    {
+        GenerateHybridOctreeQuadrilateralConditionsWithFaceColor bc_op;
+        Parameters bc_p(R"({
+            "type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+            "model_part_name":"Out","color":1,"properties_id":1,
+            "generated_entity":"SurfaceCondition3D4N"
+        })");
+        bc_op.ValidateParameters(bc_p);
+        bc_op.Generate(modeler, bc_p);
+    }
+
+    OctreeHybridFindContactsInSkinModelPart contacts_op;
+    Parameters p(R"({
+        "type"                : "OctreeHybridFindContactsInSkinModelPart",
+        "model_part_name"     : "Out",
+        "cell_color"          : 1,
+        "contact_model_parts" : []
+    })");
+    contacts_op.Execute(modeler, p); // must not throw, just logs and returns
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridFindContactsInSkinModelPartFindsContacts, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":3,"adaptive":false,"mesh_type":"dual"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+    {
+        OctreeHybridClassifyCellsInsideOutside color_op;
+        color_op.Apply(modeler, Parameters(R"({"type":"OctreeHybridClassifyCellsInsideOutside"})"));
+    }
+    {
+        GenerateHybridOctreeHexahedraElementsWithCellColor hex_op;
+        Parameters hex_p(R"({
+            "type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name":"Out","color":1,"properties_id":1,
+            "generated_entity":"Element3D8N","tag_refinement_level":true
+        })");
+        hex_op.ValidateParameters(hex_p);
+        hex_op.Generate(modeler, hex_p);
+    }
+
+    // Boundary conditions of the "inside" (color 1) cells form the skin model part.
+    {
+        GenerateHybridOctreeQuadrilateralConditionsWithFaceColor bc_op;
+        Parameters bc_p(R"({
+            "type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+            "model_part_name":"Out","color":1,"properties_id":1,
+            "generated_entity":"SurfaceCondition3D4N"
+        })");
+        bc_op.ValidateParameters(bc_p);
+        bc_op.Generate(modeler, bc_p);
+    }
+
+    model.CreateModelPart("Out.Contact0");
+    const std::size_t n_skin_conditions = model.GetModelPart("Out").NumberOfConditions();
+    KRATOS_EXPECT_GT(n_skin_conditions, std::size_t{0});
+
+    OctreeHybridFindContactsInSkinModelPart contacts_op;
+    Parameters p(R"({
+        "type"                : "OctreeHybridFindContactsInSkinModelPart",
+        "model_part_name"     : "Out",
+        "cell_color"          : 1,
+        "contact_model_parts" : [
+            { "outside_color": 0, "contact_model_part_name": "Out.Contact0" }
+        ]
+    })");
+    contacts_op.ValidateParameters(p);
+    contacts_op.Execute(modeler, p);
+
+    ModelPart& r_contact = model.GetModelPart("Out.Contact0");
+    // Boundary faces of the carved "inside" region either neighbour an "outside" (color 0)
+    // cell (a contact) or lie on the outer boundary of the octree domain (no neighbour cell,
+    // not a contact). So the contact part is a non-empty, strict subset of the skin.
+    KRATOS_EXPECT_GT(r_contact.NumberOfConditions(), std::size_t{0});
+    KRATOS_EXPECT_LE(r_contact.NumberOfConditions(), n_skin_conditions);
+    KRATOS_EXPECT_GT(r_contact.NumberOfNodes(), std::size_t{0});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridFindContactsInSkinModelPartModelPartNotFoundThrows, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    model.CreateModelPart("Out");
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        OctreeHybridRefineInterfaceCells build_op;
+        Parameters bp(R"({
+            "type":"OctreeHybridRefineInterfaceCells",
+            "refinement_depth":3,"adaptive":false,"mesh_type":"dual"
+        })");
+        build_op.ValidateParameters(bp);
+        build_op.Refine(modeler, bp);
+    }
+    ExtractMesh(modeler);
+
+    OctreeHybridFindContactsInSkinModelPart contacts_op;
+    Parameters p(R"({
+        "type"                : "OctreeHybridFindContactsInSkinModelPart",
+        "model_part_name"     : "DoesNotExist",
+        "cell_color"          : 1,
+        "contact_model_parts" : []
+    })");
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(
+        contacts_op.Execute(modeler, p),
+        "not found");
 }
 
 // ===========================================================================

@@ -23,6 +23,7 @@
 #include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
 #include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
+#include "modeler/operation/octree_hybrid_find_contacts_in_skin_model_part.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos::Testing {
@@ -303,6 +304,41 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridReportMeshQualityDefaultParametersHasModel
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridReportMeshQualityInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
     OctreeHybridReportMeshQuality op;
+    KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherOperation"});
+}
+
+// ===========================================================================
+// OctreeHybridFindContactsInSkinModelPart — GetDefaultParameters / Info
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridFindContactsInSkinModelPartDefaultParametersTypeKey, KratosCoreFastSuite)
+{
+    OctreeHybridFindContactsInSkinModelPart op;
+    Parameters p = op.GetDefaultParameters();
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"OctreeHybridFindContactsInSkinModelPart"});
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridFindContactsInSkinModelPartDefaultParametersAllKeys, KratosCoreFastSuite)
+{
+    OctreeHybridFindContactsInSkinModelPart op;
+    Parameters p = op.GetDefaultParameters();
+    KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
+    KRATOS_EXPECT_TRUE(p.Has("contact_model_parts"));
+    KRATOS_EXPECT_TRUE(p.Has("cell_color"));
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridFindContactsInSkinModelPartDefaultParametersDefaults, KratosCoreFastSuite)
+{
+    OctreeHybridFindContactsInSkinModelPart op;
+    Parameters p = op.GetDefaultParameters();
+    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
+    KRATOS_EXPECT_EQ(p["contact_model_parts"].size(), std::size_t{0});
+    KRATOS_EXPECT_EQ(p["cell_color"].GetInt(), -1);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridFindContactsInSkinModelPartInfoReturnsBaseClassName, KratosCoreFastSuite)
+{
+    OctreeHybridFindContactsInSkinModelPart op;
     KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherOperation"});
 }
 
