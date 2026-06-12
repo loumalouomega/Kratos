@@ -25,15 +25,16 @@ namespace Kratos {
 const Parameters OctreeHybridRefineInterfaceCells::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"                  : "OctreeHybridRefineInterfaceCells",
-        "input_model_part_name" : "",
-        "refinement_depth"      : 5,
-        "refined_cell_size"     : 0.0,
-        "adaptive"              : true,
-        "mesh_type"             : "dual",
-        "project_to_surface"    : false,
-        "projection_iterations" : 20000,
-        "projection_smoothing"  : 1000
+        "type"                     : "OctreeHybridRefineInterfaceCells",
+        "input_model_part_name"    : "",
+        "refinement_depth"         : 5,
+        "refined_cell_size"        : 0.0,
+        "adaptive"                 : true,
+        "mesh_type"                : "dual",
+        "project_to_surface"       : false,
+        "projection_iterations"    : 20000,
+        "projection_smoothing"     : 1000,
+        "enforce_minimum_cell_size": true // NOTE: To be compatible with octree mesher. DOES NOTHING. To be implemented if required in the future.
     })");
 }
 
