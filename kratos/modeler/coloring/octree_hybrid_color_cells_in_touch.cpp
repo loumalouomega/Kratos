@@ -82,6 +82,13 @@ void OctreeHybridColorCellsInTouch::Apply(
         cell_aabb[i] = {mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]};
     }
 
+    // Tracks cells already coloured by THIS stage so that the SAT test is not
+    // repeated for them against later geometries. Cannot reuse `mCellColor[i] ==
+    // color` for this purpose: ApplyColoring pre-fills mCellColor with
+    // `default_outside_color` (1 by default), which may already equal `color`
+    // before this stage examines any geometry.
+    std::vector<bool> touched(n_cells, false);
+
     auto color_cells = [&](const Geometry<Node>& rGeometry) {
         // Geometry AABB
         double g_min[3] = {std::numeric_limits<double>::max(),
@@ -101,10 +108,10 @@ void OctreeHybridColorCellsInTouch::Apply(
         }
 
         for (std::size_t i = 0; i < n_cells; ++i) {
-            // Skip cells already carrying the target color — once colored,
-            // a cell cannot be un-colored by subsequent geometries in the same
-            // pass, and the SAT test below would be redundant.
-            if (r_data.mCellColor[i] == color) continue;
+            // Skip cells already coloured by this stage — once coloured, a cell
+            // cannot be un-coloured by subsequent geometries in the same pass,
+            // and the SAT test below would be redundant.
+            if (touched[i]) continue;
             const auto& bb = cell_aabb[i];
             // AABB quick-reject: bb layout is {min_x,min_y,min_z,max_x,max_y,max_z}.
             // Rejecting here costs six comparisons and avoids the SAT call for the
@@ -117,8 +124,10 @@ void OctreeHybridColorCellsInTouch::Apply(
             // not actually intersect the cell.
             const Point cell_min(bb[0], bb[1], bb[2]);
             const Point cell_max(bb[3], bb[4], bb[5]);
-            if (rGeometry.HasIntersection(cell_min, cell_max))
+            if (rGeometry.HasIntersection(cell_min, cell_max)) {
                 r_data.mCellColor[i] = color;
+                touched[i] = true;
+            }
         }
     };
 
