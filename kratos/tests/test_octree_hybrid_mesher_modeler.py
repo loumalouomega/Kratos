@@ -809,6 +809,7 @@ class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
         build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
         run_modeler(model, f"""{{
             "input_model_part_name":"S",
+            "default_outside_color":0,
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
                                         "refinement_depth":{depth},"adaptive":false}}],
             "coloring_settings_list":{color_settings},
