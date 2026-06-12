@@ -34,6 +34,7 @@ summary: Registry-driven modeler that wraps the OctreeHybridMeshUtility engine t
    - 8.4 [Boundary conditions on the exterior surface](#84-boundary-conditions-on-the-exterior-surface)
    - 8.5 [Quality report](#85-quality-report)
    - 8.6 [Tetrahedral mesh (BCC Freudenthal decomposition)](#86-tetrahedral-mesh-bcc-freudenthal-decomposition)
+   - 8.7 [Contact detection between coloured regions](#87-contact-detection-between-coloured-regions)
 9. [API reference](#9-api-reference)
 10. [Registration and instantiation](#10-registration-and-instantiation)
 11. [Testing](#11-testing)
@@ -324,6 +325,7 @@ Registered operations:
 | JSON `"type"` | Class | Purpose |
 |--------------|-------|---------|
 | `OctreeHybridReportMeshQuality` | `OctreeHybridReportMeshQuality` | Log min/mean scaled Jacobian and inverted-element count |
+| `OctreeHybridFindContactsInSkinModelPart` | `OctreeHybridFindContactsInSkinModelPart` | Split a skin ModelPart's conditions/nodes into per-neighbour-colour "contact" sub-ModelParts |
 
 ---
 
@@ -1226,6 +1228,73 @@ This operation is purely read-only and does not modify any mesh entity.
 
 ---
 
+#### `OctreeHybridFindContactsInSkinModelPart`
+
+Splits the conditions of a skin (boundary) ModelPart into per-neighbour-colour
+"contact" sub-ModelParts.
+
+**Registry path:** `OctreeHybridMesherOperation.All.OctreeHybridFindContactsInSkinModelPart.Prototype`
+
+**Class:** `Kratos::OctreeHybridFindContactsInSkinModelPart`
+
+**Header:** `kratos/modeler/operation/octree_hybrid_find_contacts_in_skin_model_part.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridFindContactsInSkinModelPart"` | Registry lookup key. |
+| `model_part_name` | string | `"Undefined"` | Skin ModelPart whose conditions are classified. |
+| `contact_model_parts` | array | `[]` | List of `{ "outside_color", "contact_model_part_name" }` objects. |
+| `cell_color` | int | `-1` | Colour of the cells on "this" side of `model_part_name`'s conditions. |
+
+Each entry of `"contact_model_parts"` accepts:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `outside_color` | int | `-1` | Colour of the neighbour cell that identifies a contact. |
+| `contact_model_part_name` | string | `"Undefined"` | ModelPart (created if needed) receiving the matching conditions and nodes. |
+
+**Behaviour:**
+
+The operation is applied to a skin ModelPart whose conditions are the boundary quads
+of a colour region (typically produced by
+`GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` with `"color"` set to
+`"cell_color"`). For every condition it determines, on the octree hex mesh
+(`OctreeHybridMesherData::mCells` / `mCellColor`), the cell on the other side of the
+shared quad face. If that neighbour cell's colour matches one of the
+`"outside_color"` values listed in `"contact_model_parts"`, the condition (and its
+four nodes) is additionally added to the corresponding `"contact_model_part_name"`.
+
+A single boundary condition may be added to more than one contact ModelPart if its
+face is shared (in a non-manifold sense) by more than one neighbouring cell with
+different colours that both appear in `"contact_model_parts"`. Conditions whose face
+lies on the outer boundary of the octree domain (no neighbour cell) are skipped: they
+cannot be a contact. This operation does not create or remove mesh entities — it only
+adds existing conditions and nodes (by id) to the configured contact ModelParts.
+
+**Example JSON:**
+
+```json
+{
+    "type"                : "OctreeHybridFindContactsInSkinModelPart",
+    "model_part_name"     : "destination_model_part.submodelpart_liquid",
+    "cell_color"          : -1,
+    "contact_model_parts" : [
+        {
+            "outside_color": 0.0,
+            "contact_model_part_name": "destination_model_part.submodelpart_liquid.contact_liquid2air"
+        },
+        {
+            "outside_color": -2,
+            "contact_model_part_name": "destination_model_part.submodelpart_liquid.contact_liquid2solid.contact_liquid2mold_105"
+        }
+    ]
+}
+```
+
+---
+
 ## 8. Python / JSON usage examples
 
 ### 8.1 Dual carved mesh
@@ -1526,6 +1595,73 @@ print(f"Tri BCs      : {bound_mp.NumberOfConditions()}")
 
 > **Note:** `"TetDomain.Boundary"` is a sub-model-part of `"TetDomain"`.  Node IDs are
 > shared: every boundary triangle node also appears in the volume mesh.
+
+---
+
+### 8.7 Contact detection between coloured regions
+
+`OctreeHybridFindContactsInSkinModelPart` splits a skin ModelPart's conditions into
+per-neighbour-colour "contact" sub-ModelParts. This is useful for multi-region
+problems (e.g.\ a casting/mould setup) where, after coloring assigns different labels
+to liquid, mould and air regions, you need a separate ModelPart for each interface
+(liquid-air, liquid-mould, ...).
+
+```python
+settings = KM.Parameters("""{
+    "input_model_part_name"  : "Surface",
+    "refinement_settings_list" : [
+        {
+            "type"             : "OctreeHybridRefineInterfaceCells",
+            "refinement_depth" : 4,
+            "adaptive"         : true,
+            "mesh_type"        : "dual"
+        }
+    ],
+    "coloring_settings_list" : [
+        { "type" : "OctreeHybridClassifyCellsInsideOutside" }
+    ],
+    "entities_generator_list" : [
+        {
+            "type"            : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "model_part_name" : "Volume",
+            "color"           : 1,
+            "properties_id"   : 1
+        },
+        {
+            "type"             : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+            "model_part_name"  : "Volume.Skin",
+            "color"            : 1,
+            "properties_id"    : 1,
+            "generated_entity" : "SurfaceCondition3D4N"
+        }
+    ],
+    "model_part_operations" : [
+        {
+            "type"                : "OctreeHybridFindContactsInSkinModelPart",
+            "model_part_name"     : "Volume.Skin",
+            "cell_color"          : 1,
+            "contact_model_parts" : [
+                {
+                    "outside_color"           : 0,
+                    "contact_model_part_name" : "Volume.Skin.Contact0"
+                }
+            ]
+        }
+    ]
+}""")
+
+modeler = KM.OctreeHybridMeshGeneratorModeler(model, settings)
+modeler.SetupModelPart()
+
+contact_mp = model.GetModelPart("Volume.Skin.Contact0")
+print(f"Contact conditions: {contact_mp.NumberOfConditions()}")
+print(f"Contact nodes     : {contact_mp.NumberOfNodes()}")
+```
+
+`"Volume.Skin.Contact0"` is created (if it doesn't already exist) and populated with
+the subset of `"Volume.Skin"` conditions (and their nodes) whose octree neighbour cell
+has colour `0`. Conditions on the outer boundary of the octree domain (no neighbour
+cell) are not added to any contact ModelPart.
 
 ---
 
