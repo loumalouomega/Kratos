@@ -27,6 +27,7 @@ const Parameters RefineUniformOctreeHybrid::GetDefaultParameters() const
     return Parameters(R"({
         "type"             : "RefineUniformOctreeHybrid",
         "refinement_depth" : 5,
+        "model_part_name"  : "Undefined", // NOTE: Not used in this operation, but required for consistency with other refine operations.
         "max_voxel_size"   : 0.0
     })");
 }
