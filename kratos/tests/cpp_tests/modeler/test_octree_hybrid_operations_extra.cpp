@@ -72,12 +72,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersTypeK
     KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"RefineInterfaceCellsOctreeHybrid"});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersHasInputModelPartName, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersHasModelPartName, KratosCoreFastSuite)
 {
     RefineInterfaceCellsOctreeHybrid op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_TRUE(p.Has("input_model_part_name"));
-    KRATOS_EXPECT_EQ(p["input_model_part_name"].GetString(), std::string{""});
+    KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
+    KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{""});
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersAllKeys, KratosCoreFastSuite)

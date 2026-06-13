@@ -308,39 +308,51 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerInfoString, KratosCore
     KRATOS_EXPECT_EQ(m.Info(), "OctreeHybridMeshGeneratorModeler");
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerEmptyRefineListThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerEmptyRefineListAutoBuildsOctree, KratosCoreFastSuite)
 {
-    // An empty refinement_settings_list means no RefineInterfaceCellsOctreeHybrid entry is
-    // dispatched, so mpOctree is never built.  SetupModelPart must throw with a clear message.
+    // An empty refinement_settings_list no longer requires an explicit
+    // RefineInterfaceCellsOctreeHybrid entry: EnsureOctreeBuilt auto-builds a default octree
+    // (refinement_depth=5, mesh_type="dual", adaptive=true) from the input surface model part
+    // before 2:1 balancing and extraction.
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
-    Parameters settings(R"({
+
+    ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
         "refinement_settings_list" : [],
-        "coloring_settings_list" : [],
-        "entities_generator_list": [],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
-    OctreeHybridMeshGeneratorModeler modeler(model, settings);
-    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(), 0u);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerRefineUniformWithoutOctreeThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerRefineUniformFirstAutoBuildsOctree, KratosCoreFastSuite)
 {
     // A refinement_settings_list that starts with RefineUniformOctreeHybrid (instead of
-    // RefineInterfaceCellsOctreeHybrid) never builds the octree.  RefineUniformOctreeHybrid
-    // checks mpOctree internally and must throw before the extraction guard is even reached.
+    // RefineInterfaceCellsOctreeHybrid) no longer throws: RefineUniformOctreeHybrid::Refine
+    // self-checks that no octree exists yet and delegates to EnsureOctreeBuilt, which builds
+    // the octree (refinement_depth=4 from this entry, mesh_type="dual", adaptive=true) from
+    // the input surface model part before the uniform refinement runs.
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
-    Parameters settings(R"({
+
+    ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
         "refinement_settings_list" : [{ "type": "RefineUniformOctreeHybrid", "refinement_depth": 4 }],
-        "coloring_settings_list" : [],
-        "entities_generator_list": [],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+                                      "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
-    OctreeHybridMeshGeneratorModeler modeler(model, settings);
-    KRATOS_EXPECT_EXCEPTION_IS_THROWN(modeler.SetupModelPart(), "");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(), 0u);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerUnknownMeshTypeThrows, KratosCoreFastSuite)
@@ -1082,7 +1094,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsProducesElements, Krat
             { "type": "RefineInterfaceCellsOctreeHybrid",
               "refinement_depth": 2, "adaptive": false },
             { "type": "RefineInterfaceCellsOctreeHybrid",
-              "input_model_part_name": "Skin",
+              "model_part_name": "Skin",
               "refinement_depth": 4 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
@@ -1101,7 +1113,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsProducesElements, Krat
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsFallbackToMainSurface, KratosCoreFastSuite)
 {
-    // Empty input_model_part_name → falls back to the modeler's main surface.
+    // Empty model_part_name → falls back to the modeler's main surface.
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
 
@@ -1112,7 +1124,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsFallbackToMainSurface,
             { "type": "RefineInterfaceCellsOctreeHybrid",
               "refinement_depth": 2, "adaptive": false },
             { "type": "RefineInterfaceCellsOctreeHybrid",
-              "input_model_part_name": "",
+              "model_part_name": "",
               "refinement_depth": 4 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
@@ -1139,9 +1151,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsMultipleGeometries, Kr
             { "type": "RefineInterfaceCellsOctreeHybrid",
               "refinement_depth": 1, "adaptive": false },
             { "type": "RefineInterfaceCellsOctreeHybrid",
-              "input_model_part_name": "SkinA", "refinement_depth": 4 },
+              "model_part_name": "SkinA", "refinement_depth": 4 },
             { "type": "RefineInterfaceCellsOctreeHybrid",
-              "input_model_part_name": "SkinB", "refinement_depth": 3 }
+              "model_part_name": "SkinB", "refinement_depth": 3 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
@@ -1193,7 +1205,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefinedCellSizeProduce
             { "type": "RefineInterfaceCellsOctreeHybrid",
               "refinement_depth": 1, "adaptive": false },
             { "type": "RefineInterfaceCellsOctreeHybrid",
-              "input_model_part_name": "Skin",
+              "model_part_name": "Skin",
               "refinement_depth": 1, "refined_cell_size": 0.25 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],

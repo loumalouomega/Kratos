@@ -204,7 +204,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyIncreasesLeafCo
     KRATOS_EXPECT_GE(modeler.GetData().mpOctree->GetLeafCount(), leaves_before);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyNoOctreeThrows, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyAutoBuildsOctree, KratosCoreFastSuite)
 {
     Model model;
     BuildClosedBoxSurface(model.CreateModelPart("Skin"));
@@ -216,7 +216,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyNoOctreeThrows,
         "refinement_depth"  : 3,
         "max_voxel_size"    : 0.0
     })");
-    KRATOS_EXPECT_EXCEPTION_IS_THROWN(op.Refine(modeler, p), "");
+    op.Refine(modeler, p);
+
+    KRATOS_EXPECT_TRUE(modeler.GetData().mpOctree != nullptr);
 }
 
 // ===========================================================================
@@ -252,7 +254,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyIncrease
         "type"                  : "RefineInterfaceCellsOctreeHybrid",
         "refinement_depth"      : 4,
         "refined_cell_size"     : 0.0,
-        "input_model_part_name" : ""
+        "model_part_name"       : ""
     })");
     interface_op.Refine(modeler, p);
 
@@ -261,7 +263,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyIncrease
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyNoSurfaceThrows, KratosCoreFastSuite)
 {
-    // No octree + no surface (empty input_model_part_name AND empty modeler top-level) → throws
+    // No octree + no surface (empty model_part_name AND empty modeler top-level) → throws
     Model model;
     auto modeler = MakeEmptyModeler(model, "", "Out");
 
@@ -270,7 +272,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyNoSurfac
         "type"                  : "RefineInterfaceCellsOctreeHybrid",
         "refinement_depth"      : 3,
         "refined_cell_size"     : 0.0,
-        "input_model_part_name" : ""
+        "model_part_name"       : ""
     })");
     KRATOS_EXPECT_EXCEPTION_IS_THROWN(op.Refine(modeler, p), "");
 }
