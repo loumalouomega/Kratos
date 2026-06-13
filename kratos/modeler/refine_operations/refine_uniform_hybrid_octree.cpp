@@ -27,7 +27,7 @@ const Parameters RefineUniformOctreeHybrid::GetDefaultParameters() const
     return Parameters(R"({
         "type"             : "RefineUniformOctreeHybrid",
         "refinement_depth" : 5,
-        "model_part_name"  : "Undefined", // NOTE: Not used in this operation, but required for consistency with other refine operations.
+        "model_part_name"  : "Undefined", // NOTE: Only used if the octree has not been built yet (see EnsureOctreeBuilt).
         "max_voxel_size"   : 0.0
     })");
 }
@@ -40,8 +40,13 @@ void RefineUniformOctreeHybrid::Refine(
     Parameters RefineParameters) const
 {
     Internals::OctreeHybridMesherData& r_data = rModeler.GetData();
-    KRATOS_ERROR_IF_NOT(r_data.mpOctree)
-        << "RefineUniformOctreeHybrid: octree has not been built yet." << std::endl;
+
+    // If no octree exists yet, build it now using this entry's settings
+    // (refinement_depth, model_part_name, ...) and the modeler's defaults for
+    // the remaining build options (adaptive, mesh_type, etc.).
+    if (!r_data.mpOctree) {
+        rModeler.EnsureOctreeBuilt(RefineParameters);
+    }
 
     // max_voxel_size takes priority over refinement_depth when explicitly set (> 0).
     // The default value of 0.0 signals "not specified", so the explicit depth

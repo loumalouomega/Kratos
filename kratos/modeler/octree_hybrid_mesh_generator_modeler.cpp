@@ -24,11 +24,12 @@
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/refine_operations/refine_hybrid_octree.h"
+#include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 #include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 
-namespace Kratos 
+namespace Kratos
 {
 
 OctreeHybridMeshGeneratorModeler::OctreeHybridMeshGeneratorModeler()
@@ -616,19 +617,23 @@ void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementPara
     // Retrieve the shared data struct that refinement operations read from and write to.  It holds the octree pointer, extracted node/cell arrays, per-cell colours, hanging-node constraint descriptors, and the node-pointer cache.
     Internals::OctreeHybridMesherData& r_data = *mpData;
 
-    // Dispatch every entry in refinement_settings_list.
-    // The first entry must be RefineInterfaceCellsOctreeHybrid, which builds the
-    // initial octree from the surface and records mesh_type / projection settings
-    // in r_data.  Subsequent entries add deeper local or uniform refinement.
+    // An empty refinement_settings_list still needs an octree to extract a mesh from:
+    // build one with default settings from the input surface.
+    if (RefinementParameters.size() == 0) {
+        EnsureOctreeBuilt(Parameters());
+    }
+
+    // Dispatch every entry in refinement_settings_list. Each operation self-checks
+    // whether the octree exists yet and, if not, delegates to EnsureOctreeBuilt using its
+    // own parameters (building the octree and recording mesh_type / projection settings
+    // in r_data) before returning or refining further.
     Dispatch<RefineOctreeHybrid>(
         "RefineOctreeHybrid", RefinementParameters,
         [&](const RefineOctreeHybrid& rProto, Parameters rParams) {
             rProto.Refine(*this, rParams); }, OperationType::Refine);
 
     KRATOS_ERROR_IF_NOT(r_data.mpOctree)
-        << "OctreeHybridMeshGeneratorModeler: no octree was built. "
-        << "Ensure 'refinement_settings_list' starts with an RefineInterfaceCellsOctreeHybrid entry."
-        << std::endl;
+        << "OctreeHybridMeshGeneratorModeler: no octree was built." << std::endl;
 
     // Ensure the octree is 2:1 balancing + mesh extraction.
     KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Ensuring the octree is 2-to-1 conforming starting" << std::endl;
@@ -658,6 +663,73 @@ void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementPara
     r_data.mNodePtrs.assign(r_data.mNodes.size(), nullptr);
     
     Timer::Stop("Refinement");
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::EnsureOctreeBuilt(Parameters SourceParameters)
+{
+    Internals::OctreeHybridMesherData& r_data = *mpData;
+    if (r_data.mpOctree) return;
+
+    // Start from RefineInterfaceCellsOctreeHybrid's defaults and overlay any build-relevant
+    // keys present in SourceParameters (the triggering refinement entry's parameters).
+    Parameters build_parameters = RefineInterfaceCellsOctreeHybrid().GetDefaultParameters();
+    for (const auto& key : {"model_part_name", "refinement_depth", "adaptive", "mesh_type",
+                             "project_to_surface", "projection_iterations", "projection_smoothing"}) {
+        if (SourceParameters.Has(key)) {
+            build_parameters.SetValue(key, SourceParameters[key]);
+        }
+    }
+
+    // Fall back to the modeler's top-level input model part if no surface was specified
+    // (or the operation left it at its "Undefined" placeholder default).
+    std::string surface_name = build_parameters["model_part_name"].GetString();
+    if (surface_name.empty() || surface_name == "Undefined") {
+        surface_name = GetInputModelPartName();
+        build_parameters["model_part_name"].SetString(surface_name);
+    }
+    KRATOS_ERROR_IF(surface_name.empty())
+        << "OctreeHybridMeshGeneratorModeler: no input surface model part specified to build "
+        << "the octree. Set 'input_model_part_name' on the modeler or 'model_part_name' on "
+        << "the refinement operation that triggers the build." << std::endl;
+
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0)
+        << "Building octree from model part '" << surface_name << "' with refinement_depth="
+        << build_parameters["refinement_depth"].GetInt() << ", mesh_type=\""
+        << build_parameters["mesh_type"].GetString() << "\", adaptive="
+        << (build_parameters["adaptive"].GetBool() ? "true" : "false") << "." << std::endl;
+
+    BuildOctree(build_parameters);
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshGeneratorModeler::BuildOctree(Parameters BuildParameters)
+{
+    Internals::OctreeHybridMesherData& r_data = *mpData;
+
+    ModelPart& r_surface = mpModel->GetModelPart(BuildParameters["model_part_name"].GetString());
+
+    // Cache the triangle soup in r_data so downstream stages (RemoveOutsideElement,
+    // ClassifyInsideOutside, ProjectToIsoSurface) can reuse it without re-parsing the ModelPart.
+    r_data.mTriangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_surface);
+    const BoundingBox<Point>* p_bounding_box_override =
+        HasOctreeBoundingBox() ? &GetOctreeBoundingBox() : nullptr;
+    r_data.mpOctree = OctreeHybridMeshUtility::BuildFromSurfaceMesh(
+        r_surface,
+        BuildParameters["refinement_depth"].GetInt(),
+        BuildParameters["adaptive"].GetBool(),
+        p_bounding_box_override);
+
+    // Mesh-type and projection settings are fixed at octree construction and must not be
+    // overwritten by subsequent refinement entries in the list.
+    r_data.mMeshType             = BuildParameters["mesh_type"].GetString();
+    r_data.mProjectToSurface     = BuildParameters["project_to_surface"].GetBool();
+    r_data.mProjectionIterations = BuildParameters["projection_iterations"].GetInt();
+    r_data.mProjectionSmoothing  = BuildParameters["projection_smoothing"].GetInt();
 }
 
 /***********************************************************************************/

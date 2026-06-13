@@ -50,7 +50,7 @@ namespace Internals { class OctreeHybridMesherData; }
  *
  * | Step | Private method | What happens |
  * |------|---------------|-------------|
- * | 1 | @ref ApplyRefinement | Dispatches each @ref RefineOctreeHybrid in `refinement_settings_list` (the first must be @ref RefineInterfaceCellsOctreeHybrid, which builds the initial octree and records `mesh_type` / projection settings; further entries add deeper refinement).  Then calls `StrongConstrain2To1` and extracts the conforming *dual* or non-conforming *primal* hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
+ * | 1 | @ref ApplyRefinement | Dispatches each @ref RefineOctreeHybrid in `refinement_settings_list`. Each operation self-checks whether the octree exists yet (`GetData().mpOctree`); if not, it delegates to @ref EnsureOctreeBuilt, which builds the octree from `"model_part_name"` (falling back to the input surface) using that entry's `refinement_depth` / `adaptive` / `mesh_type` / `project_to_surface` / projection settings and records them for later stages. An empty `refinement_settings_list` also triggers @ref EnsureOctreeBuilt with default settings. Subsequent entries refine the already-built octree (@ref RefineUniformOctreeHybrid or further @ref RefineInterfaceCellsOctreeHybrid passes). Then calls `StrongConstrain2To1` and extracts the conforming *dual* or non-conforming *primal* hex mesh.  For `"dual"` with `project_to_surface`, also runs `RemoveOutsideElement`, `ClearBufferZone`, and `ProjectToIsoSurface`. |
  * | 2 | @ref ApplyColoring | Dispatches `coloring_settings_list`; classifies cells as inside (1) or outside (0) the surface. |
  * | 3 | @ref GenerateEntities | Dispatches `entities_generator_list`; emits `Element3D8N` hexes, boundary `SurfaceCondition3D4N`, and/or `LinearMasterSlaveConstraint` hanging-node constraints. |
  * | 4 | @ref ApplyOperations | Dispatches `model_part_operations`; post-processing passes (e.g. mesh-quality reports). |
@@ -62,7 +62,8 @@ namespace Internals { class OctreeHybridMesherData; }
  * static-init time through `KRATOS_REGISTRY_ADD_PROTOTYPE`.
  *
  * ### Mesh topologies
- * The `"mesh_type"` key in the first @ref RefineInterfaceCellsOctreeHybrid operation selects the topology:
+ * The `"mesh_type"` key of the entry that triggers @ref EnsureOctreeBuilt (typically the
+ * first entry of `refinement_settings_list`) selects the topology:
  * - **`"dual"`** (default): a fully *conforming* mesh produced by the dual extraction +
  *   transition-template algorithm (see @ref OctreeHybridMeshUtility).  No hanging nodes.
  * - **`"primal"`**: one hexahedron per octree leaf, sharing finest-grid corner nodes.
@@ -87,7 +88,7 @@ namespace Internals { class OctreeHybridMesherData; }
  *         { "type": "RefineInterfaceCellsOctreeHybrid",
  *           "refinement_depth": 3 },
  *         { "type": "RefineInterfaceCellsOctreeHybrid",
- *           "input_model_part_name": "Surface",
+ *           "model_part_name": "Surface",
  *           "refinement_depth": 5 }
  *     ],
  *     "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
@@ -238,10 +239,12 @@ public:
      * `"bounding_box_model_part"` (the name of another ModelPart in the `Model`) are mutually
      * exclusive ways to override the octree's domain; see @ref ResolveOctreeBoundingBox. When
      * neither is set, the domain is computed automatically from the input surface, as before.
-     * The `refinement_settings_list` must start with an @ref RefineInterfaceCellsOctreeHybrid
-     * entry (which builds the octree and records `mesh_type` / projection settings) and may be
-     * followed by any number of @ref RefineUniformOctreeHybrid or additional
-     * @ref RefineInterfaceCellsOctreeHybrid entries.
+     * `refinement_settings_list` may contain any combination and order of
+     * @ref RefineUniformOctreeHybrid and @ref RefineInterfaceCellsOctreeHybrid entries (or be
+     * empty). The first entry that runs while no octree exists yet implicitly builds it via
+     * @ref EnsureOctreeBuilt, using that entry's `model_part_name` / `refinement_depth` /
+     * `adaptive` / `mesh_type` / `project_to_surface` / projection settings; all later entries
+     * refine the resulting octree.
      *
      * Each entry of `output_files` is a debug-output request with a `"type"` key. The only
      * currently supported type is `"octree_vtk"`, which dumps the raw octree leaves via
@@ -281,11 +284,33 @@ public:
 
     /**
      * @brief Returns the top-level `input_model_part_name` from the modeler parameters.
-     * @details Used by @ref RefineInterfaceCellsOctreeHybrid as a fallback when its own
-     *          `input_model_part_name` is empty on the first call (octree build).
+     * @details Used by @ref EnsureOctreeBuilt as a fallback when the triggering refinement
+     *          entry's own `model_part_name` is empty or `"Undefined"`.
      * @return The model part name string (may be empty if not set).
      */
     std::string GetInputModelPartName() const;
+
+    /**
+     * @brief Builds the octree if it has not been built yet, using settings from
+     *        @p SourceParameters.
+     * @details Called at the top of @ref RefineUniformOctreeHybrid::Refine and
+     *          @ref RefineInterfaceCellsOctreeHybrid::Refine (and once from
+     *          @ref ApplyRefinement for an empty `refinement_settings_list`) so that any
+     *          refinement operation can run first and self-initialize the octree.
+     *
+     * No-op if `GetData().mpOctree` is already set.  Otherwise, reads `"model_part_name"`,
+     * `"refinement_depth"`, `"adaptive"`, `"mesh_type"`, `"project_to_surface"`,
+     * `"projection_iterations"`, and `"projection_smoothing"` from @p SourceParameters
+     * (each falling back to @ref RefineInterfaceCellsOctreeHybrid::GetDefaultParameters when
+     * absent). If the resolved `"model_part_name"` is empty or `"Undefined"`, falls back to
+     * @ref GetInputModelPartName. `KRATOS_ERROR` if no surface model part can be resolved.
+     * Honours the resolved octree bounding box (@ref HasOctreeBoundingBox /
+     * @ref GetOctreeBoundingBox) if one was set.
+     *
+     * @param SourceParameters Validated parameters of the triggering refinement entry
+     *                          (or an empty `Parameters()` for the empty-list default build).
+     */
+    void EnsureOctreeBuilt(Parameters SourceParameters);
 
     /**
      * @brief Returns the bounding box of the octree
@@ -503,9 +528,12 @@ private:
 
     /**
      * @brief Dispatches `refinement_settings_list`, then balances and extracts the hex mesh.
-     * @details Calls @ref RefineOctreeHybrid::Refine on every entry (the first must
-     *          be @ref RefineInterfaceCellsOctreeHybrid).  After all refinement passes, calls
-     *          `StrongConstrain2To1` and then:
+     * @details If `refinement_settings_list` is empty, @ref EnsureOctreeBuilt is called with
+     *          default settings so that the octree is built from the input surface.
+     *          Otherwise, calls @ref RefineOctreeHybrid::Refine on every entry in order; each
+     *          operation self-checks whether the octree exists and, if not, delegates to
+     *          @ref EnsureOctreeBuilt using its own parameters before refining. After all
+     *          refinement passes, calls `StrongConstrain2To1` and then:
      *          - **`mMeshType == "dual"`**: `ExtractDualHexMesh`; optionally
      *            `RemoveOutsideElement` + `ClearBufferZone` + `ProjectToIsoSurface`.
      *          - **`mMeshType == "primal"`**: `ExtractPrimalHexMesh`, which also fills
@@ -514,6 +542,20 @@ private:
      * @param RefinementParameters Parameters for the refinement
      */
     void ApplyRefinement(Parameters RefinementParameters);
+
+    /**
+     * @brief Builds the octree from a resolved surface model part and build settings.
+     * @details Called by @ref EnsureOctreeBuilt once the surface model part and build
+     *          settings (`refinement_depth`, `adaptive`, `mesh_type`, `project_to_surface`,
+     *          `projection_iterations`, `projection_smoothing`) have been resolved.
+     *          Extracts the triangle soup from `BuildParameters["model_part_name"]`, builds
+     *          the octree via @ref OctreeHybridMeshUtility::BuildFromSurfaceMesh (honouring
+     *          @ref HasOctreeBoundingBox / @ref GetOctreeBoundingBox if set), and stores
+     *          `mMeshType`, `mProjectToSurface`, `mProjectionIterations`, and
+     *          `mProjectionSmoothing` in @ref Internals::OctreeHybridMesherData.
+     * @param BuildParameters Fully resolved build parameters (see @ref EnsureOctreeBuilt).
+     */
+    void BuildOctree(Parameters BuildParameters);
 
     /**
      * @brief Dispatches `coloring_settings_list` via @ref OctreeHybridMesherColoring.

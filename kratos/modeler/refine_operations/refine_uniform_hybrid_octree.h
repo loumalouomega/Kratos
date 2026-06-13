@@ -37,11 +37,20 @@ namespace Kratos {
  * refinement pass or in combination with @ref RefineInterfaceCellsOctreeHybrid (which
  * adds extra resolution near specific surfaces).
  *
+ * If no octree has been built yet (e.g. this is the first entry in
+ * `refinement_settings_list`), `Refine` delegates to
+ * `OctreeHybridMeshGeneratorModeler::EnsureOctreeBuilt`, which builds the octree from
+ * `model_part_name` (falling back to the modeler's top-level `input_model_part_name`
+ * when left as `"Undefined"`) using `refinement_depth` and default values for the
+ * remaining build options (`adaptive`, `mesh_type`, `project_to_surface`, ...), before
+ * proceeding with the uniform refinement below.
+ *
  * ### Parameters schema
  * | Key                | Type   | Default | Description                              |
  * |--------------------|--------|---------|------------------------------------------|
  * | `type`             | string | `"RefineUniformOctreeHybrid"` | Registry lookup key. |
  * | `refinement_depth`  | int    | `5`     | Target refinement depth.  Used when `max_voxel_size` is 0. |
+ * | `model_part_name`  | string | `"Undefined"` | Surface model part used to build the octree if it has not been built yet.  `"Undefined"` falls back to the modeler's top-level `input_model_part_name`.  Ignored if the octree already exists. |
  * | `max_voxel_size` | double | `0.0`   | Desired maximum cell size in world-space units.  When > 0, overrides `refinement_depth` and the equivalent depth is computed via `OctreeHybridMeshUtility::ElementSizeToDepth`. |
  *
  * ### Example JSON usage
@@ -77,9 +86,10 @@ public:
 
     /**
      * @brief Refines all octree leaves to the depth specified in @p RefineParameters.
-     * @details Retrieves the octree from `rModeler.GetData().mpOctree` and calls
+     * @details If `rModeler.GetData().mpOctree` is null, first calls
+     * `rModeler.EnsureOctreeBuilt(RefineParameters)` to build the octree.  Then calls
      * `OctreeHybridMeshUtility::RefineAllCells()` with the target depth from
-     * `RefineParameters["refinement_depth"]`.
+     * `RefineParameters["refinement_depth"]` (or `"max_voxel_size"` if > 0).
      *
      * @param rModeler         Reference to the owning @ref OctreeHybridMeshGeneratorModeler.
      * @param RefineParameters Validated JSON parameters containing `"refinement_depth"`.
@@ -93,7 +103,8 @@ public:
      * {
      *     "type"              : "RefineUniformOctreeHybrid",
      *     "refinement_depth"  : 5,
-     *     "max_voxel_size" : 0.0
+     *     "model_part_name"   : "Undefined",
+     *     "max_voxel_size"    : 0.0
      * }
      * @endcode
      * @return A Parameters object with all accepted keys and their default values.
