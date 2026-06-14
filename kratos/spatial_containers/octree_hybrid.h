@@ -121,19 +121,19 @@ public:
      * id 0) as its sole leaf.  The normalisation parameters are set to the
      * identity mapping (scale = 1, offset = 0).
      *
-     * @param max_depth  Maximum refinement depth.  Must be in [1, MAX_DEPTH].
-     *                   Defaults to MAX_DEPTH (the coarsest allowed by the
-     *                   configuration's compile-time constant).
+     * @param MaxDepth  Maximum refinement depth.  Must be in [1, MAX_DEPTH].
+     *                  Defaults to MAX_DEPTH (the coarsest allowed by the
+     *                  configuration's compile-time constant).
      */
-    explicit OctreeHybrid(std::size_t max_depth = MAX_DEPTH)
-        : mDepth(max_depth)
+    explicit OctreeHybrid(std::size_t MaxDepth = MAX_DEPTH)
+        : mDepth(MaxDepth)
         , mLeafCount(0)
     {
         for (std::size_t i = 0; i < DIMENSION; i++) {
             mScaleFactor[i] = 1.0;
             mOffset[i]      = 0.0;
         }
-        Initialize(max_depth);
+        Initialize(MaxDepth);
     }
 
     /**
@@ -141,18 +141,18 @@ public:
      *
      * Convenience overload that calls SetBoundingBox immediately.
      *
-     * @param Low        Pointer to the three lower-bound world coordinates.
-     * @param High       Pointer to the three upper-bound world coordinates.
-     * @param max_depth  Maximum refinement depth.
+     * @param Low       Pointer to the three lower-bound world coordinates.
+     * @param High      Pointer to the three upper-bound world coordinates.
+     * @param MaxDepth  Maximum refinement depth.
      */
     OctreeHybrid(
         const double* Low,
         const double* High,
-        std::size_t   max_depth = MAX_DEPTH)
-        : mDepth(max_depth)
+        std::size_t   MaxDepth = MAX_DEPTH)
+        : mDepth(MaxDepth)
         , mLeafCount(0)
     {
-        Initialize(max_depth);
+        Initialize(MaxDepth);
         SetBoundingBox(Low, High);
     }
 
@@ -335,7 +335,7 @@ public:
     /**
      * @brief Converts three normalised coordinates to integer keys.
      * @param NormalizedCoordinates  Input normalised coordinates (length DIMENSION).
-     * @param keys                   Output keys (length DIMENSION).
+     * @param Keys                   Output keys (length DIMENSION).
      */
     void CalcKeysNormalized(
         const coordinate_type* NormalizedCoordinates,
@@ -359,8 +359,8 @@ public:
 
     /**
      * @brief Computes the normalised side length of the given cell.
-     * @param cell  Pointer to the cell.
-     * @return      1.0 / 2^cell->GetLevel().
+     * @param pCell  Pointer to the cell.
+     * @return       1.0 / 2^pCell->GetLevel().
      */
     double CalcSizeNormalized(const cell_type* pCell) const
     {
@@ -369,7 +369,7 @@ public:
 
     /**
      * @brief Computes normalised coordinates from an array of keys.
-     * @param keys                   Input keys (length DIMENSION).
+     * @param Keys                   Input keys (length DIMENSION).
      * @param NormalizedCoordinates  Output normalised coordinates (length DIMENSION).
      */
     void CalculateCoordinatesNormalized(
@@ -408,58 +408,58 @@ public:
      * @code
      *   id = mLevelId[level] + z * res^2 + y * res + x,   res = 2^level
      * @endcode
-     * @param octree_id  Flat index in mNodeSubdivided.
-     * @param level      Refinement level of the cell.
-     * @param x          Output X grid coordinate.
-     * @param y          Output Y grid coordinate.
-     * @param z          Output Z grid coordinate.
+     * @param OctreeId  Flat index in mNodeSubdivided.
+     * @param Level     Refinement level of the cell.
+     * @param rX        Output X grid coordinate.
+     * @param rY        Output Y grid coordinate.
+     * @param rZ        Output Z grid coordinate.
      */
     void OctreeIdxToXyz(
-        int octree_id, 
-        int level, 
-        int& x, 
-        int& y, 
-        int& z
+        int OctreeId,
+        int Level,
+        int& rX,
+        int& rY,
+        int& rZ
         ) const
     {
-        const int idx = octree_id - static_cast<int>(mLevelId[level]);
-        const int res = static_cast<int>(mLevelRes[level]);
-        x = idx % res;
-        y = (idx / res) % res;
-        z = idx / (res * res);
+        const int idx = OctreeId - static_cast<int>(mLevelId[Level]);
+        const int res = static_cast<int>(mLevelRes[Level]);
+        rX = idx % res;
+        rY = (idx / res) % res;
+        rZ = idx / (res * res);
     }
 
     /**
      * @brief Computes the flat id of a given (x, y, z) position at a given level.
-     * @param level  Refinement level.
-     * @param x      X grid coordinate.
-     * @param y      Y grid coordinate.
-     * @param z      Z grid coordinate.
+     * @param Level  Refinement level.
+     * @param X      X grid coordinate.
+     * @param Y      Y grid coordinate.
+     * @param Z      Z grid coordinate.
      * @return       Flat index in mNodeSubdivided.
      */
     int XyzToOctreeIdx(
-        int level, 
-        int x, 
-        int y, 
-        int z
+        int Level,
+        int X,
+        int Y,
+        int Z
         ) const
     {
-        const int res = static_cast<int>(mLevelRes[level]);
-        return static_cast<int>(mLevelId[level]) + z * res * res + y * res + x;
+        const int res = static_cast<int>(mLevelRes[Level]);
+        return static_cast<int>(mLevelId[Level]) + Z * res * res + Y * res + X;
     }
 
     /**
      * @brief Returns the level of a node given its flat id.
      * @details Uses binary search on mLevelId (O(log mDepth), effectively O(1)).
-     * @param octree_id  Flat index in mNodeSubdivided.
-     * @return           Refinement level (0 to mDepth).
+     * @param OctreeId  Flat index in mNodeSubdivided.
+     * @return          Refinement level (0 to mDepth).
      */
-    int GetLevelFromId(int octree_id) const
+    int GetLevelFromId(int OctreeId) const
     {
         int lo = 0, hi = static_cast<int>(mDepth);
         while (lo < hi) {
             const int mid = (lo + hi + 1) / 2;
-            if (static_cast<int>(mLevelId[mid]) <= octree_id) {
+            if (static_cast<int>(mLevelId[mid]) <= OctreeId) {
                 lo = mid;
             } else {
                 hi = mid - 1;
@@ -482,25 +482,25 @@ public:
      *   child_y = 2 * parent_y + dy
      *   child_z = 2 * parent_z + dz
      * @endcode
-     * @param parent_id     Flat id of the parent cell.
-     * @param parent_level  Level of the parent cell.
-     * @param child_index   Child index in [0, 7].
-     * @return              Flat id of the child cell.
+     * @param ParentId     Flat id of the parent cell.
+     * @param ParentLevel  Level of the parent cell.
+     * @param ChildIndex   Child index in [0, 7].
+     * @return             Flat id of the child cell.
      */
     int Child(
-        int parent_id, 
-        int parent_level, 
-        int child_index
+        int ParentId,
+        int ParentLevel,
+        int ChildIndex
         ) const
     {
         int px, py, pz;
-        OctreeIdxToXyz(parent_id, parent_level, px, py, pz);
+        OctreeIdxToXyz(ParentId, ParentLevel, px, py, pz);
 
-        const int dx = child_index & 1;
-        const int dy = (child_index >> 1) & 1;
-        const int dz = (child_index >> 2) & 1;
+        const int dx = ChildIndex & 1;
+        const int dy = (ChildIndex >> 1) & 1;
+        const int dz = (ChildIndex >> 2) & 1;
 
-        const int child_level = parent_level + 1;
+        const int child_level = ParentLevel + 1;
         const int child_x     = 2 * px + dx;
         const int child_y     = 2 * py + dy;
         const int child_z     = 2 * pz + dz;
@@ -514,46 +514,46 @@ public:
      * @details The list always includes `octree_id` itself at its correct position.
      * If `octree_id` is the root (level 0), only one sibling (itself) is valid
      * and the remaining seven entries are set to -1.
-     * @param octree_id  Flat id of any cell at level `level`.
-     * @param level      Refinement level of the cell.
-     * @param siblings   Output array of exactly 8 integers.
+     * @param OctreeId  Flat id of any cell at level `Level`.
+     * @param Level     Refinement level of the cell.
+     * @param Siblings  Output array of exactly 8 integers.
      */
     void RefineBrothers(
-        int octree_id, 
-        int level, 
-        int siblings[8]
+        int OctreeId,
+        int Level,
+        int Siblings[8]
         ) const
     {
-        if (level == 0) {
+        if (Level == 0) {
             // Root has no parent; only itself.
-            siblings[0] = octree_id;
-            for (int i = 1; i < 8; i++) siblings[i] = -1;
+            Siblings[0] = OctreeId;
+            for (int i = 1; i < 8; i++) Siblings[i] = -1;
             return;
         }
 
         // Parent grid position (integer division rounds toward zero).
         int cx, cy, cz;
-        OctreeIdxToXyz(octree_id, level, cx, cy, cz);
+        OctreeIdxToXyz(OctreeId, Level, cx, cy, cz);
 
-        const int parent_level = level - 1;
+        const int parent_level = Level - 1;
         const int parent_x     = cx / 2;
         const int parent_y     = cy / 2;
         const int parent_z     = cz / 2;
         const int parent_id    = XyzToOctreeIdx(parent_level, parent_x, parent_y, parent_z);
 
         for (int i = 0; i < 8; i++) {
-            siblings[i] = Child(parent_id, parent_level, i);
+            Siblings[i] = Child(parent_id, parent_level, i);
         }
     }
 
     /**
      * @brief Returns true if a cell is currently a leaf (not subdivided).
-     * @param octree_id  Flat id of the cell.
-     * @return           true if mNodeSubdivided[octree_id] == false.
+     * @param OctreeId  Flat id of the cell.
+     * @return          true if mNodeSubdivided[OctreeId] == false.
      */
-    bool IsLeaf(int octree_id) const
+    bool IsLeaf(int OctreeId) const
     {
-        return !mNodeSubdivided[static_cast<std::size_t>(octree_id)];
+        return !mNodeSubdivided[static_cast<std::size_t>(OctreeId)];
     }
 
     ///@}
@@ -564,13 +564,13 @@ public:
      * @brief Inserts a point given in normalised [0, 1]^3 coordinates.
      * @details The octree is refined along the path to the point until either
      * MIN_DEPTH or an existing subdivision boundary is reached.
-     * @param point  Normalised coordinates (length DIMENSION).
+     * @param Point  Normalised coordinates (length DIMENSION).
      */
-    void InsertNormalized(const coordinate_type* point)
+    void InsertNormalized(const coordinate_type* Point)
     {
-        key_type kx = CalcKeyNormalized(point[0]);
-        key_type ky = CalcKeyNormalized(point[1]);
-        key_type kz = CalcKeyNormalized(point[2]);
+        key_type kx = CalcKeyNormalized(Point[0]);
+        key_type ky = CalcKeyNormalized(Point[1]);
+        key_type kz = CalcKeyNormalized(Point[2]);
 
         int id    = 0;    // start at root
         int level = 0;
@@ -591,12 +591,12 @@ public:
     /**
      * @brief Inserts a point given in world-space coordinates.
      * @details Normalises the point first, then calls InsertNormalized.
-     * @param point  World-space coordinates (length DIMENSION).
+     * @param Point  World-space coordinates (length DIMENSION).
      */
-    void Insert(const coordinate_type* point)
+    void Insert(const coordinate_type* Point)
     {
         coordinate_type norm[DIMENSION];
-        NormalizeCoordinates(point, norm);
+        NormalizeCoordinates(Point, norm);
         InsertNormalized(norm);
     }
 
@@ -609,22 +609,22 @@ public:
      *     `mCells` and `mLeafIds`.
      *  4. Decrements `mLeafCount` by 1 and increments it by 8.
      * Calling this on an already-subdivided cell is a no-op.
-     * @param octree_id  Flat id of the cell to subdivide.
-     * @param level      Refinement level of the cell.  Must be < mDepth.
-     * @return           0 on success, 1 if the cell was already subdivided or at max depth.
+     * @param OctreeId  Flat id of the cell to subdivide.
+     * @param Level     Refinement level of the cell.  Must be < mDepth.
+     * @return          0 on success, 1 if the cell was already subdivided or at max depth.
      */
     int SubdivideCellByIdAndLevel(
-        int octree_id, 
-        int level
+        int OctreeId,
+        int Level
         )
     {
-        if (static_cast<std::size_t>(level) >= mDepth) return 1;  // at max depth
-        if (mNodeSubdivided[static_cast<std::size_t>(octree_id)]) return 1; // already subdivided
+        if (static_cast<std::size_t>(Level) >= mDepth) return 1;  // at max depth
+        if (mNodeSubdivided[static_cast<std::size_t>(OctreeId)]) return 1; // already subdivided
 
-        mNodeSubdivided[static_cast<std::size_t>(octree_id)] = true;
+        mNodeSubdivided[static_cast<std::size_t>(OctreeId)] = true;
 
         // Mark the cached cell as non-leaf.
-        auto it = mCells.find(octree_id);
+        auto it = mCells.find(OctreeId);
         if (it != mCells.end()) {
             it->second->SetIsLeaf(false);
         }
@@ -634,8 +634,8 @@ public:
 
         // Create eight child cells.
         int x_p, y_p, z_p;
-        OctreeIdxToXyz(octree_id, level, x_p, y_p, z_p);
-        const int child_level = level + 1;
+        OctreeIdxToXyz(OctreeId, Level, x_p, y_p, z_p);
+        const int child_level = Level + 1;
 
         for (int i = 0; i < 8; i++) {
             const int dx = i & 1;
@@ -751,23 +751,23 @@ public:
      * @details Starting from the root, the method descends through the octree using
      * the flat-id arithmetic until it reaches a leaf (a cell whose
      * mNodeSubdivided entry is false).
-     * @param point  Normalised coordinates in [0, 1]^3 (length DIMENSION).
+     * @param Point  Normalised coordinates in [0, 1]^3 (length DIMENSION).
      * @return       Pointer to the leaf cell, or nullptr if the point is
      *               outside [0, 1]^3 or not in any allocated cell.
      */
-    cell_type* pGetCellNormalized(const coordinate_type* point) const
+    cell_type* pGetCellNormalized(const coordinate_type* Point) const
     {
         key_type keys[DIMENSION];
-        CalcKeysNormalized(point, keys);
+        CalcKeysNormalized(Point, keys);
         return pGetCell(keys);
     }
 
     /**
      * @brief Returns the leaf cell that contains the point encoded by the keys.
-     * @param keys  Integer keys (length DIMENSION), each in [0, 2^mDepth).
+     * @param Keys  Integer keys (length DIMENSION), each in [0, 2^mDepth).
      * @return      Pointer to the leaf cell, or nullptr.
      */
-    cell_type* pGetCell(const key_type* keys) const
+    cell_type* pGetCell(const key_type* Keys) const
     {
         int id    = 0;
         int level = 0;
@@ -775,9 +775,9 @@ public:
         while (!IsLeaf(id)) {
             level++;
             if (static_cast<std::size_t>(level) > mDepth) break;
-            const int cx = static_cast<int>(keys[0] >> (mDepth - static_cast<std::size_t>(level)));
-            const int cy = static_cast<int>(keys[1] >> (mDepth - static_cast<std::size_t>(level)));
-            const int cz = static_cast<int>(keys[2] >> (mDepth - static_cast<std::size_t>(level)));
+            const int cx = static_cast<int>(Keys[0] >> (mDepth - static_cast<std::size_t>(level)));
+            const int cy = static_cast<int>(Keys[1] >> (mDepth - static_cast<std::size_t>(level)));
+            const int cz = static_cast<int>(Keys[2] >> (mDepth - static_cast<std::size_t>(level)));
             id = XyzToOctreeIdx(level, cx, cy, cz);
         }
 
@@ -788,20 +788,20 @@ public:
     /**
      * @brief Returns the leaf cell at the given level or the deepest available
      *        ancestor if that level has not been refined to.
-     * @param keys   Integer keys (length DIMENSION).
-     * @param level  Target level to retrieve.
-     * @return       Pointer to the leaf at or above `level`, or nullptr.
+     * @param Keys   Integer keys (length DIMENSION).
+     * @param Level  Target level to retrieve.
+     * @return       Pointer to the leaf at or above `Level`, or nullptr.
      */
-    cell_type* pGetCell(const key_type* keys, std::size_t level) const
+    cell_type* pGetCell(const key_type* Keys, std::size_t Level) const
     {
         int id       = 0;
         int cur_level = 0;
 
-        while (!IsLeaf(id) && static_cast<std::size_t>(cur_level) < level) {
+        while (!IsLeaf(id) && static_cast<std::size_t>(cur_level) < Level) {
             cur_level++;
-            const int cx = static_cast<int>(keys[0] >> (mDepth - static_cast<std::size_t>(cur_level)));
-            const int cy = static_cast<int>(keys[1] >> (mDepth - static_cast<std::size_t>(cur_level)));
-            const int cz = static_cast<int>(keys[2] >> (mDepth - static_cast<std::size_t>(cur_level)));
+            const int cx = static_cast<int>(Keys[0] >> (mDepth - static_cast<std::size_t>(cur_level)));
+            const int cy = static_cast<int>(Keys[1] >> (mDepth - static_cast<std::size_t>(cur_level)));
+            const int cz = static_cast<int>(Keys[2] >> (mDepth - static_cast<std::size_t>(cur_level)));
             id = XyzToOctreeIdx(cur_level, cx, cy, cz);
         }
 
@@ -814,16 +814,16 @@ public:
      *        normalised axis-aligned box.
      * @details Uses a depth-first traversal starting from the smallest ancestor of the
      * query box.
-     * @param coord1  Minimum corner of the query box (normalised, length DIMENSION).
-     * @param coord2  Maximum corner of the query box (normalised, length DIMENSION).
-     * @param leaves  Output vector of matching leaf cells.
+     * @param Coord1   Minimum corner of the query box (normalised, length DIMENSION).
+     * @param Coord2   Maximum corner of the query box (normalised, length DIMENSION).
+     * @param rLeaves  Output vector of matching leaf cells.
      */
     void GetLeavesInBoundingBoxNormalized(
-        const double* coord1,
-        const double* coord2,
-        std::vector<cell_type*>& leaves) const
+        const double* Coord1,
+        const double* Coord2,
+        std::vector<cell_type*>& rLeaves) const
     {
-        leaves.clear();
+        rLeaves.clear();
 
         // DFS from root.
         std::vector<int> stack;
@@ -840,11 +840,11 @@ public:
             const double lo[3] = { x * cell_size, y * cell_size, z * cell_size };
             const double hi[3] = { (x+1)*cell_size, (y+1)*cell_size, (z+1)*cell_size };
 
-            if (!Collides(coord1, coord2, lo, hi)) continue;
+            if (!Collides(Coord1, Coord2, lo, hi)) continue;
 
             if (IsLeaf(id)) {
                 auto it = mCells.find(id);
-                if (it != mCells.end()) leaves.push_back(it->second.get());
+                if (it != mCells.end()) rLeaves.push_back(it->second.get());
             } else {
                 for (int i = 0; i < 8; i++) {
                     stack.push_back(Child(id, level, i));
@@ -1059,14 +1059,14 @@ public:
     std::size_t GetDepth() const noexcept { return mDepth; }
 
     /**
-     * @brief Returns the grid resolution at the given level (2^level).
+     * @brief Returns the grid resolution at the given level (2^Level).
      */
-    std::size_t GetLevelRes(std::size_t level) const { return mLevelRes[level]; }
+    std::size_t GetLevelRes(std::size_t Level) const { return mLevelRes[Level]; }
 
     /**
      * @brief Returns the start flat index of the given level in mNodeSubdivided.
      */
-    std::size_t GetLevelId(std::size_t level) const { return mLevelId[level]; }
+    std::size_t GetLevelId(std::size_t Level) const { return mLevelId[Level]; }
 
     /**
      * @brief Returns the total number of nodes in the complete octree
