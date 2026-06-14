@@ -664,7 +664,7 @@ from the specified ModelPart.
 | `type` | string | `"OctreeHybridColorCellsInTouch"` | Registry lookup key. |
 | `model_part_name` | string | `""` | Name of the ModelPart whose geometry is tested. |
 | `color` | int | `1` | Label to write for cells in touch with the geometry. |
-| `input_entities` | string | `"geometries"` | Which entities to iterate: `"geometries"`, `"elements"`, or `"conditions"`. |
+| `input_entities` | string | `""` | Which entities to iterate: `"geometries"`, `"elements"`, or `"conditions"`. `""` (the default) auto-detects the first non-empty of `Conditions()`, `Elements()`, `Geometries()`, in that order. |
 
 **Behaviour:**
 
@@ -681,7 +681,7 @@ initialised it is resized and filled with `0` first.
     "type"            : "OctreeHybridColorCellsInTouch",
     "model_part_name" : "MySurface",
     "color"           : 2,
-    "input_entities"  : "geometries"
+    "input_entities"  : ""
 }
 ```
 
@@ -706,7 +706,7 @@ and carry a specified seed colour.
 | `model_part_name` | string | `""` | Name of the ModelPart whose geometry seeds the flood-fill. |
 | `color` | int | `1` | Label to write to every reached cell. |
 | `cell_color` | int | `0` | Only cells currently carrying this label are traversed. |
-| `input_entities` | string | `"geometries"` | Which entities to iterate: `"geometries"`, `"elements"`, or `"conditions"`. |
+| `input_entities` | string | `""` | Which entities to iterate: `"geometries"`, `"elements"`, or `"conditions"`. `""` (the default) auto-detects the first non-empty of `Conditions()`, `Elements()`, `Geometries()`, in that order. |
 
 **Behaviour:**
 
@@ -730,7 +730,7 @@ also received label 0.
     "model_part_name" : "MySurface",
     "color"           : 2,
     "cell_color"      : 0,
-    "input_entities"  : "geometries"
+    "input_entities"  : ""
 }
 ```
 
@@ -798,7 +798,7 @@ defined by another ModelPart.
 | `type` | string | `"OctreeHybridColorCellsWithInsideCenter"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the ModelPart whose geometry defines the "inside" surface. |
 | `color` | int | `-1` | Label to write for cells whose centre is inside the surface. |
-| `input_entities` | string | `""` | Which entities to extract triangles from: `"geometries"`, `"elements"`, or `"conditions"`. Must be set explicitly. |
+| `input_entities` | string | `""` | Which entities to extract triangles from: `"geometries"`, `"elements"`, or `"conditions"`. `""` (the default) auto-detects the first non-empty of `Conditions()`, `Elements()`, `Geometries()`, in that order. |
 | `tolerance` | double | `1.0e-12` | Geometric epsilon for the inside/outside test: a cell centre is inside when its signed distance to the surface is `>= -tolerance`. |
 | `bounding_box.min_point` / `bounding_box.max_point` | array[3] | `[]` / `[]` | Optional AABB pre-filter. When both are 3-vectors, only cells whose centre lies within this box are tested; cells outside are left unchanged. Empty (default) = no restriction. |
 
@@ -822,7 +822,7 @@ If `mCellColor` has not been initialised it is resized and filled with `0` first
     "type"            : "OctreeHybridColorCellsWithInsideCenter",
     "model_part_name" : "MySurface",
     "color"           : 1,
-    "input_entities"  : "geometries",
+    "input_entities"  : "",
     "tolerance"       : 1.0e-12,
     "bounding_box"  : {
         "min_point" : [],
