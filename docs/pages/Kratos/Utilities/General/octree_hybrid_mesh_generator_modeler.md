@@ -205,8 +205,13 @@ subsequent entries are optional and can apply additional refinement (e.g. `Refin
      refined to `refinement_depth`.
    - Stores `mesh_type`, `project_to_surface`, `projection_iterations`, and
      `projection_smoothing` into `OctreeHybridMesherData` for use by the extraction pass.
-   - Any subsequent entries in `refinement_settings_list` (e.g. `RefineUniformOctreeHybrid`)
-     further subdivide octree cells.
+   - Any subsequent entries in `refinement_settings_list` (e.g. `RefineUniformOctreeHybrid`,
+     `RefineInterfaceCellsOctreeHybrid`) further subdivide octree cells. If an entry's
+     `refinement_depth` (or `refined_cell_size`) exceeds the octree's current maximum
+     depth, the octree's internal grid tables are extended in place
+     (`OctreeHybrid::IncreaseDepth`) rather than rebuilt — all cells and leaves produced
+     by earlier entries are preserved, and only the new, deeper levels become available
+     for subdivision.
 2. Calls `StrongConstrain2To1` to enforce the 2:1 balance constraint across the whole tree.
 3. Depending on `mesh_type`:
 
