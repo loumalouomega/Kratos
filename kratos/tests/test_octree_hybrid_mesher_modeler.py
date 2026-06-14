@@ -106,7 +106,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
         model = self._build_box_model()
         run_modeler(model, """{
             "input_model_part_name":"CS",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
@@ -119,7 +119,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
         model = self._build_box_model()
         run_modeler(model, """{
             "input_model_part_name":"CS",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
@@ -134,7 +134,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
         model = self._build_box_model(lo=lo, hi=hi)
         run_modeler(model, """{
             "input_model_part_name":"CS",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
@@ -154,7 +154,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
         model = self._build_box_model()
         run_modeler(model, """{
             "input_model_part_name":"CS",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
                                         "tag_refinement_level":true}],
@@ -169,7 +169,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
         model = self._build_box_model()
         run_modeler(model, """{
             "input_model_part_name":"CS",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[
                 {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
@@ -185,7 +185,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
         model = self._build_box_model()
         run_modeler(model, """{
             "input_model_part_name":"CS",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[{"type":"OctreeHybridReportMeshQuality","model_part_name":"Output"}]}""")
@@ -276,7 +276,7 @@ class TestOctreeHybridMeshGeneratorModelerBunny(unittest.TestCase):
         self._load_surface(model)
         run_modeler(model, """{
             "input_model_part_name":"BunnySurface",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":true}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":true, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
@@ -326,7 +326,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
         run_modeler(model, f"""{{
             "input_model_part_name":"S",
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
-                                        "refinement_depth":{depth},"adaptive":false}}],
+                                        "refinement_depth":{depth},"adaptive":false, "project_to_surface": false}}],
             "coloring_settings_list":[{{"type":"OctreeHybridClassifyCellsInsideOutside"}}],
             "entities_generator_list":[],
             "model_part_operations":[]}}""")
@@ -341,7 +341,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
         build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
             "model_part_operations":[]}""")
@@ -349,7 +349,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
         build_closed_box_surface(model2, lo=0.3, hi=0.7, name="S")
         run_modeler(model2, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Carved","color":1}],
             "model_part_operations":[]}""")
@@ -390,7 +390,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
         with self.assertRaises(Exception):
             run_modeler(model, """{
                 "input_model_part_name":"S",
-                "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":3,"adaptive":false}],
+                "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":3,"adaptive":false, "project_to_surface": false}],
                 "coloring_settings_list":[{"type":"NonExistentColoringType"}],
                 "entities_generator_list":[],"model_part_operations":[]}""")
 
@@ -406,7 +406,7 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
         run_modeler(model, f"""{{
             "input_model_part_name":"S",
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
-                                        "refinement_depth":{depth},"adaptive":false}}],
+                                        "refinement_depth":{depth},"adaptive":false, "project_to_surface": false}}],
             "coloring_settings_list":[{{"type":"OctreeHybridClassifyCellsInsideOutside"}}],
             "entities_generator_list":[{{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":{color},
@@ -426,7 +426,7 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
         build_closed_box_surface(model_full, name="S")
         run_modeler(model_full, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":1}],
             "model_part_operations":[]}""")
@@ -486,7 +486,7 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
             run_modeler(model, """{
                 "input_model_part_name":"S",
                 "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
-                                           "refinement_depth":3,"adaptive":false}],
+                                           "refinement_depth":3,"adaptive":false, "project_to_surface": false}],
                 "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
                 "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                     "model_part_name":"O","color":1,"generated_entity":"NoSuchElement3D8N"}],
@@ -503,7 +503,7 @@ class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
         run_modeler(model, f"""{{
             "input_model_part_name":"S",
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
-                                        "refinement_depth":{depth},"adaptive":false}}],
+                                        "refinement_depth":{depth},"adaptive":false, "project_to_surface": false}}],
             "coloring_settings_list":[{{"type":"OctreeHybridClassifyCellsInsideOutside"}}],
             "entities_generator_list":[
                 {{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1}},
@@ -671,7 +671,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
         run_modeler(model, """{
             "input_model_part_name":"Surface",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,
-                                       "adaptive":true,"mesh_type":"dual"}],
+                                       "adaptive":true,"mesh_type":"dual", "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":1}],
@@ -690,7 +690,7 @@ class TestReportMeshQuality(unittest.TestCase):
         run_modeler(model, f"""{{
             "input_model_part_name":"S",
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
-                                        "refinement_depth":{depth},"adaptive":false}}],
+                                        "refinement_depth":{depth},"adaptive":false, "project_to_surface": false}}],
             "coloring_settings_list":[{{"type":"OctreeHybridClassifyCellsInsideOutside"}}],
             "entities_generator_list":[{{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"Output","color":1}}],
@@ -716,7 +716,7 @@ class TestReportMeshQuality(unittest.TestCase):
         model.CreateModelPart("Empty")  # pre-create so ReportMeshQuality can find it
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":3,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":3,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[],
             "entities_generator_list":[],
             "model_part_operations":[{"type":"OctreeHybridReportMeshQuality","model_part_name":"Empty"}]}""")
@@ -762,7 +762,7 @@ class TestRegistryDispatch(unittest.TestCase):
         build_closed_box_surface(model, name="S")
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":3,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":3,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{
                 "type":"OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype"
             }],
@@ -779,7 +779,7 @@ class TestRegistryDispatch(unittest.TestCase):
             run_modeler(model, """{
                 "input_model_part_name":"S",
                 "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
-                                           "refinement_depth":3,"adaptive":false}],
+                                           "refinement_depth":3,"adaptive":false, "project_to_surface": false}],
                 "coloring_settings_list":[],
                 "entities_generator_list":[],
                 "model_part_operations":[{"type":"TotallyUnknownOperation"}]}""")
@@ -792,7 +792,7 @@ class TestRegistryDispatch(unittest.TestCase):
             run_modeler(model, """{
                 "input_model_part_name":"S",
                 "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
-                                           "refinement_depth":3,"adaptive":false}],
+                                           "refinement_depth":3,"adaptive":false, "project_to_surface": false}],
                 "coloring_settings_list":[],
                 "entities_generator_list":[],
                 "model_part_operations":[{
@@ -811,7 +811,7 @@ class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
             "input_model_part_name":"S",
             "default_outside_color":0,
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
-                                        "refinement_depth":{depth},"adaptive":false}}],
+                                        "refinement_depth":{depth},"adaptive":false, "project_to_surface": false}}],
             "coloring_settings_list":{color_settings},
             "entities_generator_list":[{{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":{gen_color}}}],
@@ -835,7 +835,7 @@ class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
         build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
             "model_part_operations":[]}""")
@@ -859,7 +859,7 @@ class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
         build_closed_box_surface(model, name="S2")
         run_modeler(model, """{
             "input_model_part_name":"S2",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridColorCellsInTouch",
                                        "model_part_name":"SurfaceElems","color":1,
                                        "input_entities":"elements"}],
@@ -882,7 +882,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
         build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[
                 {"type":"OctreeHybridClassifyCellsInsideOutside"},
                 {"type":"OctreeHybridColorConnectedCellsInTouch",
@@ -902,7 +902,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
         # Count all outside cells (color=0 after ClassifyInsideOutside)
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"AllOutside","color":0}],
             "model_part_operations":[]}""")
@@ -912,7 +912,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
         build_closed_box_surface(model2, lo=0.3, hi=0.7, name="S")
         run_modeler(model2, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[
                 {"type":"OctreeHybridClassifyCellsInsideOutside"},
                 {"type":"OctreeHybridColorConnectedCellsInTouch",
@@ -931,7 +931,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
         build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[
                 {"type":"OctreeHybridClassifyCellsInsideOutside"},
                 {"type":"OctreeHybridColorConnectedCellsInTouch",
@@ -958,7 +958,7 @@ class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
         run_modeler(model, f"""{{
             "input_model_part_name":"S",
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
-                                        "refinement_depth":{depth},"adaptive":false}}],
+                                        "refinement_depth":{depth},"adaptive":false, "project_to_surface": false}}],
             "coloring_settings_list":[
                 {{"type":"OctreeHybridColorCellsByLevel",
                   "color":{color},"min_level":{min_level},"max_level":{max_level}}}
@@ -988,7 +988,7 @@ class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
         # Total cells (default color=1, all included)
         run_modeler(model, """{
             "input_model_part_name":"S",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false, "project_to_surface": false}],
             "coloring_settings_list":[],
             "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
             "model_part_operations":[]}""")
@@ -1014,7 +1014,7 @@ class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
         build_transition_surface(model)  # triggers 2:1 transitions → template hexes
         run_modeler(model, """{
             "input_model_part_name":"Surface",
-            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":true}],
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":true, "project_to_surface": false}],
             "coloring_settings_list":[
                 {"type":"OctreeHybridClassifyCellsInsideOutside"},
                 {"type":"OctreeHybridColorCellsByLevel","color":2,"min_level":-1,"max_level":-1}

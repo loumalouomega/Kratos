@@ -101,7 +101,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsDefaultParametersDefau
     KRATOS_EXPECT_NEAR(p["refined_cell_size"].GetDouble(), 0.0, 1e-15);
     KRATOS_EXPECT_TRUE(p["adaptive"].GetBool());
     KRATOS_EXPECT_EQ(p["mesh_type"].GetString(), std::string{"dual"});
-    KRATOS_EXPECT_FALSE(p["project_to_surface"].GetBool());
+    KRATOS_EXPECT_TRUE(p["project_to_surface"].GetBool());
     KRATOS_EXPECT_EQ(p["projection_iterations"].GetInt(), 20000);
     KRATOS_EXPECT_EQ(p["projection_smoothing"].GetInt(), 1000);
 }
