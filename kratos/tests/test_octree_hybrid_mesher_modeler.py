@@ -108,7 +108,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
             "input_model_part_name":"CS",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
         out = model.GetModelPart("Output")
         self.assertGreater(out.NumberOfElements(), 0)
@@ -121,7 +121,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
             "input_model_part_name":"CS",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
         out = model.GetModelPart("Output")
         n_inv = sum(1 for el in out.Elements
@@ -136,7 +136,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
             "input_model_part_name":"CS",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
         out = model.GetModelPart("Output")
         pts = [(n.X,n.Y,n.Z) for n in out.Nodes]
@@ -156,7 +156,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
             "input_model_part_name":"CS",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
                                         "tag_refinement_level":true}],
             "model_part_operations":[]}""")
         out = model.GetModelPart("Output")
@@ -172,8 +172,8 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
             "entities_generator_list":[
-                {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
-                {"type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
+                {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
+                {"type":"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
             ],
             "model_part_operations":[]}""")
         bnd = model.GetModelPart("Boundary")
@@ -187,7 +187,7 @@ class TestOctreeHybridMeshGeneratorModelerDual(unittest.TestCase):
             "input_model_part_name":"CS",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[{"type":"OctreeHybridReportMeshQuality","model_part_name":"Output"}]}""")
         out = model.GetModelPart("Output")
         self.assertGreater(out.NumberOfElements(), 0)
@@ -204,7 +204,7 @@ class TestOctreeHybridMeshGeneratorModelerPrimal(unittest.TestCase):
                                         "adaptive":true,"mesh_type":"primal"}}],
             "coloring_settings_list":[],
             "entities_generator_list":[
-                {{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
+                {{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
                   "constraint_type":"LinearMasterSlaveConstraint",
                   "constrained_variables":["DISPLACEMENT_X","DISPLACEMENT_Y"]}}
             ],
@@ -278,7 +278,7 @@ class TestOctreeHybridMeshGeneratorModelerBunny(unittest.TestCase):
             "input_model_part_name":"BunnySurface",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":true}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1}],
             "model_part_operations":[]}""")
         out = model.GetModelPart("Output")
         n_inv = sum(1 for el in out.Elements
@@ -298,7 +298,7 @@ class TestOctreeHybridMeshGeneratorModelerBunny(unittest.TestCase):
                                        "mesh_type":"primal"}],
             "coloring_settings_list":[],
             "entities_generator_list":[
-                {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
+                {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
                  "constraint_type":"LinearMasterSlaveConstraint",
                  "constrained_variables":["DISPLACEMENT_X"]}
             ],
@@ -343,7 +343,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
             "input_model_part_name":"S",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
             "model_part_operations":[]}""")
         model2 = KM.Model()
         build_closed_box_surface(model2, lo=0.3, hi=0.7, name="S")
@@ -351,7 +351,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
             "input_model_part_name":"S",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Carved","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Carved","color":1}],
             "model_part_operations":[]}""")
         n_all = model.GetModelPart("All").NumberOfElements()
         n_carved = model2.GetModelPart("Carved").NumberOfElements()
@@ -370,7 +370,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
                                        "refinement_depth":4,"adaptive":false,"project_to_surface":true}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"Proj","color":1}],
             "model_part_operations":[]}""")
         n_proj = model.GetModelPart("Proj").NumberOfElements()
@@ -397,7 +397,7 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
 
 # ===========================================================================
 class TestGenerateHexesByCellColor(unittest.TestCase):
-    """Unit tests for GenerateHybridOctreeHexahedraElementsWithCellColor entity generator."""
+    """Unit tests for GenerateOctreeHybridHexahedraElementsWithCellColor entity generator."""
 
     def _box_run(self, lo=0.3, hi=0.7, depth=4, color=1,
                  entity="Element3D8N", tag_level=True):
@@ -408,7 +408,7 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
                                         "refinement_depth":{depth},"adaptive":false}}],
             "coloring_settings_list":[{{"type":"OctreeHybridClassifyCellsInsideOutside"}}],
-            "entities_generator_list":[{{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":{color},
                                         "generated_entity":"{entity}",
                                         "tag_refinement_level":{str(tag_level).lower()}}}],
@@ -428,12 +428,12 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
             "input_model_part_name":"S",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"O","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":1}],
             "model_part_operations":[]}""")
         n_all = model_full.GetModelPart("O").NumberOfElements()
 
         n_carved = self._box_run().NumberOfElements()
-        print(f"\n[GenerateHybridOctreeHexahedraElementsWithCellColor] unfiltered={n_all} inside={n_carved}")
+        print(f"\n[GenerateOctreeHybridHexahedraElementsWithCellColor] unfiltered={n_all} inside={n_carved}")
         self.assertGreater(n_all, n_carved)
 
     def test_zero_inverted_elements(self):
@@ -477,7 +477,7 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
 
     def test_registry_path_exists(self):
         self.assertTrue(KM.Registry.HasValue(
-            "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype"))
+            "OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridHexahedraElementsWithCellColor.Prototype"))
 
     def test_unknown_entity_type_raises(self):
         with self.assertRaises(Exception):
@@ -488,14 +488,14 @@ class TestGenerateHexesByCellColor(unittest.TestCase):
                 "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
                                            "refinement_depth":3,"adaptive":false}],
                 "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-                "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+                "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                     "model_part_name":"O","color":1,"generated_entity":"NoSuchElement3D8N"}],
                 "model_part_operations":[]}""")
 
 
 # ===========================================================================
 class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
-    """Unit tests for GenerateHybridOctreeQuadrilateralConditionsWithFaceColor entity generator."""
+    """Unit tests for GenerateOctreeHybridQuadrilateralConditionsWithFaceColor entity generator."""
 
     def _run(self, lo=0.3, hi=0.7, depth=4):
         model = KM.Model()
@@ -506,15 +506,15 @@ class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
                                         "refinement_depth":{depth},"adaptive":false}}],
             "coloring_settings_list":[{{"type":"OctreeHybridClassifyCellsInsideOutside"}}],
             "entities_generator_list":[
-                {{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Volume","color":1}},
-                {{"type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}}
+                {{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1}},
+                {{"type":"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}}
             ],
             "model_part_operations":[]}}""")
         return model.GetModelPart("Volume"), model.GetModelPart("Boundary")
 
     def test_conditions_created(self):
         vol, bnd = self._run()
-        print(f"\n[GenerateHybridOctreeQuadrilateralConditionsWithFaceColor] elements={vol.NumberOfElements()} cond={bnd.NumberOfConditions()}")
+        print(f"\n[GenerateOctreeHybridQuadrilateralConditionsWithFaceColor] elements={vol.NumberOfElements()} cond={bnd.NumberOfConditions()}")
         self.assertGreater(bnd.NumberOfConditions(), 0)
 
     def test_boundary_nodes_populated(self):
@@ -550,7 +550,7 @@ class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
 
     def test_registry_path_exists(self):
         self.assertTrue(KM.Registry.HasValue(
-            "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeQuadrilateralConditionsWithFaceColor.Prototype"))
+            "OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridQuadrilateralConditionsWithFaceColor.Prototype"))
 
     def test_primal_boundary_constraints_generated(self):
         """Primal mesh: 'constrained_variables' on the boundary generator produces constraints in the boundary ModelPart."""
@@ -562,8 +562,8 @@ class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
                                        "adaptive":true,"mesh_type":"primal"}],
             "coloring_settings_list":[],
             "entities_generator_list":[
-                {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
-                {"type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary",
+                {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
+                {"type":"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary",
                  "color":1,"constraint_type":"LinearMasterSlaveConstraint",
                  "constrained_variables":["DISPLACEMENT_X"]}
             ],
@@ -575,7 +575,7 @@ class TestGenerateBoundaryConditionsByFace(unittest.TestCase):
 
 # ===========================================================================
 class TestGenerateHangingNodeConstraints(unittest.TestCase):
-    """Tests for hanging-node constraint generation via GenerateHybridOctreeHexahedraElementsWithCellColor."""
+    """Tests for hanging-node constraint generation via GenerateOctreeHybridHexahedraElementsWithCellColor."""
 
     def _run(self, depth=4, variables=None):
         if variables is None:
@@ -589,7 +589,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
                                         "refinement_depth":{depth},"adaptive":true,"mesh_type":"primal"}}],
             "coloring_settings_list":[],
             "entities_generator_list":[
-                {{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"O","color":1,
+                {{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":1,
                   "constraint_type":"LinearMasterSlaveConstraint",
                   "constrained_variables":{var_json}}}
             ],
@@ -599,7 +599,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
     def test_constraints_generated(self):
         out = self._run()
         nc = out.NumberOfMasterSlaveConstraints()
-        print(f"\n[GenerateHybridOctreeHexahedraElementsWithCellColor primal] elements={out.NumberOfElements()} constraints={nc}")
+        print(f"\n[GenerateOctreeHybridHexahedraElementsWithCellColor primal] elements={out.NumberOfElements()} constraints={nc}")
         self.assertGreater(nc, 0)
 
     def test_partition_of_unity(self):
@@ -638,7 +638,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
         out3 = self._run(variables=["DISPLACEMENT_X", "DISPLACEMENT_Y", "DISPLACEMENT_Z"])
         nc1 = out1.NumberOfMasterSlaveConstraints()
         nc3 = out3.NumberOfMasterSlaveConstraints()
-        print(f"\n[GenerateHybridOctreeHexahedraElementsWithCellColor primal] 1-var={nc1} 3-var={nc3}")
+        print(f"\n[GenerateOctreeHybridHexahedraElementsWithCellColor primal] 1-var={nc1} 3-var={nc3}")
         self.assertEqual(nc3, 3 * nc1,
                          f"3-variable count {nc3} ≠ 3 × single-variable count {nc1}")
 
@@ -658,7 +658,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,
                                        "adaptive":true,"mesh_type":"primal"}],
             "coloring_settings_list":[],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":1,"constraint_type":"LinearMasterSlaveConstraint",
                                         "constrained_variables":[]}],
             "model_part_operations":[]}""")
@@ -673,7 +673,7 @@ class TestGenerateHangingNodeConstraints(unittest.TestCase):
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,
                                        "adaptive":true,"mesh_type":"dual"}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":1}],
             "model_part_operations":[]}""")
         # Dual path has no mHanging entries → no constraints should be created
@@ -692,7 +692,7 @@ class TestReportMeshQuality(unittest.TestCase):
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
                                         "refinement_depth":{depth},"adaptive":false}}],
             "coloring_settings_list":[{{"type":"OctreeHybridClassifyCellsInsideOutside"}}],
-            "entities_generator_list":[{{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"Output","color":1}}],
             "model_part_operations":[{{"type":"OctreeHybridReportMeshQuality",
                                        "model_part_name":"Output"}}]}}""")
@@ -749,8 +749,8 @@ class TestRegistryDispatch(unittest.TestCase):
             "OctreeHybridMesherColoring.All.OctreeHybridColorCellsInTouch.Prototype",
             "OctreeHybridMesherColoring.All.OctreeHybridColorConnectedCellsInTouch.Prototype",
             "OctreeHybridMesherColoring.All.OctreeHybridColorCellsByLevel.Prototype",
-            "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype",
-            "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeQuadrilateralConditionsWithFaceColor.Prototype",
+            "OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridHexahedraElementsWithCellColor.Prototype",
+            "OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridQuadrilateralConditionsWithFaceColor.Prototype",
             "OctreeHybridMesherOperation.All.OctreeHybridReportMeshQuality.Prototype",
         ]
         for path in paths:
@@ -766,7 +766,7 @@ class TestRegistryDispatch(unittest.TestCase):
             "coloring_settings_list":[{
                 "type":"OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype"
             }],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":1}],
             "model_part_operations":[]}""")
         self.assertGreater(model.GetModelPart("O").NumberOfElements(), 0)
@@ -813,7 +813,7 @@ class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
             "refinement_settings_list":[{{"type":"RefineInterfaceCellsOctreeHybrid",
                                         "refinement_depth":{depth},"adaptive":false}}],
             "coloring_settings_list":{color_settings},
-            "entities_generator_list":[{{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":{gen_color}}}],
             "model_part_operations":[]}}""")
         return model.GetModelPart("O")
@@ -837,7 +837,7 @@ class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
             "input_model_part_name":"S",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
             "model_part_operations":[]}""")
         n_all = model.GetModelPart("All").NumberOfElements()
 
@@ -863,7 +863,7 @@ class TestOctreeHybridColorCellsInTouch(unittest.TestCase):
             "coloring_settings_list":[{"type":"OctreeHybridColorCellsInTouch",
                                        "model_part_name":"SurfaceElems","color":1,
                                        "input_entities":"elements"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"O","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":1}],
             "model_part_operations":[]}""")
         self.assertGreater(model.GetModelPart("O").NumberOfElements(), 0)
 
@@ -888,7 +888,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
                 {"type":"OctreeHybridColorConnectedCellsInTouch",
                  "model_part_name":"S","color":2,"cell_color":0}
             ],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"O","color":2}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":2}],
             "model_part_operations":[]}""")
         n = model.GetModelPart("O").NumberOfElements()
         print(f"\n[OctreeHybridColorConnectedCellsInTouch] flood_filled_outside={n}")
@@ -904,7 +904,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
             "input_model_part_name":"S",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"AllOutside","color":0}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"AllOutside","color":0}],
             "model_part_operations":[]}""")
         n_outside = model.GetModelPart("AllOutside").NumberOfElements()
 
@@ -918,7 +918,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
                 {"type":"OctreeHybridColorConnectedCellsInTouch",
                  "model_part_name":"S","color":2,"cell_color":0}
             ],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Flooded","color":2}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Flooded","color":2}],
             "model_part_operations":[]}""")
         n_flooded = model2.GetModelPart("Flooded").NumberOfElements()
         print(f"\n[OctreeHybridColorConnectedCellsInTouch] all_outside={n_outside} flooded={n_flooded}")
@@ -937,7 +937,7 @@ class TestOctreeHybridColorConnectedCellsInTouch(unittest.TestCase):
                 {"type":"OctreeHybridColorConnectedCellsInTouch",
                  "model_part_name":"S","color":3,"cell_color":1}
             ],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"O","color":3}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":3}],
             "model_part_operations":[]}""")
         n = model.GetModelPart("O").NumberOfElements()
         print(f"\n[OctreeHybridColorConnectedCellsInTouch] flood_filled_inside={n}")
@@ -963,7 +963,7 @@ class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
                 {{"type":"OctreeHybridColorCellsByLevel",
                   "color":{color},"min_level":{min_level},"max_level":{max_level}}}
             ],
-            "entities_generator_list":[{{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"O","color":{color}}}],
             "model_part_operations":[]}}""")
         return model.GetModelPart("O")
@@ -990,7 +990,7 @@ class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
             "input_model_part_name":"S",
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid","refinement_depth":4,"adaptive":false}],
             "coloring_settings_list":[],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"All","color":1}],
             "model_part_operations":[]}""")
         n_all = model.GetModelPart("All").NumberOfElements()
 
@@ -1019,7 +1019,7 @@ class TestOctreeHybridColorCellsByLevel(unittest.TestCase):
                 {"type":"OctreeHybridClassifyCellsInsideOutside"},
                 {"type":"OctreeHybridColorCellsByLevel","color":2,"min_level":-1,"max_level":-1}
             ],
-            "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
                                         "model_part_name":"Templates","color":2,
                                         "tag_refinement_level":true}],
             "model_part_operations":[]}""")
