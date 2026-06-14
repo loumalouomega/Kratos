@@ -65,7 +65,7 @@ void GenerateOctreeHybridHexahedraElementsWithCellColor::Generate(
     const std::size_t properties_id = GenerationParameters["properties_id"].GetInt();
     // Retrieve an existing Properties object if present (e.g. a prior generation
     // step already created it on the same ModelPart), otherwise create a new one.
-    Properties::Pointer p_properties = r_model_part.HasProperties(properties_id)
+    Properties::Pointer p_properties = r_model_part.RecursivelyHasProperties(properties_id)
         ? r_model_part.pGetProperties(properties_id)
         : r_model_part.CreateNewProperties(properties_id);
     const std::string entity_name = GenerationParameters["generated_entity"].GetString();
