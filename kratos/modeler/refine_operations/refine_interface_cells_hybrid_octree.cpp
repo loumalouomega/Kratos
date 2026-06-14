@@ -83,6 +83,7 @@ void RefineInterfaceCellsOctreeHybrid::Refine(
     // from the initial build (the main geometry).  A non-empty name allows adding
     // refinement driven by a different feature surface (e.g. a local refinement zone)
     // without rebuilding the octree.
+    const int leaf_count_before = r_data.mpOctree->GetLeafCount();
     const std::string op_surface_name = RefineParameters["model_part_name"].GetString();
     if (op_surface_name.empty()) {
         OctreeHybridMeshUtility::RefineInterfaceCells(*r_data.mpOctree, r_data.mTriangles, target_depth);
@@ -91,6 +92,10 @@ void RefineInterfaceCellsOctreeHybrid::Refine(
         const OctreeHybridMeshUtility::TriangleSoup triangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_surface);
         OctreeHybridMeshUtility::RefineInterfaceCells(*r_data.mpOctree, triangles, target_depth);
     }
+
+    KRATOS_INFO_IF("RefineInterfaceCellsOctreeHybrid", echo_level > 0)
+        << "Interface cell refinement to depth " << target_depth << " finished: leaf cells "
+        << leaf_count_before << " -> " << r_data.mpOctree->GetLeafCount() << "." << std::endl;
 }
 
 } // namespace Kratos
