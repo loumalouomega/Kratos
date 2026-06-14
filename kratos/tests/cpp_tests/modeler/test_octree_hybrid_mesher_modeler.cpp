@@ -1059,8 +1059,10 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinesAllCells, KratosCoreFa
     })");
 
     // Test run: initial build at depth 1, then uniformly refined to depth 4.
-    // RefineUniform reinitializes the octree to the target depth when it exceeds the
-    // current max depth, so the resulting mesh is identical to the reference.
+    // RefineUniform extends the octree's grid tables in place (IncreaseDepth) when
+    // the target depth exceeds the current max depth, preserving the depth-1 build
+    // and then filling every cell down to depth 4 — so the resulting mesh is
+    // identical to the reference, which was built directly at depth 4.
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Skin",
         "output_model_part_name" : "Output",
@@ -1080,6 +1082,107 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinesAllCells, KratosCoreFa
     // Both runs produce the same fully-uniform depth-4 octree → same element counts.
     KRATOS_EXPECT_EQ(out.NumberOfElements(), ref.NumberOfElements());
     KRATOS_EXPECT_EQ(out.NumberOfNodes(),    ref.NumberOfNodes());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMultiStageRefinementPreservesPriorRefinementAndExtractsMesh, KratosCoreFastSuite)
+{
+    // Regression test for the scenario that originally produced
+    // "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor: hex mesh not yet
+    // extracted": a refinement_settings_list with several entries, each requiring a
+    // deeper octree than the previous one. Initialize() used to be called again for
+    // the deeper depths, discarding all previously-refined cells and leaving an
+    // octree whose dual mesh extraction produced no hexahedra. IncreaseDepth() now
+    // extends the grid tables in place, so the refinement performed by earlier
+    // entries survives and the final dual mesh is non-empty.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refinement_settings_list" : [
+            { "type": "RefineInterfaceCellsOctreeHybrid",
+              "refinement_depth": 2, "adaptive": true, "mesh_type": "dual" },
+            { "type": "RefineUniformOctreeHybrid",
+              "refinement_depth": 3 },
+            { "type": "RefineInterfaceCellsOctreeHybrid",
+              "model_part_name": "Skin",
+              "refinement_depth": 4 }
+        ],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [
+            { "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
+              "model_part_name": "Output", "color": 1, "properties_id": 1 },
+            { "type": "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
+              "model_part_name": "Output", "color": 1, "properties_id": 1 }
+        ],
+        "model_part_operations"  : []
+    })");
+
+    // The hex mesh must have been extracted and elements generated — this fails
+    // (empty mesh / "hex mesh not yet extracted") if a later refinement_settings_list
+    // entry reinitializes the octree and discards the refinement done by earlier
+    // entries.
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(),    0u);
+    KRATOS_EXPECT_GT(out.NumberOfConditions(), 0u);
+
+    // Both generators target the same properties_id on the same ModelPart: the
+    // second one must reuse the Properties created by the first instead of throwing
+    // "Property #N already existing".
+    KRATOS_EXPECT_EQ(out.NumberOfProperties(), 1u);
+
+    for (const auto& r_el : out.Elements())
+        KRATOS_EXPECT_GT(MinScaledJacobian(r_el), 0.0);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMultiStageRefinementTetrahedraAndTriangleConditions, KratosCoreFastSuite)
+{
+    // Same regression scenario as
+    // OctreeHybridMultiStageRefinementPreservesPriorRefinementAndExtractsMesh, but for
+    // the tetrahedra/triangle generators (GenerateOctreeHybridTetrahedraElementsWithCellColor
+    // + GenerateOctreeHybridTriangularConditionsWithFaceColor) instead of the
+    // hexahedra/quadrilateral ones. A multi-entry refinement_settings_list with
+    // increasing depths must preserve earlier refinement (IncreaseDepth, not
+    // Initialize) so the dual mesh is non-empty, and both generators sharing
+    // properties_id must reuse the same Properties instance.
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Output",
+        "refinement_settings_list" : [
+            { "type": "RefineInterfaceCellsOctreeHybrid",
+              "refinement_depth": 2, "adaptive": true, "mesh_type": "dual" },
+            { "type": "RefineUniformOctreeHybrid",
+              "refinement_depth": 3 },
+            { "type": "RefineInterfaceCellsOctreeHybrid",
+              "model_part_name": "Skin",
+              "refinement_depth": 4 }
+        ],
+        "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
+        "entities_generator_list": [
+            { "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
+              "model_part_name": "Output", "color": 1, "properties_id": 1 },
+            { "type": "GenerateOctreeHybridTriangularConditionsWithFaceColor",
+              "model_part_name": "Output", "color": 1, "properties_id": 1 }
+        ],
+        "model_part_operations"  : []
+    })");
+
+    // Each surviving hex cell is split into 6 tetrahedra, and each boundary quad
+    // face into 2 triangles — both must be non-empty.
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+    KRATOS_EXPECT_GT(out.NumberOfNodes(),    0u);
+    KRATOS_EXPECT_GT(out.NumberOfConditions(), 0u);
+    KRATOS_EXPECT_EQ(out.NumberOfElements() % 6, 0u);
+    KRATOS_EXPECT_EQ(out.NumberOfConditions() % 2, 0u);
+
+    // Both generators target the same properties_id on the same ModelPart: the
+    // second one must reuse the Properties created by the first instead of throwing
+    // "Property #N already existing".
+    KRATOS_EXPECT_EQ(out.NumberOfProperties(), 1u);
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsProducesElements, KratosCoreFastSuite)
