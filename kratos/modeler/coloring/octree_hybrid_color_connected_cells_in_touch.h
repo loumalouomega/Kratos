@@ -34,9 +34,10 @@ namespace Kratos {
  * @details The operation works in two phases:
  *
  *          **Phase 1 — seed detection.**  For each geometry in the input ModelPart
- *          (selected via `input_entities`), cells whose AABB-vs-geometry intersection
- *          test passes and whose current colour equals `cell_color` are added as
- *          flood-fill seeds.
+ *          (selected via `input_entities`, see
+ *          @ref OctreeHybridMeshUtility::ResolveInputEntityGeometries), cells whose
+ *          AABB-vs-geometry intersection test passes and whose current colour equals
+ *          `cell_color` are added as flood-fill seeds.
  *
  *          **Phase 2 — BFS flood-fill.**  A stack-based depth-first search traverses
  *          face-adjacent neighbours: two cells are adjacent when they share the same
@@ -68,7 +69,7 @@ namespace Kratos {
  *     "model_part_name" : "MySurface",
  *     "color"           : 2,
  *     "cell_color"      : 0,
- *     "input_entities"  : "geometries"
+ *     "input_entities"  : ""
  * }
  * @endcode
  *
@@ -116,9 +117,12 @@ public:
      *     "model_part_name" : "",
      *     "color"           : 1,
      *     "cell_color"      : 0,
-     *     "input_entities"  : "geometries"
+     *     "input_entities"  : ""
      * }
      * @endcode
+     * `"input_entities" == ""` (the default) auto-detects the first non-empty of
+     * `Conditions()`, `Elements()`, `Geometries()`; `"geometries"`, `"elements"`,
+     * or `"conditions"` select that container explicitly. Any other value throws.
      */
     const Parameters GetDefaultParameters() const override;
 

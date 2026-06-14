@@ -30,8 +30,11 @@ namespace Kratos {
  * @brief Colouring stage that labels every extracted hex cell whose axis-aligned
  *        bounding box (AABB) intersects any geometry in the input ModelPart.
  * @details For each geometry in the requested ModelPart (selected by `input_entities`
- *          as `"elements"`, `"conditions"`, or `"geometries"`), the operation computes
- *          the geometry's AABB, quick-rejects cells whose own AABB does not overlap,
+ *          as `"elements"`, `"conditions"`, or `"geometries"`; when empty — the
+ *          default — the first non-empty of `Conditions()`, `Elements()`,
+ *          `Geometries()`, in that order, is used — see
+ *          @ref OctreeHybridMeshUtility::ResolveInputEntityGeometries), the operation
+ *          computes the geometry's AABB, quick-rejects cells whose own AABB does not overlap,
  *          then calls `Geometry::HasIntersection(min_pt, max_pt)` for the remaining
  *          candidates.  Cells that pass are assigned the requested `color`.
  *
@@ -61,7 +64,7 @@ namespace Kratos {
  *     "type"              : "OctreeHybridColorCellsInTouch",
  *     "model_part_name"   : "MySurface",
  *     "color"             : 2,
- *     "input_entities"    : "geometries"
+ *     "input_entities"    : ""
  * }
  * @endcode
  *
@@ -106,9 +109,12 @@ public:
      *     "type"           : "OctreeHybridColorCellsInTouch",
      *     "model_part_name": "",
      *     "color"          : 1,
-     *     "input_entities" : "geometries"
+     *     "input_entities" : ""
      * }
      * @endcode
+     * `"input_entities" == ""` (the default) auto-detects the first non-empty of
+     * `Conditions()`, `Elements()`, `Geometries()`; `"geometries"`, `"elements"`,
+     * or `"conditions"` select that container explicitly. Any other value throws.
      */
     const Parameters GetDefaultParameters() const override;
 

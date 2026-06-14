@@ -24,6 +24,7 @@
 #include "modeler/coloring/octree_hybrid_color_connected_cells_in_touch.h"
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
+#include "modeler/utilities/octree_hybrid_mesh_utility.h"
 #include "geometries/point.h"
 
 namespace Kratos
@@ -36,7 +37,7 @@ const Parameters OctreeHybridColorConnectedCellsInTouch::GetDefaultParameters() 
         "model_part_name" : "",
         "color"           : 1,
         "cell_color"      : 0,
-        "input_entities"  : "geometries"
+        "input_entities"  : ""
     })");
 }
 
@@ -170,20 +171,9 @@ void OctreeHybridColorConnectedCellsInTouch::Apply(
         }
     };
 
-    if (input_entities == "geometries") {
-        for (const auto& r_geom : r_mp.Geometries())
-            seed_from_geometry(r_geom);
-    } else if (input_entities == "elements") {
-        for (const auto& r_elem : r_mp.Elements())
-            seed_from_geometry(r_elem.GetGeometry());
-    } else if (input_entities == "conditions") {
-        for (const auto& r_cond : r_mp.Conditions())
-            seed_from_geometry(r_cond.GetGeometry());
-    } else {
-        KRATOS_ERROR << "OctreeHybridColorConnectedCellsInTouch: unsupported input_entities '"
-                     << input_entities
-                     << "'. Valid values: \"geometries\", \"elements\", \"conditions\"."
-                     << std::endl;
+    for (const Geometry<Node>* p_geom : OctreeHybridMeshUtility::ResolveInputEntityGeometries(
+             r_mp, input_entities, "OctreeHybridColorConnectedCellsInTouch")) {
+        seed_from_geometry(*p_geom);
     }
 
     // --- BFS flood-fill through cells with cell_color ---

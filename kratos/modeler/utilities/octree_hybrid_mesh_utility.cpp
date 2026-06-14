@@ -56,22 +56,51 @@ struct AdaptiveRefineData {
     std::array<std::vector<int>,5> refine_tri;
 };
 
+// Collects pointers to the geometries describing the surface mesh as a triangle
+// soup. Tries rSurfaceMesh.Geometries() first (populated when StlIO's
+// "new_entity_type" is "geometry"); if empty, falls back to the 3-noded
+// Elements() (populated when "new_entity_type" is "element"), then to the
+// 3-noded Conditions() (populated when "new_entity_type" is "condition").
+// This lets the octree build and the geometry-based coloring stages work
+// regardless of how the surface mesh was imported.
+template <typename TGeometryPtr, typename TModelPartType>
+void CollectSurfaceTriangles(TModelPartType& rSurfaceMesh, std::vector<TGeometryPtr>& rTriangles)
+{
+    for (auto& r_geom : rSurfaceMesh.Geometries()) {
+        if (r_geom.PointsNumber() >= 3) rTriangles.push_back(&r_geom);
+    }
+    if (!rTriangles.empty()) return;
+
+    for (auto& r_elem : rSurfaceMesh.Elements()) {
+        auto& r_geom = r_elem.GetGeometry();
+        if (r_geom.PointsNumber() == 3) rTriangles.push_back(&r_geom);
+    }
+    if (!rTriangles.empty()) return;
+
+    for (auto& r_cond : rSurfaceMesh.Conditions()) {
+        auto& r_geom = r_cond.GetGeometry();
+        if (r_geom.PointsNumber() == 3) rTriangles.push_back(&r_geom);
+    }
+}
+
 AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh, const BoundingBox<Point>* pOverrideBoundingBox = nullptr)
 {
     constexpr double PI = 3.1415926535897932384626433;
     AdaptiveRefineData data;
 
     // --- Gather triangle corners (world coords) and the bounding box ------
+    CollectSurfaceTriangles(rSurfaceMesh, data.tri_geom);
+
     std::vector<std::array<double,3>> corners;       // 3 per triangle
-    corners.reserve(rSurfaceMesh.NumberOfGeometries() * 3);
+    corners.reserve(data.tri_geom.size() * 3);
     double lo[3] = { std::numeric_limits<double>::max(),
                      std::numeric_limits<double>::max(),
                      std::numeric_limits<double>::max() };
     double hi[3] = { std::numeric_limits<double>::lowest(),
                      std::numeric_limits<double>::lowest(),
                      std::numeric_limits<double>::lowest() };
-    for (auto& g : rSurfaceMesh.Geometries()) {
-        if (g.PointsNumber() < 3) continue;
+    for (Geometry<Node>* p_g : data.tri_geom) {
+        const auto& g = *p_g;
         for (int k = 0; k < 3; ++k) {
             const double x = g[k].X(), y = g[k].Y(), z = g[k].Z();
             corners.push_back({x,y,z});
@@ -79,7 +108,6 @@ AdaptiveRefineData BuildRefineSets(ModelPart& rSurfaceMesh, const BoundingBox<Po
             lo[1]=std::min(lo[1],y); hi[1]=std::max(hi[1],y);
             lo[2]=std::min(lo[2],z); hi[2]=std::max(hi[2],z);
         }
-        data.tri_geom.push_back(&g);
     }
     const int nTri = static_cast<int>(data.tri_geom.size());
     if (nTri == 0) return data;
@@ -275,8 +303,7 @@ auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
 
     // --- Collect triangles ---
     std::vector<GeometryType*> triangles;
-    triangles.reserve(rSurfaceMesh.NumberOfGeometries());
-    for (auto& r_geom : rSurfaceMesh.Geometries()) triangles.push_back(&r_geom);
+    CollectSurfaceTriangles(rSurfaceMesh, triangles);
 
     for (std::size_t iter = 0; iter < RefinementDepth; ++iter) {
         std::vector<CellType*> leaves;
@@ -1394,10 +1421,13 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
 
 OctreeHybridMeshUtility::TriangleSoup OctreeHybridMeshUtility::ExtractTriangleSoup(const ModelPart& rSurfaceMesh)
 {
+    std::vector<const Geometry<Node>*> tri_geom;
+    CollectSurfaceTriangles(rSurfaceMesh, tri_geom);
+
     TriangleSoup triangles;
-    triangles.reserve(rSurfaceMesh.NumberOfGeometries());
-    for (const auto& r_geom : rSurfaceMesh.Geometries()) {
-        if (r_geom.PointsNumber() < 3) continue;
+    triangles.reserve(tri_geom.size());
+    for (const Geometry<Node>* p_geom : tri_geom) {
+        const auto& r_geom = *p_geom;
         triangles.push_back({{
             {{ r_geom[0].X(), r_geom[0].Y(), r_geom[0].Z() }},
             {{ r_geom[1].X(), r_geom[1].Y(), r_geom[1].Z() }},
@@ -1405,6 +1435,61 @@ OctreeHybridMeshUtility::TriangleSoup OctreeHybridMeshUtility::ExtractTriangleSo
         }});
     }
     return triangles;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+std::vector<const OctreeHybridMeshUtility::GeometryType*> OctreeHybridMeshUtility::ResolveInputEntityGeometries(
+    const ModelPart& rModelPart,
+    const std::string& rInputEntities,
+    const std::string& rCallerName)
+{
+    std::vector<const GeometryType*> geometries;
+
+    auto collect_elements = [&]() {
+        geometries.reserve(geometries.size() + rModelPart.NumberOfElements());
+        for (const auto& r_elem : rModelPart.Elements()) geometries.push_back(&r_elem.GetGeometry());
+    };
+    auto collect_conditions = [&]() {
+        geometries.reserve(geometries.size() + rModelPart.NumberOfConditions());
+        for (const auto& r_cond : rModelPart.Conditions()) geometries.push_back(&r_cond.GetGeometry());
+    };
+    auto collect_geometries = [&]() {
+        geometries.reserve(geometries.size() + rModelPart.NumberOfGeometries());
+        for (const auto& r_geom : rModelPart.Geometries()) geometries.push_back(&r_geom);
+    };
+
+    if (rInputEntities == "elements") {
+        collect_elements();
+    } else if (rInputEntities == "conditions") {
+        collect_conditions();
+    } else if (rInputEntities == "geometries") {
+        collect_geometries();
+    } else if (rInputEntities.empty()) {
+        // Auto-detect: try conditions, then elements, then geometries, and use
+        // the first non-empty container. This matches how surface meshes are
+        // typically populated (e.g. SurfaceCondition3D3N from a volume mesh's
+        // mdpa, Element3D3N from StlIO with new_entity_type="element", or
+        // Triangle3D3 geometries from StlIO's default new_entity_type).
+        if (rModelPart.NumberOfConditions() > 0) {
+            collect_conditions();
+        } else if (rModelPart.NumberOfElements() > 0) {
+            collect_elements();
+        } else if (rModelPart.NumberOfGeometries() > 0) {
+            collect_geometries();
+        } else {
+            KRATOS_ERROR << rCallerName << ": ModelPart '" << rModelPart.Name()
+                         << "' has no elements, conditions or geometries to color from."
+                         << std::endl;
+        }
+    } else {
+        KRATOS_ERROR << rCallerName << ": unsupported input_entities '" << rInputEntities
+                     << "'. Valid values: \"\", \"geometries\", \"elements\", \"conditions\"."
+                     << std::endl;
+    }
+
+    return geometries;
 }
 
 /***********************************************************************************/

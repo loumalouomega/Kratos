@@ -79,22 +79,11 @@ void OctreeHybridColorCellsWithInsideCenter::Apply(
         }});
     };
 
-    if (input_entities == "geometries") {
-        triangles = OctreeHybridMeshUtility::ExtractTriangleSoup(r_mp);
-    } else if (input_entities == "elements") {
-        triangles.reserve(r_mp.NumberOfElements());
-        for (const auto& r_elem : r_mp.Elements())
-            append_geometry(r_elem.GetGeometry());
-    } else if (input_entities == "conditions") {
-        triangles.reserve(r_mp.NumberOfConditions());
-        for (const auto& r_cond : r_mp.Conditions())
-            append_geometry(r_cond.GetGeometry());
-    } else {
-        KRATOS_ERROR << "OctreeHybridColorCellsWithInsideCenter: unsupported input_entities '"
-                     << input_entities
-                     << "'. Valid values: \"geometries\", \"elements\", \"conditions\"."
-                     << std::endl;
-    }
+    const auto geometries = OctreeHybridMeshUtility::ResolveInputEntityGeometries(
+        r_mp, input_entities, "OctreeHybridColorCellsWithInsideCenter");
+    triangles.reserve(geometries.size());
+    for (const Geometry<Node>* p_geom : geometries)
+        append_geometry(*p_geom);
 
     // Optional AABB pre-filter: only cells whose centre lies within bounding_box are tested.
     const Parameters bounding_box = ColoringParameters["bounding_box"];

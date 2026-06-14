@@ -598,6 +598,111 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityExtractTriangleSoupPreservesCoo
     KRATOS_EXPECT_NEAR(soup[0][0][2], 3.0, 1e-12);
 }
 
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesExplicitGeometries, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("Tris");
+    mp.CreateNewNode(1, 0.0, 0.0, 0.0);
+    mp.CreateNewNode(2, 1.0, 0.0, 0.0);
+    mp.CreateNewNode(3, 0.0, 1.0, 0.0);
+    mp.CreateNewGeometry("Triangle3D3", 1, std::vector<IndexType>{1, 2, 3});
+
+    const auto geometries = Util::ResolveInputEntityGeometries(mp, "geometries", "Test");
+    KRATOS_EXPECT_EQ(geometries.size(), 1u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesExplicitElements, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("Elems");
+    mp.CreateNewNode(1, 0.0, 0.0, 0.0);
+    mp.CreateNewNode(2, 1.0, 0.0, 0.0);
+    mp.CreateNewNode(3, 0.0, 1.0, 0.0);
+    mp.CreateNewElement("Element3D3N", 1, {1, 2, 3}, mp.pGetProperties(0));
+
+    const auto geometries = Util::ResolveInputEntityGeometries(mp, "elements", "Test");
+    KRATOS_EXPECT_EQ(geometries.size(), 1u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesExplicitConditions, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("Conds");
+    mp.CreateNewNode(1, 0.0, 0.0, 0.0);
+    mp.CreateNewNode(2, 1.0, 0.0, 0.0);
+    mp.CreateNewNode(3, 0.0, 1.0, 0.0);
+    mp.CreateNewCondition("SurfaceCondition3D3N", 1, {1, 2, 3}, mp.pGetProperties(0));
+
+    const auto geometries = Util::ResolveInputEntityGeometries(mp, "conditions", "Test");
+    KRATOS_EXPECT_EQ(geometries.size(), 1u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesAutoDetectPrefersConditions, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("Mixed");
+    mp.CreateNewNode(1, 0.0, 0.0, 0.0);
+    mp.CreateNewNode(2, 1.0, 0.0, 0.0);
+    mp.CreateNewNode(3, 0.0, 1.0, 0.0);
+    mp.CreateNewGeometry("Triangle3D3", 1, std::vector<IndexType>{1, 2, 3});
+    mp.CreateNewElement("Element3D3N", 1, {1, 2, 3}, mp.pGetProperties(0));
+    mp.CreateNewCondition("SurfaceCondition3D3N", 1, {1, 2, 3}, mp.pGetProperties(0));
+
+    // With "", Conditions() take priority over Elements()/Geometries().
+    const auto geometries = Util::ResolveInputEntityGeometries(mp, "", "Test");
+    KRATOS_EXPECT_EQ(geometries.size(), 1u);
+    KRATOS_EXPECT_EQ(geometries[0], &mp.GetCondition(1).GetGeometry());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesAutoDetectFallsBackToElements, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("ElemsOnly");
+    mp.CreateNewNode(1, 0.0, 0.0, 0.0);
+    mp.CreateNewNode(2, 1.0, 0.0, 0.0);
+    mp.CreateNewNode(3, 0.0, 1.0, 0.0);
+    mp.CreateNewElement("Element3D3N", 1, {1, 2, 3}, mp.pGetProperties(0));
+
+    // No conditions present: "" falls back to Elements().
+    const auto geometries = Util::ResolveInputEntityGeometries(mp, "", "Test");
+    KRATOS_EXPECT_EQ(geometries.size(), 1u);
+    KRATOS_EXPECT_EQ(geometries[0], &mp.GetElement(1).GetGeometry());
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesAutoDetectFallsBackToGeometries, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("GeomsOnly");
+    mp.CreateNewNode(1, 0.0, 0.0, 0.0);
+    mp.CreateNewNode(2, 1.0, 0.0, 0.0);
+    mp.CreateNewNode(3, 0.0, 1.0, 0.0);
+    mp.CreateNewGeometry("Triangle3D3", 1, std::vector<IndexType>{1, 2, 3});
+
+    // No conditions or elements present: "" falls back to Geometries().
+    const auto geometries = Util::ResolveInputEntityGeometries(mp, "", "Test");
+    KRATOS_EXPECT_EQ(geometries.size(), 1u);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesEmptyThrows, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("Empty");
+
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(
+        Util::ResolveInputEntityGeometries(mp, "", "Test"),
+        "has no elements, conditions or geometries to color from");
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityResolveInputEntityGeometriesInvalidThrows, KratosCoreFastSuite)
+{
+    Model model;
+    auto& mp = model.CreateModelPart("Whatever");
+
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(
+        Util::ResolveInputEntityGeometries(mp, "invalid", "Test"),
+        "unsupported input_entities");
+}
+
 // ===========================================================================
 // Section G — Octree building and direct refinement
 // ===========================================================================

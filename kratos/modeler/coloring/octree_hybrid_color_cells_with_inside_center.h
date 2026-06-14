@@ -32,7 +32,10 @@ namespace Kratos {
  * @details For each cell, the centroid of its 8 corner nodes (`OctreeHybridMesherData::mNodes`,
  *          via `OctreeHybridMesherData::mCells`) is tested against the triangle soup
  *          extracted from the ModelPart `model_part_name` (selected by `input_entities`
- *          as `"geometries"`, `"elements"`, or `"conditions"`).  The test combines a
+ *          as `"geometries"`, `"elements"`, or `"conditions"`; when empty — the
+ *          default — the first non-empty of `Conditions()`, `Elements()`,
+ *          `Geometries()`, in that order, is used — see
+ *          @ref OctreeHybridMeshUtility::ResolveInputEntityGeometries).  The test combines a
  *          ray-cast crossing-parity sign with the closest-triangle distance
  *          (`OctreeHybridMeshUtility::ComputeNodeSignedDistance`, positive = inside).
  *          A cell centre is considered inside when its signed distance is greater than
@@ -69,7 +72,7 @@ namespace Kratos {
  *     "type"            : "OctreeHybridColorCellsWithInsideCenter",
  *     "model_part_name" : "MySurface",
  *     "color"           : 1,
- *     "input_entities"  : "geometries",
+ *     "input_entities"  : "",
  *     "tolerance"       : 1.0e-12,
  *     "bounding_box"  : {
  *         "min_point" : [],
@@ -129,6 +132,9 @@ public:
      *     }
      * }
      * @endcode
+     * `"input_entities" == ""` (the default) auto-detects the first non-empty of
+     * `Conditions()`, `Elements()`, `Geometries()`; `"geometries"`, `"elements"`,
+     * or `"conditions"` select that container explicitly. Any other value throws.
      */
     const Parameters GetDefaultParameters() const override;
 

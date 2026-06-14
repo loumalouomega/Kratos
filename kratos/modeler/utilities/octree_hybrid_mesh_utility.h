@@ -236,13 +236,43 @@ public:
     /**
      * @brief Collects the surface triangles of @p rSurfaceMesh as a world-space
      *        @ref TriangleSoup.
-     * @details Iterates `rSurfaceMesh.Geometries()` and copies the world-space
-     *          coordinates of every triangle's three vertices into the returned
-     *          soup.  Geometries with fewer than 3 points are silently skipped.
+     * @details Iterates `rSurfaceMesh.Geometries()` (entities with 3 or more points;
+     *          only the first 3 are used) and copies the world-space coordinates of
+     *          every triangle's three vertices into the returned soup.  If
+     *          `Geometries()` is empty, falls back to the 3-noded entries of
+     *          `Elements()`, then to the 3-noded entries of `Conditions()` — this
+     *          covers surface meshes imported with `StlIO`'s `new_entity_type` set
+     *          to `"element"` or `"condition"` instead of the default `"geometry"`.
      * @param rSurfaceMesh  Read-only surface ModelPart (from StlIO::ReadModelPart).
      * @return              World-space triangle soup; one entry per triangle.
      */
     static TriangleSoup ExtractTriangleSoup(const ModelPart& rSurfaceMesh);
+
+    /**
+     * @brief Resolves the geometries selected by a coloring stage's `input_entities`
+     *        parameter from @p rModelPart.
+     * @details Used by the `OctreeHybrid*Coloring` stages (e.g.
+     *          @ref Kratos::OctreeHybridColorCellsInTouch,
+     *          @ref Kratos::OctreeHybridColorCellsWithInsideCenter,
+     *          @ref Kratos::OctreeHybridColorConnectedCellsInTouch) to obtain the
+     *          geometries to test, regardless of how the surface mesh was imported:
+     *          - `"elements"`   → `rModelPart.Elements()` geometries.
+     *          - `"conditions"` → `rModelPart.Conditions()` geometries.
+     *          - `"geometries"` → `rModelPart.Geometries()`.
+     *          - `""` (default) → auto-detect, trying `Conditions()`, then
+     *            `Elements()`, then `Geometries()`, and using the first
+     *            non-empty container. Throws if all three are empty.
+     *          - any other value throws.
+     * @param rModelPart    ModelPart to resolve the geometries from.
+     * @param rInputEntities  Value of the `"input_entities"` parameter.
+     * @param rCallerName   Name of the calling coloring stage, used in error messages.
+     * @return              Pointers to the resolved geometries (valid as long as
+     *                       @p rModelPart is not modified).
+     */
+    static std::vector<const GeometryType*> ResolveInputEntityGeometries(
+        const ModelPart& rModelPart,
+        const std::string& rInputEntities,
+        const std::string& rCallerName);
 
     /**
      * @brief Extracts the **primal (leaf-hex) mesh** plus the hanging-node
