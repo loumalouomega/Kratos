@@ -376,6 +376,14 @@ const std::string OctreeHybridMeshGeneratorModeler::GetLabel() const
 /***********************************************************************************/
 /***********************************************************************************/
 
+OctreeHybridMeshGeneratorModeler::SizeType OctreeHybridMeshGeneratorModeler::GetEchoLevel() const
+{
+    return mEchoLevel;
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
 template<class TBase, class TInvoke>
 void OctreeHybridMeshGeneratorModeler::Dispatch(
     const std::string& rRegistryRoot,

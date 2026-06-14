@@ -431,6 +431,21 @@ public:
      */
     IndexType NextConstraintId();
 
+    /**
+     * @brief Returns the configured verbosity level.
+     * @details Used by refinement operations (e.g. @ref RefineUniformOctreeHybrid,
+     *          @ref RefineInterfaceCellsOctreeHybrid) to gate `KRATOS_INFO_IF` logging,
+     *          such as reporting the refinement depth equivalent to a requested cell size.
+     * @return The echo level (`0` = silent).
+     */
+    SizeType GetEchoLevel() const;
+
+    /**
+     * @brief Returns the label of the modeler, for use as a `KRATOS_INFO`/`KRATOS_INFO_IF` tag.
+     * @return The label as a string.
+     */
+    const std::string GetLabel() const;
+
     ///@}
     ///@name Input and output
     ///@{
@@ -645,12 +660,6 @@ private:
         TInvoke&& Invoke,
         const OperationType Operation = OperationType::UNDEFINED
         );
-
-    /**
-     * @brief Returns the label of the modeler.
-     * @return The label as a string.
-     */
-    const std::string GetLabel() const;
 
     ///@}
     ///@name Serializer
