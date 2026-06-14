@@ -92,7 +92,7 @@ namespace Internals { class OctreeHybridMesherData; }
  *           "refinement_depth": 5 }
  *     ],
  *     "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
- *     "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+ *     "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
  *                                   "model_part_name": "Volume", "color": 1 }],
  *     "model_part_operations"  : [{ "type": "OctreeHybridReportMeshQuality",
  *                                   "model_part_name": "Volume" }]

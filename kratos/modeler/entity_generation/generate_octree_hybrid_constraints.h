@@ -31,7 +31,7 @@ namespace Kratos
  * @brief Standalone entity-generation stage that creates the 2:1 transition
  *        hanging-node master-slave constraints of the primal hybrid octree mesh.
  * @details This stage extracts the hanging-node-constraint logic that the per-entity
- * generators (e.g. `GenerateHybridOctreeHexahedraElementsWithCellColor`) optionally run
+ * generators (e.g. `GenerateOctreeHybridHexahedraElementsWithCellColor`) optionally run
  * inline, into its own pipeline entry. For every record in
  * `OctreeHybridMesherData::mHanging` (populated only when `mMeshType == "primal"`), it
  * creates one `"generated_entity"` constraint per (master node x constrained variable)
@@ -73,7 +73,7 @@ namespace Kratos
  * @endcode
  *
  * @see OctreeHybridMesherEntityGeneration
- * @see GenerateHybridOctreeHexahedraElementsWithCellColor
+ * @see GenerateOctreeHybridHexahedraElementsWithCellColor
  * @see OctreeHybridMesherData::mHanging
  * @author Vicente Mataix Ferrandiz
  */

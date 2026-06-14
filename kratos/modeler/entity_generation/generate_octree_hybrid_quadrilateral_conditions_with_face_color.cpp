@@ -17,17 +17,17 @@
 // Project includes
 #include "includes/kratos_components.h"
 #include "utilities/model_part_utils.h"
-#include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_quadrilateral_conditions_with_face_color.h"
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 #include "modeler/utilities/octree_hybrid_mesh_utility.h"
 
 namespace Kratos {
 
-const Parameters GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::GetDefaultParameters() const
+const Parameters GenerateOctreeHybridQuadrilateralConditionsWithFaceColor::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"                  : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+        "type"                  : "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
         "model_part_name"       : "Undefined",
         "color"                 : 1,
         "properties_id"         : 1,
@@ -44,13 +44,13 @@ const Parameters GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::GetDe
 /***********************************************************************************/
 /***********************************************************************************/
 
-void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
+void GenerateOctreeHybridQuadrilateralConditionsWithFaceColor::Generate(
     OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters GenerationParameters) const
 {
     // Validate and assign defaults to the parameters.
     auto& r_data = rModeler.GetData();
-    KRATOS_ERROR_IF(!r_data.IsExtracted()) << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: hex mesh not yet extracted." << std::endl;
+    KRATOS_ERROR_IF(!r_data.IsExtracted()) << "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor: hex mesh not yet extracted." << std::endl;
 
     // Create the output ModelPart
     ModelPart& r_model_part = rModeler.CreateAndGetModelPart(GenerationParameters["model_part_name"].GetString());
@@ -117,7 +117,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
     r_model_part.AddConditions(new_conditions.begin(), new_conditions.end());
 
-    KRATOS_INFO_IF("GenerateHybridOctreeQuadrilateralConditionsWithFaceColor", echo_level > 0)
+    KRATOS_INFO_IF("GenerateOctreeHybridQuadrilateralConditionsWithFaceColor", echo_level > 0)
         << "Generated " << new_conditions.size() << " conditions and " << n_new_nodes
         << " nodes in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 
@@ -133,7 +133,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
     for (unsigned int vi = 0; vi < n_vars; ++vi) {
         const std::string& vname = r_var_list[vi].GetString();
         KRATOS_ERROR_IF_NOT(KratosComponents<Variable<double>>::Has(vname))
-            << "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor: variable '" << vname
+            << "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor: variable '" << vname
             << "' is not registered as a scalar variable." << std::endl;
         vars[vi] = &KratosComponents<Variable<double>>::Get(vname);
     }
@@ -176,7 +176,7 @@ void GenerateHybridOctreeQuadrilateralConditionsWithFaceColor::Generate(
         }
     }
 
-    KRATOS_INFO_IF("GenerateHybridOctreeQuadrilateralConditionsWithFaceColor", echo_level > 0)
+    KRATOS_INFO_IF("GenerateOctreeHybridQuadrilateralConditionsWithFaceColor", echo_level > 0)
         << "Generated " << n_constraints << " \"" << constraint_type
         << "\" hanging-node constraints in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 }

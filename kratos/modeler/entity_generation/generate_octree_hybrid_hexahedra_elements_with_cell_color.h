@@ -26,7 +26,7 @@ namespace Kratos
 ///@{
 
 /**
- * @class GenerateHybridOctreeHexahedraElementsWithCellColor
+ * @class GenerateOctreeHybridHexahedraElementsWithCellColor
  * @ingroup KratosCore
  * @brief Entity-generation stage that emits one hexahedral element per cell whose
  *        colour matches the requested value.
@@ -65,7 +65,7 @@ namespace Kratos
  * ### Typical JSON configuration (dual mesh)
  * @code{.json}
  * {
- *     "type"                : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+ *     "type"                : "GenerateOctreeHybridHexahedraElementsWithCellColor",
  *     "model_part_name"     : "FluidDomain",
  *     "color"               : 1,
  *     "properties_id"       : 1,
@@ -77,7 +77,7 @@ namespace Kratos
  * ### Primal mesh with hanging-node constraints
  * @code{.json}
  * {
- *     "type"                  : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+ *     "type"                  : "GenerateOctreeHybridHexahedraElementsWithCellColor",
  *     "model_part_name"       : "StructureDomain",
  *     "color"                 : 1,
  *     "constraint_type"       : "LinearMasterSlaveConstraint",
@@ -94,20 +94,20 @@ namespace Kratos
  * @see OctreeHybridClassifyCellsInsideOutside
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHybridOctreeHexahedraElementsWithCellColor : public OctreeHybridMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) GenerateOctreeHybridHexahedraElementsWithCellColor : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    GenerateHybridOctreeHexahedraElementsWithCellColor() = default;
+    GenerateOctreeHybridHexahedraElementsWithCellColor() = default;
 
     /**
      * @brief Copy constructor (no-op body — this class carries no state).
      * @param rOther Source instance; no data is copied.
      */
-    GenerateHybridOctreeHexahedraElementsWithCellColor(GenerateHybridOctreeHexahedraElementsWithCellColor const& rOther) {}
+    GenerateOctreeHybridHexahedraElementsWithCellColor(GenerateOctreeHybridHexahedraElementsWithCellColor const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -182,13 +182,13 @@ public:
     void Generate(OctreeHybridMeshGeneratorModeler& rModeler, Parameters GenerationParameters) const override;
 
     /**
-     * @brief Returns the default JSON parameter schema for @ref GenerateHybridOctreeHexahedraElementsWithCellColor.
+     * @brief Returns the default JSON parameter schema for @ref GenerateOctreeHybridHexahedraElementsWithCellColor.
      * @details The schema defines all configuration keys accepted by the @ref Generate
      *          method with their default values:
      *
      *   | Key                    | Type    | Default              | Description |
      *   |------------------------|---------|----------------------|-------------|
-     *   | `"type"`               | string  | `"GenerateHybridOctreeHexahedraElementsWithCellColor"` | Registry type token. |
+     *   | `"type"`               | string  | `"GenerateOctreeHybridHexahedraElementsWithCellColor"` | Registry type token. |
      *   | `"model_part_name"`    | string  | `"Undefined"`        | Target ModelPart; created if absent. |
      *   | `"color"`              | int     | `1`                  | Cell-colour value to select (1 == inside). |
      *   | `"properties_id"`      | int     | `1`                  | Properties block ID for generated elements. |
@@ -210,10 +210,10 @@ private:
     ///@name Registry
     ///@{
 
-    /// Registers this class at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeHexahedraElementsWithCellColor)
-    /// Registers this class at path "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype".
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeHexahedraElementsWithCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateOctreeHybridHexahedraElementsWithCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateOctreeHybridHexahedraElementsWithCellColor)
+    /// Registers this class at path "OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridHexahedraElementsWithCellColor.Prototype".
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateOctreeHybridHexahedraElementsWithCellColor)
 
     ///@}
 };

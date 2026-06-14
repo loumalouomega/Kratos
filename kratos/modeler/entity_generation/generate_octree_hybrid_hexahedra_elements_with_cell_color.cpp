@@ -16,17 +16,17 @@
 
 // Project includes
 #include "utilities/model_part_utils.h"
-#include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_hexahedra_elements_with_cell_color.h"
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos 
 {
 
-const Parameters GenerateHybridOctreeHexahedraElementsWithCellColor::GetDefaultParameters() const
+const Parameters GenerateOctreeHybridHexahedraElementsWithCellColor::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"                  : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "type"                  : "GenerateOctreeHybridHexahedraElementsWithCellColor",
         "model_part_name"       : "Undefined",
         "color"                 : 1,
         "properties_id"         : 1,
@@ -44,7 +44,7 @@ const Parameters GenerateHybridOctreeHexahedraElementsWithCellColor::GetDefaultP
 /***********************************************************************************/
 /***********************************************************************************/
 
-void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
+void GenerateOctreeHybridHexahedraElementsWithCellColor::Generate(
     OctreeHybridMeshGeneratorModeler& rModeler, 
     Parameters GenerationParameters
     ) const
@@ -70,7 +70,7 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
         : r_model_part.CreateNewProperties(properties_id);
     const std::string entity_name = GenerationParameters["generated_entity"].GetString();
     KRATOS_ERROR_IF(!KratosComponents<Element>::Has(entity_name))
-        << "GenerateHybridOctreeHexahedraElementsWithCellColor: element type '" << entity_name
+        << "GenerateOctreeHybridHexahedraElementsWithCellColor: element type '" << entity_name
         << "' is not registered in KratosComponents." << std::endl;
     const Element& r_prototype_element = KratosComponents<Element>::Get(entity_name);
 
@@ -106,7 +106,7 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
     ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
     r_model_part.AddElements(new_elements.begin(), new_elements.end());
 
-    KRATOS_INFO_IF("GenerateHybridOctreeHexahedraElementsWithCellColor", echo_level > 0)
+    KRATOS_INFO_IF("GenerateOctreeHybridHexahedraElementsWithCellColor", echo_level > 0)
         << "Generated " << new_elements.size() << " elements and " << n_new_nodes
         << " nodes in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 
@@ -122,7 +122,7 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
     for (unsigned int vi = 0; vi < n_vars; ++vi) {
         const std::string& vname = r_var_list[vi].GetString();
         KRATOS_ERROR_IF_NOT(KratosComponents<Variable<double>>::Has(vname))
-            << "GenerateHybridOctreeHexahedraElementsWithCellColor: variable '" << vname
+            << "GenerateOctreeHybridHexahedraElementsWithCellColor: variable '" << vname
             << "' is not registered as a scalar variable." << std::endl;
         vars[vi] = &KratosComponents<Variable<double>>::Get(vname);
     }
@@ -166,7 +166,7 @@ void GenerateHybridOctreeHexahedraElementsWithCellColor::Generate(
         }
     }
 
-    KRATOS_INFO_IF("GenerateHybridOctreeHexahedraElementsWithCellColor", echo_level > 0)
+    KRATOS_INFO_IF("GenerateOctreeHybridHexahedraElementsWithCellColor", echo_level > 0)
         << "Generated " << n_constraints << " \"" << constraint_type
         << "\" hanging-node constraints in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 }

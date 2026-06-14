@@ -62,7 +62,7 @@ namespace Kratos {
  *
  * @see OctreeHybridMesherColoring
  * @see OctreeHybridMesherEntityGeneration
- * @see GenerateHybridOctreeHexahedraElementsWithCellColor
+ * @see GenerateOctreeHybridHexahedraElementsWithCellColor
  * @see OctreeHybridMeshUtility::ClassifyInsideOutside
  * @author Vicente Mataix Ferrandiz
  */

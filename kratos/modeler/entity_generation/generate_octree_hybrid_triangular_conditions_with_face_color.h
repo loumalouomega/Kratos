@@ -22,7 +22,7 @@ namespace Kratos
 ///@{
 
 /**
- * @class GenerateHybridOctreeTriangularConditionsWithFaceColor
+ * @class GenerateOctreeHybridTriangularConditionsWithFaceColor
  * @ingroup KratosCore
  * @brief Entity-generation stage that creates triangular boundary conditions on the exterior
  *        faces of the coloured hex mesh.
@@ -33,11 +33,11 @@ namespace Kratos
  *   - triangle 2: `{n0, n2, n3}`
  *
  * This diagonal is consistent with the `(0, 6)` main-diagonal Freudenthal decomposition used
- * by `GenerateHybridOctreeTetrahedraElementsWithCellColor`, so the boundary triangles are faces
+ * by `GenerateOctreeHybridTetrahedraElementsWithCellColor`, so the boundary triangles are faces
  * of the interior tetrahedra — the combined tet + triangle mesh is conforming.
  *
  * Node de-duplication and batch insertion follow the same pattern as
- * @ref GenerateHybridOctreeQuadrilateralConditionsWithFaceColor.
+ * @ref GenerateOctreeHybridQuadrilateralConditionsWithFaceColor.
  *
  * ### Prerequisite
  * The hex-extraction step must have run first so that `OctreeHybridMesherData::mCells` and
@@ -46,7 +46,7 @@ namespace Kratos
  * ### Parameters schema
  * | Key                    | Type         | Default                                  | Description                               |
  * |------------------------|--------------|--------------------------------------------|-------------------------------------------|
- * | `type`                 | string       | `"GenerateHybridOctreeTriangularConditionsWithFaceColor"` | Registry lookup key.   |
+ * | `type`                 | string       | `"GenerateOctreeHybridTriangularConditionsWithFaceColor"` | Registry lookup key.   |
  * | `model_part_name`      | string       | `"Undefined"`                            | ModelPart to create conditions in.        |
  * | `color`                | int          | `1`                                      | Cell color (inside label).                |
  * | `properties_id`        | int          | `1`                                      | Properties ID for each condition.         |
@@ -56,20 +56,20 @@ namespace Kratos
  * | `echo_level`           | int          | `0`                                      | Verbosity of `KRATOS_INFO` logging (`0` = silent). |
  *
  * @see OctreeHybridMesherEntityGeneration
- * @see GenerateHybridOctreeQuadrilateralConditionsWithFaceColor
- * @see GenerateHybridOctreeTetrahedraElementsWithCellColor
+ * @see GenerateOctreeHybridQuadrilateralConditionsWithFaceColor
+ * @see GenerateOctreeHybridTetrahedraElementsWithCellColor
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHybridOctreeTriangularConditionsWithFaceColor
+class KRATOS_API(KRATOS_CORE) GenerateOctreeHybridTriangularConditionsWithFaceColor
     : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
-    GenerateHybridOctreeTriangularConditionsWithFaceColor() = default;
-    GenerateHybridOctreeTriangularConditionsWithFaceColor(
-        GenerateHybridOctreeTriangularConditionsWithFaceColor const&) {}
+    GenerateOctreeHybridTriangularConditionsWithFaceColor() = default;
+    GenerateOctreeHybridTriangularConditionsWithFaceColor(
+        GenerateOctreeHybridTriangularConditionsWithFaceColor const&) {}
 
     ///@}
     ///@name Operations
@@ -91,10 +91,10 @@ private:
 
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics",
                                   OctreeHybridMesherEntityGeneration,
-                                  GenerateHybridOctreeTriangularConditionsWithFaceColor)
+                                  GenerateOctreeHybridTriangularConditionsWithFaceColor)
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All",
                                   OctreeHybridMesherEntityGeneration,
-                                  GenerateHybridOctreeTriangularConditionsWithFaceColor)
+                                  GenerateOctreeHybridTriangularConditionsWithFaceColor)
 
     ///@}
 };

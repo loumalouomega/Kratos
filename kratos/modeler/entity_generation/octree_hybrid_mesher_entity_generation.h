@@ -39,7 +39,7 @@ class OctreeHybridMeshGeneratorModeler;
  * `OctreeHybridMesherData` into Kratos ModelPart entities:
  *
  *   - **Hexahedral elements** — one `Element3D8N` (or a user-chosen type) per cell
- *     whose colour matches the requested value (@ref GenerateHybridOctreeHexahedraElementsWithCellColor).
+ *     whose colour matches the requested value (@ref GenerateOctreeHybridHexahedraElementsWithCellColor).
  *   - **Boundary conditions** — conditions on boundary faces (future extensions).
  *   - **Hanging-node constraints** — master–slave `MasterSlaveConstraint` objects at
  *     2:1 refinement transitions in the primal mesh.
@@ -56,7 +56,7 @@ class OctreeHybridMeshGeneratorModeler;
  * 3. **Entity generation** (this class) emits ModelPart nodes, elements and constraints.
  * 4. Optional post-processing operations.
  *
- * @see GenerateHybridOctreeHexahedraElementsWithCellColor
+ * @see GenerateOctreeHybridHexahedraElementsWithCellColor
  * @see OctreeHybridMesherColoring
  * @see OctreeHybridMeshGeneratorModeler
  * @author Vicente Mataix Ferrandiz

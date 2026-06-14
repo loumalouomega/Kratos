@@ -56,7 +56,7 @@ namespace Kratos {
  * Run after the coloring stages that produce `mCellColor` (e.g.
  * `OctreeHybridClassifyCellsInsideOutside`), so that `cell_color` already identifies
  * the region whose outer faces should be tagged — typically for boundary-condition
- * generation via `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor`.
+ * generation via `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor`.
  *
  * ### Usage
  * @code{.json}

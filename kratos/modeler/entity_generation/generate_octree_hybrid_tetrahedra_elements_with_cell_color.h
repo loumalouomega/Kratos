@@ -22,7 +22,7 @@ namespace Kratos
 ///@{
 
 /**
- * @class GenerateHybridOctreeTetrahedraElementsWithCellColor
+ * @class GenerateOctreeHybridTetrahedraElementsWithCellColor
  * @ingroup KratosCore
  * @brief Entity-generation stage that emits tetrahedral elements from the dual/primal hex mesh
  *        by decomposing each selected hex cell into 6 Freudenthal tetrahedra.
@@ -39,12 +39,12 @@ namespace Kratos
  * conforming with no hanging nodes.
  *
  * Node de-duplication and batch insertion follow the same pattern as
- * @ref GenerateHybridOctreeHexahedraElementsWithCellColor.
+ * @ref GenerateOctreeHybridHexahedraElementsWithCellColor.
  *
  * ### Parameters schema
  * | Key                    | Type         | Default                          | Description                                          |
  * |------------------------|--------------|----------------------------------|------------------------------------------------------|
- * | `type`                 | string       | `"GenerateHybridOctreeTetrahedraElementsWithCellColor"` | Registry lookup key.              |
+ * | `type`                 | string       | `"GenerateOctreeHybridTetrahedraElementsWithCellColor"` | Registry lookup key.              |
  * | `model_part_name`      | string       | `"Undefined"`                    | ModelPart to create elements in.                     |
  * | `color`                | int          | `1`                              | Cell color to select (1 = inside, 0 = outside).      |
  * | `properties_id`        | int          | `1`                              | Properties ID assigned to each element.              |
@@ -55,18 +55,18 @@ namespace Kratos
  * | `echo_level`           | int          | `0`                              | Verbosity of `KRATOS_INFO` logging (`0` = silent).   |
  *
  * @see OctreeHybridMesherEntityGeneration
- * @see GenerateHybridOctreeHexahedraElementsWithCellColor
+ * @see GenerateOctreeHybridHexahedraElementsWithCellColor
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHybridOctreeTetrahedraElementsWithCellColor
+class KRATOS_API(KRATOS_CORE) GenerateOctreeHybridTetrahedraElementsWithCellColor
     : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
-    GenerateHybridOctreeTetrahedraElementsWithCellColor() = default;
-    GenerateHybridOctreeTetrahedraElementsWithCellColor(GenerateHybridOctreeTetrahedraElementsWithCellColor const&) {}
+    GenerateOctreeHybridTetrahedraElementsWithCellColor() = default;
+    GenerateOctreeHybridTetrahedraElementsWithCellColor(GenerateOctreeHybridTetrahedraElementsWithCellColor const&) {}
 
     ///@}
     ///@name Operations
@@ -88,10 +88,10 @@ private:
 
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics",
                                   OctreeHybridMesherEntityGeneration,
-                                  GenerateHybridOctreeTetrahedraElementsWithCellColor)
+                                  GenerateOctreeHybridTetrahedraElementsWithCellColor)
     KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All",
                                   OctreeHybridMesherEntityGeneration,
-                                  GenerateHybridOctreeTetrahedraElementsWithCellColor)
+                                  GenerateOctreeHybridTetrahedraElementsWithCellColor)
 
     ///@}
 };

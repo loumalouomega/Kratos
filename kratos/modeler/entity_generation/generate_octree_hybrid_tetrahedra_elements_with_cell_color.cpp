@@ -12,17 +12,17 @@
 
 // Project includes
 #include "utilities/model_part_utils.h"
-#include "modeler/entity_generation/generate_hybrid_octree_tetrahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_tetrahedra_elements_with_cell_color.h"
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
 
 namespace Kratos
 {
 
-const Parameters GenerateHybridOctreeTetrahedraElementsWithCellColor::GetDefaultParameters() const
+const Parameters GenerateOctreeHybridTetrahedraElementsWithCellColor::GetDefaultParameters() const
 {
     return Parameters(R"({
-        "type"                 : "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+        "type"                 : "GenerateOctreeHybridTetrahedraElementsWithCellColor",
         "model_part_name"      : "Undefined",
         "color"                : 1,
         "properties_id"        : 1,
@@ -37,7 +37,7 @@ const Parameters GenerateHybridOctreeTetrahedraElementsWithCellColor::GetDefault
 /***********************************************************************************/
 /***********************************************************************************/
 
-void GenerateHybridOctreeTetrahedraElementsWithCellColor::Generate(
+void GenerateOctreeHybridTetrahedraElementsWithCellColor::Generate(
     OctreeHybridMeshGeneratorModeler& rModeler,
     Parameters GenerationParameters
     ) const
@@ -62,7 +62,7 @@ void GenerateHybridOctreeTetrahedraElementsWithCellColor::Generate(
     // Validate the requested element type exists in KratosComponents.
     const std::string entity_name = GenerationParameters["generated_entity"].GetString();
     KRATOS_ERROR_IF(!KratosComponents<Element>::Has(entity_name))
-        << "GenerateHybridOctreeTetrahedraElementsWithCellColor: element type '"
+        << "GenerateOctreeHybridTetrahedraElementsWithCellColor: element type '"
         << entity_name << "' is not registered in KratosComponents." << std::endl;
     const Element& r_proto = KratosComponents<Element>::Get(entity_name);
 
@@ -114,7 +114,7 @@ void GenerateHybridOctreeTetrahedraElementsWithCellColor::Generate(
     ModelPartUtils::AddNodesFromOrderedContainer(r_model_part, new_nodes.begin(), new_nodes.end());
     r_model_part.AddElements(new_elements.begin(), new_elements.end());
 
-    KRATOS_INFO_IF("GenerateHybridOctreeTetrahedraElementsWithCellColor", echo_level > 0)
+    KRATOS_INFO_IF("GenerateOctreeHybridTetrahedraElementsWithCellColor", echo_level > 0)
         << "Generated " << new_elements.size() << " elements and " << n_new_nodes
         << " nodes in ModelPart \"" << r_model_part.FullName() << "\"." << std::endl;
 }

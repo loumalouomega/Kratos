@@ -32,7 +32,7 @@ namespace Kratos
  *        ModelPart into per-neighbour-colour "contact" sub-ModelParts.
  * @details This operation is applied to a skin ModelPart whose conditions are the
  * boundary quads of a colour region (typically produced by
- * @ref GenerateHybridOctreeQuadrilateralConditionsWithFaceColor with `"color"` set to
+ * @ref GenerateOctreeHybridQuadrilateralConditionsWithFaceColor with `"color"` set to
  * `"cell_color"`).  For every condition it determines, on the **octree hex mesh**
  * (`OctreeHybridMesherData::mCells` / `mCellColor`), the cell on the other side of the
  * shared quad face.  If that neighbour cell's colour matches one of the
@@ -98,7 +98,7 @@ namespace Kratos
  * @endcode
  *
  * @see OctreeHybridMesherOperation
- * @see GenerateHybridOctreeQuadrilateralConditionsWithFaceColor
+ * @see GenerateOctreeHybridQuadrilateralConditionsWithFaceColor
  * @see OctreeHybridMeshUtility::ExtractBoundaryFaces
  * @author Vicente Mataix Ferrandiz
  */

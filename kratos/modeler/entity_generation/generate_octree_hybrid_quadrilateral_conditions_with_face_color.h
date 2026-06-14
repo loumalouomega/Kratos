@@ -26,7 +26,7 @@ namespace Kratos
 ///@{
 
 /**
- * @class GenerateHybridOctreeQuadrilateralConditionsWithFaceColor
+ * @class GenerateOctreeHybridQuadrilateralConditionsWithFaceColor
  * @ingroup KratosCore
  * @brief Entity-generation component that creates quadrilateral boundary conditions on
  *        the exterior faces of the coloured hex mesh.
@@ -53,10 +53,10 @@ namespace Kratos
  * `"constraint_type"` per (hanging node × master node × variable) triple in the same
  * ModelPart — ensuring that boundary DOFs at refinement transitions are properly
  * constrained without a separate entity-generation entry.  This mirrors the behaviour of
- * @ref GenerateHybridOctreeHexahedraElementsWithCellColor.
+ * @ref GenerateOctreeHybridHexahedraElementsWithCellColor.
  *
  * ### Prerequisite
- * The hex-generation step (e.g. @ref GenerateHybridOctreeHexahedraElementsWithCellColor) must
+ * The hex-generation step (e.g. @ref GenerateOctreeHybridHexahedraElementsWithCellColor) must
  * have run first so that `OctreeHybridMesherData::mCells` and `OctreeHybridMesherData::mCellColor`
  * are populated.
  *
@@ -68,7 +68,7 @@ namespace Kratos
  * ### Parameters schema
  * | Key                       | Type         | Default                    | Description                                |
  * |---------------------------|--------------|----------------------------|--------------------------------------------|
- * | `type`                    | string       | `"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor"` | Registry lookup key.         |
+ * | `type`                    | string       | `"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor"` | Registry lookup key.         |
  * | `model_part_name`         | string       | `"Undefined"`              | ModelPart to create conditions in.         |
  * | `color`                   | int          | `1`                        | Cell color (inside label) to use.          |
  * | `properties_id`           | int          | `1`                        | Properties ID assigned to each condition.  |
@@ -86,20 +86,20 @@ namespace Kratos
  * @see OctreeHybridMeshUtility::ExtractBoundaryFaces
  * @author Vicente Mataix Ferrandiz
  */
-class KRATOS_API(KRATOS_CORE) GenerateHybridOctreeQuadrilateralConditionsWithFaceColor : public OctreeHybridMesherEntityGeneration
+class KRATOS_API(KRATOS_CORE) GenerateOctreeHybridQuadrilateralConditionsWithFaceColor : public OctreeHybridMesherEntityGeneration
 {
 public:
     ///@name Life Cycle
     ///@{
 
     /// Default constructor.
-    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor() = default;
+    GenerateOctreeHybridQuadrilateralConditionsWithFaceColor() = default;
 
     /**
      * @brief Copy constructor.
      * @param rOther The instance to copy.  No data members to copy in this class.
      */
-    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor(GenerateHybridOctreeQuadrilateralConditionsWithFaceColor const& rOther) {}
+    GenerateOctreeHybridQuadrilateralConditionsWithFaceColor(GenerateOctreeHybridQuadrilateralConditionsWithFaceColor const& rOther) {}
 
     ///@}
     ///@name Operations
@@ -154,7 +154,7 @@ public:
      * @details Schema:
      * @code{.json}
      * {
-     *     "type"                  : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+     *     "type"                  : "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
      *     "model_part_name"       : "Undefined",
      *     "color"                 : 1,
      *     "properties_id"         : 1,
@@ -181,9 +181,9 @@ private:
     ///@{
 
     /// Registers this class as a prototype under the KratosMultiphysics sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeQuadrilateralConditionsWithFaceColor)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.KratosMultiphysics", OctreeHybridMesherEntityGeneration, GenerateOctreeHybridQuadrilateralConditionsWithFaceColor)
     /// Registers this class as a prototype under the All sub-path.
-    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateHybridOctreeQuadrilateralConditionsWithFaceColor)
+    KRATOS_REGISTRY_ADD_PROTOTYPE("OctreeHybridMesherEntityGeneration.All", OctreeHybridMesherEntityGeneration, GenerateOctreeHybridQuadrilateralConditionsWithFaceColor)
 
     ///@}
 };
