@@ -256,6 +256,7 @@ auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
     bool Adaptive,
     const BoundingBox<Point>* pOverrideBoundingBox) -> std::unique_ptr<OctreeType>
 {
+    KRATOS_TRY
     KRATOS_ERROR_IF(RefinementDepth < 1 || RefinementDepth > ConfigurationType::MAX_DEPTH)
         << "OctreeHybridMeshUtility: RefinementDepth must be in [1, "
         << ConfigurationType::MAX_DEPTH << "], got " << RefinementDepth << std::endl;
@@ -330,6 +331,7 @@ auto OctreeHybridMeshUtility::BuildFromSurfaceMesh(
         if (!any_split) break;
     }
     return p_octree;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -340,6 +342,7 @@ auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
     std::size_t RefinementDepth,
     const BoundingBox<Point>* pOverrideBoundingBox) -> std::unique_ptr<OctreeType>
 {
+    KRATOS_TRY
     const AdaptiveRefineData data = BuildRefineSets(rSurfaceMesh, pOverrideBoundingBox);
     KRATOS_ERROR_IF(data.tri_geom.empty())
         << "OctreeHybridMeshUtility: surface ModelPart has no triangles." << std::endl;
@@ -445,6 +448,7 @@ auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
         if (!any_split) break;
     }
     return p_octree;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -452,6 +456,7 @@ auto OctreeHybridMeshUtility::BuildAdaptiveFromSurfaceMesh(
 
 void OctreeHybridMeshUtility::RefineAllCells(OctreeType& rOctree, std::size_t TargetDepth)
 {
+    KRATOS_TRY
     TargetDepth = std::min(TargetDepth, rOctree.GetDepth());
     bool any = true;
     while (any) {
@@ -466,6 +471,7 @@ void OctreeHybridMeshUtility::RefineAllCells(OctreeType& rOctree, std::size_t Ta
             }
         }
     }
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -476,6 +482,7 @@ void OctreeHybridMeshUtility::RefineInterfaceCells(
     const TriangleSoup& rTriangles,
     std::size_t         TargetDepth)
 {
+    KRATOS_TRY
     TargetDepth = std::min(TargetDepth, rOctree.GetDepth());
     for (const auto& tri : rTriangles) {
         for (int k = 0; k < 3; ++k) {
@@ -495,6 +502,7 @@ void OctreeHybridMeshUtility::RefineInterfaceCells(
             }
         }
     }
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -503,6 +511,7 @@ void OctreeHybridMeshUtility::RefineInterfaceCells(
 std::size_t OctreeHybridMeshUtility::ElementSizeToDepth(OctreeType& rOctree, double ElementSize,
                                                         bool ClampToMaxDepth)
 {
+    KRATOS_TRY
     KRATOS_ERROR_IF(ElementSize <= 0.0)
         << "OctreeHybridMeshUtility::ElementSizeToDepth: ElementSize must be > 0, got "
         << ElementSize << std::endl;
@@ -530,6 +539,7 @@ std::size_t OctreeHybridMeshUtility::ElementSizeToDepth(OctreeType& rOctree, dou
     const std::size_t depth = static_cast<std::size_t>(
         std::ceil(-std::log2(norm_size)));
     return ClampToMaxDepth ? std::min(depth, rOctree.GetDepth()) : depth;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -541,6 +551,7 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
     std::vector<std::array<int,8>>& rCells,
     std::vector<int>& rCellLevel)
 {
+    KRATOS_TRY
     // ------------------------------------------------------------------ //
     // 1. Collect leaves (the octree must already be 2:1-balanced)
     // ------------------------------------------------------------------ //
@@ -1415,6 +1426,7 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
     rNodes     = std::move(nodes);
     rCells     = std::move(cells);
     rCellLevel = std::move(cell_level);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1422,6 +1434,7 @@ void OctreeHybridMeshUtility::ExtractDualHexMesh(
 
 OctreeHybridMeshUtility::TriangleSoup OctreeHybridMeshUtility::ExtractTriangleSoup(const ModelPart& rSurfaceMesh)
 {
+    KRATOS_TRY
     std::vector<const Geometry<Node>*> tri_geom;
     CollectSurfaceTriangles(rSurfaceMesh, tri_geom);
 
@@ -1436,6 +1449,7 @@ OctreeHybridMeshUtility::TriangleSoup OctreeHybridMeshUtility::ExtractTriangleSo
         }});
     }
     return triangles;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1446,6 +1460,7 @@ std::vector<const OctreeHybridMeshUtility::GeometryType*> OctreeHybridMeshUtilit
     const std::string& rInputEntities,
     const std::string& rCallerName)
 {
+    KRATOS_TRY
     std::vector<const GeometryType*> geometries;
 
     auto collect_elements = [&]() {
@@ -1491,6 +1506,7 @@ std::vector<const OctreeHybridMeshUtility::GeometryType*> OctreeHybridMeshUtilit
     }
 
     return geometries;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1503,6 +1519,7 @@ void OctreeHybridMeshUtility::ExtractPrimalHexMesh(
     std::vector<int>&                 rCellLevel,
     std::vector<HangingConstraint>&   rHanging)
 {
+    KRATOS_TRY
     // ------------------------------------------------------------------ //
     // 1. Collect leaves (already 2:1-balanced)
     // ------------------------------------------------------------------ //
@@ -1708,6 +1725,7 @@ void OctreeHybridMeshUtility::ExtractPrimalHexMesh(
 
     rHanging.reserve(best.size());
     for (auto& [k, hc] : best) rHanging.push_back(hc);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1721,6 +1739,7 @@ void OctreeHybridMeshUtility::WriteDualHexVtk(
     int ProjIters,
     int ProjSmooth)
 {
+    KRATOS_TRY
     rOctree.StrongConstrain2To1();
 
     std::vector<std::array<double,3>> nodes;
@@ -1743,6 +1762,7 @@ void OctreeHybridMeshUtility::WriteDualHexVtk(
     }
 
     WriteHexVtk(rFilename, nodes, cells, cell_level);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1750,6 +1770,7 @@ void OctreeHybridMeshUtility::WriteDualHexVtk(
 
 void OctreeHybridMeshUtility::WritePrimalVtk(OctreeType& rOctree, const std::string& rFilename)
 {
+    KRATOS_TRY
     std::vector<CellType*> leaves;
     rOctree.GetAllLeavesVector(leaves);
 
@@ -1802,6 +1823,7 @@ void OctreeHybridMeshUtility::WritePrimalVtk(OctreeType& rOctree, const std::str
     for (std::size_t e = 0; e < nc; ++e) f << "12\n";
     f << "CELL_DATA "<<nc<<"\nSCALARS level int 1\nLOOKUP_TABLE default\n";
     for (CellType* p : leaves) f << p->GetLevel() << '\n';
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1813,8 +1835,10 @@ void OctreeHybridMeshUtility::BuildAndWriteVtk(
     std::size_t RefinementDepth,
     bool Adaptive)
 {
+    KRATOS_TRY
     auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
     WriteDualHexVtk(*p_octree, rVtkFilename);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1826,6 +1850,7 @@ void OctreeHybridMeshUtility::BuildCarveAndWriteVtk(
     std::size_t RefinementDepth,
     bool Adaptive)
 {
+    KRATOS_TRY
     auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
 
     // Collect surface triangles in world coordinates.
@@ -1835,6 +1860,7 @@ void OctreeHybridMeshUtility::BuildCarveAndWriteVtk(
         << "ModelPart has no triangles to carve against." << std::endl;
 
     WriteDualHexVtk(*p_octree, rVtkFilename, &triangles);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1848,6 +1874,7 @@ void OctreeHybridMeshUtility::BuildCarveProjectAndWriteVtk(
     int ProjSmooth,
     bool Adaptive)
 {
+    KRATOS_TRY
     auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth, Adaptive);
 
     TriangleSoup triangles = ExtractTriangleSoup(rSurfaceMesh);
@@ -1857,6 +1884,7 @@ void OctreeHybridMeshUtility::BuildCarveProjectAndWriteVtk(
 
     WriteDualHexVtk(*p_octree, rVtkFilename, &triangles, /*Project=*/true,
                     ProjIters, ProjSmooth);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1867,6 +1895,7 @@ void OctreeHybridMeshUtility::WriteOctreeForReference(
     const std::string& rFilename,
     std::size_t RefinementDepth)
 {
+    KRATOS_TRY
     auto p_octree = BuildFromSurfaceMesh(rSurfaceMesh, RefinementDepth);
     p_octree->StrongConstrain2To1();
 
@@ -1919,6 +1948,7 @@ void OctreeHybridMeshUtility::WriteOctreeForReference(
                            <<' '<<e[4]<<' '<<e[5]<<' '<<e[6]<<' '<<e[7]<<'\n';
     f << "CELL_TYPES " << nc << '\n';
     for (std::size_t i = 0; i < nc; ++i) f << "12\n";
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1926,8 +1956,10 @@ void OctreeHybridMeshUtility::WriteOctreeForReference(
 
 double OctreeHybridMeshUtility::SqDist(const double a[3], const double b[3])
 {
+    KRATOS_TRY
     const double dx = a[0]-b[0], dy = a[1]-b[1], dz = a[2]-b[2];
     return dx*dx + dy*dy + dz*dz;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1935,11 +1967,13 @@ double OctreeHybridMeshUtility::SqDist(const double a[3], const double b[3])
 
 double OctreeHybridMeshUtility::TriArea(double a, double b, double c)
 {
+    KRATOS_TRY
     // Heron's formula.  The clamp to 0 guards against negative values from
     // floating-point rounding when the "triangle" is degenerate (collinear points).
     const double s = 0.5*(a+b+c);
     const double area = s*(s-a)*(s-b)*(s-c);
     return std::sqrt(area < 0.0 ? 0.0 : area);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1949,6 +1983,7 @@ int OctreeHybridMeshUtility::TriRayIntersect(
     const double a[3], const double b[3], const double c[3],
     const double p[3], const double dir[3], double e[3], double& alpha)
 {
+    KRATOS_TRY
     constexpr double DIST_THRES = 1e-12;
     // A, B, C, D are the coefficients of the triangle's plane equation
     // Ax + By + Cz + D = 0, computed from the three vertices.
@@ -1970,6 +2005,7 @@ int OctreeHybridMeshUtility::TriRayIntersect(
     if (fI>0 && fJ>0 && fI+fJ<fD) return 1;             // inside
     if (fI==0 || fJ==0 || fI+fJ==fD) return -1;         // on the boundary
     return 0;                                            // outside
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -1979,6 +2015,7 @@ double OctreeHybridMeshUtility::PointToTri(
     const double a[3], const double b[3], const double c[3],
     const double p[3], double currMin)
 {
+    KRATOS_TRY
     const double A = (c[1]*b[2]-b[1]*c[2]+a[1]*c[2]-a[2]*c[1]-a[1]*b[2]+a[2]*b[1]);
     const double B = (a[0]*(b[2]-c[2])-b[0]*(a[2]-c[2])+c[0]*(a[2]-b[2]));
     const double C = (a[0]*(c[1]-b[1])-b[0]*(c[1]-a[1])+c[0]*(b[1]-a[1]));
@@ -2019,6 +2056,7 @@ double OctreeHybridMeshUtility::PointToTri(
     if (kBC>0 && kBC<1) beta = std::min(beta, S3*2/BC);
     if (kCA>0 && kCA<1) beta = std::min(beta, S2*2/AC);
     return std::sqrt(alpha*alpha + beta*beta);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2030,6 +2068,7 @@ void OctreeHybridMeshUtility::RemoveOutsideElement(
     std::vector<std::array<int,8>>& rCells,
     std::vector<int>& rCellLevel)
 {
+    KRATOS_TRY
     const std::vector<double> signed_dist = ComputeNodeSignedDistance(rTriangles, rNodes);
 
     std::vector<std::array<int,8>> kept_cells;
@@ -2044,6 +2083,7 @@ void OctreeHybridMeshUtility::RemoveOutsideElement(
     }
     rCells.swap(kept_cells);
     rCellLevel.swap(kept_level);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2055,10 +2095,12 @@ void OctreeHybridMeshUtility::ClassifyInsideOutside(
     const std::vector<std::array<int,8>>& rCells,
     std::vector<int>& rCellColor)
 {
+    KRATOS_TRY
     const std::vector<double> signed_dist = ComputeNodeSignedDistance(rTriangles, rNodes);
     rCellColor.assign(rCells.size(), 0);
     for (std::size_t c = 0; c < rCells.size(); ++c)
         rCellColor[c] = KeepCarvedCell(rCells[c], signed_dist) ? 1 : 0;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2068,6 +2110,7 @@ auto OctreeHybridMeshUtility::ComputeNodeSignedDistance(
     const TriangleSoup& rTriangles,
     const std::vector<std::array<double,3>>& rNodes) -> std::vector<double>
 {
+    KRATOS_TRY
     constexpr double DIST_THRES = 1e-12;
     const int NV = static_cast<int>(rNodes.size());
     const int NT = static_cast<int>(rTriangles.size());
@@ -2117,6 +2160,7 @@ auto OctreeHybridMeshUtility::ComputeNodeSignedDistance(
         signed_dist[i] = inside ? md : -md;
     });
     return signed_dist;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2126,6 +2170,7 @@ bool OctreeHybridMeshUtility::KeepCarvedCell(
     const std::array<int,8>& rCell,
     const std::vector<double>& rSignedDist)
 {
+    KRATOS_TRY
     // OUT_IN_RATIO controls how deeply an "outside" node may penetrate relative
     // to the "inside" clearance before the cell is dropped.  A value of 0.15
     // means: if the deepest outside node is more than 15 % of the maximum inside
@@ -2146,6 +2191,7 @@ bool OctreeHybridMeshUtility::KeepCarvedCell(
         }
     }
     return min_neg + OUT_IN_RATIO * max_pos >= 0.0;
+    KRATOS_CATCH("")
 }
 
 // SJ_ADJ[corner][0..2]: the three edge-adjacent corners of a hex at `corner`
@@ -2161,9 +2207,11 @@ static constexpr int SJ_ADJ[8][3] =
 
 double OctreeHybridMeshUtility::TripleProduct(const double e0[3], const double e1[3], const double e2[3])
 {
+    KRATOS_TRY
     return e0[0]*(e1[1]*e2[2]-e1[2]*e2[1])
          + e0[1]*(e1[2]*e2[0]-e1[0]*e2[2])
          + e0[2]*(e1[0]*e2[1]-e1[1]*e2[0]);
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2172,6 +2220,7 @@ double OctreeHybridMeshUtility::TripleProduct(const double e0[3], const double e
 void OctreeHybridMeshUtility::HexEdgeTriple(const double p[8][3], int corner,
                           double e0[3], double e1[3], double e2[3])
 {
+    KRATOS_TRY
     if (corner == 8) {
         // Virtual "body-centre" point (corner index 8, one past the 8 corners):
         // edge vectors are computed as face-centre differences so that the triple
@@ -2189,6 +2238,7 @@ void OctreeHybridMeshUtility::HexEdgeTriple(const double p[8][3], int corner,
             e2[d] = p[SJ_ADJ[corner][2]][d]-p[corner][d];
         }
     }
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2196,6 +2246,13 @@ void OctreeHybridMeshUtility::HexEdgeTriple(const double p[8][3], int corner,
 
 double OctreeHybridMeshUtility::ScaledJacobianMin(const double p[8][3])
 {
+    KRATOS_TRY
+    // Worst (minimum) scaled Jacobian of the hex: at each of the 8 corners plus
+    // the body centre (HexEdgeTriple's corner==8 case), normalise the triple
+    // product of the three local edge vectors by their lengths, giving a value
+    // in [-1, 1] that is 1 for a perfect cube and <= 0 for an inverted or
+    // degenerate element.  A zero-length edge makes the corner undefined and
+    // is reported as the worst possible value.
     constexpr double DIST_THRES = 1e-12;
     double mn = std::numeric_limits<double>::max();
     for (int c = 0; c <= 8; ++c) {
@@ -2210,6 +2267,7 @@ double OctreeHybridMeshUtility::ScaledJacobianMin(const double p[8][3])
         if (s < mn) mn = s;
     }
     return mn;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2217,6 +2275,12 @@ double OctreeHybridMeshUtility::ScaledJacobianMin(const double p[8][3])
 
 double OctreeHybridMeshUtility::JacobianMin(const double p[8][3])
 {
+    KRATOS_TRY
+    // Worst (minimum) unnormalised Jacobian determinant of the hex, taken over
+    // the same 8 corners + body centre as ScaledJacobianMin but without
+    // dividing by edge lengths.  Used where the absolute sign of the
+    // determinant (inverted vs. valid element) matters more than the
+    // shape-quality value itself.
     double mn = std::numeric_limits<double>::max();
     for (int c = 0; c <= 8; ++c) {
         double e0[3], e1[3], e2[3];
@@ -2225,6 +2289,7 @@ double OctreeHybridMeshUtility::JacobianMin(const double p[8][3])
         if (v < mn) mn = v;
     }
     return mn;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2234,6 +2299,11 @@ void OctreeHybridMeshUtility::ClosestPointOnTriangle(
     const double a[3], const double b[3], const double c[3],
     const double p[3], double q[3])
 {
+    KRATOS_TRY
+    // Classic Voronoi-region test (Ericson, "Real-Time Collision Detection"):
+    // walk the vertex, edge and face regions of triangle (a,b,c) in barycentric
+    // space and return whichever region p projects into - a vertex, a clamped
+    // point on an edge, or the unclamped projection onto the face plane.
     auto sub=[](const double u[3],const double v[3],double r[3]){ r[0]=u[0]-v[0]; r[1]=u[1]-v[1]; r[2]=u[2]-v[2]; };
     auto dot=[](const double u[3],const double v[3]){ return u[0]*v[0]+u[1]*v[1]+u[2]*v[2]; };
     double ab[3],ac[3],ap[3]; sub(b,a,ab); sub(c,a,ac); sub(p,a,ap);
@@ -2260,6 +2330,7 @@ void OctreeHybridMeshUtility::ClosestPointOnTriangle(
     const double denom=1.0/(va+vb+vc);
     const double v=vb*denom, w=vc*denom;
     for(int d=0;d<3;++d) q[d]=a[d]+ab[d]*v+ac[d]*w;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2268,6 +2339,7 @@ void OctreeHybridMeshUtility::ClosestPointOnTriangle(
 double OctreeHybridMeshUtility::ClosestPointOnSoup(
     const TriangleSoup& rTri, const double p[3], double q[3], int& tri)
 {
+    KRATOS_TRY
     double best = std::numeric_limits<double>::max();
     for (int t = 0; t < static_cast<int>(rTri.size()); ++t) {
         double cand[3];
@@ -2278,6 +2350,7 @@ double OctreeHybridMeshUtility::ClosestPointOnSoup(
         if (d2 < best) { best=d2; q[0]=cand[0]; q[1]=cand[1]; q[2]=cand[2]; tri=t; }
     }
     return best;
+    KRATOS_CATCH("")
 }
 
 static constexpr int FACE_FIDC[6][4] =
@@ -2289,6 +2362,7 @@ static constexpr int FACE_FIDC[6][4] =
 auto OctreeHybridMeshUtility::ExtractBoundaryFaces(
     const std::vector<std::array<int,8>>& rCells) -> std::vector<std::array<int,5>>
 {
+    KRATOS_TRY
     std::map<std::array<int,4>, int> count;
     std::map<std::array<int,4>, std::array<int,5>> first;
     for (int c = 0; c < static_cast<int>(rCells.size()); ++c)
@@ -2301,6 +2375,7 @@ auto OctreeHybridMeshUtility::ExtractBoundaryFaces(
     std::vector<std::array<int,5>> bfaces;
     for (const auto& kv : count) if (kv.second == 1) bfaces.push_back(first[kv.first]);
     return bfaces;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2309,6 +2384,7 @@ auto OctreeHybridMeshUtility::ExtractBoundaryFaces(
 auto OctreeHybridMeshUtility::ComputeCellFaceNeighbors(
     const std::vector<std::array<int,8>>& rCells) -> std::vector<std::array<int,6>>
 {
+    KRATOS_TRY
     const int n_cells = static_cast<int>(rCells.size());
     std::vector<std::array<int,6>> neighbors(n_cells);
     for (auto& r_cell_neighbors : neighbors) r_cell_neighbors.fill(-1);
@@ -2328,6 +2404,7 @@ auto OctreeHybridMeshUtility::ComputeCellFaceNeighbors(
             }
         }
     return neighbors;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2339,6 +2416,7 @@ void OctreeHybridMeshUtility::ClearBufferZone(
     std::vector<int>& rCellLevel,
     int MaxRounds)
 {
+    KRATOS_TRY
     // 128 unit directions distributed evenly on a sphere via the Fibonacci
     // sphere algorithm: each point advances by the golden angle (≈137.5°,
     // the irrational rotation that minimises clustering) and the z coordinate
@@ -2447,6 +2525,7 @@ void OctreeHybridMeshUtility::ClearBufferZone(
             if (component[c] == largest) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); }
         rCells.swap(kept); rCellLevel.swap(kept_lv);
     }
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2458,10 +2537,16 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
     std::vector<std::array<int,8>>& rCells,
     std::vector<int>& rCellLevel,
     int TotalIters,
-    int SmoothEvery)
+    int SmoothEvery
+    )
 {
+    KRATOS_TRY
     const int n_core_cells = static_cast<int>(rCells.size());
     if (n_core_cells == 0 || rTriangles.empty()) return;
+
+    KRATOS_INFO("ProjectToIsoSurface") << "Starting (" << n_core_cells << " core hexes, "
+        << rTriangles.size() << " input triangles, " << TotalIters << " iterations, "
+        << "smoothing every " << SmoothEvery << " iterations)" << std::endl;
 
     // --- 0. Normalise to the reference's 100-unit box --------------------
     // All of the optimisation constants below (learning rate, fitting weight,
@@ -2470,31 +2555,58 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
     // (e.g. unit) coordinates would make the scale-dependent gradients blow up,
     // so we rescale on entry and undo it on exit.
     double lo[3]={ 1e300, 1e300, 1e300}, hi[3]={-1e300,-1e300,-1e300};
-    for (const auto& nd : rNodes)
-        for (int d=0; d<3; ++d) { lo[d]=std::min(lo[d],nd[d]); hi[d]=std::max(hi[d],nd[d]); }
+    for (const auto& r_node : rNodes) {
+        for (int d=0; d<3; ++d) { 
+            lo[d]=std::min(lo[d],r_node[d]); 
+            hi[d]=std::max(hi[d],r_node[d]); 
+        }
+    }
     double extent = std::max({hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2], 1e-300});
     const double S = 100.0 / extent;
-    for (auto& nd : rNodes) for (int d=0;d<3;++d) nd[d]=(nd[d]-lo[d])*S;
+    for (auto& r_node : rNodes) {
+        for (int d=0;d<3;++d) {
+            r_node[d]=(r_node[d]-lo[d])*S;
+        }
+    }
     TriangleSoup tri = rTriangles;             // local, normalised copy
-    for (auto& t : tri) for (auto& v : t) for (int d=0;d<3;++d) v[d]=(v[d]-lo[d])*S;
+    for (auto& r_triangle : tri) {
+        for (auto& r_vertex : r_triangle) { 
+            for (int d=0;d<3;++d) {
+                r_vertex[d]=(r_vertex[d]-lo[d])*S;
+            }
+        }
+    }
     const TriangleSoup& rTri = tri;            // shadow the argument below
 
     // --- 1. Boundary quad faces (owned by exactly one hex) ----------------
-    static constexpr int FIDC[6][4] =
-        {{0,1,2,3},{4,5,1,0},{4,0,3,7},{5,6,2,1},{6,7,3,2},{7,6,5,4}};
-    std::map<std::array<int,4>, int>            face_count;
+    static constexpr int FIDC[6][4] = {{0,1,2,3},{4,5,1,0},{4,0,3,7},{5,6,2,1},{6,7,3,2},{7,6,5,4}};
+    std::map<std::array<int,4>, int> face_count;
     std::map<std::array<int,4>, std::array<int,5>> face_first; // key -> {n0..n3, cell}
-    for (int c = 0; c < n_core_cells; ++c)
+    for (int c = 0; c < n_core_cells; ++c) {
         for (int f = 0; f < 6; ++f) {
             std::array<int,4> q = { rCells[c][FIDC[f][0]], rCells[c][FIDC[f][1]],
                                     rCells[c][FIDC[f][2]], rCells[c][FIDC[f][3]] };
             std::array<int,4> key = q; std::sort(key.begin(), key.end());
             if (++face_count[key] == 1) face_first[key] = {q[0],q[1],q[2],q[3],c};
         }
+    }
+
+    // Boundary faces are those that appear in exactly one hex.
     std::vector<std::array<int,5>> bfaces;  // {n0,n1,n2,n3, owning cell}
-    for (const auto& kv : face_count)
-        if (kv.second == 1) bfaces.push_back(face_first[kv.first]);
-    if (bfaces.empty()) return;
+    for (const auto& r_kv : face_count) {
+        if (r_kv.second == 1) {
+            bfaces.push_back(face_first[r_kv.first]);
+        }
+    }
+
+    // If there are no boundary faces, the mesh is already watertight and there
+    // is nothing to project onto the input surface.
+    if (bfaces.empty()) {
+        KRATOS_INFO("ProjectToIsoSurface") << "No boundary faces found, mesh is already watertight - nothing to project" << std::endl;
+        return;
+    }
+
+    KRATOS_INFO("ProjectToIsoSurface") << "Found " << bfaces.size() << " boundary faces" << std::endl;
 
     // --- 2. Duplicate boundary vertices, build the buffer shell -----------
     std::unordered_map<int,int> dup_of;     // core boundary node -> dup node id
@@ -2509,62 +2621,132 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
     // Cell centroid helper (to orient buffer hexes outward).
     auto centroid = [&](int c, double o[3]) {
         o[0]=o[1]=o[2]=0;
-        for (int k=0;k<8;++k) for (int d=0;d<3;++d) o[d]+=rNodes[rCells[c][k]][d];
-        for (int d=0;d<3;++d) o[d]/=8.0;
+        for (int k=0;k<8;++k) {
+            for (int d=0;d<3;++d) {
+                o[d]+=rNodes[rCells[c][k]][d];
+            }
+        }
+        for (int d=0;d<3;++d) {
+            o[d]/=8.0;
+        }
     };
 
+    // Build a buffer hex for each boundary face, with the duplicates on the
+    // outward side and the original core nodes on the inner side.  The buffer
+    // hex is oriented so that its outward normal points away from the owning
+    // cell centroid.  The duplicates are nudged outward by one unit to avoid
+    // zero-volume hexes when the core is flat against the boundary.
     const int n_buffer_start = static_cast<int>(rCells.size());
-    for (const auto& bf : bfaces) {
-        const int c0=bf[0], c1=bf[1], c2=bf[2], c3=bf[3];
+    for (const auto& r_bf : bfaces) {
+        const int c0=r_bf[0], c1=r_bf[1], c2=r_bf[2], c3=r_bf[3];
         const int d0=dup_of[c0], d1=dup_of[c1], d2=dup_of[c2], d3=dup_of[c3];
         // Outward normal of the quad (away from the owning cell centroid).
-        double cen[3]; centroid(bf[4], cen);
+        double cen[3]; centroid(r_bf[4], cen);
         double fc[3]={0,0,0};
-        for (int d=0;d<3;++d) fc[d]=0.25*(rNodes[c0][d]+rNodes[c1][d]+rNodes[c2][d]+rNodes[c3][d]);
+        // Face centre of the quad.
+        for (int d=0;d<3;++d) {
+            fc[d]=0.25*(rNodes[c0][d]+rNodes[c1][d]+rNodes[c2][d]+rNodes[c3][d]);
+        }
         double e1[3],e2[3],nrm[3];
-        for (int d=0;d<3;++d){ e1[d]=rNodes[c1][d]-rNodes[c0][d]; e2[d]=rNodes[c3][d]-rNodes[c0][d]; }
-        nrm[0]=e1[1]*e2[2]-e1[2]*e2[1]; nrm[1]=e1[2]*e2[0]-e1[0]*e2[2]; nrm[2]=e1[0]*e2[1]-e1[1]*e2[0];
+        // Compute the face normal via the cross product of two edges.
+        for (int d=0;d<3;++d){ 
+            e1[d]=rNodes[c1][d]-rNodes[c0][d]; 
+            e2[d]=rNodes[c3][d]-rNodes[c0][d]; 
+        }
+        // Compute the outward normal of the face.
+        nrm[0]=e1[1]*e2[2]-e1[2]*e2[1]; 
+        nrm[1]=e1[2]*e2[0]-e1[0]*e2[2]; 
+        nrm[2]=e1[0]*e2[1]-e1[1]*e2[0];
+        // Vector from the cell centroid to the face centre.
         double out[3]={fc[0]-cen[0],fc[1]-cen[1],fc[2]-cen[2]};
         const double nlen=std::sqrt(nrm[0]*nrm[0]+nrm[1]*nrm[1]+nrm[2]*nrm[2])+1e-300;
-        for (int d=0;d<3;++d) nrm[d]/=nlen;
-        if (nrm[0]*out[0]+nrm[1]*out[1]+nrm[2]*out[2] < 0)
-            for (int d=0;d<3;++d) nrm[d]=-nrm[d];
+        for (int d=0;d<3;++d) {
+            nrm[d]/=nlen;
+        }
+        // If the normal points inward, flip it to point outward.
+        if (nrm[0]*out[0]+nrm[1]*out[1]+nrm[2]*out[2] < 0) {
+            for (int d=0;d<3;++d) {
+                nrm[d]=-nrm[d];
+            }
+        }
         // Build the buffer hex (duplicates on the outward side, core on the
         // inner side); choose the winding that gives a positive test volume
         // when the duplicates are nudged a unit outward.
         double test[8][3];
-        auto fill_test = [&](const std::array<int,8>& e){
-            for (int k=0;k<8;++k) for (int d=0;d<3;++d) test[k][d]=rNodes[e[k]][d];
-            for (int k=0;k<4;++k) for (int d=0;d<3;++d) test[k][d]+=nrm[d]; // nudge dups out
+        auto fill_test = [&](const std::array<int,8>& e) {
+            // Fill the test array with the coordinates of the hex corners.
+            for (int k=0;k<8;++k) {
+                for (int d=0;d<3;++d) {
+                    test[k][d]=rNodes[e[k]][d];
+                }
+            }
+            // Nudge the duplicates outward to avoid a zero-volume test.
+            for (int k=0;k<4;++k) {
+                for (int d=0;d<3;++d) {
+                    test[k][d]+=nrm[d]; // nudge dups out
+                }
+            }
         };
         std::array<int,8> hexA = { d0,d1,d2,d3, c0,c1,c2,c3 };
         fill_test(hexA);
         std::array<int,8> hex = hexA;
-        if (JacobianMin(test) <= 0) hex = { d0,d3,d2,d1, c0,c3,c2,c1 };
+        if (JacobianMin(test) <= 0) { 
+            hex = { d0,d3,d2,d1, c0,c3,c2,c1 };
+        }
         rCells.push_back(hex);
         rCellLevel.push_back(-2);   // buffer-layer marker
     }
 
+    KRATOS_INFO("ProjectToIsoSurface") << "Built buffer shell: " << dup_of.size() << " duplicated nodes, " << (rCells.size() - n_core_cells) << " buffer hexes" << std::endl;
+
     // --- 3. Affected elements, optimizable vertices, adjacency ------------
     const int NN = static_cast<int>(rNodes.size());
     std::vector<std::vector<int>> node_cells(NN);     // node -> incident cells
-    for (int c = 0; c < static_cast<int>(rCells.size()); ++c)
-        for (int k = 0; k < 8; ++k) node_cells[rCells[c][k]].push_back(c);
+    for (int c = 0; c < static_cast<int>(rCells.size()); ++c) {
+        for (int k = 0; k < 8; ++k) {
+            node_cells[rCells[c][k]].push_back(c);
+        }
+    }
 
+    // is_dup[v] = 1 if v is a duplicate node; is_boundary[v] = 1 if v is a core
+    // node that touches a boundary face.  These are the only nodes that are
+    // optimizable, and they are the only nodes that have a surface attractor
+    // gradient.
     std::vector<char> is_dup(NN, 0), is_boundary(NN, 0);
-    for (const auto& kv : dup_of) { is_boundary[kv.first]=1; is_dup[kv.second]=1; }
+    for (const auto& kv : dup_of) { 
+        is_boundary[kv.first]=1; 
+        is_dup[kv.second]=1; 
+    }
 
+    // Affected cells are those that are either buffer-layer cells or core
+    // cells that touch a boundary face; only these participate in the
+    // quality-gradient accumulation and the global scaled-Jacobian checks.
     std::vector<char> affected_cell(rCells.size(), 0);
-    for (int c = n_buffer_start; c < static_cast<int>(rCells.size()); ++c) affected_cell[c]=1;
-    for (int c = 0; c < n_core_cells; ++c)
-        for (int k = 0; k < 8; ++k)
-            if (is_boundary[rCells[c][k]]) { affected_cell[c]=1; break; }
+    for (int c = n_buffer_start; c < static_cast<int>(rCells.size()); ++c) {
+        affected_cell[c]=1;
+    }
+    // Core cells that touch the boundary are also affected.
+    for (int c = 0; c < n_core_cells; ++c) {
+        for (int k = 0; k < 8; ++k) {
+            if (is_boundary[rCells[c][k]]) { 
+                affected_cell[c]=1; break; 
+            }
+        }
+    }
+    // Build a list of affected cells for iteration.
     std::vector<int> affected;
-    for (int c = 0; c < static_cast<int>(rCells.size()); ++c)
-        if (affected_cell[c]) affected.push_back(c);
+    for (int c = 0; c < static_cast<int>(rCells.size()); ++c) {
+        if (affected_cell[c]) {
+            affected.push_back(c);
+        }
+    }
 
     std::vector<char> optimizable(NN, 0);
-    for (int c : affected) for (int k=0;k<8;++k) optimizable[rCells[c][k]]=1;
+    for (int c : affected) {
+        for (int k=0;k<8;++k) {
+            optimizable[rCells[c][k]]=1;
+        }
+    }
 
     // Smoothing neighbours: core-boundary points average their core
     // neighbours; duplicate points average their duplicate-ring neighbours.
@@ -2587,16 +2769,26 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
         for (int c=0;c<static_cast<int>(rCells.size());++c)
             for (int k=0;k<8;++k) {
                 const int v=rCells[c][k];
-                if (!is_boundary[v]) continue;
-                for (int a=0;a<3;++a) s[v].insert(rCells[c][ADJ[k][a]]);
+                if (!is_boundary[v]) {
+                    continue;
+                }
+                for (int a=0;a<3;++a) {
+                    s[v].insert(rCells[c][ADJ[k][a]]);
+                }
             }
-        for (int i=0;i<NN;++i) smooth_nbr[i].assign(s[i].begin(), s[i].end());
+        for (int i=0;i<NN;++i) {
+            smooth_nbr[i].assign(s[i].begin(), s[i].end());
+        }
     }
 
     // Closest triangle / projection target for each duplicate node.
     std::vector<int> dup_tri(NN, -1);
     auto load_hex = [&](int c, double p[8][3]) {
-        for (int k=0;k<8;++k) for (int d=0;d<3;++d) p[k][d]=rNodes[rCells[c][k]][d];
+        for (int k=0;k<8;++k) {
+            for (int d=0;d<3;++d) {
+                p[k][d]=rNodes[rCells[c][k]][d];
+            }
+        }
     };
     for (int i=0;i<NN;++i) if (is_dup[i]) {
         double q[3]={0,0,0}; int tri=-1;
@@ -2647,9 +2839,14 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
         std::array<double,3> old = rNodes[v];
         rNodes[v] = {tgt[0],tgt[1],tgt[2]};
         for (int c : node_cells[v]) {
-            if (!affected_cell[c]) continue;
+            if (!affected_cell[c])  {
+                continue;
+            }
             double p[8][3]; load_hex(c,p);
-            if (ScaledJacobianMin(p) <= eps_sj) { rNodes[v]=old; return; }
+            if (ScaledJacobianMin(p) <= eps_sj) { 
+                rNodes[v]=old; 
+                return; 
+            }
         }
     };
     // One smoothing sweep: surface (duplicate) points smooth toward their
@@ -2662,8 +2859,14 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
         for (int v=0; v<NN; ++v) {
             if (!optimizable[v] || smooth_nbr[v].empty()) continue;
             double avg[3]={0,0,0};
-            for (int nb : smooth_nbr[v]) for (int d=0;d<3;++d) avg[d]+=rNodes[nb][d];
-            for (int d=0;d<3;++d) avg[d]/=smooth_nbr[v].size();
+            for (int nb : smooth_nbr[v]) {
+                for (int d=0;d<3;++d) {
+                    avg[d]+=rNodes[nb][d];
+                }
+            }
+            for (int d=0;d<3;++d) {
+                avg[d]/=smooth_nbr[v].size();
+            }
             if (is_dup[v]) {
                 double q[3]={0,0,0}; int tri=-1;
                 ClosestPointOnSoup(rTri, avg, q, tri);
@@ -2689,21 +2892,38 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
     //     raise the worst element, never degrade the converged mesh.
     auto global_min_sj = [&]() {
         double m = 1.0e30;
-        for (int c : affected) { double p[8][3]; load_hex(c, p); m = std::min(m, ScaledJacobianMin(p)); }
+        for (int r_c : affected) { 
+            double p[8][3]; load_hex(r_c, p); 
+            m = std::min(m, ScaledJacobianMin(p)); 
+        }
         return m;
     };
 
+    // Snapshot the best valid mesh so far, and its worst element.
     std::vector<std::array<double,3>> best_nodes = rNodes;
     double best_min_sj = global_min_sj();
     int drag_count = 0;
     int stall = 0;
+
+    KRATOS_INFO("ProjectToIsoSurface") << "Starting optimisation: " << affected.size()
+        << " affected hexes, " << NN << " nodes (" << dup_of.size() << " optimizable on "
+        << "the shell), initial worst scaled Jacobian " << best_min_sj
+        << ", gate eps_sj=" << eps_sj << ", target=" << EPS_TARGET << std::endl;
+
+    // Iterate: accumulate gradients, take a combined step, smooth, escalate the gate.
     for (int it = 1; it <= TotalIters; ++it) {
-        for (int i=0;i<NN;++i) { grad[i]={0,0,0}; gq[i]={0,0,0}; }
+        for (int i=0;i<NN;++i) { 
+            grad[i]={0,0,0}; 
+            gq[i]={0,0,0}; 
+        }
 
         int bad = 0;
-        for (int c : affected) {
-            double p[8][3]; load_hex(c, p);
-            if (ScaledJacobianMin(p) <= eps_sj) { ++bad; accumulate_quality_grad(c); }
+        for (int r_c : affected) {
+            double p[8][3]; load_hex(r_c, p);
+            if (ScaledJacobianMin(p) <= eps_sj) { 
+                ++bad; 
+                accumulate_quality_grad(r_c);
+            }
         }
         // Geometry-fitting attractor: always pull the duplicated shell onto the
         // input surface so escalation cannot strand it off the geometry.  Full
@@ -2715,29 +2935,55 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
             ClosestPointOnTriangle(rTri[dup_tri[i]][0].data(),
                 rTri[dup_tri[i]][1].data(), rTri[dup_tri[i]][2].data(),
                 rNodes[i].data(), q);
-            for (int d=0;d<3;++d) grad[i][d] += -w_attr*(rNodes[i][d]-q[d]);
+            for (int d=0;d<3;++d) {
+                grad[i][d] += -w_attr*(rNodes[i][d]-q[d]);
+            }
         }
-        for (int i=0;i<NN;++i) if (optimizable[i])
-            for (int d=0;d<3;++d) rNodes[i][d] += LR*grad[i][d] + LRQ*gq[i][d];
+        // Update optimizable nodes with a combined step of surface attraction and
+        // quality ascent.  The reference code does not normalise the gradients,
+        // so the relative magnitudes of LR and LRQ are tuned to the reference's
+        // 100-unit-normalised frame.
+        for (int i=0;i<NN;++i) {
+            if (optimizable[i]) {
+                for (int d=0;d<3;++d) {
+                    rNodes[i][d] += LR*grad[i][d] + LRQ*gq[i][d];
+                }
+            }
+        }
 
+        // Smoothing is gated by the current eps_sj: only accept a Laplacian move
+        // if it keeps every incident affected element above the gate.  The
+        // smoothing window is a fixed number of iterations, after which the gate
+        // is escalated if the mesh is valid, or backed off one step if the mesh
+        // has been invalid for too long.  The best valid mesh seen so far is
+        // snapshotted in best_nodes/best_min_sj and restored at the end.
         if (it % SmoothEvery == 0) {
-            smoothing_sweep();
+            smoothing_sweep(); // Smooth the shell and the core boundary, gated by eps_sj
 
             // Refresh closest triangles, find the duplicate sitting furthest
             // from the surface, and drag it on (ungated) so the shell keeps
             // closing onto the geometry where smoothing alone cannot.
             double max_dist = 0.0; int max_dist_node = -1;
-            for (int i=0;i<NN;++i) if (is_dup[i]) {
-                double q[3]={0,0,0}; int tri=-1;
-                const double d2 = ClosestPointOnSoup(rTri, rNodes[i].data(), q, tri);
-                dup_tri[i]=tri;
-                const double dd=std::sqrt(d2);
-                if (dd>max_dist) { max_dist=dd; max_dist_node=i; }
+            for (int i=0;i<NN;++i) {
+                if (is_dup[i]) {
+                    double q[3]={0,0,0}; 
+                    int tri=-1;
+                    const double d2 = ClosestPointOnSoup(rTri, rNodes[i].data(), q, tri);
+                    dup_tri[i]=tri;
+                    const double dd=std::sqrt(d2);
+                    if (dd>max_dist) { 
+                        max_dist=dd; max_dist_node=i; 
+                    }
+                }
             }
+            // Drag the worst duplicate onto the surface every 4 smoothing windows, but only if it is still off by more than TOL.
             if (max_dist_node >= 0 && max_dist >= TOL && (drag_count++ % 4 == 0)) {
-                double q[3]={0,0,0}; int tri=-1;
+                double q[3]={0,0,0}; 
+                int tri=-1;
                 ClosestPointOnSoup(rTri, rNodes[max_dist_node].data(), q, tri);
-                for (int d=0;d<3;++d) rNodes[max_dist_node][d] = q[d];
+                for (int d=0;d<3;++d) {
+                    rNodes[max_dist_node][d] = q[d];
+                }
             }
 
             // Snapshot the best valid mesh (worst element highest), then ramp
@@ -2746,27 +2992,51 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
             // the gate backs off one step so the remaining iterations settle at
             // the best reachable worst element.
             const double gmin = global_min_sj();
-            if (gmin > best_min_sj) { best_min_sj = gmin; best_nodes = rNodes; }
+            if (gmin > best_min_sj) {
+                best_min_sj = gmin; 
+                best_nodes = rNodes; 
+            }
             int bad_now = 0;
-            for (int c : affected) {
-                double p[8][3]; load_hex(c,p);
-                if (ScaledJacobianMin(p) <= eps_sj) { bad_now = 1; break; }
+            for (int r_c : affected) {
+                double p[8][3]; load_hex(r_c,p);
+                if (ScaledJacobianMin(p) <= eps_sj) { 
+                    bad_now = 1; 
+                    break; 
+                }
             }
             if (bad_now == 0) {
                 stall = 0;
-                if (eps_sj < EPS_TARGET) eps_sj = std::min(EPS_TARGET, eps_sj + EPS_STEP);
+                if (eps_sj < EPS_TARGET) {
+                    eps_sj = std::min(EPS_TARGET, eps_sj + EPS_STEP);
+                    KRATOS_INFO("ProjectToIsoSurface") << "  iter " << it << "/" << TotalIters
+                        << ": mesh valid, gate raised to eps_sj=" << eps_sj
+                        << " (worst scaled Jacobian=" << gmin << ", best=" << best_min_sj << ")" << std::endl;
+                }
             } else if (++stall >= STALL_MAX) {
                 eps_sj = std::max(0.01, eps_sj - EPS_STEP);  // back off one step
                 stall = 0;
+                KRATOS_INFO("ProjectToIsoSurface") << "  iter " << it << "/" << TotalIters
+                    << ": stalled, gate backed off to eps_sj=" << eps_sj
+                    << " (worst scaled Jacobian=" << gmin << ", best=" << best_min_sj << ")" << std::endl;
             }
         }
     }
 
     // Restore the best valid mesh found during escalation.
-    if (global_min_sj() < best_min_sj) rNodes = best_nodes;
+    if (global_min_sj() < best_min_sj) {
+        rNodes = best_nodes;
+        KRATOS_INFO("ProjectToIsoSurface") << "Restoring best snapshot (worst scaled Jacobian " << best_min_sj << ")" << std::endl;
+    }
 
     // --- 5. Undo the normalisation --------------------------------------
-    for (auto& nd : rNodes) for (int d=0; d<3; ++d) nd[d] = nd[d]/S + lo[d];
+    for (auto& r_nd : rNodes) {
+        for (int d=0; d<3; ++d) {
+            r_nd[d] = r_nd[d]/S + lo[d];
+        }
+    }
+
+    KRATOS_INFO("ProjectToIsoSurface") << "Finished: final worst scaled Jacobian=" << best_min_sj << ", gate eps_sj=" << eps_sj << std::endl;
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
@@ -2778,6 +3048,7 @@ void OctreeHybridMeshUtility::WriteHexVtk(
     const std::vector<std::array<int,8>>& rCells,
     const std::vector<int>& rCellLevel)
 {
+    KRATOS_TRY
     std::ofstream f(rFilename);
     KRATOS_ERROR_IF_NOT(f.is_open())
         << "OctreeHybridMeshUtility::WriteHexVtk: cannot open '"
@@ -2822,6 +3093,7 @@ void OctreeHybridMeshUtility::WriteHexVtk(
           << "SCALARS level int 1\nLOOKUP_TABLE default\n";
         for (int lv : rCellLevel) f << lv << '\n';
     }
+    KRATOS_CATCH("")
 }
 
 } // namespace Kratos

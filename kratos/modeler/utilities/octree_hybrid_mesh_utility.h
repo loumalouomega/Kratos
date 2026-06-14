@@ -714,7 +714,28 @@ public:
     /**
      * @brief Meshes the buffer zone and fits the carved core mesh to the input
      *        surface with Jacobian control — port of HexGen.cpp::ProjectToIsoSurface.
-     *
+     * @details The algorithm proceeds in five stages:
+     *   -# Normalise @p rNodes and @p rTriangles to a 100-unit bounding box (the
+     *      frame the optimisation constants below are calibrated for); the
+     *      transform is undone on exit.
+     *   -# Find the boundary quad faces of the core mesh, i.e. those owned by
+     *      exactly one hex. If none exist the core mesh is already watertight
+     *      and the function returns without modifying it.
+     *   -# Duplicate every boundary node and build one buffer hex per boundary
+     *      face (tagged with level -2) connecting the duplicates to the
+     *      original core nodes, oriented so its outward normal points away
+     *      from the owning core cell.
+     *   -# Determine the affected hexes (buffer hexes plus core hexes touching
+     *      the boundary) and the optimisable nodes (their corners), then run
+     *      the gradient/smoothing optimisation loop: each iteration accumulates
+     *      a scaled-Jacobian quality gradient on sub-threshold hexes and a
+     *      surface-attraction gradient on the duplicated shell, applies a
+     *      combined step, and every @p SmoothEvery iterations performs a
+     *      Jacobian-gated Laplacian smoothing pass that progressively
+     *      escalates the quality gate (`eps_sj`) toward 0.50, backing off if
+     *      the mesh stalls. The best valid mesh seen is kept and restored at
+     *      the end.
+     *   -# Undo the normalisation from stage 1.
      * @param rTriangles   Input surface triangles (world coordinates).
      * @param rNodes       Core-mesh nodes; duplicate shell nodes are appended.
      * @param rCells       Core hexes; buffer hexes are appended.

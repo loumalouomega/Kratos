@@ -669,9 +669,7 @@ void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementPara
             OctreeHybridMeshUtility::ClearBufferZone(r_data.mNodes, r_data.mCells, r_data.mCellLevel);
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
 
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0)
-                << "Projecting to iso-surface starting (" << r_data.mProjectionIterations
-                << " iterations, smoothing every " << r_data.mProjectionSmoothing << " iterations)" << std::endl;
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface starting (" << r_data.mProjectionIterations << " iterations, smoothing every " << r_data.mProjectionSmoothing << " iterations)" << std::endl;
             OctreeHybridMeshUtility::ProjectToIsoSurface(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mProjectionIterations, r_data.mProjectionSmoothing);
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface finished" << std::endl;
             r_data.mProjected = true;
