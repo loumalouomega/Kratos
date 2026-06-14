@@ -117,9 +117,16 @@ public:
     ///@name Type Definitions
     ///@{
 
+    /// The octree configuration type used by the HybridOctree_Hex reference code.
     using ConfigurationType = OctreeHybridKratosConfiguration;
+
+    /// The octree cell type used by the HybridOctree_Hex reference code.
     using CellType          = OctreeHybridCell<ConfigurationType>;
+
+    /// The octree type used by the HybridOctree_Hex reference code.
     using OctreeType        = OctreeHybrid<CellType>;
+
+    /// The octree's point type (3D world coordinates).
     using GeometryType      = Geometry<Node>;
 
     /// A flat list of surface triangles in world coordinates: one entry per
@@ -177,7 +184,8 @@ public:
         ModelPart& rSurfaceMesh,
         std::size_t RefinementDepth,
         bool Adaptive = true,
-        const BoundingBox<Point>* pOverrideBoundingBox = nullptr);
+        const BoundingBox<Point>* pOverrideBoundingBox = nullptr
+        );
 
     /**
      * @brief Builds an OctreeHybrid using the reference HybridOctree_Hex **adaptive**
@@ -211,13 +219,14 @@ public:
     static std::unique_ptr<OctreeType> BuildAdaptiveFromSurfaceMesh(
         ModelPart& rSurfaceMesh,
         std::size_t RefinementDepth,
-        const BoundingBox<Point>* pOverrideBoundingBox = nullptr);
+        const BoundingBox<Point>* pOverrideBoundingBox = nullptr
+        );
 
     /**
      * @brief Extracts the **dual hex mesh** (the proper HybridOctree_Hex output)
      *        into in-memory node/cell arrays.
      *
-     * The octree must already be strongly 2:1-balanced (call
+     * @details The octree must already be strongly 2:1-balanced (call
      * @ref OctreeHybrid::StrongConstrain2To1 first).
      *
      * @param rOctree     Octree (bounding box must be set, already 2:1-balanced).
@@ -231,7 +240,8 @@ public:
         OctreeType& rOctree,
         std::vector<std::array<double,3>>& rNodes,
         std::vector<std::array<int,8>>& rCells,
-        std::vector<int>& rCellLevel);
+        std::vector<int>& rCellLevel
+        );
 
     /**
      * @brief Collects the surface triangles of @p rSurfaceMesh as a world-space
@@ -272,13 +282,14 @@ public:
     static std::vector<const GeometryType*> ResolveInputEntityGeometries(
         const ModelPart& rModelPart,
         const std::string& rInputEntities,
-        const std::string& rCallerName);
+        const std::string& rCallerName
+        );
 
     /**
      * @brief Extracts the **primal (leaf-hex) mesh** plus the hanging-node
      *        master-slave constraints at 2:1 transitions.
      *
-     * The primal mesh has one hexahedron per octree leaf, with shared
+     * @details The primal mesh has one hexahedron per octree leaf, with shared
      * finest-grid corner nodes.  It is **non-conforming** at every 2:1
      * interface where a coarse face touches four finer faces.  The hanging
      * nodes that lie on those coarse faces are tied to the face's four
@@ -300,7 +311,8 @@ public:
         std::vector<std::array<double,3>>& rNodes,
         std::vector<std::array<int,8>>&   rCells,
         std::vector<int>&                 rCellLevel,
-        std::vector<HangingConstraint>&   rHanging);
+        std::vector<HangingConstraint>&   rHanging
+        );
 
     /**
      * @brief Balances the octree, extracts the dual hex mesh, optionally carves
@@ -320,15 +332,18 @@ public:
         const TriangleSoup* pTriangles = nullptr,
         bool Project = false,
         int ProjIters = 20000,
-        int ProjSmooth = 1000);
+        int ProjSmooth = 1000
+        );
 
     /**
      * @brief Writes the raw primal octree cells as (non-conforming) hexahedra.
-     *
-     * Useful for debugging and for direct octree visualisation.
+     * @details Useful for debugging and for direct octree visualisation.
      * The cell-data field "level" encodes each cell's refinement level.
      */
-    static void WritePrimalVtk(OctreeType& rOctree, const std::string& rFilename);
+    static void WritePrimalVtk(
+        OctreeType& rOctree, 
+        const std::string& rFilename
+        );
 
     /**
      * @brief Convenience wrapper: builds the octree and writes the uncarved dual hex mesh.
@@ -344,7 +359,8 @@ public:
         ModelPart& rSurfaceMesh,
         const std::string& rVtkFilename,
         std::size_t RefinementDepth = 5,
-        bool Adaptive = true);
+        bool Adaptive = true
+        );
 
     /**
      * @brief Builds the octree, extracts the dual hex mesh, carves away exterior
@@ -359,12 +375,16 @@ public:
         ModelPart& rSurfaceMesh,
         const std::string& rVtkFilename,
         std::size_t RefinementDepth = 5,
-        bool Adaptive = true);
+        bool Adaptive = true
+        );
 
     /**
      * @brief Builds the octree, carves the dual block, and then **fits it to the
      *        input surface with Jacobian control** before writing.
-     *
+     * @details The projection stage is the same as @ref WriteDualHexVtk with
+     *          `Project = true`.  The resulting mesh is conforming, closed, and
+     *          manifold, with no T-junctions or template overlaps.  The projection
+     *          is iterative and may take several minutes for a large mesh.
      * @param rSurfaceMesh     Surface ModelPart (from StlIO).
      * @param rVtkFilename     Output .vtk path.
      * @param RefinementDepth  Maximum refinement depth (default 5).
@@ -377,17 +397,27 @@ public:
         std::size_t RefinementDepth = 5,
         int ProjIters = 20000,
         int ProjSmooth = 1000,
-        bool Adaptive = true);
+        bool Adaptive = true
+        );
 
     /**
      * @brief Debug/validation helper: writes the strongly-balanced octree leaves
      *        in the exact VTK format the reference HybridOctree_Hex expects from
      *        its `ReadOctree`.
+     @details The output is a legacy ASCII VTK file with one hexahedron per leaf cell,
+     *          keyed by its integer grid coordinates at the finest level.  The
+     *          cell-data field "level" encodes each cell's refinement level.  The
+     *          output can be read by the reference code to verify that the octree
+     *          built here matches the reference's own octree construction.
+     * @param rSurfaceMesh     Surface ModelPart (from StlIO).
+     * @param rFilename        Output .vtk path.
+     * @param RefinementDepth  Maximum refinement depth (default 5).
      */
     static void WriteOctreeForReference(
         ModelPart& rSurfaceMesh,
         const std::string& rFilename,
-        std::size_t RefinementDepth);
+        std::size_t RefinementDepth
+        );
 
     ///@}
     ///@name Octree refinement
@@ -410,13 +440,16 @@ public:
      * @param TargetDepth The minimum leaf depth to reach.  Cells at this depth
      *                    are not subdivided further.
      */
-    static void RefineAllCells(OctreeType& rOctree, std::size_t TargetDepth);
+    static void RefineAllCells(
+        OctreeType& rOctree, 
+        std::size_t TargetDepth
+        );
 
     /**
      * @brief Refines octree cells that contain surface-triangle vertices to at
      *        least @p TargetDepth, approximating the interface geometry.
      *
-     * For every vertex in @p rTriangles the method normalises the world-space
+     * @details For every vertex in @p rTriangles the method normalises the world-space
      * coordinates and, for each level 0 … @p TargetDepth-1, computes the
      * integer grid coordinates of the enclosing cell and subdivides that cell if
      * it is still a leaf.  This drives refinement along the paths from the root
@@ -440,7 +473,8 @@ public:
     static void RefineInterfaceCells(
         OctreeType&         rOctree,
         const TriangleSoup& rTriangles,
-        std::size_t         TargetDepth);
+        std::size_t         TargetDepth
+        );
 
     /**
      * @brief Converts a desired world-space element size to an equivalent octree depth.
@@ -481,40 +515,48 @@ public:
      * @param b Second point (array of 3 doubles).
      * @return (a[i]-b[i])^2 summed over i=0,1,2.
      */
-    static double SqDist(const double a[3], const double b[3]);
-
-    /**
-     * @brief Triangle area from its three edge lengths (Heron's formula, clamped to ≥ 0).
-     * @param a Length of the first edge.
-     * @param b Length of the second edge.
-     * @param c Length of the third edge.
-     * @return Non-negative area; returns 0 when the triangle is degenerate.
-     */
-    static double TriArea(double a, double b, double c);
+    static double SqDist(
+        const double a[3], 
+        const double b[3]
+        );
 
     /**
      * @brief Ray/triangle intersection (port of HexGen.cpp::Intersect).
-     *
+     * @param a ,b,c  Triangle vertices (world coordinates).
+     * @param p       Ray origin (world coordinates).
+     * @param dir     Ray direction (world coordinates).
      * @param[out] e      intersection point (when the return value is 1).
      * @param[out] alpha  ray parameter at the intersection.
      * @return 1 if the ray hits strictly inside the triangle; 0 if it misses;
      *         -1 if the ray is parallel to the plane or grazes an edge/vertex.
      */
     static int TriRayIntersect(
-        const double a[3], const double b[3], const double c[3],
-        const double p[3], const double dir[3], double e[3], double& alpha);
+        const double a[3], 
+        const double b[3], 
+        const double c[3],
+        const double p[3], 
+        const double dir[3], 
+        double e[3], 
+        double& alpha
+        );
 
     /**
      * @brief Unsigned distance from point @p p to triangle (@p a,@p b,@p c)
      *        (port of HexGen.cpp::PointToTri).
-     *
-     * Returns the perpendicular plane distance when the foot of the perpendicular
+     * @details Returns the perpendicular plane distance when the foot of the perpendicular
      * lies inside the triangle, otherwise the distance to the nearest edge or
      * vertex.  Early-outs when that already exceeds @p currMin.
+     * @param a,b,c  Triangle vertices (world coordinates).
+     * @param p      Point to measure distance from (world coordinates).
+     * @param currMin  Current minimum distance (used for early-out).
      */
     static double PointToTri(
-        const double a[3], const double b[3], const double c[3],
-        const double p[3], double currMin);
+        const double a[3], 
+        const double b[3], 
+        const double c[3],
+        const double p[3], 
+        double currMin
+        );
 
     /**
      * @brief Carves hexes lying outside the surface (reference stage 4,
@@ -527,12 +569,15 @@ public:
      * @param rNodes      Hex node coordinates (world space); read-only.
      * @param rCells      [in/out] Hex connectivity; compacted after carving.
      * @param rCellLevel  [in/out] Per-cell level tags; compacted in parallel with @p rCells.
+     * @param EchoLevel   Verbosity level (0 = silent, otherwise = non-silent).
      */
     static void RemoveOutsideElement(
         const TriangleSoup& rTriangles,
         const std::vector<std::array<double,3>>& rNodes,
         std::vector<std::array<int,8>>& rCells,
-        std::vector<int>& rCellLevel);
+        std::vector<int>& rCellLevel,
+        const int EchoLevel = 0
+        );
 
     /**
      * @brief Classifies every hex cell as inside (1) or outside (0) the surface.
@@ -549,17 +594,20 @@ public:
         const TriangleSoup& rTriangles,
         const std::vector<std::array<double,3>>& rNodes,
         const std::vector<std::array<int,8>>& rCells,
-        std::vector<int>& rCellColor);
+        std::vector<int>& rCellColor
+        );
 
     /**
      * @brief Per-node signed distance to the surface (negative outside).
-     *
-     * Sign from ray-cast crossing parity (odd crossings ⇒ inside), magnitude from
+     * @details Sign from ray-cast crossing parity (odd crossings ⇒ inside), magnitude from
      * the closest triangle.  Cost O(#nodes · #triangles); computed in parallel.
+     * @param rTriangles  Input surface triangle soup (world coordinates).
+     * @param rNodes      Hex node coordinates (world space); read-only.
      */
     static std::vector<double> ComputeNodeSignedDistance(
         const TriangleSoup& rTriangles,
-        const std::vector<std::array<double,3>>& rNodes);
+        const std::vector<std::array<double,3>>& rNodes
+        );
 
     /**
      * @brief Keep test for a carved hex: at most two outside corners and a small
@@ -577,7 +625,8 @@ public:
      */
     static bool KeepCarvedCell(
         const std::array<int,8>& rCell,
-        const std::vector<double>& rSignedDist);
+        const std::vector<double>& rSignedDist
+        );
 
     /**
      * @brief Minimum scaled Jacobian over a hex's body centre and 8 corners
@@ -614,7 +663,11 @@ public:
      * @param e2 Third edge vector (length 3).
      * @return   Scalar triple product.
      */
-    static double TripleProduct(const double e0[3], const double e1[3], const double e2[3]);
+    static double TripleProduct(
+        const double e0[3], 
+        const double e1[3], 
+        const double e2[3]
+        );
 
     /**
      * @brief Builds the edge triple of a hex at a specified evaluation point.
@@ -628,8 +681,13 @@ public:
      * @param e1      [out] Second edge vector.
      * @param e2      [out] Third edge vector.
      */
-    static void HexEdgeTriple(const double p[8][3], int corner,
-                              double e0[3], double e1[3], double e2[3]);
+    static void HexEdgeTriple(
+        const double p[8][3], 
+        int corner,
+        double e0[3], 
+        double e1[3], 
+        double e2[3]
+        );
 
     /**
      * @brief Closest point on a triangle to a query point (Ericson, RTCD §5.1.5).
@@ -643,8 +701,12 @@ public:
      * @param q  [out] Closest point on the triangle to @p p (length 3).
      */
     static void ClosestPointOnTriangle(
-        const double a[3], const double b[3], const double c[3],
-        const double p[3], double q[3]);
+        const double a[3], 
+        const double b[3], 
+        const double c[3],
+        const double p[3], 
+        double q[3]
+        );
 
     /**
      * @brief Closest point on the whole triangle soup to a query point.
@@ -658,7 +720,11 @@ public:
      * @return      Squared distance from @p p to the closest point @p q.
      */
     static double ClosestPointOnSoup(
-        const TriangleSoup& rTri, const double p[3], double q[3], int& tri);
+        const TriangleSoup& rTri, 
+        const double p[3], 
+        double q[3], 
+        int& tri
+        );
 
     /**
      * @brief Extracts the boundary quad faces of a hex set.
@@ -671,8 +737,7 @@ public:
      *                node array).
      * @return        Vector of boundary face descriptors; one per boundary quad.
      */
-    static std::vector<std::array<int,5>> ExtractBoundaryFaces(
-        const std::vector<std::array<int,8>>& rCells);
+    static std::vector<std::array<int,5>> ExtractBoundaryFaces(const std::vector<std::array<int,8>>& rCells);
 
     /**
      * @brief Computes, for every (cell, local face) pair, the index of the
@@ -688,8 +753,7 @@ public:
      *                 sharing local face `f` of cell `c`, or `-1` if `f` lies on
      *                 the mesh boundary.
      */
-    static std::vector<std::array<int,6>> ComputeCellFaceNeighbors(
-        const std::vector<std::array<int,8>>& rCells);
+    static std::vector<std::array<int,6>> ComputeCellFaceNeighbors(const std::vector<std::array<int,8>>& rCells);
 
     /**
      * @brief Buffer-zone clearance — port of paper Section 2.3 hemisphere restriction.
@@ -704,12 +768,15 @@ public:
      * @param rCells      [in/out] Hex connectivity; offending hexes are erased.
      * @param rCellLevel  [in/out] Per-cell level tags; compacted in parallel with @p rCells.
      * @param MaxRounds   Maximum number of removal iterations (default 50).
+     * @param EchoLevel   Verbosity level (0 = silent, otherwise = non-silent).
      */
     static void ClearBufferZone(
         const std::vector<std::array<double,3>>& rNodes,
         std::vector<std::array<int,8>>& rCells,
         std::vector<int>& rCellLevel,
-        int MaxRounds = 50);
+        int MaxRounds = 50,
+        const int EchoLevel = 0
+        );
 
     /**
      * @brief Meshes the buffer zone and fits the carved core mesh to the input
@@ -742,6 +809,7 @@ public:
      * @param rCellLevel   Per-cell level tag; buffer hexes are tagged -2.
      * @param TotalIters   Total gradient iterations.
      * @param SmoothEvery  Iterations between smart-Laplacian/threshold updates.
+     * @param EchoLevel    Verbosity level (0 = silent, otherwise = non-silent).
      */
     static void ProjectToIsoSurface(
         const TriangleSoup& rTriangles,
@@ -749,17 +817,26 @@ public:
         std::vector<std::array<int,8>>& rCells,
         std::vector<int>& rCellLevel,
         int TotalIters,
-        int SmoothEvery);
+        int SmoothEvery,
+        const int EchoLevel = 0
+        );
 
     /**
      * @brief Writes a hex mesh to a legacy ASCII VTK file, compacting away any
      *        nodes not referenced by a cell.
+     * @details The output is a legacy ASCII VTK file with one hexahedron per cell,
+     *          keyed by its 8 corner node indices.  The cell-data field "level" encodes each cell's refinement level.  The output can be read by the reference code to verify that the octree built here matches the reference's own octree construction.
+     * @param rFilename   Output .vtk path.
+     * @param rNodes      Hex node coordinates (world space); read-only.
+     * @param rCells      Hexahedra connectivity (indices into @p rNodes); read-only.
+     * @param rCellLevel  Per-cell refinement level (leaf level); read-only.
      */
     static void WriteHexVtk(
         const std::string& rFilename,
         const std::vector<std::array<double,3>>& rNodes,
         const std::vector<std::array<int,8>>& rCells,
-        const std::vector<int>& rCellLevel);
+        const std::vector<int>& rCellLevel
+        );
 
     ///@}
 };

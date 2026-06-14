@@ -101,18 +101,6 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilitySqDistSamePoint, KratosCoreFast
     KRATOS_EXPECT_DOUBLE_EQ(Util::SqDist(p, p), 0.0);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityTriAreaEquilateral, KratosCoreFastSuite)
-{
-    // Equilateral triangle with side length 2: area = sqrt(3) ≈ 1.73205
-    KRATOS_EXPECT_NEAR(Util::TriArea(2.0, 2.0, 2.0), std::sqrt(3.0), 1e-10);
-}
-
-KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityTriAreaDegenerate, KratosCoreFastSuite)
-{
-    // Collinear: a+b=c → Heron gives 0 (clamped ≥ 0)
-    KRATOS_EXPECT_NEAR(Util::TriArea(1.0, 1.0, 2.0), 0.0, 1e-12);
-}
-
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityTriRayIntersectHitsCenter, KratosCoreFastSuite)
 {
     // Triangle in XY plane: a=(0,0,0), b=(2,0,0), c=(0,2,0)

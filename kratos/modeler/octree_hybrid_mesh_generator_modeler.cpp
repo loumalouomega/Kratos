@@ -662,15 +662,15 @@ void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementPara
         // If projection to surface is on and we have a triangle soup, remove outside elements, clear the buffer zone, and project to the surface.
         if (r_data.mProjectToSurface && !r_data.mTriangles.empty()) {
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing outside elements starting (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
-            OctreeHybridMeshUtility::RemoveOutsideElement(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+            OctreeHybridMeshUtility::RemoveOutsideElement(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, mEchoLevel);
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing outside elements finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
 
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone starting (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
-            OctreeHybridMeshUtility::ClearBufferZone(r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+            OctreeHybridMeshUtility::ClearBufferZone(r_data.mNodes, r_data.mCells, r_data.mCellLevel, mEchoLevel);
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
 
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface starting (" << r_data.mProjectionIterations << " iterations, smoothing every " << r_data.mProjectionSmoothing << " iterations)" << std::endl;
-            OctreeHybridMeshUtility::ProjectToIsoSurface(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mProjectionIterations, r_data.mProjectionSmoothing);
+            OctreeHybridMeshUtility::ProjectToIsoSurface(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mProjectionIterations, r_data.mProjectionSmoothing, mEchoLevel);
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface finished" << std::endl;
             r_data.mProjected = true;
         }
