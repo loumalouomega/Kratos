@@ -439,20 +439,24 @@ void OctreeHybridMeshGeneratorModeler::Dispatch(
             // If the model part is not in the map, we add it and we calculate the start ids, otherwise we just update the start ids for the elements, conditions and constraints (the nodes are not updated because they are generated first and we want to keep the same start node id for all the entity generations of the same model part)
             if (it_find == start_ids.end()) {
                 auto& r_ids = start_ids[r_root_model_part.Name()];
-                r_ids[0] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Nodes(), [](Node& rNode) {
+                const std::size_t max_node_id = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Nodes(), [](Node& rNode) {
                     return rNode.Id();
                 });
+                r_ids[0] = max_node_id > 0 ? max_node_id + 1 : 0;
             }
             auto& r_ids = start_ids[r_root_model_part.Name()];
-            r_ids[1] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Elements(), [](Element& rElement) {
+            const std::size_t max_element_id = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Elements(), [](Element& rElement) {
                 return rElement.Id();
             });
-            r_ids[2] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Conditions(), [](Condition& rCondition) {
+            r_ids[1] = max_element_id > 0 ? max_element_id + 1 : 0;
+            const std::size_t max_condition_id = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.Conditions(), [](Condition& rCondition) {
                 return rCondition.Id();
             });
-            r_ids[3] = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.MasterSlaveConstraints(), [](MasterSlaveConstraint& rConstraint) {
+            r_ids[2] = max_condition_id > 0 ? max_condition_id + 1 : 0;
+            const std::size_t max_constraint_id = block_for_each<MaxReduction<std::size_t>>(r_root_model_part.MasterSlaveConstraints(), [](MasterSlaveConstraint& rConstraint) {
                 return rConstraint.Id();
             });
+            r_ids[3] = max_constraint_id > 0 ? max_constraint_id + 1 : 0;
 
             // Set the initial node id
             if (default_parameters.Has("initial_node_id") && r_ids[0] > 0) {
