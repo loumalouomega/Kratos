@@ -648,20 +648,32 @@ void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementPara
         << "OctreeHybridMeshGeneratorModeler: no octree was built." << std::endl;
 
     // Ensure the octree is 2:1 balancing + mesh extraction.
-    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Ensuring the octree is 2-to-1 conforming starting" << std::endl;
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Ensuring the octree is 2-to-1 conforming starting (leaf cells: " << r_data.mpOctree->GetLeafCount() << ")" << std::endl;
     r_data.mpOctree->StrongConstrain2To1();
-    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Ensuring the octree is 2-to-1 conforming finished" << std::endl;
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Ensuring the octree is 2-to-1 conforming finished (leaf cells: " << r_data.mpOctree->GetLeafCount() << ")" << std::endl;
 
     // If we consider a dual mesh, the elements are defined by the octree nodes.  If we consider a primal mesh, the elements are defined by the octree cells and the hanging nodes are stored as constraints.
     if (r_data.mMeshType == "dual") {
         // Extract the dual mesh, which is fully conforming with transition templates and no hanging nodes.  Projection settings are fixed at octree build time and must not be changed by subsequent refinement entries in the list.
+        KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Extracting dual hexahedral mesh starting" << std::endl;
         OctreeHybridMeshUtility::ExtractDualHexMesh(*r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+        KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Extracting dual hexahedral mesh finished: " << r_data.mNodes.size() << " nodes, " << r_data.mCells.size() << " hexahedra" << std::endl;
 
         // If projection to surface is on and we have a triangle soup, remove outside elements, clear the buffer zone, and project to the surface.
         if (r_data.mProjectToSurface && !r_data.mTriangles.empty()) {
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing outside elements starting (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
             OctreeHybridMeshUtility::RemoveOutsideElement(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing outside elements finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
+
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone starting (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
             OctreeHybridMeshUtility::ClearBufferZone(r_data.mNodes, r_data.mCells, r_data.mCellLevel);
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
+
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0)
+                << "Projecting to iso-surface starting (" << r_data.mProjectionIterations
+                << " iterations, smoothing every " << r_data.mProjectionSmoothing << " iterations)" << std::endl;
             OctreeHybridMeshUtility::ProjectToIsoSurface(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mProjectionIterations, r_data.mProjectionSmoothing);
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface finished" << std::endl;
             r_data.mProjected = true;
         }
     } else if (r_data.mMeshType == "primal") { // If we consider a primal mesh, the elements are defined by the octree cells and the hanging nodes are stored as constraints.
@@ -735,6 +747,10 @@ void OctreeHybridMeshGeneratorModeler::BuildOctree(Parameters BuildParameters)
         BuildParameters["refinement_depth"].GetInt(),
         BuildParameters["adaptive"].GetBool(),
         p_bounding_box_override);
+
+    KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0)
+        << "Octree built: " << r_data.mpOctree->GetLeafCount() << " leaf cells, depth "
+        << r_data.mpOctree->GetDepth() << "." << std::endl;
 
     // Mesh-type and projection settings are fixed at octree construction and must not be
     // overwritten by subsequent refinement entries in the list.
