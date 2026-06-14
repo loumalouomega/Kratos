@@ -199,6 +199,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyIncreasesLeafCo
     modeler.GetData().mCells.clear();
     modeler.GetData().mNodes.clear();
     modeler.GetData().mCellLevel.clear();
+    uniform_op.ValidateParameters(p);
     uniform_op.Refine(modeler, p);
 
     KRATOS_EXPECT_GE(modeler.GetData().mpOctree->GetLeafCount(), leaves_before);
@@ -216,6 +217,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefineDirectlyAutoBuildsOctre
         "refinement_depth"  : 3,
         "max_voxel_size"    : 0.0
     })");
+    op.ValidateParameters(p);
     op.Refine(modeler, p);
 
     KRATOS_EXPECT_TRUE(modeler.GetData().mpOctree != nullptr);
@@ -256,6 +258,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefineDirectlyIncrease
         "refined_cell_size"     : 0.0,
         "model_part_name"       : ""
     })");
+    interface_op.ValidateParameters(p);
     interface_op.Refine(modeler, p);
 
     KRATOS_EXPECT_GE(modeler.GetData().mpOctree->GetLeafCount(), leaves_before);
