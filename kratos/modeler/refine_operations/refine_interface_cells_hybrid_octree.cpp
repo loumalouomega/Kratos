@@ -55,15 +55,14 @@ void RefineInterfaceCellsOctreeHybrid::Refine(
 
     // If no octree exists yet, build it now using this entry's settings
     // (refinement_depth, adaptive, mesh_type, project_to_surface, model_part_name, ...).
-    // The octree is built exactly once; every subsequent entry to this Refine method
-    // adds deeper refinement without rebuilding from scratch.
+    // The octree is built exactly once; every entry to this Refine method (including
+    // this first one) then proceeds to apply its own interface refinement below.
     if (!r_data.mpOctree) {
         rModeler.EnsureOctreeBuilt(RefineParameters);
-        return;
     }
 
-    // Subsequent calls: selectively subdivide cells near the interface at a finer
-    // level.  refined_cell_size takes priority over refinement_depth when set (> 0).
+    // Selectively subdivide cells near the interface at a finer level.
+    // refined_cell_size takes priority over refinement_depth when set (> 0).
     const double refined_cell_size = RefineParameters["refined_cell_size"].GetDouble();
     const std::size_t target_depth = (refined_cell_size > 0.0)
         ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, refined_cell_size, false)
