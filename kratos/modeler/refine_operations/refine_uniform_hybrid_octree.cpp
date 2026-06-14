@@ -28,7 +28,8 @@ const Parameters RefineUniformOctreeHybrid::GetDefaultParameters() const
         "type"             : "RefineUniformOctreeHybrid",
         "refinement_depth" : 5,
         "model_part_name"  : "Undefined", // NOTE: Only used if the octree has not been built yet (see EnsureOctreeBuilt).
-        "max_voxel_size"   : 0.0
+        "max_voxel_size"   : 0.0,
+        "echo_level"       : 1
     })");
 }
 
@@ -37,8 +38,13 @@ const Parameters RefineUniformOctreeHybrid::GetDefaultParameters() const
 
 void RefineUniformOctreeHybrid::Refine(
     OctreeHybridMeshGeneratorModeler& rModeler,
-    Parameters RefineParameters) const
+    Parameters RefineParameters
+    ) const
 {
+    // Get the echo level for this operation (default 1) and override the modeler's echo level if set.
+    const int echo_level = RefineParameters["echo_level"].GetInt();
+
+    // If no octree exists yet, build it now using this entry's settings
     Internals::OctreeHybridMesherData& r_data = rModeler.GetData();
 
     // If no octree exists yet, build it now using this entry's settings
@@ -56,6 +62,10 @@ void RefineUniformOctreeHybrid::Refine(
         ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, max_voxel_size, false)
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
 
+    KRATOS_INFO_IF("RefineUniformOctreeHybrid", echo_level > 0 && max_voxel_size > 0.0)
+        << "RefineUniformOctreeHybrid: max_voxel_size=" << max_voxel_size
+        << " corresponds to refinement depth " << target_depth << "." << std::endl;
+
     // OctreeType is constructed with a fixed maximum depth at build time.  If
     // the requested depth exceeds that limit, extend the internal grid tables
     // to the new depth without discarding the subdivision performed so far.
@@ -63,6 +73,7 @@ void RefineUniformOctreeHybrid::Refine(
         r_data.mpOctree->IncreaseDepth(target_depth);
     }
 
+    // Subdivide all cells to the requested depth.  This is a no-op for any cell that has already been subdivided to the requested depth or deeper, so it is safe to call this multiple times with the same or increasing depth without rebuilding the octree.
     OctreeHybridMeshUtility::RefineAllCells(*r_data.mpOctree, target_depth);
 }
 
