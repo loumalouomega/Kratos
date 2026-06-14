@@ -20,8 +20,8 @@
 #include "modeler/refine_operations/refine_interface_cells_hybrid_octree.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
 #include "modeler/coloring/octree_hybrid_color_cells_with_inside_center.h"
-#include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
-#include "modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_hexahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_quadrilateral_conditions_with_face_color.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
 #include "modeler/operation/octree_hybrid_find_contacts_in_skin_model_part.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
@@ -183,19 +183,19 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterInfoReturnsBaseC
 }
 
 // ===========================================================================
-// GenerateHybridOctreeHexahedraElementsWithCellColor — GetDefaultParameters / Info
+// GenerateOctreeHybridHexahedraElementsWithCellColor — GetDefaultParameters / Info
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefaultParametersTypeKey, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridHexahedraElementsWithCellColorDefaultParametersTypeKey, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    GenerateOctreeHybridHexahedraElementsWithCellColor op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateHybridOctreeHexahedraElementsWithCellColor"});
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateOctreeHybridHexahedraElementsWithCellColor"});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefaultParametersAllKeys, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridHexahedraElementsWithCellColorDefaultParametersAllKeys, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    GenerateOctreeHybridHexahedraElementsWithCellColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
     KRATOS_EXPECT_TRUE(p.Has("color"));
@@ -210,9 +210,9 @@ KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefa
     KRATOS_EXPECT_TRUE(p.Has("echo_level"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefaultParametersDefaults, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridHexahedraElementsWithCellColorDefaultParametersDefaults, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    GenerateOctreeHybridHexahedraElementsWithCellColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
     KRATOS_EXPECT_EQ(p["color"].GetInt(), 1);
@@ -227,26 +227,26 @@ KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorDefa
     KRATOS_EXPECT_EQ(p["echo_level"].GetInt(), 0);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeHexahedraElementsWithCellColorInfoReturnsBaseClassName, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridHexahedraElementsWithCellColorInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    GenerateOctreeHybridHexahedraElementsWithCellColor op;
     KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherEntityGeneration"});
 }
 
 // ===========================================================================
-// GenerateHybridOctreeQuadrilateralConditionsWithFaceColor — GetDefaultParameters / Info
+// GenerateOctreeHybridQuadrilateralConditionsWithFaceColor — GetDefaultParameters / Info
 // ===========================================================================
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorDefaultParametersTypeKey, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridQuadrilateralConditionsWithFaceColorDefaultParametersTypeKey, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
+    GenerateOctreeHybridQuadrilateralConditionsWithFaceColor op;
     Parameters p = op.GetDefaultParameters();
-    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor"});
+    KRATOS_EXPECT_EQ(p["type"].GetString(), std::string{"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor"});
 }
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorDefaultParametersAllKeys, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridQuadrilateralConditionsWithFaceColorDefaultParametersAllKeys, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
+    GenerateOctreeHybridQuadrilateralConditionsWithFaceColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("model_part_name"));
     KRATOS_EXPECT_TRUE(p.Has("color"));
@@ -260,9 +260,9 @@ KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceCol
     KRATOS_EXPECT_TRUE(p.Has("echo_level"));
 }
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorDefaultParametersDefaults, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridQuadrilateralConditionsWithFaceColorDefaultParametersDefaults, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
+    GenerateOctreeHybridQuadrilateralConditionsWithFaceColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_EQ(p["model_part_name"].GetString(), std::string{"Undefined"});
     KRATOS_EXPECT_EQ(p["color"].GetInt(), 1);
@@ -276,9 +276,9 @@ KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceCol
     KRATOS_EXPECT_EQ(p["echo_level"].GetInt(), 0);
 }
 
-KRATOS_TEST_CASE_IN_SUITE(GenerateHybridOctreeQuadrilateralConditionsWithFaceColorInfoReturnsBaseClassName, KratosCoreFastSuite)
+KRATOS_TEST_CASE_IN_SUITE(GenerateOctreeHybridQuadrilateralConditionsWithFaceColorInfoReturnsBaseClassName, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeQuadrilateralConditionsWithFaceColor op;
+    GenerateOctreeHybridQuadrilateralConditionsWithFaceColor op;
     KRATOS_EXPECT_EQ(op.Info(), std::string{"OctreeHybridMesherEntityGeneration"});
 }
 

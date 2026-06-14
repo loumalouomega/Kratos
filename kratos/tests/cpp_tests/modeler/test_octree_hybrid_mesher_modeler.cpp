@@ -32,9 +32,9 @@
 #include "modeler/coloring/octree_hybrid_color_outer_cell_faces.h"
 #include "modeler/coloring/octree_hybrid_color_cells_in_bounding_box.h"
 #include "modeler/coloring/octree_hybrid_color_cells_faces_in_bounding_box.h"
-#include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
-#include "modeler/entity_generation/generate_hybrid_octree_tetrahedra_elements_with_cell_color.h"
-#include "modeler/entity_generation/generate_hybrid_octree_triangular_conditions_with_face_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_hexahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_tetrahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_triangular_conditions_with_face_color.h"
 
 namespace Kratos::Testing {
 
@@ -163,7 +163,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerDualElementsCreated, K
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -183,7 +183,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerDualZeroInverted, Krat
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -207,7 +207,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerDualCarveBbox, KratosC
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -243,7 +243,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerDualExplicitBoundingBo
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -279,7 +279,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerSetupModelPartBounding
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -322,7 +322,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerEmptyRefineListAutoBui
         "output_model_part_name" : "Output",
         "refinement_settings_list" : [],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -346,7 +346,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerRefineUniformFirstAuto
         "output_model_part_name" : "Output",
         "refinement_settings_list" : [{ "type": "RefineUniformOctreeHybrid", "refinement_depth": 4 }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -522,7 +522,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherClassifyReducesCellCount, KratosCore
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"O","color":1}],
         "model_part_operations":[]
     })";
@@ -531,7 +531,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherClassifyReducesCellCount, KratosCore
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"O","color":1}],
         "model_part_operations":[]
     })";
@@ -550,13 +550,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherClassifyRegistered, KratosCoreFastSu
 }
 
 // ===========================================================================
-// GenerateHybridOctreeHexahedraElementsWithCellColor entity generator
+// GenerateOctreeHybridHexahedraElementsWithCellColor entity generator
 // ===========================================================================
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesRegistered, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype"));
+        "OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridHexahedraElementsWithCellColor.Prototype"));
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesNodeDeduplication, KratosCoreFastSuite)
@@ -569,7 +569,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesNodeDeduplication, Krat
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -591,7 +591,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesRefinementLevelTagged, 
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1,"tag_refinement_level":true}],
         "model_part_operations":[]
     })");
@@ -616,7 +616,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesNoLevelWhenDisabled, Kr
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1,"tag_refinement_level":false}],
         "model_part_operations":[]
     })");
@@ -637,7 +637,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesUniqueIds, KratosCoreFa
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -655,13 +655,13 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesUniqueIds, KratosCoreFa
 }
 
 // ===========================================================================
-// GenerateHybridOctreeQuadrilateralConditionsWithFaceColor entity generator
+// GenerateOctreeHybridQuadrilateralConditionsWithFaceColor entity generator
 // ===========================================================================
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsRegistered, KratosCoreFastSuite)
 {
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeQuadrilateralConditionsWithFaceColor.Prototype"));
+        "OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridQuadrilateralConditionsWithFaceColor.Prototype"));
 }
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsCreated, KratosCoreFastSuite)
@@ -675,8 +675,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsCreated, KratosCor
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
-            {"type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
         ],
         "model_part_operations":[]
     })");
@@ -697,8 +697,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsQuadNodes, KratosC
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
-            {"type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
         ],
         "model_part_operations":[]
     })");
@@ -719,8 +719,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryConditionsFewerthanSixTimesE
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
-            {"type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
         ],
         "model_part_operations":[]
     })");
@@ -741,8 +741,8 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryNodesSubsetOfVolume, KratosC
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
-            {"type":"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Volume","color":1},
+            {"type":"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor","model_part_name":"Boundary","color":1}
         ],
         "model_part_operations":[]
     })");
@@ -758,12 +758,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherBoundaryNodesSubsetOfVolume, KratosC
 }
 
 // ===========================================================================
-// GenerateHybridOctreeHexahedraElementsWithCellColor — hanging-node constraint parameters
+// GenerateOctreeHybridHexahedraElementsWithCellColor — hanging-node constraint parameters
 // ===========================================================================
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherGenerateHexesByCellColorHasConstraintParams, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    GenerateOctreeHybridHexahedraElementsWithCellColor op;
     Parameters p = op.GetDefaultParameters();
     KRATOS_EXPECT_TRUE(p.Has("constraint_type"));
     KRATOS_EXPECT_TRUE(p.Has("constrained_variables"));
@@ -782,7 +782,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMeshConstraintsGenerated, Krat
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
              "constraint_type":"LinearMasterSlaveConstraint","constrained_variables":["DISPLACEMENT_X"]}
         ],
         "model_part_operations":[]
@@ -803,7 +803,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsPartitionOfUnity, K
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
              "constraint_type":"LinearMasterSlaveConstraint","constrained_variables":["DISPLACEMENT_X"]}
         ],
         "model_part_operations":[]
@@ -831,7 +831,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalConstraintsMasterCountsValid, 
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"Output","color":1,
              "constraint_type":"LinearMasterSlaveConstraint","constrained_variables":["DISPLACEMENT_X"]}
         ],
         "model_part_operations":[]
@@ -862,7 +862,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, Krat
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"O","color":1,
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":1,
              "constraint_type":"LinearMasterSlaveConstraint","constrained_variables":["DISPLACEMENT_X"]}
         ],"model_part_operations":[]
     })";
@@ -872,7 +872,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherPrimalMultiVariableConstraints, Krat
             "refinement_depth":4,"adaptive":true,"mesh_type":"primal"}],
         "coloring_settings_list":[],
         "entities_generator_list":[
-            {"type":"GenerateHybridOctreeHexahedraElementsWithCellColor","model_part_name":"O","color":1,
+            {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor","model_part_name":"O","color":1,
              "constraint_type":"LinearMasterSlaveConstraint","constrained_variables":["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]}
         ],"model_part_operations":[]
     })";
@@ -894,7 +894,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherDualMeshNoHangingConstraints, Kratos
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":true,"mesh_type":"dual"}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -923,7 +923,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherReportMeshQualityRunsWithoutError, K
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[{"type":"OctreeHybridReportMeshQuality",
             "model_part_name":"Output"}]
@@ -972,7 +972,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryKratosMultiphysicsPaths, Kra
     KRATOS_EXPECT_TRUE(Registry::HasValue(
         "OctreeHybridMesherColoring.KratosMultiphysics.OctreeHybridClassifyCellsInsideOutside.Prototype"));
     KRATOS_EXPECT_TRUE(Registry::HasValue(
-        "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype"));
+        "OctreeHybridMesherEntityGeneration.KratosMultiphysics.GenerateOctreeHybridHexahedraElementsWithCellColor.Prototype"));
     KRATOS_EXPECT_TRUE(Registry::HasValue(
         "OctreeHybridMesherOperation.KratosMultiphysics.OctreeHybridReportMeshQuality.Prototype"));
 }
@@ -990,7 +990,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherRegistryFullPathDispatchWorks, Krato
         "coloring_settings_list":[{
             "type":"OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype"
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -1053,7 +1053,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinesAllCells, KratosCoreFa
               "refinement_depth": 4 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Ref", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -1071,7 +1071,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformRefinesAllCells, KratosCoreFa
               "refinement_depth": 4 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -1098,7 +1098,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsProducesElements, Krat
               "refinement_depth": 4 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -1128,7 +1128,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsFallbackToMainSurface,
               "refinement_depth": 4 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -1156,7 +1156,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsMultipleGeometries, Kr
               "model_part_name": "SkinB", "refinement_depth": 3 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -1182,7 +1182,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineUniformMaxVoxelSizeProducesElements,
               "refinement_depth": 1, "max_voxel_size": 0.25 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -1209,7 +1209,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridRefineInterfaceCellsRefinedCellSizeProduce
               "refinement_depth": 1, "refined_cell_size": 0.25 }
         ],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -1275,7 +1275,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInTouchColorsSomeCells, KratosCo
             "type":"OctreeHybridColorCellsInTouch",
             "model_part_name":"Skin","color":2
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":2}],
         "model_part_operations":[]
     })");
@@ -1298,7 +1298,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInTouchNotAllCells, KratosCoreFa
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -1312,7 +1312,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsInTouchNotAllCells, KratosCoreFa
             "type":"OctreeHybridColorCellsInTouch",
             "model_part_name":"Skin","color":2
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":2}],
         "model_part_operations":[]
     })");
@@ -1348,7 +1348,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorConnectedCellsInTouchProducesElements
             {"type":"OctreeHybridColorConnectedCellsInTouch",
              "model_part_name":"Skin","cell_color":1,"color":3}
         ],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":3}],
         "model_part_operations":[]
     })");
@@ -1372,7 +1372,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorConnectedCellsInTouchFloodFillCoversI
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -1386,7 +1386,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorConnectedCellsInTouchFloodFillCoversI
             {"type":"OctreeHybridColorConnectedCellsInTouch",
              "model_part_name":"Skin","cell_color":1,"color":3}
         ],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":3}],
         "model_part_operations":[]
     })");
@@ -1420,7 +1420,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelColorsCorrectSubset, Krat
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -1432,7 +1432,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelColorsCorrectSubset, Krat
         "coloring_settings_list":[{
             "type":"OctreeHybridColorCellsByLevel","color":2,"min_level":4,"max_level":4
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":2}],
         "model_part_operations":[]
     })");
@@ -1454,7 +1454,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByLevelExcludesBeyondMaxDepth, K
         "coloring_settings_list":[{
             "type":"OctreeHybridColorCellsByLevel","color":2,"min_level":5,"max_level":5
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":2}],
         "model_part_operations":[]
     })");
@@ -1506,7 +1506,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterColorsInsideSubs
         "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
             "refinement_depth":4,"adaptive":false}],
         "coloring_settings_list":[],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":1}],
         "model_part_operations":[]
     })");
@@ -1519,7 +1519,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterColorsInsideSubs
             "type":"OctreeHybridColorCellsWithInsideCenter",
             "model_part_name":"Skin","color":2,"input_entities":"geometries"
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":2}],
         "model_part_operations":[]
     })");
@@ -1544,7 +1544,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterBoundingBoxRestr
             "type":"OctreeHybridColorCellsWithInsideCenter",
             "model_part_name":"Skin","color":2,"input_entities":"geometries"
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":2}],
         "model_part_operations":[]
     })");
@@ -1558,7 +1558,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsWithInsideCenterBoundingBoxRestr
             "model_part_name":"Skin","color":2,"input_entities":"geometries",
             "bounding_box":{"min_point":[0.3,0.3,0.3],"max_point":[0.5,0.5,0.5]}
         }],
-        "entities_generator_list":[{"type":"GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name":"Output","color":2}],
         "model_part_operations":[]
     })");
@@ -2088,15 +2088,15 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellFacesModelPartNotFoundThrows, Kra
 }
 
 // ===========================================================================
-// GenerateHybridOctreeTetrahedraElementsWithCellColor — registry and generation tests
+// GenerateOctreeHybridTetrahedraElementsWithCellColor — registry and generation tests
 // ===========================================================================
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateTetrahedraRegistryEntry, KratosCoreFastSuite)
 {
     const std::string path_km = "OctreeHybridMesherEntityGeneration.KratosMultiphysics."
-                                "GenerateHybridOctreeTetrahedraElementsWithCellColor.Prototype";
+                                "GenerateOctreeHybridTetrahedraElementsWithCellColor.Prototype";
     const std::string path_all = "OctreeHybridMesherEntityGeneration.All."
-                                 "GenerateHybridOctreeTetrahedraElementsWithCellColor.Prototype";
+                                 "GenerateOctreeHybridTetrahedraElementsWithCellColor.Prototype";
     KRATOS_EXPECT_TRUE(Registry::HasItem(path_km));
     KRATOS_EXPECT_TRUE(Registry::HasItem(path_all));
 }
@@ -2104,9 +2104,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateTetrahedraRegistryEntry, KratosCor
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridGenerateTriangleBCsRegistryEntry, KratosCoreFastSuite)
 {
     const std::string path_km = "OctreeHybridMesherEntityGeneration.KratosMultiphysics."
-                                "GenerateHybridOctreeTriangularConditionsWithFaceColor.Prototype";
+                                "GenerateOctreeHybridTriangularConditionsWithFaceColor.Prototype";
     const std::string path_all = "OctreeHybridMesherEntityGeneration.All."
-                                 "GenerateHybridOctreeTriangularConditionsWithFaceColor.Prototype";
+                                 "GenerateOctreeHybridTriangularConditionsWithFaceColor.Prototype";
     KRATOS_EXPECT_TRUE(Registry::HasItem(path_km));
     KRATOS_EXPECT_TRUE(Registry::HasItem(path_all));
 }
@@ -2122,7 +2122,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraElementsCreated, 
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -2145,7 +2145,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraCountIsHexTimes6,
     BuildClosedBoxSurface(hex_model.CreateModelPart("Skin"));
     Parameters hex_params(common_settings);
     hex_params.AddValue("entities_generator_list", Parameters(R"([{
-        "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
         "model_part_name": "Output", "color": 1 }])"));
     OctreeHybridMeshGeneratorModeler hex_modeler(hex_model, hex_params);
     hex_modeler.SetupModelPart();
@@ -2155,7 +2155,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraCountIsHexTimes6,
     BuildClosedBoxSurface(tet_model.CreateModelPart("Skin"));
     Parameters tet_params(common_settings);
     tet_params.AddValue("entities_generator_list", Parameters(R"([{
-        "type": "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+        "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
         "model_part_name": "Output", "color": 1 }])"));
     OctreeHybridMeshGeneratorModeler tet_modeler(tet_model, tet_params);
     tet_modeler.SetupModelPart();
@@ -2175,7 +2175,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraZeroInverted, Kra
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1 }],
         "model_part_operations"  : []
     })");
@@ -2208,7 +2208,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraNodeSubsetFromHex
     BuildClosedBoxSurface(hex_model.CreateModelPart("Skin"));
     Parameters hex_p(common_settings_str);
     hex_p.AddValue("entities_generator_list", Parameters(R"([{
-        "type": "GenerateHybridOctreeHexahedraElementsWithCellColor",
+        "type": "GenerateOctreeHybridHexahedraElementsWithCellColor",
         "model_part_name": "Output", "color": 1 }])"));
     OctreeHybridMeshGeneratorModeler hex_modeler(hex_model, hex_p);
     hex_modeler.SetupModelPart();
@@ -2220,7 +2220,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraNodeSubsetFromHex
     BuildClosedBoxSurface(tet_model.CreateModelPart("Skin"));
     Parameters tet_p(common_settings_str);
     tet_p.AddValue("entities_generator_list", Parameters(R"([{
-        "type": "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+        "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
         "model_part_name": "Output", "color": 1 }])"));
     OctreeHybridMeshGeneratorModeler tet_modeler(tet_model, tet_p);
     tet_modeler.SetupModelPart();
@@ -2239,7 +2239,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraTagRefinementLeve
         "refinement_settings_list" : [{ "type": "RefineInterfaceCellsOctreeHybrid",
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
-        "entities_generator_list": [{ "type": "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+        "entities_generator_list": [{ "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
                                       "model_part_name": "Output", "color": 1,
                                       "tag_refinement_level": true }],
         "model_part_operations"  : []
@@ -2250,7 +2250,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTetraTagRefinementLeve
 }
 
 // ===========================================================================
-// GenerateHybridOctreeTriangularConditionsWithFaceColor — tests
+// GenerateOctreeHybridTriangularConditionsWithFaceColor — tests
 // ===========================================================================
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTriangleBCsCreated, KratosCoreFastSuite)
@@ -2265,9 +2265,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTriangleBCsCreated, Kr
                                       "refinement_depth": 4, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [
-            { "type": "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+            { "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
               "model_part_name": "Output", "color": 1 },
-            { "type": "GenerateHybridOctreeTriangularConditionsWithFaceColor",
+            { "type": "GenerateOctreeHybridTriangularConditionsWithFaceColor",
               "model_part_name": "Output.Boundary", "color": 1 }
         ],
         "model_part_operations"  : []
@@ -2295,7 +2295,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTriangleBCsCountIsTwic
     BuildClosedBoxSurface(quad_model.CreateModelPart("Skin"));
     Parameters quad_p(common_str);
     quad_p.AddValue("entities_generator_list", Parameters(R"([{
-        "type": "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+        "type": "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
         "model_part_name": "Output", "color": 1 }])"));
     OctreeHybridMeshGeneratorModeler quad_modeler(quad_model, quad_p);
     quad_modeler.SetupModelPart();
@@ -2305,7 +2305,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTriangleBCsCountIsTwic
     BuildClosedBoxSurface(tri_model.CreateModelPart("Skin"));
     Parameters tri_p(common_str);
     tri_p.AddValue("entities_generator_list", Parameters(R"([{
-        "type": "GenerateHybridOctreeTriangularConditionsWithFaceColor",
+        "type": "GenerateOctreeHybridTriangularConditionsWithFaceColor",
         "model_part_name": "Output", "color": 1 }])"));
     OctreeHybridMeshGeneratorModeler tri_modeler(tri_model, tri_p);
     tri_modeler.SetupModelPart();
@@ -2325,9 +2325,9 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTriangleBCsNodeSubset,
                                       "refinement_depth": 3, "adaptive": false }],
         "coloring_settings_list" : [{ "type": "OctreeHybridClassifyCellsInsideOutside" }],
         "entities_generator_list": [
-            { "type": "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+            { "type": "GenerateOctreeHybridTetrahedraElementsWithCellColor",
               "model_part_name": "Output", "color": 1 },
-            { "type": "GenerateHybridOctreeTriangularConditionsWithFaceColor",
+            { "type": "GenerateOctreeHybridTriangularConditionsWithFaceColor",
               "model_part_name": "Output.Boundary", "color": 1 }
         ],
         "model_part_operations"  : []

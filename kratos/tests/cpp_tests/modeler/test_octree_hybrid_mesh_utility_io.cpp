@@ -24,7 +24,7 @@
 #include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
-#include "modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h"
+#include "modeler/entity_generation/generate_octree_hybrid_hexahedra_elements_with_cell_color.h"
 #include "modeler/operation/octree_hybrid_mesher_operation.h"
 #include "modeler/operation/octree_hybrid_report_mesh_quality.h"
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
@@ -354,7 +354,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherColoringStreamOperatorNonEmpty, Krat
 
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMesherEntityGenerationStreamOperatorNonEmpty, KratosCoreFastSuite)
 {
-    GenerateHybridOctreeHexahedraElementsWithCellColor op;
+    GenerateOctreeHybridHexahedraElementsWithCellColor op;
     std::ostringstream ss;
     ss << static_cast<const OctreeHybridMesherEntityGeneration&>(op);
     KRATOS_EXPECT_FALSE(ss.str().empty());
