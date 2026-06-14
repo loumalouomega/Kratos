@@ -11,6 +11,7 @@
 //
 
 // System includes
+#include <algorithm>
 #include <vector>
 
 // External includes
@@ -380,7 +381,74 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridInitializeResetsToSingleLeaf, KratosCoreFa
 KRATOS_TEST_CASE_IN_SUITE(OctreeHybridInitializeThrowsOnInvalidDepth, KratosCoreFastSuite)
 {
     OHExtraOctree octree(4);
-    EXPECT_THROW(octree.Initialize(0), std::invalid_argument);
+    EXPECT_THROW(octree.Initialize(0), Kratos::Exception);
+}
+
+// ===========================================================================
+// OctreeHybrid::IncreaseDepth — non-destructive depth extension
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridIncreaseDepthPreservesExistingStructure, KratosCoreFastSuite)
+{
+    // Build a non-uniform octree at depth 2: subdivide the root (level 0 → 1)
+    // and then subdivide one of its children (level 1 → 2), leaving the other
+    // seven level-1 cells as leaves. This mirrors the shape of an adaptively
+    // refined octree, where leaves exist at several different levels.
+    OHExtraOctree octree(2);
+    octree.SubdivideCellByIdAndLevel(0, 0);
+    const int subdivided_child_id = octree.Child(0, 0, 0);
+    octree.SubdivideCellByIdAndLevel(subdivided_child_id, 1);
+
+    const int leaf_count_before = octree.GetLeafCount();
+    std::vector<int> leaves_before;
+    {
+        std::vector<OHExtraCell*> leaves;
+        octree.GetAllLeavesVector(leaves);
+        for (auto* p_leaf : leaves) leaves_before.push_back(p_leaf->GetId());
+    }
+    std::sort(leaves_before.begin(), leaves_before.end());
+
+    // Increase the depth from 2 to 4, as RefineUniformOctreeHybrid /
+    // RefineInterfaceCellsOctreeHybrid now do when a later refinement entry
+    // requests a deeper octree than the current one.
+    octree.IncreaseDepth(4);
+
+    KRATOS_EXPECT_EQ(octree.GetDepth(), std::size_t{4});
+
+    // All previously-existing leaves and subdivided cells must survive
+    // unchanged — unlike Initialize(), which would collapse everything back
+    // to a single root leaf.
+    KRATOS_EXPECT_EQ(octree.GetLeafCount(), leaf_count_before);
+    std::vector<int> leaves_after;
+    {
+        std::vector<OHExtraCell*> leaves;
+        octree.GetAllLeavesVector(leaves);
+        for (auto* p_leaf : leaves) leaves_after.push_back(p_leaf->GetId());
+    }
+    std::sort(leaves_after.begin(), leaves_after.end());
+    KRATOS_EXPECT_EQ(leaves_before, leaves_after);
+
+    KRATOS_EXPECT_FALSE(octree.IsLeaf(0));
+    KRATOS_EXPECT_FALSE(octree.IsLeaf(subdivided_child_id));
+
+    // The newly-available depth levels are usable: a level-2 leaf (created
+    // when subdivided_child_id was split) can now be subdivided to level 3,
+    // which Initialize(2) would not have allowed (level >= old mDepth == 2).
+    const int level2_leaf_id = octree.Child(subdivided_child_id, 1, 0);
+    KRATOS_EXPECT_EQ(octree.SubdivideCellByIdAndLevel(level2_leaf_id, 2), 0);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridIncreaseDepthThrowsWhenNotDeeper, KratosCoreFastSuite)
+{
+    OHExtraOctree octree(2);
+    EXPECT_THROW(octree.IncreaseDepth(2), Kratos::Exception);
+    EXPECT_THROW(octree.IncreaseDepth(1), Kratos::Exception);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridIncreaseDepthThrowsBeyondMaxDepth, KratosCoreFastSuite)
+{
+    OHExtraOctree octree(2);
+    EXPECT_THROW(octree.IncreaseDepth(OHExtraOctree::MAX_DEPTH + 1), Kratos::Exception);
 }
 
 } // namespace Kratos::Testing
