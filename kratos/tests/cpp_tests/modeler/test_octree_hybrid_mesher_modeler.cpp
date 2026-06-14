@@ -12,8 +12,8 @@
 
 // System includes
 #include <algorithm>
-#include <cmath>
-#include <set>
+#include <filesystem>
+#include <functional>
 
 // External includes
 
@@ -23,6 +23,7 @@
 #include "includes/kernel.h"
 #include "includes/variables.h"
 #include "includes/registry.h"
+#include "input_output/stl_io.h"
 
 #include "modeler/octree_hybrid_mesh_generator_modeler.h"
 #include "modeler/internals/octree_hybrid_mesher_data.h"
@@ -36,7 +37,8 @@
 #include "modeler/entity_generation/generate_octree_hybrid_tetrahedra_elements_with_cell_color.h"
 #include "modeler/entity_generation/generate_octree_hybrid_triangular_conditions_with_face_color.h"
 
-namespace Kratos::Testing {
+namespace Kratos::Testing 
+{
 
 namespace {
 
@@ -144,6 +146,61 @@ double MinScaledJacobian(const Element& rElement)
         worst = std::min(worst, det / (n0 * n1 * n2));
     }
     return worst;
+}
+
+/**
+ * @brief Path to the Bunny-LowPoly.stl test asset, resolved relative to this
+ *        source file so it works regardless of the test binary's working
+ *        directory (kratos/tests/cpp_tests/modeler/ -> kratos/tests/...).
+ */
+std::filesystem::path BunnyStlPath()
+{
+    return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()
+        / "auxiliar_files_for_python_unittest" / "stl_files" / "Bunny-LowPoly.stl";
+}
+
+/**
+ * @brief Counts the number of node-connectivity-connected groups of hexahedra
+ *        in @p rModelPart (two elements are connected if they share a node).
+ *
+ * Used to detect disconnected "island" cells left over by the dual-mesh
+ * extraction/projection pipeline, which would otherwise show up as floating,
+ * unprojected octree leaves embedded in the surface-conforming mesh.
+ */
+std::size_t CountConnectedElementGroups(const ModelPart& rModelPart)
+{
+    const auto& r_elements = rModelPart.Elements();
+    const std::size_t n_elements = r_elements.size();
+    if (n_elements == 0) return 0;
+
+    std::vector<IndexType> parent(n_elements);
+    std::iota(parent.begin(), parent.end(), 0);
+    std::function<IndexType(IndexType)> find = [&](IndexType i) {
+        while (parent[i] != i) i = parent[i];
+        return i;
+    };
+    auto unite = [&](IndexType a, IndexType b) {
+        const IndexType ra = find(a), rb = find(b);
+        if (ra != rb) parent[ra] = rb;
+    };
+
+    std::unordered_map<IndexType, IndexType> node_to_element;
+    node_to_element.reserve(n_elements * 8);
+    std::size_t idx = 0;
+    for (const auto& r_elem : r_elements) {
+        for (const auto& r_node : r_elem.GetGeometry()) {
+            const auto it = node_to_element.find(r_node.Id());
+            if (it == node_to_element.end())
+                node_to_element.emplace(r_node.Id(), idx);
+            else
+                unite(idx, it->second);
+        }
+        ++idx;
+    }
+
+    std::set<IndexType> roots;
+    for (IndexType i = 0; i < n_elements; ++i) roots.insert(find(i));
+    return roots.size();
 }
 
 } // anonymous namespace
@@ -2443,6 +2500,67 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerTriangleBCsNodeSubset,
     ModelPart& boundary = model.GetModelPart("Output.Boundary");
     for (const auto& n : boundary.Nodes())
         KRATOS_EXPECT_TRUE(tet_node_ids.count(n.Id()) > 0);
+}
+
+// ===========================================================================
+// OctreeHybridMeshGeneratorModeler — projected dual mesh on the Bunny STL
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerBunnyProjectedDualMeshIsConnected, KratosCoreFastSuite)
+{
+    // Regression test for a bug where RefineInterfaceCellsOctreeHybrid with
+    // "mesh_type": "dual" and "project_to_surface": true could leave isolated,
+    // unprojected octree-leaf "islands" (e.g. near the bunny's thin ear) in
+    // the output mesh: ClearBufferZone removed geometrically "folded" cells
+    // but not cells that were simply disconnected from the main carved
+    // volume, and ProjectToIsoSurface then re-shelled each such island into
+    // its own small floating cluster of raw, un-deformed hexahedra.
+    const auto stl_path = BunnyStlPath();
+    if (!std::filesystem::exists(stl_path)) {
+        KRATOS_INFO("OctreeHybridMeshGeneratorModelerBunnyProjectedDualMeshIsConnected")
+            << "Skipping: STL file not found at " << stl_path << std::endl;
+        return;
+    }
+
+    Model model;
+    ModelPart& r_surface = model.CreateModelPart("Surface");
+    r_surface.GetProcessInfo()[DOMAIN_SIZE] = 3;
+    StlIO(stl_path).ReadModelPart(r_surface);
+
+    ModelPart& out = RunModeler(model, R"({
+        "input_model_part_name"  : "Surface",
+        "output_model_part_name" : "BunnyVolume",
+        "refinement_settings_list" : [{
+            "type"                 : "RefineInterfaceCellsOctreeHybrid",
+            "refinement_depth"     : 4,
+            "adaptive"             : true,
+            "mesh_type"            : "dual",
+            "project_to_surface"   : true,
+            "projection_iterations": 2000,
+            "projection_smoothing" : 200
+        }],
+        "coloring_settings_list" : [],
+        "entities_generator_list": [{
+            "type"                : "GenerateOctreeHybridHexahedraElementsWithCellColor",
+            "model_part_name"     : "BunnyVolume",
+            "color"               : 1,
+            "tag_refinement_level": true
+        }],
+        "model_part_operations"  : []
+    })");
+
+    KRATOS_EXPECT_GT(out.NumberOfElements(), 0u);
+
+    // The projected dual volume mesh must be a single connected solid: no
+    // disconnected, unprojected octree-leaf islands left behind.
+    KRATOS_EXPECT_EQ(CountConnectedElementGroups(out), std::size_t{1});
+
+    // All nodes must have finite coordinates after projection.
+    for (const auto& r_node : out.Nodes()) {
+        KRATOS_EXPECT_TRUE(std::isfinite(r_node.X()));
+        KRATOS_EXPECT_TRUE(std::isfinite(r_node.Y()));
+        KRATOS_EXPECT_TRUE(std::isfinite(r_node.Z()));
+    }
 }
 
 } // namespace Kratos::Testing
