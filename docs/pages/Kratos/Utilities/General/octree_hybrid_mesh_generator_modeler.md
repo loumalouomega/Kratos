@@ -312,10 +312,10 @@ Registered entity-generation components:
 
 | JSON `"type"` | Class | Purpose |
 |--------------|-------|---------|
-| `GenerateHybridOctreeHexahedraElementsWithCellColor` | `GenerateHybridOctreeHexahedraElementsWithCellColor` | Create hex elements for cells matching a colour; optionally generates a `"constraint_type"` constraint for primal mesh hanging nodes when `"constraint_type"` and `"constrained_variables"` are non-empty |
-| `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` | `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` | Create quad conditions on the outer surface; optionally generates a `"constraint_type"` constraint for primal mesh hanging nodes when `"constraint_type"` and `"constrained_variables"` are non-empty |
-| `GenerateHybridOctreeTetrahedraElementsWithCellColor` | `GenerateHybridOctreeTetrahedraElementsWithCellColor` | Decompose each colour-matched hex into 6 tetrahedral elements using the Freudenthal–Kuhn scheme (BCC lattice, §3.3.3) |
-| `GenerateHybridOctreeTriangularConditionsWithFaceColor` | `GenerateHybridOctreeTriangularConditionsWithFaceColor` | Create triangular conditions on the outer surface by splitting each boundary quad along the `(n₀, n₂)` diagonal (2 triangles per quad) |
+| `GenerateOctreeHybridHexahedraElementsWithCellColor` | `GenerateOctreeHybridHexahedraElementsWithCellColor` | Create hex elements for cells matching a colour; optionally generates a `"constraint_type"` constraint for primal mesh hanging nodes when `"constraint_type"` and `"constrained_variables"` are non-empty |
+| `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` | `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` | Create quad conditions on the outer surface; optionally generates a `"constraint_type"` constraint for primal mesh hanging nodes when `"constraint_type"` and `"constrained_variables"` are non-empty |
+| `GenerateOctreeHybridTetrahedraElementsWithCellColor` | `GenerateOctreeHybridTetrahedraElementsWithCellColor` | Decompose each colour-matched hex into 6 tetrahedral elements using the Freudenthal–Kuhn scheme (BCC lattice, §3.3.3) |
+| `GenerateOctreeHybridTriangularConditionsWithFaceColor` | `GenerateOctreeHybridTriangularConditionsWithFaceColor` | Create triangular conditions on the outer surface by splitting each boundary quad along the `(n₀, n₂)` diagonal (2 triangles per quad) |
 | `GenerateOctreeHybridConstraints` | `GenerateOctreeHybridConstraints` | Create one master-slave constraint per (master node x constrained variable) for every primal-mesh 2:1 transition hanging node, optionally filtered by `"color"` and/or `"face_color"` |
 | `GenerateOctreeHybridConstraintsBetweenColors` | `GenerateOctreeHybridConstraintsBetweenColors` | Tie geometrically coincident, non-conforming nodes between two colour blocks (`"color_block_a"` / `"color_block_b"`) with one master-slave constraint per (node pair x constrained variable) |
 
@@ -350,7 +350,7 @@ it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetDat
 | `mCellLevel` | `vector<int>` | `BuildOctreeAndExtract` | Entity generation, quality report | Octree refinement level per cell (-1 for transition-template hexes). |
 | `mCellColor` | `vector<int>` | Coloring stages | Entity generation | Per-cell inside(1)/outside(0) label. Empty until coloring runs. |
 | `mCellFaceColor` | `vector<array<int,6>>` | `OctreeHybridColorCellFacesBetweenColors` | Entity generation | Per-cell, per-local-face interface label (`FACE_FIDC`/Hexahedra3D8 ordering). Empty until a face-coloring stage runs. |
-| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `GenerateHybridOctreeHexahedraElementsWithCellColor` (when `"constraint_type"` and `"constrained_variables"` are non-empty), `GenerateOctreeHybridConstraints` | Hanging-node interpolation records (primal mesh only). |
+| `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `GenerateOctreeHybridHexahedraElementsWithCellColor` (when `"constraint_type"` and `"constrained_variables"` are non-empty), `GenerateOctreeHybridConstraints` | Hanging-node interpolation records (primal mesh only). |
 | `mNodePtrs` | `vector<Node::Pointer>` | Entity generation (lazy) | Entity generation | De-duplication cache: mesh-node index -> ModelPart Node. Null until the node is first needed. |
 | `mProjected` | `bool` | `BuildOctreeAndExtract` | `OctreeHybridClassifyCellsInsideOutside` | True when surface projection has been applied; triggers the classification short-circuit. |
 
@@ -432,7 +432,7 @@ variable)** triple:
 | Edge-midpoint | 2 | 0.5 |
 | Face-centre | 4 | 0.25 |
 
-The `"constrained_variables"` parameter of `GenerateHybridOctreeHexahedraElementsWithCellColor` lists which
+The `"constrained_variables"` parameter of `GenerateOctreeHybridHexahedraElementsWithCellColor` lists which
 DOF variables to constrain at 2:1 transitions (default: `[]` — no constraints).
 Pass the desired scalar DOF names (e.g. `["DISPLACEMENT_X","DISPLACEMENT_Y","DISPLACEMENT_Z"]`)
 together with a non-empty `"constraint_type"` (e.g. `"LinearMasterSlaveConstraint"`)
@@ -1021,7 +1021,7 @@ regardless of `default_outside_color`.
 A typical pipeline runs this stage after `OctreeHybridClassifyCellsInsideOutside`,
 so that `cell_color` already identifies the region whose outer faces should be
 tagged — typically for boundary-condition generation via
-`GenerateHybridOctreeQuadrilateralConditionsWithFaceColor`.
+`GenerateOctreeHybridQuadrilateralConditionsWithFaceColor`.
 
 ---
 
@@ -1092,22 +1092,22 @@ an intersecting surface, or unconditionally as a manual override.
 
 ### 7.2 Entity-generation components
 
-#### `GenerateHybridOctreeHexahedraElementsWithCellColor`
+#### `GenerateOctreeHybridHexahedraElementsWithCellColor`
 
 Creates one 8-noded hexahedral element per cell whose colour matches the configured
 value.
 
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeHexahedraElementsWithCellColor.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridHexahedraElementsWithCellColor.Prototype`
 
-**Class:** `Kratos::GenerateHybridOctreeHexahedraElementsWithCellColor`
+**Class:** `Kratos::GenerateOctreeHybridHexahedraElementsWithCellColor`
 
-**Header:** `kratos/modeler/entity_generation/generate_hybrid_octree_hexahedra_elements_with_cell_color.h`
+**Header:** `kratos/modeler/entity_generation/generate_octree_hybrid_hexahedra_elements_with_cell_color.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"GenerateHybridOctreeHexahedraElementsWithCellColor"` | Registry lookup key. |
+| `type` | string | `"GenerateOctreeHybridHexahedraElementsWithCellColor"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
 | `color` | int | `1` | Cell-colour label to emit (e.g. `1` for inside cells). |
 | `properties_id` | int | `1` | Properties block ID assigned to every new element (created on demand). |
@@ -1138,7 +1138,7 @@ Kratos `Hexahedra3D8` local-node numbering, so no remapping is required.
 
 ```json
 {
-    "type"                : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+    "type"                : "GenerateOctreeHybridHexahedraElementsWithCellColor",
     "model_part_name"     : "FluidDomain",
     "color"               : 1,
     "properties_id"       : 1,
@@ -1149,22 +1149,22 @@ Kratos `Hexahedra3D8` local-node numbering, so no remapping is required.
 
 ---
 
-#### `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor`
+#### `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor`
 
 Creates quadrilateral boundary conditions on the outer surface of the coloured hex
 mesh.
 
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeQuadrilateralConditionsWithFaceColor.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridQuadrilateralConditionsWithFaceColor.Prototype`
 
-**Class:** `Kratos::GenerateHybridOctreeQuadrilateralConditionsWithFaceColor`
+**Class:** `Kratos::GenerateOctreeHybridQuadrilateralConditionsWithFaceColor`
 
-**Header:** `kratos/modeler/entity_generation/generate_hybrid_octree_quadrilateral_conditions_with_face_color.h`
+**Header:** `kratos/modeler/entity_generation/generate_octree_hybrid_quadrilateral_conditions_with_face_color.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"GenerateHybridOctreeQuadrilateralConditionsWithFaceColor"` | Registry lookup key. |
+| `type` | string | `"GenerateOctreeHybridQuadrilateralConditionsWithFaceColor"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
 | `color` | int | `1` | Cell-colour label identifying the volume to extract the boundary of. |
 | `properties_id` | int | `1` | Properties block ID assigned to every new condition. |
@@ -1187,7 +1187,7 @@ mesh.
 4. Bulk-inserts all nodes and conditions into the target ModelPart.
 5. If `"constraint_type"` and `"constrained_variables"` are non-empty and `mHanging` is
    non-empty, generates `"constraint_type"` objects for all 2:1 hanging-node transitions
-   (same logic as `GenerateHybridOctreeHexahedraElementsWithCellColor`).
+   (same logic as `GenerateOctreeHybridHexahedraElementsWithCellColor`).
 
 Winding convention: outward normals follow the convention of `ExtractBoundaryFaces`.
 
@@ -1195,7 +1195,7 @@ Winding convention: outward normals follow the convention of `ExtractBoundaryFac
 
 ```json
 {
-    "type"                  : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+    "type"                  : "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
     "model_part_name"       : "Boundary",
     "color"                 : 1,
     "properties_id"         : 1,
@@ -1207,7 +1207,7 @@ Winding convention: outward normals follow the convention of `ExtractBoundaryFac
 
 ---
 
-#### `GenerateHybridOctreeTetrahedraElementsWithCellColor`
+#### `GenerateOctreeHybridTetrahedraElementsWithCellColor`
 
 Decomposes each colour-matched hex cell into **6 tetrahedra** using the Freudenthal–Kuhn
 decomposition along the main diagonal (local nodes 0 → 6).  This implements the BCC-lattice
@@ -1219,17 +1219,17 @@ local node indices via the fixed `idTransform` map, so adjacent hexes always sha
 physical node at the same logical corner — the shared-face diagonal is therefore identical in
 both hexes, and no hanging nodes are produced.
 
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeTetrahedraElementsWithCellColor.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridTetrahedraElementsWithCellColor.Prototype`
 
-**Class:** `Kratos::GenerateHybridOctreeTetrahedraElementsWithCellColor`
+**Class:** `Kratos::GenerateOctreeHybridTetrahedraElementsWithCellColor`
 
-**Header:** `kratos/modeler/entity_generation/generate_hybrid_octree_tetrahedra_elements_with_cell_color.h`
+**Header:** `kratos/modeler/entity_generation/generate_octree_hybrid_tetrahedra_elements_with_cell_color.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"GenerateHybridOctreeTetrahedraElementsWithCellColor"` | Registry lookup key. |
+| `type` | string | `"GenerateOctreeHybridTetrahedraElementsWithCellColor"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
 | `color` | int | `1` | Cell-colour label to decompose (e.g. `1` for inside cells). |
 | `properties_id` | int | `1` | Properties block ID assigned to every new element. |
@@ -1254,7 +1254,7 @@ both hexes, and no hanging nodes are produced.
 
 ```json
 {
-    "type"                 : "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+    "type"                 : "GenerateOctreeHybridTetrahedraElementsWithCellColor",
     "model_part_name"      : "TetDomain",
     "color"                : 1,
     "properties_id"        : 1,
@@ -1265,7 +1265,7 @@ both hexes, and no hanging nodes are produced.
 
 ---
 
-#### `GenerateHybridOctreeTriangularConditionsWithFaceColor`
+#### `GenerateOctreeHybridTriangularConditionsWithFaceColor`
 
 Creates **triangular boundary conditions** on the outer surface of the coloured hex mesh.
 Each boundary quad `{n₀, n₁, n₂, n₃}` from `OctreeHybridMeshUtility::ExtractBoundaryFaces`
@@ -1274,21 +1274,21 @@ is split along the `(n₀, n₂)` diagonal into two triangles:
 - triangle 2: `{n₀, n₂, n₃}`
 
 This diagonal is consistent with the `(0, 6)` main-diagonal Freudenthal decomposition used by
-`GenerateHybridOctreeTetrahedraElementsWithCellColor`, so every boundary triangle is an exposed face of an
+`GenerateOctreeHybridTetrahedraElementsWithCellColor`, so every boundary triangle is an exposed face of an
 interior tetrahedron.  A tet mesh + triangle BC mesh pair generated from the same `entities_generator_list`
 is therefore **conforming** at the boundary.
 
-**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateHybridOctreeTriangularConditionsWithFaceColor.Prototype`
+**Registry path:** `OctreeHybridMesherEntityGeneration.All.GenerateOctreeHybridTriangularConditionsWithFaceColor.Prototype`
 
-**Class:** `Kratos::GenerateHybridOctreeTriangularConditionsWithFaceColor`
+**Class:** `Kratos::GenerateOctreeHybridTriangularConditionsWithFaceColor`
 
-**Header:** `kratos/modeler/entity_generation/generate_hybrid_octree_triangular_conditions_with_face_color.h`
+**Header:** `kratos/modeler/entity_generation/generate_octree_hybrid_triangular_conditions_with_face_color.h`
 
 **Parameter schema:**
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `type` | string | `"GenerateHybridOctreeTriangularConditionsWithFaceColor"` | Registry lookup key. |
+| `type` | string | `"GenerateOctreeHybridTriangularConditionsWithFaceColor"` | Registry lookup key. |
 | `model_part_name` | string | `"Undefined"` | Name of the target ModelPart (created if absent). |
 | `color` | int | `1` | Cell-colour label identifying the volume to extract the boundary of. |
 | `properties_id` | int | `1` | Properties block ID assigned to every new condition. |
@@ -1301,7 +1301,7 @@ is therefore **conforming** at the boundary.
 
 ```json
 {
-    "type"             : "GenerateHybridOctreeTriangularConditionsWithFaceColor",
+    "type"             : "GenerateOctreeHybridTriangularConditionsWithFaceColor",
     "model_part_name"  : "TetDomain.Boundary",
     "color"            : 1,
     "properties_id"    : 1,
@@ -1316,7 +1316,7 @@ is therefore **conforming** at the boundary.
 Standalone entity-generation stage that creates the **2:1 transition hanging-node**
 master-slave constraints of the **primal** mesh. It extracts the hanging-node-constraint
 logic that the per-entity generators (e.g.
-`GenerateHybridOctreeHexahedraElementsWithCellColor`) can optionally run inline, into its
+`GenerateOctreeHybridHexahedraElementsWithCellColor`) can optionally run inline, into its
 own pipeline entry, so that constraints can be generated independently of (and after) the
 element/condition generation stages.
 
@@ -1528,7 +1528,7 @@ Each entry of `"contact_model_parts"` accepts:
 
 The operation is applied to a skin ModelPart whose conditions are the boundary quads
 of a colour region (typically produced by
-`GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` with `"color"` set to
+`GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` with `"color"` set to
 `"cell_color"`). For every condition it determines, on the octree hex mesh
 (`OctreeHybridMesherData::mCells` / `mCellColor`), the cell on the other side of the
 shared quad face. If that neighbour cell's colour matches one of the
@@ -1596,7 +1596,7 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"             : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "type"             : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name"  : "Volume",
             "color"            : 1,
             "properties_id"    : 1,
@@ -1648,7 +1648,7 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"                  : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "type"                  : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name"       : "Domain",
             "color"                 : 1,
             "properties_id"         : 1,
@@ -1709,7 +1709,7 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"             : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "type"             : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name"  : "Volume",
             "color"            : 1,
             "properties_id"    : 1,
@@ -1739,7 +1739,7 @@ no ray-casting occurs.
 
 ### 8.4 Boundary conditions on the exterior surface
 
-Combine `GenerateHybridOctreeHexahedraElementsWithCellColor` and `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` to populate
+Combine `GenerateOctreeHybridHexahedraElementsWithCellColor` and `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` to populate
 both a volume ModelPart and a boundary ModelPart in a single `SetupModelPart` call.
 
 ```python
@@ -1758,13 +1758,13 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"            : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "type"            : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name" : "Volume",
             "color"           : 1,
             "properties_id"   : 1
         },
         {
-            "type"             : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+            "type"             : "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
             "model_part_name"  : "Boundary",
             "color"            : 1,
             "properties_id"    : 1,
@@ -1776,8 +1776,8 @@ settings = KM.Parameters("""{
 ```
 
 The `Boundary` ModelPart will contain the exterior quad conditions and the shared
-nodes; nodes created first by `GenerateHybridOctreeHexahedraElementsWithCellColor` are reused (not duplicated)
-by `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` through the `mNodePtrs` de-duplication cache.
+nodes; nodes created first by `GenerateOctreeHybridHexahedraElementsWithCellColor` are reused (not duplicated)
+by `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` through the `mNodePtrs` de-duplication cache.
 
 ---
 
@@ -1805,8 +1805,8 @@ Expected log output (example, depth-4 dual box mesh):
 
 ### 8.6 Tetrahedral mesh (BCC Freudenthal decomposition)
 
-`GenerateHybridOctreeTetrahedraElementsWithCellColor` decomposes each hex cell into 6 tetrahedra.
-Pair it with `GenerateHybridOctreeTriangularConditionsWithFaceColor` to obtain a conforming
+`GenerateOctreeHybridTetrahedraElementsWithCellColor` decomposes each hex cell into 6 tetrahedra.
+Pair it with `GenerateOctreeHybridTriangularConditionsWithFaceColor` to obtain a conforming
 tet + triangle-BC mesh in a single `SetupModelPart` call.
 
 The tet count is always exactly **6 × hex count** for the same settings, and the
@@ -1835,7 +1835,7 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"                 : "GenerateHybridOctreeTetrahedraElementsWithCellColor",
+            "type"                 : "GenerateOctreeHybridTetrahedraElementsWithCellColor",
             "model_part_name"      : "TetDomain",
             "color"                : 1,
             "properties_id"        : 1,
@@ -1843,7 +1843,7 @@ settings = KM.Parameters("""{
             "tag_refinement_level" : true
         },
         {
-            "type"             : "GenerateHybridOctreeTriangularConditionsWithFaceColor",
+            "type"             : "GenerateOctreeHybridTriangularConditionsWithFaceColor",
             "model_part_name"  : "TetDomain.Boundary",
             "color"            : 1,
             "properties_id"    : 1,
@@ -1891,13 +1891,13 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"            : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "type"            : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name" : "Volume",
             "color"           : 1,
             "properties_id"   : 1
         },
         {
-            "type"             : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+            "type"             : "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
             "model_part_name"  : "Volume.Skin",
             "color"            : 1,
             "properties_id"    : 1,
@@ -1963,7 +1963,7 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"            : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "type"            : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name" : "Volume",
             "color"           : 1,
             "properties_id"   : 1
@@ -1986,7 +1986,7 @@ domain, is set to `2`; all other entries remain `0`.
 
 `OctreeHybridColorOuterCellFaces` marks, for every cell with a given `mCellColor`, the
 local faces that have no neighbouring cell — i.e. the outer boundary of the extracted
-hex mesh. Combined with `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor`,
+hex mesh. Combined with `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor`,
 this generates boundary conditions on the outer faces of the domain, regardless of
 whether those faces also lie on the input skin surface.
 
@@ -2015,13 +2015,13 @@ settings = KM.Parameters("""{
     ],
     "entities_generator_list" : [
         {
-            "type"            : "GenerateHybridOctreeHexahedraElementsWithCellColor",
+            "type"            : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name" : "Volume",
             "color"           : 1,
             "properties_id"   : 1
         },
         {
-            "type"             : "GenerateHybridOctreeQuadrilateralConditionsWithFaceColor",
+            "type"             : "GenerateOctreeHybridQuadrilateralConditionsWithFaceColor",
             "model_part_name"  : "Boundary",
             "color"            : 3,
             "properties_id"    : 1,
@@ -2286,7 +2286,7 @@ Tests for the dual (conforming) hex mesh path using a synthetic closed-box surfa
 | `test_dual_mesh_zero_inverted` | All hexes have minimum scaled Jacobian > 0 (no inverted elements). |
 | `test_dual_mesh_carve_bbox_inside_surface` | Output node bounding box lies within one half-cell margin of the input surface box (carve respected). |
 | `test_dual_mesh_refinement_level_tagged` | At least one element has `REFINEMENT_LEVEL > 0` (regular dual hexes carry their octree level). |
-| `test_boundary_conditions_created` | `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` creates a non-empty `Boundary` ModelPart alongside the volume. |
+| `test_boundary_conditions_created` | `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` creates a non-empty `Boundary` ModelPart alongside the volume. |
 | `test_quality_report_operation` | `OctreeHybridReportMeshQuality` runs without error; the resulting ModelPart is non-empty. |
 
 #### `TestOctreeHybridMeshGeneratorModelerPrimal`
@@ -2322,7 +2322,7 @@ Unit tests for the `OctreeHybridClassifyCellsInsideOutside` coloring component.
 
 #### `TestGenerateHexesByCellColor`
 
-Unit tests for the `GenerateHybridOctreeHexahedraElementsWithCellColor` entity-generation component.
+Unit tests for the `GenerateOctreeHybridHexahedraElementsWithCellColor` entity-generation component.
 
 | Test | Assertion |
 |------|-----------|
@@ -2334,12 +2334,12 @@ Unit tests for the `GenerateHybridOctreeHexahedraElementsWithCellColor` entity-g
 | `test_node_deduplication` | Node count is strictly less than 8 × element count (nodes are shared across adjacent elements). |
 | `test_node_ids_contiguous_from_one` | Node ids are unique and start from 1. |
 | `test_element_ids_contiguous_from_one` | Element ids are unique and start from 1. |
-| `test_registry_path_exists` | The Registry path for `GenerateHybridOctreeHexahedraElementsWithCellColor` exists. |
+| `test_registry_path_exists` | The Registry path for `GenerateOctreeHybridHexahedraElementsWithCellColor` exists. |
 | `test_unknown_entity_type_raises` | A non-existent `generated_entity` type name triggers a clear error. |
 
 #### `TestGenerateBoundaryConditionsByFace`
 
-Unit tests for the `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` entity-generation component.
+Unit tests for the `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` entity-generation component.
 
 | Test | Assertion |
 |------|-----------|
@@ -2349,13 +2349,13 @@ Unit tests for the `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` en
 | `test_condition_ids_contiguous` | Condition ids are unique and start from 1. |
 | `test_each_condition_has_four_nodes` | Every boundary condition has exactly 4 nodes (is a quad). |
 | `test_boundary_faces_lt_6_times_elements` | Boundary face count is less than 6 × element count (interior faces are not counted). |
-| `test_registry_path_exists` | The Registry path for `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` exists. |
+| `test_registry_path_exists` | The Registry path for `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` exists. |
 | `test_primal_boundary_constraints_generated` | With `"constraint_type"` and `"constrained_variables"` set on a primal mesh, constraints are created in the boundary ModelPart. |
 
 #### `TestGenerateHangingNodeConstraints`
 
 Tests for hanging-node constraint generation via the `"constraint_type"` and `"constrained_variables"` parameters of
-`GenerateHybridOctreeHexahedraElementsWithCellColor` (primal mesh).
+`GenerateOctreeHybridHexahedraElementsWithCellColor` (primal mesh).
 
 | Test | Assertion |
 |------|-----------|
@@ -2449,13 +2449,13 @@ The C++ suite mirrors the Python suite, covering the same functional groups plus
 |-------|---------------|
 | Top-level modeler | `OctreeHybridMeshGeneratorModelerDualElementsCreated`, `…DualZeroInverted`, `…DualCarveBbox`, `…DefaultParametersValid`, `…InfoString`, `…UnknownOperationThrows` |
 | `OctreeHybridClassifyCellsInsideOutside` | `OctreeHybridMesherClassifyReducesCellCount`, `…ClassifyRegistered` |
-| `GenerateHybridOctreeHexahedraElementsWithCellColor` | `OctreeHybridMesherGenerateHexesRegistered`, `…GenerateHexesNodeDeduplication`, `…GenerateHexesRefinementLevelTagged`, `…GenerateHexesNoLevelWhenDisabled`, `…GenerateHexesUniqueIds` |
-| `GenerateHybridOctreeQuadrilateralConditionsWithFaceColor` | `OctreeHybridMesherBoundaryConditionsRegistered`, `…BoundaryConditionsCreated`, `…BoundaryConditionsQuadNodes`, `…BoundaryConditionsFewerthanSixTimesElements`, `…BoundaryNodesSubsetOfVolume` |
-| `GenerateHybridOctreeHexahedraElementsWithCellColor` (hanging-node path) | `OctreeHybridMesherGenerateHexesByCellColorHasConstraintParams`, `…PrimalMeshConstraintsGenerated`, `…PrimalConstraintsPartitionOfUnity`, `…PrimalConstraintsMasterCountsValid`, `…PrimalMultiVariableConstraints`, `…DualMeshNoHangingConstraints` |
+| `GenerateOctreeHybridHexahedraElementsWithCellColor` | `OctreeHybridMesherGenerateHexesRegistered`, `…GenerateHexesNodeDeduplication`, `…GenerateHexesRefinementLevelTagged`, `…GenerateHexesNoLevelWhenDisabled`, `…GenerateHexesUniqueIds` |
+| `GenerateOctreeHybridQuadrilateralConditionsWithFaceColor` | `OctreeHybridMesherBoundaryConditionsRegistered`, `…BoundaryConditionsCreated`, `…BoundaryConditionsQuadNodes`, `…BoundaryConditionsFewerthanSixTimesElements`, `…BoundaryNodesSubsetOfVolume` |
+| `GenerateOctreeHybridHexahedraElementsWithCellColor` (hanging-node path) | `OctreeHybridMesherGenerateHexesByCellColorHasConstraintParams`, `…PrimalMeshConstraintsGenerated`, `…PrimalConstraintsPartitionOfUnity`, `…PrimalConstraintsMasterCountsValid`, `…PrimalMultiVariableConstraints`, `…DualMeshNoHangingConstraints` |
 | `OctreeHybridReportMeshQuality` | `OctreeHybridMesherReportMeshQualityRegistered`, `…ReportMeshQualityRunsWithoutError`, `…ReportMeshQualityEmptyModelPart` |
 | Registry dispatch | `OctreeHybridMesherRegistryBasePrototypesPresent`, `…RegistryKratosMultiphysicsPaths`, `…RegistryFullPathDispatchWorks`, `…RegistryBaseColoringInvocationThrows`, `…RegistryBaseOperationInvocationThrows` |
-| `GenerateHybridOctreeTetrahedraElementsWithCellColor` | `OctreeHybridGenerateTetrahedraRegistryEntry`, `OctreeHybridMeshGeneratorModelerTetraElementsCreated`, `…TetraCountIsHexTimes6`, `…TetraZeroInverted`, `…TetraNodeSubsetFromHex`, `…TetraTagRefinementLevel` |
-| `GenerateHybridOctreeTriangularConditionsWithFaceColor` | `OctreeHybridGenerateTriangleBCsRegistryEntry`, `OctreeHybridMeshGeneratorModelerTriangleBCsCreated`, `…TriangleBCsCountIsTwiceQuad`, `…TriangleBCsNodeSubset` |
+| `GenerateOctreeHybridTetrahedraElementsWithCellColor` | `OctreeHybridGenerateTetrahedraRegistryEntry`, `OctreeHybridMeshGeneratorModelerTetraElementsCreated`, `…TetraCountIsHexTimes6`, `…TetraZeroInverted`, `…TetraNodeSubsetFromHex`, `…TetraTagRefinementLevel` |
+| `GenerateOctreeHybridTriangularConditionsWithFaceColor` | `OctreeHybridGenerateTriangleBCsRegistryEntry`, `OctreeHybridMeshGeneratorModelerTriangleBCsCreated`, `…TriangleBCsCountIsTwiceQuad`, `…TriangleBCsNodeSubset` |
 
 ---
 
@@ -2474,7 +2474,7 @@ The notebook walks through:
 - Visualising the octree adaptive refinement (level scalar field) and the hex mesh quality.
 - Comparing the uncarved block, the coloring-carved mesh, and the surface-projected mesh.
 - Generating hanging-node constraints for the primal mesh and inspecting their partition-of-unity property.
-- **Step 11 (new):** Generating a conforming tetrahedral mesh via `GenerateHybridOctreeTetrahedraElementsWithCellColor` and triangular boundary conditions via `GenerateHybridOctreeTriangularConditionsWithFaceColor`; verifying the 6× tet/hex ratio and zero inverted elements; PyVista visualisation of the tet mesh coloured by refinement level.
+- **Step 11 (new):** Generating a conforming tetrahedral mesh via `GenerateOctreeHybridTetrahedraElementsWithCellColor` and triangular boundary conditions via `GenerateOctreeHybridTriangularConditionsWithFaceColor`; verifying the 6× tet/hex ratio and zero inverted elements; PyVista visualisation of the tet mesh coloured by refinement level.
 
 It requires `KratosMultiphysics`, `pyvista`, and optionally `trame`/`ipywidgets` for interactive rendering.
 
@@ -2524,7 +2524,7 @@ It requires `KratosMultiphysics`, `pyvista`, and optionally `trame`/`ipywidgets`
    is set in `RefineInterfaceCellsOctreeHybrid` (which already removes outside cells),
    `OctreeHybridClassifyCellsInsideOutside` must still appear in `coloring_settings_list`
    so that `mCellColor` is populated.
-   `GenerateHybridOctreeHexahedraElementsWithCellColor` filters on `mCellColor` and will produce no elements
+   `GenerateOctreeHybridHexahedraElementsWithCellColor` filters on `mCellColor` and will produce no elements
    if the color array is empty.
 
 ---
