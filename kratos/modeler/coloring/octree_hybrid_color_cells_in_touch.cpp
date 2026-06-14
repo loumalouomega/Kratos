@@ -39,18 +39,21 @@ const Parameters OctreeHybridColorCellsInTouch::GetDefaultParameters() const
 
 void OctreeHybridColorCellsInTouch::Apply(
     OctreeHybridMeshGeneratorModeler& rModeler,
-    Parameters ColoringParameters) const
+    Parameters ColoringParameters
+    ) const
 {
     KRATOS_TRY
 
+    // Get the data from the modeler
     auto& r_data = rModeler.GetData();
     const std::size_t n_cells = r_data.mCells.size();
 
     // Only reset the color vector when it has the wrong size so that prior
     // coloring steps' assignments are preserved (see OctreeHybridColorCellsByLevel
     // for the same rationale).
-    if (r_data.mCellColor.size() != n_cells)
+    if (r_data.mCellColor.size() != n_cells) {
         r_data.mCellColor.assign(n_cells, 0);
+    }
 
     const int color                    = ColoringParameters["color"].GetInt();
     const std::string model_part_name  = ColoringParameters["model_part_name"].GetString();
@@ -89,6 +92,7 @@ void OctreeHybridColorCellsInTouch::Apply(
     // before this stage examines any geometry.
     std::vector<bool> touched(n_cells, false);
 
+    // Lambda to colour all cells that intersect a given geometry.
     auto color_cells = [&](const Geometry<Node>& rGeometry) {
         // Geometry AABB
         double g_min[3] = {std::numeric_limits<double>::max(),
@@ -97,6 +101,8 @@ void OctreeHybridColorCellsInTouch::Apply(
         double g_max[3] = {-std::numeric_limits<double>::max(),
                            -std::numeric_limits<double>::max(),
                            -std::numeric_limits<double>::max()};
+
+        // Compute geometry AABB
         for (std::size_t k = 0; k < rGeometry.PointsNumber(); ++k) {
             const auto& p = rGeometry[k];
             if (p.X() < g_min[0]) g_min[0] = p.X();
@@ -107,6 +113,7 @@ void OctreeHybridColorCellsInTouch::Apply(
             if (p.Z() > g_max[2]) g_max[2] = p.Z();
         }
 
+        // Loop over all cells and colour those that intersect the geometry.
         for (std::size_t i = 0; i < n_cells; ++i) {
             // Skip cells already coloured by this stage — once coloured, a cell
             // cannot be un-coloured by subsequent geometries in the same pass,
@@ -132,14 +139,17 @@ void OctreeHybridColorCellsInTouch::Apply(
     };
 
     if (input_entities == "geometries") {
-        for (const auto& r_geom : r_mp.Geometries())
+        for (const auto& r_geom : r_mp.Geometries()) {
             color_cells(r_geom);
+        }
     } else if (input_entities == "elements") {
-        for (const auto& r_elem : r_mp.Elements())
+        for (const auto& r_elem : r_mp.Elements()) {
             color_cells(r_elem.GetGeometry());
+        }
     } else if (input_entities == "conditions") {
-        for (const auto& r_cond : r_mp.Conditions())
+        for (const auto& r_cond : r_mp.Conditions()) {
             color_cells(r_cond.GetGeometry());
+        }
     } else {
         KRATOS_ERROR << "OctreeHybridColorCellsInTouch: unsupported input_entities '"
                      << input_entities
