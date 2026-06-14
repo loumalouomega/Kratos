@@ -63,11 +63,11 @@ void RefineInterfaceCellsOctreeHybrid::Refine(
         ? OctreeHybridMeshUtility::ElementSizeToDepth(*r_data.mpOctree, refined_cell_size, false)
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
 
-    // Re-initialize the octree's internal grid if the requested depth exceeds the
-    // maximum set at construction; without this, SubdivideCellByIdAndLevel would
-    // silently stop at the old maximum depth.
+    // Extend the octree's internal grid tables if the requested depth exceeds the
+    // current maximum; without this, SubdivideCellByIdAndLevel would silently stop
+    // at the old maximum depth. IncreaseDepth preserves all previously refined cells.
     if (target_depth > r_data.mpOctree->GetDepth())
-        r_data.mpOctree->Initialize(target_depth);
+        r_data.mpOctree->IncreaseDepth(target_depth);
 
     // When no surface is specified for the sub-refinement pass, reuse the triangles
     // from the initial build (the main geometry).  A non-empty name allows adding

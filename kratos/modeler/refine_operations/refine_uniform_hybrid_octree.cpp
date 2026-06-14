@@ -57,10 +57,10 @@ void RefineUniformOctreeHybrid::Refine(
         : static_cast<std::size_t>(RefineParameters["refinement_depth"].GetInt());
 
     // OctreeType is constructed with a fixed maximum depth at build time.  If
-    // the requested depth exceeds that limit, Initialize re-creates the internal
-    // grid at the new depth before any subdivision can reach that level.
+    // the requested depth exceeds that limit, extend the internal grid tables
+    // to the new depth without discarding the subdivision performed so far.
     if (target_depth > r_data.mpOctree->GetDepth()) {
-        r_data.mpOctree->Initialize(target_depth);
+        r_data.mpOctree->IncreaseDepth(target_depth);
     }
 
     OctreeHybridMeshUtility::RefineAllCells(*r_data.mpOctree, target_depth);
