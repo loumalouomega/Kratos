@@ -357,6 +357,27 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridCalcSizeNormalizedMatchesInversePowerOfTwo
 }
 
 /**
+ * @brief OctreeHybrid::CalcSizeNormalized(const cell_type*) must match
+ *        CalcSizeNormalizedAtLevel(cell->GetLevel()) for both the root cell and a
+ *        cell created by subdivision.
+ */
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridCalcSizeNormalizedFromCellMatchesLevel, KratosCoreFastSuite)
+{
+    OHTestOctree octree(4);
+
+    std::vector<OHTestCell*> leaves;
+    octree.GetAllLeavesVector(leaves);
+    KRATOS_EXPECT_EQ(leaves.size(), std::size_t{1});
+    KRATOS_EXPECT_DOUBLE_EQ(octree.CalcSizeNormalized(leaves[0]), 1.0); // root, level 0
+
+    octree.SubdivideCellByIdAndLevel(0, 0);
+    octree.GetAllLeavesVector(leaves);
+    for (const OHTestCell* p_leaf : leaves) {
+        KRATOS_EXPECT_DOUBLE_EQ(octree.CalcSizeNormalized(p_leaf), 0.5); // level 1
+    }
+}
+
+/**
  * @brief SetBoundingBox + NormalizeCoordinates maps the corners to (0,0,0) and
  *        (1,1,1); ScaleBackToOriginalCoordinate is the exact inverse.
  */
@@ -651,6 +672,26 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridInfoAndPrintProduceNonEmptyOutput, KratosC
     oss.str("");
     octree.PrintData(oss);
     KRATOS_EXPECT_FALSE(oss.str().empty());
+}
+
+/**
+ * @brief operator<<(std::ostream&, const OctreeHybrid&) must combine PrintInfo and
+ *        PrintData (separated by a newline), matching the manual sequence.
+ */
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridStreamInsertionOperatorMatchesPrintInfoAndData, KratosCoreFastSuite)
+{
+    OHTestOctree octree(4);
+    octree.SubdivideCellByIdAndLevel(0, 0);
+
+    std::ostringstream expected;
+    octree.PrintInfo(expected);
+    expected << "\n";
+    octree.PrintData(expected);
+
+    std::ostringstream actual;
+    actual << octree;
+
+    KRATOS_EXPECT_EQ(actual.str(), expected.str());
 }
 
 ///@}
