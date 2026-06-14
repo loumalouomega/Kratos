@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <stack>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -2356,7 +2357,7 @@ void OctreeHybridMeshUtility::ClearBufferZone(
 
     for (int round=0; round<MaxRounds; ++round) {
         auto bfaces = ExtractBoundaryFaces(rCells);
-        if (bfaces.empty()) return;
+        if (bfaces.empty()) break;
 
         // Outward normal of each boundary face, and the faces / cells at each
         // boundary vertex.
@@ -2401,12 +2402,49 @@ void OctreeHybridMeshUtility::ClearBufferZone(
                 if (cb.second > best_cnt) { best_cnt=cb.second; best_cell=cb.first; }
             if (best_cell>=0) to_delete.insert(best_cell);
         }
-        if (to_delete.empty()) return;
+        if (to_delete.empty()) break;
 
         std::vector<std::array<int,8>> kept; std::vector<int> kept_lv;
         kept.reserve(rCells.size());
         for (int c=0;c<static_cast<int>(rCells.size());++c)
             if (!to_delete.count(c)) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); }
+        rCells.swap(kept); rCellLevel.swap(kept_lv);
+    }
+
+    // Final pass: discard any cells not face-connected to the largest group.
+    // The folding check above only removes cells that are geometrically
+    // tangled with their neighbours; a fully convex cell (or small convex
+    // cluster) that ends up sharing no face with the rest of the carved
+    // volume -- e.g. an isolated octree leaf surviving near a thin feature --
+    // passes that check untouched, yet it is a disconnected fragment that
+    // must not appear in the final mesh (it would otherwise be re-shelled by
+    // ProjectToIsoSurface into its own floating, unprojected island).
+    const int n_cells = static_cast<int>(rCells.size());
+    if (n_cells == 0) return;
+    const auto neighbors = ComputeCellFaceNeighbors(rCells);
+    std::vector<int> component(n_cells, -1);
+    std::vector<int> component_size;
+    for (int start = 0; start < n_cells; ++start) {
+        if (component[start] != -1) continue;
+        const int id = static_cast<int>(component_size.size());
+        int count = 0;
+        std::stack<int> stack;
+        stack.push(start);
+        component[start] = id;
+        while (!stack.empty()) {
+            const int c = stack.top(); stack.pop();
+            ++count;
+            for (int nb : neighbors[c])
+                if (nb >= 0 && component[nb] == -1) { component[nb] = id; stack.push(nb); }
+        }
+        component_size.push_back(count);
+    }
+    if (component_size.size() > 1) {
+        const int largest = static_cast<int>(std::max_element(component_size.begin(), component_size.end()) - component_size.begin());
+        std::vector<std::array<int,8>> kept; std::vector<int> kept_lv;
+        kept.reserve(n_cells);
+        for (int c = 0; c < n_cells; ++c)
+            if (component[c] == largest) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); }
         rCells.swap(kept); rCellLevel.swap(kept_lv);
     }
 }

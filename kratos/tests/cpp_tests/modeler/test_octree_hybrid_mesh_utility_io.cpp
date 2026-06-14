@@ -283,6 +283,39 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClearBufferZonePreservesConvexB
     KRATOS_EXPECT_EQ(cells.size(), std::size_t{2});
 }
 
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClearBufferZoneRemovesDisconnectedIsland, KratosCoreFastSuite)
+{
+    // A 2x1x1 block of two adjacent (face-connected) hexes, plus a third hex
+    // far away that shares no face (nor node) with the block. Both the block
+    // and the isolated hex are individually convex, so the folded-vertex
+    // check alone would keep all three -- as happened for an isolated octree
+    // leaf surviving near a thin feature, which ProjectToIsoSurface would
+    // then re-shell into its own floating, unprojected cube (see bunny-ear
+    // regression). ClearBufferZone must discard the disconnected island and
+    // keep only the largest face-connected group.
+    std::vector<std::array<double,3>> nodes = {
+        {0,0,0},{1,0,0},{2,0,0},
+        {0,1,0},{1,1,0},{2,1,0},
+        {0,0,1},{1,0,1},{2,0,1},
+        {0,1,1},{1,1,1},{2,1,1},
+        // Isolated unit cube, far away from the block above.
+        {10,0,0},{11,0,0},{11,1,0},{10,1,0},
+        {10,0,1},{11,0,1},{11,1,1},{10,1,1}
+    };
+    std::vector<std::array<int,8>> cells = {
+        {{0,1,4,3,6,7,10,9}},
+        {{1,2,5,4,7,8,11,10}},
+        {{12,13,14,15,16,17,18,19}}
+    };
+    std::vector<int> levels = {1, 1, 1};
+
+    OctreeHybridMeshUtility::ClearBufferZone(nodes, cells, levels);
+
+    KRATOS_EXPECT_EQ(cells.size(), std::size_t{2});
+    for (const int level : levels)
+        KRATOS_EXPECT_EQ(level, 1);
+}
+
 // ===========================================================================
 // OctreeHybridMeshUtility::ProjectToIsoSurface
 // ===========================================================================
