@@ -169,8 +169,7 @@ public:
 
     /**
      * @brief Initialises (or re-initialises) the octree for the given depth.
-     *
-     * This method:
+     * @details This method:
      *  1. Computes `mLevelId` and `mLevelRes` tables.
      *  2. Resizes `mNodeSubdivided` to the full complete-octree size and
      *     sets all entries to false (no cell is subdivided).
@@ -179,16 +178,12 @@ public:
      *
      * Calling Initialize() on an already-populated octree discards all
      * previous subdivision state and object associations.
-     *
-     * @param depth  Maximum refinement depth.  Must be >= 1 and <= MAX_DEPTH.
+     * @param Depth  Maximum refinement depth.  Must be >= 1 and <= MAX_DEPTH.
      */
-    void Initialize(std::size_t depth)
+    void Initialize(std::size_t Depth)
     {
-        if (depth < 1 || depth > MAX_DEPTH) {
-            throw std::invalid_argument(
-                "OctreeHybrid::Initialize: depth must be in [1, MAX_DEPTH]");
-        }
-        mDepth = depth;
+        KRATOS_ERROR_IF(Depth < 1 || Depth > MAX_DEPTH) << "OctreeHybrid::Initialize: Depth must be in [1, MAX_DEPTH]" << std::endl;
+        mDepth = Depth;
 
         // --- Precompute level tables -------------------------------------------
         // mLevelRes[L] = 2^L
@@ -218,16 +213,44 @@ public:
         mCells[0] = std::make_unique<cell_type>(0, 0, 0, 0, 0);
     }
 
+    /**
+     * @brief Extends the maximum refinement depth without discarding existing data.
+     * @details Unlike Initialize(), this method preserves all existing cells, leaves and
+     * subdivision flags. It only extends the `mLevelId`/`mLevelRes` tables and grows
+     * `mNodeSubdivided` so that cells up to the new depth can be represented and
+     * subdivided. Ids and levels of existing cells (which all lie at levels
+     * <= the previous depth) remain valid, since `mLevelId`/`mLevelRes` entries for
+     * those levels are unchanged by the extension.
+     * @param NewDepth  New maximum refinement depth. Must be > current depth and
+     *                  <= MAX_DEPTH.
+     */
+    void IncreaseDepth(const std::size_t NewDepth)
+    {
+        KRATOS_ERROR_IF(NewDepth <= mDepth || NewDepth > MAX_DEPTH) << "OctreeHybrid::IncreaseDepth: NewDepth must be > current depth and <= MAX_DEPTH" << std::endl;
+
+        const std::size_t old_depth = mDepth;
+        mDepth = NewDepth;
+
+        // --- Extend level tables, continuing the existing recursion -------------
+        mLevelRes.resize(mDepth + 2);
+        mLevelId.resize(mDepth + 2);
+        for (std::size_t L = old_depth + 2; L <= mDepth + 1; L++) {
+            mLevelRes[L] = mLevelRes[L-1] * 2;
+            mLevelId[L]  = mLevelId[L-1] + mLevelRes[L-1] * mLevelRes[L-1] * mLevelRes[L-1];
+        }
+
+        // --- Grow the flat subdivision array, preserving existing entries -------
+        mNodeSubdivided.resize(mLevelId[mDepth + 1], false);
+    }
+
     ///@}
     ///@name Bounding box and coordinate utilities
     ///@{
 
     /**
      * @brief Sets the world-space bounding box and computes normalisation factors.
-     *
-     * After this call, NormalizeCoordinates() maps world points in
+     * @details After this call, NormalizeCoordinates() maps world points in
      * [Low[i], High[i]] to [0, 1] for each axis i.
-     *
      * @param Low   Pointer to three lower-bound world coordinates.
      * @param High  Pointer to three upper-bound world coordinates.
      */
@@ -241,7 +264,6 @@ public:
 
     /**
      * @brief Normalises world coordinates in-place to [0, 1]^3.
-     *
      * @param Coordinates  In/out array of length DIMENSION.
      */
     void NormalizeCoordinates(coordinate_type* Coordinates) const
@@ -253,7 +275,6 @@ public:
 
     /**
      * @brief Normalises world coordinates into a separate output array.
-     *
      * @param Coordinates            Input world coordinates (length DIMENSION).
      * @param NormalizedCoordinates  Output normalised coordinates (length DIMENSION).
      */
@@ -268,7 +289,6 @@ public:
 
     /**
      * @brief Scales normalised coordinates back to world space in-place.
-     *
      * @param ThisCoordinates  In/out normalised coordinates (length DIMENSION).
      */
     void ScaleBackToOriginalCoordinate(coordinate_type* ThisCoordinates) const
@@ -280,13 +300,13 @@ public:
 
     /**
      * @brief Scales normalised coordinates back to world space into a separate array.
-     *
      * @param ThisCoordinates    Input normalised coordinates (length DIMENSION).
      * @param ResultCoordinates  Output world coordinates (length DIMENSION).
      */
     void ScaleBackToOriginalCoordinate(
         const coordinate_type* ThisCoordinates,
-        coordinate_type*       ResultCoordinates) const
+        coordinate_type*       ResultCoordinates
+        ) const
     {
         for (std::size_t i = 0; i < DIMENSION; i++) {
             ResultCoordinates[i] = ThisCoordinates[i] / mScaleFactor[i] - mOffset[i];
@@ -295,91 +315,86 @@ public:
 
     /**
      * @brief Converts a single normalised coordinate in [0, 1] to an integer key.
-     *
-     * The key is in [0, 2^mDepth].  At level L the grid position of the key
+     * @details The key is in [0, 2^mDepth].  At level L the grid position of the key
      * is obtained by right-shifting by (mDepth - L):
      * @code
      *   grid_pos_at_L = key >> (mDepth - L)
      * @endcode
-     *
-     * @param coordinate  Normalised coordinate in [0, 1].
+     * @param Coordinate  Normalised coordinate in [0, 1].
      * @return            Integer key in [0, 2^mDepth].
      */
-    key_type CalcKeyNormalized(coordinate_type coordinate) const
+    key_type CalcKeyNormalized(coordinate_type Coordinate) const
     {
-        assert(coordinate >= 0.0 && coordinate <= 1.0);
+        assert(Coordinate >= 0.0 && Coordinate <= 1.0);
         const std::size_t res = mLevelRes[mDepth]; // 2^mDepth
         return static_cast<key_type>(
             std::min(static_cast<double>(res - 1),
-                     std::floor(coordinate * static_cast<double>(res))));
+                     std::floor(Coordinate * static_cast<double>(res))));
     }
 
     /**
      * @brief Converts three normalised coordinates to integer keys.
-     *
      * @param NormalizedCoordinates  Input normalised coordinates (length DIMENSION).
      * @param keys                   Output keys (length DIMENSION).
      */
     void CalcKeysNormalized(
         const coordinate_type* NormalizedCoordinates,
-        key_type*              keys) const
+        key_type* Keys
+        ) const
     {
         for (std::size_t i = 0; i < DIMENSION; i++) {
-            keys[i] = CalcKeyNormalized(NormalizedCoordinates[i]);
+            Keys[i] = CalcKeyNormalized(NormalizedCoordinates[i]);
         }
     }
 
     /**
      * @brief Computes the normalised side length of a cell at the given level.
-     *
-     * @param level  Refinement level (0 = coarsest, MAX_DEPTH = finest).
-     * @return       1.0 / 2^level.
+     * @param Level  Refinement level (0 = coarsest, MAX_DEPTH = finest).
+     * @return       1.0 / 2^Level.
      */
-    double CalcSizeNormalizedAtLevel(std::size_t level) const
+    double CalcSizeNormalizedAtLevel(std::size_t Level) const
     {
-        return 1.0 / static_cast<double>(mLevelRes[level]);
+        return 1.0 / static_cast<double>(mLevelRes[Level]);
     }
 
     /**
      * @brief Computes the normalised side length of the given cell.
-     *
      * @param cell  Pointer to the cell.
      * @return      1.0 / 2^cell->GetLevel().
      */
-    double CalcSizeNormalized(const cell_type* cell) const
+    double CalcSizeNormalized(const cell_type* pCell) const
     {
-        return CalcSizeNormalizedAtLevel(static_cast<std::size_t>(cell->GetLevel()));
+        return CalcSizeNormalizedAtLevel(static_cast<std::size_t>(pCell->GetLevel()));
     }
 
     /**
      * @brief Computes normalised coordinates from an array of keys.
-     *
      * @param keys                   Input keys (length DIMENSION).
      * @param NormalizedCoordinates  Output normalised coordinates (length DIMENSION).
      */
     void CalculateCoordinatesNormalized(
-        const key_type* keys,
-        coordinate_type* NormalizedCoordinates) const
+        const key_type* Keys,
+        coordinate_type* NormalizedCoordinates
+        ) const
     {
         const double scale = 1.0 / static_cast<double>(mLevelRes[mDepth]);
         for (std::size_t i = 0; i < DIMENSION; i++) {
-            NormalizedCoordinates[i] = static_cast<double>(keys[i]) * scale;
+            NormalizedCoordinates[i] = static_cast<double>(Keys[i]) * scale;
         }
     }
 
     /**
      * @brief Computes world-space coordinates from keys (reverses normalisation).
-     *
-     * @param keys             Input keys (length DIMENSION).
+     * @param Keys             Input keys (length DIMENSION).
      * @param ResultCoordinates Output world-space coordinates (length DIMENSION).
      */
     void CalculateCoordinates(
-        const key_type* keys,
+        const key_type* Keys,
         coordinate_type* ResultCoordinates) const
     {
         const double scale = 1.0 / static_cast<double>(mLevelRes[mDepth]);
         for (std::size_t i = 0; i < DIMENSION; i++) {
-            ResultCoordinates[i] = static_cast<double>(keys[i]) * scale / mScaleFactor[i] - mOffset[i];
+            ResultCoordinates[i] = static_cast<double>(Keys[i]) * scale / mScaleFactor[i] - mOffset[i];
         }
     }
 
@@ -389,19 +404,23 @@ public:
 
     /**
      * @brief Converts a flat octree id and its level to (x, y, z) grid coordinates.
-     *
-     * Inverse of the formula:
+     * @details Inverse of the formula:
      * @code
      *   id = mLevelId[level] + z * res^2 + y * res + x,   res = 2^level
      * @endcode
-     *
      * @param octree_id  Flat index in mNodeSubdivided.
      * @param level      Refinement level of the cell.
      * @param x          Output X grid coordinate.
      * @param y          Output Y grid coordinate.
      * @param z          Output Z grid coordinate.
      */
-    void OctreeIdxToXyz(int octree_id, int level, int& x, int& y, int& z) const
+    void OctreeIdxToXyz(
+        int octree_id, 
+        int level, 
+        int& x, 
+        int& y, 
+        int& z
+        ) const
     {
         const int idx = octree_id - static_cast<int>(mLevelId[level]);
         const int res = static_cast<int>(mLevelRes[level]);
@@ -412,14 +431,18 @@ public:
 
     /**
      * @brief Computes the flat id of a given (x, y, z) position at a given level.
-     *
      * @param level  Refinement level.
      * @param x      X grid coordinate.
      * @param y      Y grid coordinate.
      * @param z      Z grid coordinate.
      * @return       Flat index in mNodeSubdivided.
      */
-    int XyzToOctreeIdx(int level, int x, int y, int z) const
+    int XyzToOctreeIdx(
+        int level, 
+        int x, 
+        int y, 
+        int z
+        ) const
     {
         const int res = static_cast<int>(mLevelRes[level]);
         return static_cast<int>(mLevelId[level]) + z * res * res + y * res + x;
@@ -427,9 +450,7 @@ public:
 
     /**
      * @brief Returns the level of a node given its flat id.
-     *
-     * Uses binary search on mLevelId (O(log mDepth), effectively O(1)).
-     *
+     * @details Uses binary search on mLevelId (O(log mDepth), effectively O(1)).
      * @param octree_id  Flat index in mNodeSubdivided.
      * @return           Refinement level (0 to mDepth).
      */
@@ -438,18 +459,18 @@ public:
         int lo = 0, hi = static_cast<int>(mDepth);
         while (lo < hi) {
             const int mid = (lo + hi + 1) / 2;
-            if (static_cast<int>(mLevelId[mid]) <= octree_id)
+            if (static_cast<int>(mLevelId[mid]) <= octree_id) {
                 lo = mid;
-            else
+            } else {
                 hi = mid - 1;
+            }
         }
         return lo;
     }
 
     /**
      * @brief Computes the flat id of a child of a given parent cell.
-     *
-     * Child indices map to (dx, dy, dz) offsets by bit-decomposition:
+     * @details Child indices map to (dx, dy, dz) offsets by bit-decomposition:
      * @code
      *   dx = child_index & 1
      *   dy = (child_index >> 1) & 1
@@ -458,14 +479,19 @@ public:
      * The child grid position at level parent_level+1 is:
      * @code
      *   child_x = 2 * parent_x + dx
+     *   child_y = 2 * parent_y + dy
+     *   child_z = 2 * parent_z + dz
      * @endcode
-     *
      * @param parent_id     Flat id of the parent cell.
      * @param parent_level  Level of the parent cell.
      * @param child_index   Child index in [0, 7].
      * @return              Flat id of the child cell.
      */
-    int Child(int parent_id, int parent_level, int child_index) const
+    int Child(
+        int parent_id, 
+        int parent_level, 
+        int child_index
+        ) const
     {
         int px, py, pz;
         OctreeIdxToXyz(parent_id, parent_level, px, py, pz);
@@ -485,16 +511,18 @@ public:
     /**
      * @brief Fills `siblings` with the flat ids of all eight cells that share
      *        the same parent as `octree_id`.
-     *
-     * The list always includes `octree_id` itself at its correct position.
+     * @details The list always includes `octree_id` itself at its correct position.
      * If `octree_id` is the root (level 0), only one sibling (itself) is valid
      * and the remaining seven entries are set to -1.
-     *
      * @param octree_id  Flat id of any cell at level `level`.
      * @param level      Refinement level of the cell.
      * @param siblings   Output array of exactly 8 integers.
      */
-    void RefineBrothers(int octree_id, int level, int siblings[8]) const
+    void RefineBrothers(
+        int octree_id, 
+        int level, 
+        int siblings[8]
+        ) const
     {
         if (level == 0) {
             // Root has no parent; only itself.
@@ -520,7 +548,6 @@ public:
 
     /**
      * @brief Returns true if a cell is currently a leaf (not subdivided).
-     *
      * @param octree_id  Flat id of the cell.
      * @return           true if mNodeSubdivided[octree_id] == false.
      */
@@ -535,10 +562,8 @@ public:
 
     /**
      * @brief Inserts a point given in normalised [0, 1]^3 coordinates.
-     *
-     * The octree is refined along the path to the point until either
+     * @details The octree is refined along the path to the point until either
      * MIN_DEPTH or an existing subdivision boundary is reached.
-     *
      * @param point  Normalised coordinates (length DIMENSION).
      */
     void InsertNormalized(const coordinate_type* point)
@@ -565,9 +590,7 @@ public:
 
     /**
      * @brief Inserts a point given in world-space coordinates.
-     *
-     * Normalises the point first, then calls InsertNormalized.
-     *
+     * @details Normalises the point first, then calls InsertNormalized.
      * @param point  World-space coordinates (length DIMENSION).
      */
     void Insert(const coordinate_type* point)
@@ -579,21 +602,21 @@ public:
 
     /**
      * @brief Subdivides the cell identified by `octree_id` at `level`.
-     *
-     * The method:
+     * @details The method:
      *  1. Sets `mNodeSubdivided[octree_id] = true`.
      *  2. Updates the cell in `mCells` to mark it as non-leaf.
      *  3. Creates eight child cells at `level+1` and registers them in
      *     `mCells` and `mLeafIds`.
      *  4. Decrements `mLeafCount` by 1 and increments it by 8.
-     *
      * Calling this on an already-subdivided cell is a no-op.
-     *
      * @param octree_id  Flat id of the cell to subdivide.
      * @param level      Refinement level of the cell.  Must be < mDepth.
      * @return           0 on success, 1 if the cell was already subdivided or at max depth.
      */
-    int SubdivideCellByIdAndLevel(int octree_id, int level)
+    int SubdivideCellByIdAndLevel(
+        int octree_id, 
+        int level
+        )
     {
         if (static_cast<std::size_t>(level) >= mDepth) return 1;  // at max depth
         if (mNodeSubdivided[static_cast<std::size_t>(octree_id)]) return 1; // already subdivided
@@ -632,16 +655,14 @@ public:
     }
 
     /**
-     * @brief Subdivides the cell pointed to by `p_cell`.
-     *
-     * Convenience overload compatible with OctreeBinary::SubdivideCell().
-     *
-     * @param p_cell  Pointer to the cell to subdivide.
-     * @return        0 on success, 1 if already subdivided.
+     * @brief Subdivides the cell pointed to by `pCell`.
+     * @details Convenience overload compatible with OctreeBinary::SubdivideCell().
+     * @param pCell  Pointer to the cell to subdivide.
+     * @return 0 on success, 1 if already subdivided.
      */
-    int SubdivideCell(cell_type* p_cell)
+    int SubdivideCell(cell_type* pCell)
     {
-        return SubdivideCellByIdAndLevel(p_cell->GetId(), p_cell->GetLevel());
+        return SubdivideCellByIdAndLevel(pCell->GetId(), pCell->GetLevel());
     }
 
     ///@}
@@ -650,8 +671,7 @@ public:
 
     /**
      * @brief Rebuilds `mLeafIds` by traversing the octree from the root.
-     *
-     * After a batch of subdivisions (e.g. during balancing), entries for
+     * @details After a batch of subdivisions (e.g. during balancing), entries for
      * cells that were subsequently subdivided may remain in `mLeafIds`.
      * This method removes all such stale entries and resets `mLeafCount`.
      *
@@ -690,25 +710,23 @@ public:
 
     /**
      * @brief Collects all current leaf cells into the provided vector.
-     *
-     * The vector is cleared before filling.  Cells are returned as raw
+     * @details The vector is cleared before filling.  Cells are returned as raw
      * pointers into the internal `mCells` map; they remain valid as long as
      * the octree is not modified.
-     *
-     * @param all_leaves  Output vector that will hold one pointer per leaf.
+     * @param rAllLeaves  Output vector that will hold one pointer per leaf.
      * @return            Always 0 (for API compatibility with OctreeBinary).
      */
-    int GetAllLeavesVector(std::vector<cell_type*>& all_leaves) const
+    int GetAllLeavesVector(std::vector<cell_type*>& rAllLeaves) const
     {
-        all_leaves.clear();
-        all_leaves.reserve(static_cast<std::size_t>(mLeafCount));
+        rAllLeaves.clear();
+        rAllLeaves.reserve(static_cast<std::size_t>(mLeafCount));
         for (const int id : mLeafIds) {
             // mLeafIds may contain stale entries for cells that were
             // subsequently subdivided.  Only emit actual leaves.
             if (!IsLeaf(id)) continue;
             auto it = mCells.find(id);
             if (it != mCells.end() && it->second) {
-                all_leaves.push_back(it->second.get());
+                rAllLeaves.push_back(it->second.get());
             }
         }
         return 0;
@@ -730,11 +748,9 @@ public:
 
     /**
      * @brief Returns the leaf cell that contains the given normalised point.
-     *
-     * Starting from the root, the method descends through the octree using
+     * @details Starting from the root, the method descends through the octree using
      * the flat-id arithmetic until it reaches a leaf (a cell whose
      * mNodeSubdivided entry is false).
-     *
      * @param point  Normalised coordinates in [0, 1]^3 (length DIMENSION).
      * @return       Pointer to the leaf cell, or nullptr if the point is
      *               outside [0, 1]^3 or not in any allocated cell.
@@ -748,7 +764,6 @@ public:
 
     /**
      * @brief Returns the leaf cell that contains the point encoded by the keys.
-     *
      * @param keys  Integer keys (length DIMENSION), each in [0, 2^mDepth).
      * @return      Pointer to the leaf cell, or nullptr.
      */
@@ -773,7 +788,6 @@ public:
     /**
      * @brief Returns the leaf cell at the given level or the deepest available
      *        ancestor if that level has not been refined to.
-     *
      * @param keys   Integer keys (length DIMENSION).
      * @param level  Target level to retrieve.
      * @return       Pointer to the leaf at or above `level`, or nullptr.
@@ -798,10 +812,8 @@ public:
     /**
      * @brief Collects all leaf cells whose bounding boxes intersect the given
      *        normalised axis-aligned box.
-     *
-     * Uses a depth-first traversal starting from the smallest ancestor of the
+     * @details Uses a depth-first traversal starting from the smallest ancestor of the
      * query box.
-     *
      * @param coord1  Minimum corner of the query box (normalised, length DIMENSION).
      * @param coord2  Maximum corner of the query box (normalised, length DIMENSION).
      * @param leaves  Output vector of matching leaf cells.
@@ -847,8 +859,7 @@ public:
 
     /**
      * @brief Enforces the 2:1 balance condition on the entire octree.
-     *
-     * Two adjacent leaf cells satisfy the 2:1 balance condition when their
+     * @details Two adjacent leaf cells satisfy the 2:1 balance condition when their
      * refinement levels differ by at most 1.  If any pair of face-adjacent
      * leaves violates this condition, the coarser cell (and all its siblings)
      * is subdivided.  The process repeats until the octree is fully balanced.
@@ -865,7 +876,6 @@ public:
      *
      * This is repeated (convergence loop) until a full pass over all leaves
      * produces no new subdivisions.
-     *
      * @note After this method returns, call RebuildLeafListClean() if you need
      *       a consistent leaf list (the method calls it internally).
      */
@@ -943,10 +953,7 @@ public:
 
     /**
      * @brief Strong-balance version of Constrain2To1.
-     *
-     * Port of StrongBalancedOctree() from the reference HexGen.cpp.
-     *
-     * In addition to face-neighbours (6 directions), this also checks
+     * @details In addition to face-neighbours (6 directions), this also checks
      * edge-neighbours (12 directions) and corner-neighbours (8 directions),
      * ensuring no two leaves at any shared topological feature differ by
      * more than one level.  This stricter condition is required for the
@@ -1030,7 +1037,6 @@ public:
 
     /**
      * @brief Returns true if two axis-aligned boxes overlap.
-     *
      * @param Low1, High1  First box corners.
      * @param Low2, High2  Second box corners.
      */
