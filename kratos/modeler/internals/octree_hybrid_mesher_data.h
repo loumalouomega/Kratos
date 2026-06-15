@@ -96,6 +96,12 @@ public:
     /// Number of smoothing iterations in the projection step.
     int mProjectionSmoothing = 1000;
 
+    /// Per-cell carve classification after surface projection: 0 = outside
+    /// (carved-but-retained), 1 = core (projected, inside), 2 = buffer shell
+    /// (new cells appended during projection). Empty until @ref mProjectToSurface
+    /// is true and the projection step has run.
+    std::vector<int> mCarveStatus;
+
     ///@}
     ///@name Inquiry
     ///@{

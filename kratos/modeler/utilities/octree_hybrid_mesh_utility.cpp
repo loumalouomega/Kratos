@@ -2431,12 +2431,15 @@ auto OctreeHybridMeshUtility::ComputeCellFaceNeighbors(
 /***********************************************************************************/
 /***********************************************************************************/
 
-void OctreeHybridMeshUtility::ClearBufferZone(
+namespace {
+
+void ClearBufferZoneImpl(
     const std::vector<std::array<double,3>>& rNodes,
     std::vector<std::array<int,8>>& rCells,
     std::vector<int>& rCellLevel,
+    std::vector<int>& rIndexMap,
     int MaxRounds,
-    const int EchoLevel
+    int EchoLevel
     )
 {
     KRATOS_TRY
@@ -2457,7 +2460,7 @@ void OctreeHybridMeshUtility::ClearBufferZone(
     }
 
     for (int round=0; round<MaxRounds; ++round) {
-        auto bfaces = ExtractBoundaryFaces(rCells);
+        auto bfaces = OctreeHybridMeshUtility::ExtractBoundaryFaces(rCells);
         if (bfaces.empty()) break;
 
         // Outward normal of each boundary face, and the faces / cells at each
@@ -2530,11 +2533,11 @@ void OctreeHybridMeshUtility::ClearBufferZone(
         }
         if (to_delete.empty()) break;
 
-        std::vector<std::array<int,8>> kept; std::vector<int> kept_lv;
-        kept.reserve(rCells.size());
+        std::vector<std::array<int,8>> kept; std::vector<int> kept_lv; std::vector<int> kept_idx;
+        kept.reserve(rCells.size()); kept_idx.reserve(rCells.size());
         for (int c=0;c<static_cast<int>(rCells.size());++c)
-            if (!to_delete.count(c)) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); }
-        rCells.swap(kept); rCellLevel.swap(kept_lv);
+            if (!to_delete.count(c)) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); kept_idx.push_back(rIndexMap[c]); }
+        rCells.swap(kept); rCellLevel.swap(kept_lv); rIndexMap.swap(kept_idx);
     }
 
     // Final pass: discard any cells not face-connected to the largest group.
@@ -2547,7 +2550,7 @@ void OctreeHybridMeshUtility::ClearBufferZone(
     // ProjectToIsoSurface into its own floating, unprojected island).
     const int n_cells = static_cast<int>(rCells.size());
     if (n_cells == 0) return;
-    const auto neighbors = ComputeCellFaceNeighbors(rCells);
+    const auto neighbors = OctreeHybridMeshUtility::ComputeCellFaceNeighbors(rCells);
     std::vector<int> component(n_cells, -1);
     std::vector<int> component_size;
     for (int start = 0; start < n_cells; ++start) {
@@ -2567,12 +2570,57 @@ void OctreeHybridMeshUtility::ClearBufferZone(
     }
     if (component_size.size() > 1) {
         const int largest = static_cast<int>(std::max_element(component_size.begin(), component_size.end()) - component_size.begin());
-        std::vector<std::array<int,8>> kept; std::vector<int> kept_lv;
-        kept.reserve(n_cells);
+        std::vector<std::array<int,8>> kept; std::vector<int> kept_lv; std::vector<int> kept_idx;
+        kept.reserve(n_cells); kept_idx.reserve(n_cells);
         for (int c = 0; c < n_cells; ++c)
-            if (component[c] == largest) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); }
-        rCells.swap(kept); rCellLevel.swap(kept_lv);
+            if (component[c] == largest) { kept.push_back(rCells[c]); kept_lv.push_back(rCellLevel[c]); kept_idx.push_back(rIndexMap[c]); }
+        rCells.swap(kept); rCellLevel.swap(kept_lv); rIndexMap.swap(kept_idx);
     }
+    KRATOS_CATCH("")
+}
+
+} // anonymous namespace
+
+void OctreeHybridMeshUtility::ClearBufferZone(
+    const std::vector<std::array<double,3>>& rNodes,
+    std::vector<std::array<int,8>>& rCells,
+    std::vector<int>& rCellLevel,
+    int MaxRounds,
+    const int EchoLevel
+    )
+{
+    KRATOS_TRY
+    std::vector<int> index_map(rCells.size());
+    for (std::size_t i = 0; i < index_map.size(); ++i) index_map[i] = static_cast<int>(i);
+    ClearBufferZoneImpl(rNodes, rCells, rCellLevel, index_map, MaxRounds, EchoLevel);
+    KRATOS_CATCH("")
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshUtility::ClearBufferZone(
+    const std::vector<std::array<double,3>>& rNodes,
+    const std::vector<std::array<int,8>>& rCells,
+    const std::vector<int>& rCellLevel,
+    std::vector<int>& rCoreCellIndices,
+    int MaxRounds,
+    const int EchoLevel
+    )
+{
+    KRATOS_TRY
+    std::vector<std::array<int,8>> core_cells;
+    std::vector<int> core_levels;
+    core_cells.reserve(rCoreCellIndices.size());
+    core_levels.reserve(rCoreCellIndices.size());
+    for (int idx : rCoreCellIndices) {
+        core_cells.push_back(rCells[idx]);
+        core_levels.push_back(rCellLevel[idx]);
+    }
+
+    std::vector<int> index_map = rCoreCellIndices;
+    ClearBufferZoneImpl(rNodes, core_cells, core_levels, index_map, MaxRounds, EchoLevel);
+    rCoreCellIndices.swap(index_map);
     KRATOS_CATCH("")
 }
 
@@ -3085,6 +3133,64 @@ void OctreeHybridMeshUtility::ProjectToIsoSurface(
     }
 
     KRATOS_INFO_IF("OctreeHybridMeshUtility::ProjectToIsoSurface", EchoLevel > 0) << "Finished: final worst scaled Jacobian=" << best_min_sj << ", gate eps_sj=" << eps_sj << std::endl;
+    KRATOS_CATCH("")
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+void OctreeHybridMeshUtility::ProjectToIsoSurface(
+    const TriangleSoup& rTriangles,
+    std::vector<std::array<double,3>>& rNodes,
+    std::vector<std::array<int,8>>& rCells,
+    std::vector<int>& rCellLevel,
+    const std::vector<int>& rCoreCellIndices,
+    std::vector<int>& rCarveStatus,
+    int TotalIters,
+    int SmoothEvery,
+    const int EchoLevel
+    )
+{
+    KRATOS_TRY
+    const std::size_t n_cells = rCells.size();
+    rCarveStatus.assign(n_cells, 0);
+    for (int idx : rCoreCellIndices) {
+        KRATOS_ERROR_IF(idx < 0 || static_cast<std::size_t>(idx) >= n_cells)
+            << "OctreeHybridMeshUtility::ProjectToIsoSurface: rCoreCellIndices "
+            << "contains out-of-range index " << idx << " (rCells has " << n_cells
+            << " entries)." << std::endl;
+        rCarveStatus[idx] = 1;
+    }
+
+    if (rCoreCellIndices.empty() || rTriangles.empty()) {
+        return;
+    }
+
+    std::vector<std::array<int,8>> core_cells;
+    std::vector<int> core_levels;
+    core_cells.reserve(rCoreCellIndices.size());
+    core_levels.reserve(rCoreCellIndices.size());
+    for (int idx : rCoreCellIndices) {
+        core_cells.push_back(rCells[idx]);
+        core_levels.push_back(rCellLevel[idx]);
+    }
+    const std::size_t n_core = core_cells.size();
+
+    ProjectToIsoSurface(rTriangles, rNodes, core_cells, core_levels, TotalIters, SmoothEvery, EchoLevel);
+
+    // Refresh the original core cells (defensive: connectivity is not expected
+    // to change, but keeps rCells authoritative).
+    for (std::size_t i = 0; i < n_core; ++i) {
+        rCells[rCoreCellIndices[i]] = core_cells[i];
+        rCellLevel[rCoreCellIndices[i]] = core_levels[i];
+    }
+
+    // Append the newly created buffer-shell hexes (level -2).
+    for (std::size_t i = n_core; i < core_cells.size(); ++i) {
+        rCells.push_back(core_cells[i]);
+        rCellLevel.push_back(core_levels[i]);
+        rCarveStatus.push_back(2);
+    }
     KRATOS_CATCH("")
 }
 

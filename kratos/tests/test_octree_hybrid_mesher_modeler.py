@@ -361,8 +361,9 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
                            "OctreeHybridClassifyCellsInsideOutside removed no cells")
         self.assertGreater(n_carved, 0, "No inside cells found")
 
-    def test_projected_shortcut_all_cells_inside(self):
-        """With project_to_surface=true the shortcut path sets all cells to color=1."""
+    def test_projected_classification_marks_core_and_buffer_inside(self):
+        """With project_to_surface=true, OctreeHybridClassifyCellsInsideOutside colors
+        core+buffer cells as 1 (inside) and carved-but-retained outside cells as 0."""
         model = KM.Model()
         build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
         run_modeler(model, """{
@@ -370,12 +371,41 @@ class TestClassifyCellsInsideOutside(unittest.TestCase):
             "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
                                        "refinement_depth":4,"adaptive":false,"project_to_surface":true}],
             "coloring_settings_list":[{"type":"OctreeHybridClassifyCellsInsideOutside"}],
-            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
-                                        "model_part_name":"Proj","color":1}],
+            "entities_generator_list":[
+                {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
+                 "model_part_name":"Inside","color":1},
+                {"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
+                 "model_part_name":"Outside","color":0}
+            ],
             "model_part_operations":[]}""")
-        n_proj = model.GetModelPart("Proj").NumberOfElements()
-        print(f"\n[OctreeHybridClassifyCellsInsideOutside projected] elements={n_proj}")
-        self.assertGreater(n_proj, 0)
+        n_inside = model.GetModelPart("Inside").NumberOfElements()
+        n_outside = model.GetModelPart("Outside").NumberOfElements()
+        print(f"\n[OctreeHybridClassifyCellsInsideOutside projected] inside={n_inside} outside={n_outside}")
+        self.assertGreater(n_inside, 0)
+        self.assertGreater(n_outside, 0)
+
+    def test_outside_carved_cells_are_retained_for_coloring(self):
+        """Cells outside the surface remain in mCells after project_to_surface so a
+        later coloring stage can still select them (regression for the carve-before-color
+        bug, where RemoveOutsideElement destroyed the mold region before mold coloring ran)."""
+        model = KM.Model()
+        build_closed_box_surface(model, lo=0.3, hi=0.7, name="S")
+        run_modeler(model, """{
+            "input_model_part_name":"S",
+            "refinement_settings_list":[{"type":"RefineInterfaceCellsOctreeHybrid",
+                                       "refinement_depth":4,"adaptive":false,"project_to_surface":true}],
+            "coloring_settings_list":[{"type":"OctreeHybridColorCellsInBoundingBox",
+                                        "color":2,
+                                        "min_point":[0.3,0.3,0.3],
+                                        "max_point":[0.7,0.7,0.7],
+                                        "inside_bounding_box":false}],
+            "entities_generator_list":[{"type":"GenerateOctreeHybridHexahedraElementsWithCellColor",
+                                        "model_part_name":"Mold","color":2}],
+            "model_part_operations":[]}""")
+        n_mold = model.GetModelPart("Mold").NumberOfElements()
+        print(f"\n[OctreeHybridColorCellsInBoundingBox outside] elements={n_mold}")
+        self.assertGreater(n_mold, 0,
+                            "Outside cells were carved away before coloring could select them")
 
     def test_default_type_name(self):
         """The default parameters include type='OctreeHybridClassifyCellsInsideOutside'."""

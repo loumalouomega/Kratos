@@ -220,14 +220,18 @@ subsequent entries are optional and can apply additional refinement (e.g. `Refin
    - Calls `OctreeHybridMeshUtility::ExtractDualHexMesh`, which runs the
      face-adjacency detection and transition-template emission pass to produce a
      conforming all-hex dual mesh stored as flat arrays in `OctreeHybridMesherData`.
-   - If `project_to_surface: true` and the triangle soup is non-empty:
-     - `RemoveOutsideElement`: carves away hexes whose centroids are outside the
-       surface (ray-cast inside/outside parity test + signed-distance filter).
-     - `ClearBufferZone`: removes boundary hexes that create non-manifold topology
-       (hemisphere-probe clearance so the extruded shell cannot self-intersect).
-     - `ProjectToIsoSurface`: runs the Jacobian-controlled optimiser to pull boundary
-       nodes onto the input surface.  The iteration budget is controlled by
-       `projection_iterations` and `projection_smoothing`.
+   - If `project_to_surface: true` and the triangle soup is non-empty, the
+     pipeline is **non-destructive**: no cell is ever removed from `mCells`.
+     - `ClassifyInsideOutside`: classifies every cell as core (inside, 1) or
+       outside (0) without modifying `mCells`.
+     - `ClearBufferZone` (non-destructive overload): shrinks the core-cell index
+       list in place to drop boundary hexes that create non-manifold topology,
+       without touching `mCells`.
+     - `ProjectToIsoSurface` (non-destructive overload): runs the
+       Jacobian-controlled optimiser on the core cells only, appends any new
+       buffer-shell hexes (level `-2`) to `mCells`/`mCellLevel`, and fills
+       `OctreeHybridMesherData::mCarveStatus` with the per-cell classification:
+       `0` = outside (carved-but-retained), `1` = core, `2` = buffer shell.
      - Sets `OctreeHybridMesherData::mProjected = true`.
 
    **`mesh_type: "primal"`**
@@ -277,6 +281,7 @@ Registered coloring components:
 | JSON `"type"` | Purpose |
 |--------------|---------|
 | `OctreeHybridClassifyCellsInsideOutside` | Ray-cast inside/outside classification |
+| `OctreeHybridColorCellsByCarveStatus` | Color cells by their non-destructive carve classification (mCarveStatus) |
 | `OctreeHybridColorCellsInTouch` | Color cells whose AABB intersects input-model-part geometry |
 | `OctreeHybridColorConnectedCellsInTouch` | Flood-fill connected cells touching input geometry |
 | `OctreeHybridColorCellsByLevel` | Color cells by octree refinement level |
@@ -289,9 +294,10 @@ Registered coloring components:
 
 When using `mesh_type: "dual"` **without** `project_to_surface`, the coloring stage is
 responsible for the inside/outside carving.  When `project_to_surface: true`, the
-projection pass has already removed all outside cells and set `mProjected = true`;
-`OctreeHybridClassifyCellsInsideOutside` then short-circuits with a single `assign(n, 1)` call
-instead of running the ray-caster.
+non-destructive projection pass has populated `OctreeHybridMesherData::mCarveStatus`
+and set `mProjected = true`; `OctreeHybridClassifyCellsInsideOutside` then derives
+`mCellColor` directly from `mCarveStatus` (core/buffer cells -> 1, carved-but-retained
+outside cells -> 0) instead of running the ray-caster.
 
 When using `mesh_type: "primal"`, the coloring list can be left empty (all cells
 included), or `OctreeHybridClassifyCellsInsideOutside` can be run to carve away outside cells
@@ -357,7 +363,8 @@ it as a `std::unique_ptr<OctreeHybridMesherData>` and exposes it through `GetDat
 | `mCellFaceColor` | `vector<array<int,6>>` | `OctreeHybridColorCellFacesBetweenColors` | Entity generation | Per-cell, per-local-face interface label (`FACE_FIDC`/Hexahedra3D8 ordering). Empty until a face-coloring stage runs. |
 | `mHanging` | `vector<HangingConstraint>` | `BuildOctreeAndExtract` | `GenerateOctreeHybridHexahedraElementsWithCellColor` (when `"constraint_type"` and `"constrained_variables"` are non-empty), `GenerateOctreeHybridConstraints` | Hanging-node interpolation records (primal mesh only). |
 | `mNodePtrs` | `vector<Node::Pointer>` | Entity generation (lazy) | Entity generation | De-duplication cache: mesh-node index -> ModelPart Node. Null until the node is first needed. |
-| `mProjected` | `bool` | `BuildOctreeAndExtract` | `OctreeHybridClassifyCellsInsideOutside` | True when surface projection has been applied; triggers the classification short-circuit. |
+| `mProjected` | `bool` | `BuildOctreeAndExtract` | `OctreeHybridClassifyCellsInsideOutside`, `OctreeHybridColorCellsByCarveStatus` | True when surface projection has been applied; switches classification to the `mCarveStatus`-based path. |
+| `mCarveStatus` | `std::vector<int>` | `BuildOctreeAndExtract` (projection step) | `OctreeHybridClassifyCellsInsideOutside`, `OctreeHybridColorCellsByCarveStatus` | Per-cell carve classification: 0 = outside (retained), 1 = core, 2 = buffer shell. Empty unless `project_to_surface: true`. |
 
 `IsExtracted()` returns `true` once `mCells` is non-empty (i.e. after
 `BuildOctreeAndExtract` completes).
@@ -507,7 +514,7 @@ The complete parameter block accepted by `OctreeHybridMeshGeneratorModeler`:
 | `refinement_depth` | int | `5` | Maximum octree refinement level near the surface.  Range: `[1, MAX_DEPTH=10]`. |
 | `adaptive` | bool | `true` | `true` = curvature + thickness adaptive refinement (matches HybridOctree_Hex reference cell-for-cell); `false` = uniform refinement of all surface-intersecting cells. |
 | `mesh_type` | string | `"dual"` | `"dual"` = conforming all-hex dual mesh; `"primal"` = one hex per octree leaf with hanging-node records. |
-| `project_to_surface` | bool | `false` | Dual mesh only.  When `true`, additionally carves the mesh against the surface (`RemoveOutsideElement`), clears non-manifold boundary regions (`ClearBufferZone`), and runs the Jacobian-controlled surface projector (`ProjectToIsoSurface`).  Sets `mProjected = true`. |
+| `project_to_surface` | bool | `false` | Dual mesh only.  When `true`, additionally classifies the mesh against the surface (`ClassifyInsideOutside`), clears non-manifold boundary regions from the core-cell set (`ClearBufferZone`), and runs the Jacobian-controlled surface projector (`ProjectToIsoSurface`) on the core cells, appending buffer-shell hexes.  This pipeline is non-destructive — no cell is removed from `mCells`.  Sets `mProjected = true` and fills `mCarveStatus`. |
 | `projection_iterations` | int | `20000` | Number of optimiser iterations in the surface projection pass.  Higher values improve the minimum scaled Jacobian at the cost of longer runtime. |
 | `projection_smoothing` | int | `1000` | Interval (in iterations) at which a gated smart-Laplacian smoothing pass is applied during surface projection. |
 
@@ -629,10 +636,11 @@ Classifies every hex cell as inside (label 1) or outside (label 0) the input sur
 
 **Behaviour:**
 
-- If `OctreeHybridMesherData::mProjected == true` (surface projection was applied), every
-  surviving cell is definitively inside; the method assigns `1` to all entries in
-  `mCellColor` with a single `std::vector::assign` call and returns immediately,
-  skipping the ray-caster entirely.
+- If `OctreeHybridMesherData::mProjected == true` (surface projection was applied),
+  the ray-caster is skipped: `mCellColor[i]` is set to `1` for every cell with
+  `OctreeHybridMesherData::mCarveStatus[i] != 0` (core or buffer shell, i.e. cells
+  the non-destructive projection step kept inside or added) and to `0` otherwise
+  (carved-but-retained outside cells).
 - Otherwise, calls `OctreeHybridMeshUtility::ClassifyInsideOutside`, which for each
   cell shoots a random ray from the cell centroid, counts surface-triangle crossings
   for the inside/outside sign, and uses closest-triangle distance for the magnitude.
@@ -643,6 +651,60 @@ Classifies every hex cell as inside (label 1) or outside (label 0) the input sur
 ```json
 { "type": "OctreeHybridClassifyCellsInsideOutside" }
 ```
+
+---
+
+#### `OctreeHybridColorCellsByCarveStatus`
+
+Colors cells by their non-destructive carve classification
+(`OctreeHybridMesherData::mCarveStatus`): 0 = outside (carved-but-retained),
+1 = core (projected, inside), 2 = buffer shell (appended during projection).
+Requires a refinement entry with `"project_to_surface": true` to have run first
+(otherwise `mCarveStatus` is empty and this stage throws).
+
+**Registry path:** `OctreeHybridMesherColoring.All.OctreeHybridColorCellsByCarveStatus.Prototype`
+
+**Class:** `Kratos::OctreeHybridColorCellsByCarveStatus`
+
+**Header:** `kratos/modeler/coloring/octree_hybrid_color_cells_by_carve_status.h`
+
+**Parameter schema:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | string | `"OctreeHybridColorCellsByCarveStatus"` | Registry lookup key. |
+| `color` | int | `1` | Color assigned to cells whose `mCarveStatus` is within `[min_status, max_status]`. |
+| `min_status` | int | `0` | Lower bound (inclusive) of the carve-status range to color. |
+| `max_status` | int | `2` | Upper bound (inclusive) of the carve-status range to color. |
+
+**Example JSON:**
+
+```json
+{
+    "type"       : "OctreeHybridColorCellsByCarveStatus",
+    "color"      : 1,
+    "min_status" : 1,
+    "max_status" : 2
+}
+```
+
+This is the typical way to recover the old "inside-only" mesh after a
+non-destructive `project_to_surface: true` pass: color core+buffer cells (statuses
+1-2) with the color used by the volume entity generator, leaving carved-but-retained
+outside cells (status 0) at the default outside color so they are excluded from
+volume generation but remain available for other coloring stages (e.g. a mold region
+selected by `OctreeHybridColorCellsInBoundingBox`).
+
+> **Important — `default_outside_color` interaction.** `ApplyColoring` pre-fills
+> `mCellColor` with the top-level `"default_outside_color"` value (default `1`)
+> *before* any coloring stage runs. Because `mCellColor` is therefore already sized
+> to `mCells.size()`, the "resize and fill with 0 if size differs" branch described
+> in `OctreeHybridColorCellsByCarveStatus`'s class documentation never triggers in
+> normal single-stage usage. If your goal is to leave `mCarveStatus == 0` (outside)
+> cells at color `0` — e.g. to exclude them from a volume entity generator while
+> still being selectable by a later coloring stage — you must ALSO set
+> `"default_outside_color": 0` at the top level of the modeler parameters. Otherwise
+> those cells silently retain the `default_outside_color` value (default `1`).
 
 ---
 
@@ -1737,8 +1799,9 @@ modeler.SetupModelPart()
 
 The `"coloring_settings_list"` entry is still required even when
 `project_to_surface: true` — it assigns the colour labels that entity generation
-filters on.  Because `mProjected == true`, the classification short-circuit fires and
-no ray-casting occurs.
+filters on.  Because `mProjected == true`, `OctreeHybridClassifyCellsInsideOutside`
+uses `mCarveStatus` directly (core/buffer cells -> 1, carved-but-retained outside
+cells -> 0) instead of the ray-caster, and no ray-casting occurs.
 
 ---
 
@@ -2321,7 +2384,8 @@ Unit tests for the `OctreeHybridClassifyCellsInsideOutside` coloring component.
 | Test | Assertion |
 |------|-----------|
 | `test_produces_inside_and_outside_colors` | Running the classifier reduces the element count vs. the unfiltered full block; the inside set is strictly smaller but non-empty. |
-| `test_projected_shortcut_all_cells_inside` | With `project_to_surface: true` the short-circuit path fires: all surviving cells receive `color = 1`. |
+| `test_projected_classification_marks_core_and_buffer_inside` | With `project_to_surface: true`, core+buffer cells (`mCarveStatus != 0`) receive `color = 1` and carved-but-retained outside cells (`mCarveStatus == 0`) receive `color = 0`. |
+| `test_outside_carved_cells_are_retained_for_coloring` | Regression: outside cells remain in `mCells` after `project_to_surface: true` so a later `OctreeHybridColorCellsInBoundingBox` stage can still select them. |
 | `test_default_type_name` | The Registry path `OctreeHybridMesherColoring.All.OctreeHybridClassifyCellsInsideOutside.Prototype` exists. |
 | `test_unknown_coloring_type_raises` | A non-existent coloring type name triggers a clear error. |
 
@@ -2526,9 +2590,13 @@ It requires `KratosMultiphysics`, `pyvista`, and optionally `trame`/`ipywidgets`
    §13.2 for a detailed explanation.
 
 7. **Coloring required before entity generation.** Even when `project_to_surface: true`
-   is set in `RefineInterfaceCellsOctreeHybrid` (which already removes outside cells),
-   `OctreeHybridClassifyCellsInsideOutside` must still appear in `coloring_settings_list`
-   so that `mCellColor` is populated.
+   is set in `RefineInterfaceCellsOctreeHybrid`, carved-but-retained outside cells are
+   **not** removed from `mCells` — the carve/project pipeline is non-destructive, and
+   `mCells` after `project_to_surface: true` includes outside cells
+   (`mCarveStatus == 0`) in addition to the core and buffer-shell cells.
+   `OctreeHybridClassifyCellsInsideOutside` (or `OctreeHybridColorCellsByCarveStatus`)
+   must still appear in `coloring_settings_list` so that `mCellColor` is populated and
+   the outside cells are excluded from volume entity generation.
    `GenerateOctreeHybridHexahedraElementsWithCellColor` filters on `mCellColor` and will produce no elements
    if the color array is empty.
 

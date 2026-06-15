@@ -2530,6 +2530,7 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerBunnyProjectedDualMesh
     ModelPart& out = RunModeler(model, R"({
         "input_model_part_name"  : "Surface",
         "output_model_part_name" : "BunnyVolume",
+        "default_outside_color"  : 0,
         "refinement_settings_list" : [{
             "type"                 : "RefineInterfaceCellsOctreeHybrid",
             "refinement_depth"     : 4,
@@ -2539,7 +2540,12 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerBunnyProjectedDualMesh
             "projection_iterations": 2000,
             "projection_smoothing" : 200
         }],
-        "coloring_settings_list" : [],
+        "coloring_settings_list" : [{
+            "type"       : "OctreeHybridColorCellsByCarveStatus",
+            "color"      : 1,
+            "min_status" : 1,
+            "max_status" : 2
+        }],
         "entities_generator_list": [{
             "type"                : "GenerateOctreeHybridHexahedraElementsWithCellColor",
             "model_part_name"     : "BunnyVolume",
@@ -2561,6 +2567,61 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshGeneratorModelerBunnyProjectedDualMesh
         KRATOS_EXPECT_TRUE(std::isfinite(r_node.Y()));
         KRATOS_EXPECT_TRUE(std::isfinite(r_node.Z()));
     }
+}
+
+
+// ===========================================================================
+// ApplyRefinement with project_to_surface=true — diagnostics do not alter mesh
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridApplyRefinementProjectedDiagnosticsPreserveCarveStatus, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"), 0.3, 0.7);
+
+    Parameters settings(R"({
+        "input_model_part_name"  : "Skin",
+        "output_model_part_name" : "Out",
+        "default_outside_color"  : 0,
+        "refinement_settings_list" : [{
+            "type"                 : "RefineInterfaceCellsOctreeHybrid",
+            "refinement_depth"     : 3,
+            "adaptive"             : false,
+            "mesh_type"            : "dual",
+            "project_to_surface"   : true,
+            "projection_iterations": 20,
+            "projection_smoothing" : 10
+        }],
+        "coloring_settings_list" : [{
+            "type"       : "OctreeHybridColorCellsByCarveStatus",
+            "color"      : 1,
+            "min_status" : 1,
+            "max_status" : 2
+        }],
+        "entities_generator_list": [{
+            "type"            : "GenerateOctreeHybridHexahedraElementsWithCellColor",
+            "model_part_name" : "Out",
+            "color"           : 1
+        }],
+        "model_part_operations"  : []
+    })");
+    settings.RemoveValue("output_model_part_name");
+
+    OctreeHybridMeshGeneratorModeler modeler(model, settings);
+    modeler.SetupModelPart();
+
+    auto& r_data = modeler.GetData();
+    KRATOS_EXPECT_TRUE(r_data.mProjected);
+    KRATOS_EXPECT_EQ(r_data.mCarveStatus.size(), r_data.mCells.size());
+
+    bool has_outside = false, has_core = false;
+    for (int status : r_data.mCarveStatus) {
+        if (status == 0) has_outside = true;
+        if (status == 1) has_core = true;
+        KRATOS_EXPECT_TRUE(status == 0 || status == 1 || status == 2);
+    }
+    KRATOS_EXPECT_TRUE(has_outside);
+    KRATOS_EXPECT_TRUE(has_core);
 }
 
 } // namespace Kratos::Testing

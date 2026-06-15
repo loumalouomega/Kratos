@@ -29,6 +29,7 @@
 
 #include "modeler/coloring/octree_hybrid_mesher_coloring.h"
 #include "modeler/coloring/octree_hybrid_classify_cells_inside_outside.h"
+#include "modeler/coloring/octree_hybrid_color_cells_by_carve_status.h"
 
 #include "modeler/entity_generation/octree_hybrid_mesher_entity_generation.h"
 #include "modeler/entity_generation/generate_octree_hybrid_hexahedra_elements_with_cell_color.h"
@@ -341,6 +342,91 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridClassifyCellsInsideOutsideApplyDirectlyPro
     bool has_outside = std::any_of(colors.begin(), colors.end(), [](int c){ return c == 0; });
     KRATOS_EXPECT_TRUE(has_inside);
     KRATOS_EXPECT_TRUE(has_outside);
+}
+
+// ===========================================================================
+// OctreeHybridColorCellsByCarveStatus::Apply — direct call
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByCarveStatusApplyDirectlyColorsSelectedStatuses, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        RefineInterfaceCellsOctreeHybrid build_op;
+        Parameters p(R"({
+            "type"            : "RefineInterfaceCellsOctreeHybrid",
+            "refinement_depth": 3,
+            "adaptive"        : false,
+            "mesh_type"       : "dual"
+        })");
+        build_op.ValidateParameters(p);
+        build_op.Refine(modeler, p);
+    }
+    ExtractMesh(modeler);
+
+    auto& r_data = modeler.GetData();
+    const std::size_t n_cells = r_data.mCells.size();
+    KRATOS_EXPECT_GT(n_cells, 0u);
+
+    // Synthesize a carve-status pattern: half outside (0), the rest split between
+    // core (1) and buffer shell (2).
+    r_data.mCarveStatus.assign(n_cells, 0);
+    for (std::size_t i = n_cells / 2; i < n_cells; ++i) {
+        r_data.mCarveStatus[i] = (i % 2 == 0) ? 1 : 2;
+    }
+
+    OctreeHybridColorCellsByCarveStatus color_op;
+    Parameters p(R"({
+        "type"       : "OctreeHybridColorCellsByCarveStatus",
+        "color"      : 5,
+        "min_status" : 1,
+        "max_status" : 2
+    })");
+    color_op.Apply(modeler, p);
+
+    KRATOS_EXPECT_EQ(r_data.mCellColor.size(), n_cells);
+    for (std::size_t i = 0; i < n_cells; ++i) {
+        if (r_data.mCarveStatus[i] == 0) {
+            KRATOS_EXPECT_EQ(r_data.mCellColor[i], 0);
+        } else {
+            KRATOS_EXPECT_EQ(r_data.mCellColor[i], 5);
+        }
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridColorCellsByCarveStatusApplyDirectlyThrowsWithoutCarveStatus, KratosCoreFastSuite)
+{
+    Model model;
+    BuildClosedBoxSurface(model.CreateModelPart("Skin"));
+    auto modeler = MakeEmptyModeler(model, "Skin", "Out");
+
+    {
+        RefineInterfaceCellsOctreeHybrid build_op;
+        Parameters p(R"({
+            "type"            : "RefineInterfaceCellsOctreeHybrid",
+            "refinement_depth": 3,
+            "adaptive"        : false,
+            "mesh_type"       : "dual"
+        })");
+        build_op.ValidateParameters(p);
+        build_op.Refine(modeler, p);
+    }
+    ExtractMesh(modeler);
+
+    // mCarveStatus was never populated (project_to_surface was not used).
+    KRATOS_EXPECT_TRUE(modeler.GetData().mCarveStatus.empty());
+
+    OctreeHybridColorCellsByCarveStatus color_op;
+    Parameters p(R"({
+        "type"       : "OctreeHybridColorCellsByCarveStatus",
+        "color"      : 1,
+        "min_status" : 0,
+        "max_status" : 2
+    })");
+    KRATOS_EXPECT_EXCEPTION_IS_THROWN(color_op.Apply(modeler, p), "mCarveStatus has size");
 }
 
 // ===========================================================================

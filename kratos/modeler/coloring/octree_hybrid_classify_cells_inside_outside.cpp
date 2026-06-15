@@ -37,14 +37,19 @@ void OctreeHybridClassifyCellsInsideOutside::Apply(OctreeHybridMeshGeneratorMode
 {
     auto& r_data = rModeler.GetData();
 
-    // When the dual mesh has been projected onto the surface, RemoveOutsideElement
-    // already discarded every cell that was predominantly outside the closed surface
-    // before ProjectToIsoSurface ran.  Every surviving cell is therefore inside by
-    // construction — running the ray-cast classifier again would be redundant and
-    // could mis-classify the buffer-layer cells (level == -2) whose centroids have
-    // been moved to the surface during projection.
+    // When the dual mesh has been projected onto the surface, the carve/project
+    // pipeline is non-destructive: mCells retains outside cells alongside the core
+    // and buffer-shell cells, classified per-cell in mCarveStatus (0 = outside,
+    // 1 = core, 2 = buffer shell). Map that to the inside (1) / outside (0)
+    // convention directly, without invoking the ray-caster again.
     if (r_data.mProjected) {
-        r_data.mCellColor.assign(r_data.mCells.size(), 1);
+        const std::size_t n_cells = r_data.mCells.size();
+        r_data.mCellColor.assign(n_cells, 0);
+        for (std::size_t i = 0; i < n_cells; ++i) {
+            if (r_data.mCarveStatus[i] != 0) {
+                r_data.mCellColor[i] = 1;
+            }
+        }
         return;
     }
 

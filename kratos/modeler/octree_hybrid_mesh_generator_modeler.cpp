@@ -11,7 +11,9 @@
 //
 
 // System includes
+#include <algorithm>
 #include <cmath>
+#include <set>
 
 // External includes
 
@@ -659,20 +661,74 @@ void OctreeHybridMeshGeneratorModeler::ApplyRefinement(Parameters RefinementPara
         OctreeHybridMeshUtility::ExtractDualHexMesh(*r_data.mpOctree, r_data.mNodes, r_data.mCells, r_data.mCellLevel);
         KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Extracting dual hexahedral mesh finished: " << r_data.mNodes.size() << " nodes, " << r_data.mCells.size() << " hexahedra" << std::endl;
 
-        // If projection to surface is on and we have a triangle soup, remove outside elements, clear the buffer zone, and project to the surface.
+        // If projection to surface is on and we have a triangle soup, classify
+        // inside/outside cells, clear the buffer zone, and project to the surface —
+        // all without removing any cell from r_data.mCells. Outside cells stay in
+        // the mesh (tagged via r_data.mCarveStatus) so that coloring stages decide
+        // what to keep.
         if (r_data.mProjectToSurface && !r_data.mTriangles.empty()) {
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing outside elements starting (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
-            OctreeHybridMeshUtility::RemoveOutsideElement(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, mEchoLevel);
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Removing outside elements finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Classifying inside/outside cells starting (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
+            std::vector<int> cell_color;
+            OctreeHybridMeshUtility::ClassifyInsideOutside(r_data.mTriangles, r_data.mNodes, r_data.mCells, cell_color);
+            std::vector<int> core_cell_indices;
+            for (std::size_t i = 0; i < cell_color.size(); ++i) {
+                if (cell_color[i] == 1) {
+                    core_cell_indices.push_back(static_cast<int>(i));
+                }
+            }
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Classifying inside/outside cells finished (" << core_cell_indices.size() << " inside of " << r_data.mCells.size() << ")" << std::endl;
 
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone starting (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
-            OctreeHybridMeshUtility::ClearBufferZone(r_data.mNodes, r_data.mCells, r_data.mCellLevel, mEchoLevel);
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone starting (core hexahedra: " << core_cell_indices.size() << ")" << std::endl;
+            OctreeHybridMeshUtility::ClearBufferZone(r_data.mNodes, r_data.mCells, r_data.mCellLevel, core_cell_indices, 50, mEchoLevel);
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Clearing buffer zone finished (core hexahedra: " << core_cell_indices.size() << ")" << std::endl;
 
             KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface starting (" << r_data.mProjectionIterations << " iterations, smoothing every " << r_data.mProjectionSmoothing << " iterations)" << std::endl;
-            OctreeHybridMeshUtility::ProjectToIsoSurface(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, r_data.mProjectionIterations, r_data.mProjectionSmoothing, mEchoLevel);
-            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface finished" << std::endl;
+            OctreeHybridMeshUtility::ProjectToIsoSurface(r_data.mTriangles, r_data.mNodes, r_data.mCells, r_data.mCellLevel, core_cell_indices, r_data.mCarveStatus, r_data.mProjectionIterations, r_data.mProjectionSmoothing, mEchoLevel);
+            KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0) << "Projecting to iso-surface finished (hexahedra: " << r_data.mCells.size() << ")" << std::endl;
             r_data.mProjected = true;
+
+            // Diagnostics only (spec §7): a cell outside the surface (mCarveStatus == 0)
+            // that shares a node with a core/buffer cell (mCarveStatus != 0) may have been
+            // dragged into a poor shape by the projection optimiser, since boundary-shared
+            // node coordinates are updated in place. Log a single summary if any such cell
+            // is inverted; no mesh changes result from this check.
+            {
+                std::set<int> dragged_nodes;
+                for (std::size_t i = 0; i < r_data.mCarveStatus.size(); ++i) {
+                    if (r_data.mCarveStatus[i] != 0) {
+                        for (int node_id : r_data.mCells[i]) {
+                            dragged_nodes.insert(node_id);
+                        }
+                    }
+                }
+                int n_bad = 0;
+                double worst_sj = 1.0;
+                for (std::size_t i = 0; i < r_data.mCarveStatus.size(); ++i) {
+                    if (r_data.mCarveStatus[i] != 0) continue;
+                    bool shares_dragged_node = false;
+                    for (int node_id : r_data.mCells[i]) {
+                        if (dragged_nodes.count(node_id)) {
+                            shares_dragged_node = true;
+                            break;
+                        }
+                    }
+                    if (!shares_dragged_node) continue;
+                    double p[8][3];
+                    for (int k = 0; k < 8; ++k) {
+                        for (int d = 0; d < 3; ++d) {
+                            p[k][d] = r_data.mNodes[r_data.mCells[i][k]][d];
+                        }
+                    }
+                    const double sj = OctreeHybridMeshUtility::ScaledJacobianMin(p);
+                    if (sj <= 0.0) {
+                        ++n_bad;
+                        worst_sj = std::min(worst_sj, sj);
+                    }
+                }
+                KRATOS_INFO_IF(GetLabel(), mEchoLevel > 0 && n_bad > 0)
+                    << "Surface projection dragged " << n_bad << " outside cell(s) into a "
+                    << "non-positive scaled Jacobian shape (worst scaled Jacobian: " << worst_sj << ")." << std::endl;
+            }
         }
     } else if (r_data.mMeshType == "primal") { // If we consider a primal mesh, the elements are defined by the octree cells and the hanging nodes are stored as constraints.
         OctreeHybridMeshUtility::ExtractPrimalHexMesh(

@@ -779,6 +779,32 @@ public:
         );
 
     /**
+     * @brief Non-destructive buffer-zone clearance: shrinks @p rCoreCellIndices
+     *        in place without modifying @p rCells.
+     * @details Identical fold-detection and largest-connected-component logic to
+     *          the destructive overload, but operates on a private copy of the
+     *          cells selected by @p rCoreCellIndices. On return,
+     *          @p rCoreCellIndices contains only the indices (into @p rCells)
+     *          of the cells that survive buffer-zone clearance; @p rCells and
+     *          @p rCellLevel are left unchanged.
+     * @param rNodes           Hex node coordinates (world space); read-only.
+     * @param rCells           Hex connectivity; not modified.
+     * @param rCellLevel       Per-cell level tags; not modified.
+     * @param rCoreCellIndices [in/out] Indices into @p rCells identifying the
+     *                         current core cell set; shrunk in place.
+     * @param MaxRounds        Maximum number of removal iterations (default 50).
+     * @param EchoLevel        Verbosity level (0 = silent, otherwise = non-silent).
+     */
+    static void ClearBufferZone(
+        const std::vector<std::array<double,3>>& rNodes,
+        const std::vector<std::array<int,8>>& rCells,
+        const std::vector<int>& rCellLevel,
+        std::vector<int>& rCoreCellIndices,
+        int MaxRounds = 50,
+        const int EchoLevel = 0
+        );
+
+    /**
      * @brief Meshes the buffer zone and fits the carved core mesh to the input
      *        surface with Jacobian control — port of HexGen.cpp::ProjectToIsoSurface.
      * @details The algorithm proceeds in five stages:
@@ -816,6 +842,52 @@ public:
         std::vector<std::array<double,3>>& rNodes,
         std::vector<std::array<int,8>>& rCells,
         std::vector<int>& rCellLevel,
+        int TotalIters,
+        int SmoothEvery,
+        const int EchoLevel = 0
+        );
+
+    /**
+     * @brief Non-destructive surface projection: projects only the cells listed
+     *        in @p rCoreCellIndices, appending any new buffer-shell cells to
+     *        @p rCells/@p rCellLevel and recording per-cell carve status in
+     *        @p rCarveStatus.
+     * @details Builds a private copy of the cells selected by @p rCoreCellIndices
+     *          and forwards it, together with @p rNodes and @p rTriangles, to the
+     *          destructive 7-argument overload (operating on the shared @p rNodes
+     *          array means optimised/dragged node positions are visible to every
+     *          cell that references them, including cells outside the core set).
+     *          On return:
+     *          - @p rCarveStatus is resized to `rCells.size()` (after appends);
+     *            entries for the original @p rCoreCellIndices are set to 1, all
+     *            other pre-existing cells to 0, and newly appended buffer-shell
+     *            cells to 2.
+     *          - New buffer-shell hexes (tagged with level -2) are appended to
+     *            @p rCells/@p rCellLevel.
+     *          - @p rCells/@p rCellLevel entries for the original core cells are
+     *            refreshed from the optimised copy (their connectivity is not
+     *            expected to change, but this keeps @p rCells authoritative).
+     *          If @p rCoreCellIndices is empty or @p rTriangles is empty,
+     *          @p rCarveStatus is still (re)initialised but no cells are appended.
+     * @param rTriangles       Input surface triangles (world coordinates).
+     * @param rNodes           Mesh nodes; duplicate shell nodes are appended.
+     * @param rCells           [in/out] Hex connectivity; buffer hexes are appended.
+     * @param rCellLevel       [in/out] Per-cell level tag; buffer hexes tagged -2.
+     * @param rCoreCellIndices Indices into @p rCells (before this call) identifying
+     *                         the cells to project.
+     * @param rCarveStatus     [out] Per-cell classification: 0 = outside (untouched),
+     *                         1 = core (projected), 2 = buffer shell (new).
+     * @param TotalIters       Total gradient iterations.
+     * @param SmoothEvery      Iterations between smart-Laplacian/threshold updates.
+     * @param EchoLevel        Verbosity level (0 = silent, otherwise = non-silent).
+     */
+    static void ProjectToIsoSurface(
+        const TriangleSoup& rTriangles,
+        std::vector<std::array<double,3>>& rNodes,
+        std::vector<std::array<int,8>>& rCells,
+        std::vector<int>& rCellLevel,
+        const std::vector<int>& rCoreCellIndices,
+        std::vector<int>& rCarveStatus,
         int TotalIters,
         int SmoothEvery,
         const int EchoLevel = 0

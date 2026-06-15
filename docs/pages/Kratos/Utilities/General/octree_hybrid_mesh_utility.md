@@ -1264,6 +1264,17 @@ Output: the final watertight, Jacobian-controlled all-hex mesh (`projHex.vtk` /
   re-extracted until clean.  This is the key step that stops the extruded shell from
   self-intersecting — on the depth-5 bunny it cuts inverted buffer hexes from ~11 %
   to ~0.05 %.
+
+  > **Non-destructive overloads.** `ClearBufferZone` and `ProjectToIsoSurface` also have
+  > overloads that operate on a `core_cell_indices` index list instead of mutating
+  > `rCells` directly: `ClearBufferZone` shrinks the index list in place, and
+  > `ProjectToIsoSurface` appends any new buffer-shell hexes to `rCells`/`rCellLevel`
+  > and fills a `carve_status` output vector (0 = outside, 1 = core, 2 = buffer shell).
+  > These are used by `OctreeHybridMeshGeneratorModeler::ApplyRefinement` so that
+  > `project_to_surface: true` never removes cells from the mesh; the destructive
+  > overloads documented above remain available for `BuildCarveAndWriteVtk` /
+  > `BuildCarveProjectAndWriteVtk` and their tests.
+
 - **Buffer-layer meshing** mirrors the reference: each boundary vertex is duplicated,
   and a hex (`level = -2`) links the boundary quad to its duplicate quad, with the
   winding chosen so a small outward extrusion gives a positive Jacobian.

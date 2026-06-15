@@ -880,4 +880,103 @@ KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityRemoveOutsideElementKeepsInside
     KRATOS_EXPECT_GT(cells.size(), 0u);
 }
 
+// ===========================================================================
+// Section I — Non-destructive ClearBufferZone / ProjectToIsoSurface overloads
+// ===========================================================================
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityClearBufferZoneNonDestructiveShrinksCoreIndicesOnly, KratosCoreFastSuite)
+{
+    Model model;
+    BuildBoxSurface(model.CreateModelPart("Skin"), 0.3, 0.7);
+    const Util::TriangleSoup soup = Util::ExtractTriangleSoup(model.GetModelPart("Skin"));
+    auto octree = Util::BuildFromSurfaceMesh(model.GetModelPart("Skin"), 3, false);
+    octree->StrongConstrain2To1();
+
+    std::vector<std::array<double,3>> nodes;
+    std::vector<std::array<int,8>> cells;
+    std::vector<int> levels;
+    Util::ExtractDualHexMesh(*octree, nodes, cells, levels);
+
+    std::vector<int> cell_color;
+    Util::ClassifyInsideOutside(soup, nodes, cells, cell_color);
+    std::vector<int> core_indices;
+    for (std::size_t i = 0; i < cell_color.size(); ++i) {
+        if (cell_color[i] == 1) core_indices.push_back(static_cast<int>(i));
+    }
+
+    const std::size_t n_cells_before = cells.size();
+    const std::size_t n_levels_before = levels.size();
+    const std::size_t n_core_before = core_indices.size();
+    KRATOS_EXPECT_GT(n_core_before, 0u);
+
+    Util::ClearBufferZone(nodes, cells, levels, core_indices);
+
+    // rCells/rCellLevel are untouched.
+    KRATOS_EXPECT_EQ(cells.size(), n_cells_before);
+    KRATOS_EXPECT_EQ(levels.size(), n_levels_before);
+
+    // core_indices only shrinks, and stays within bounds and inside the surface.
+    KRATOS_EXPECT_LE(core_indices.size(), n_core_before);
+    for (int idx : core_indices) {
+        KRATOS_EXPECT_GE(idx, 0);
+        KRATOS_EXPECT_LT(static_cast<std::size_t>(idx), n_cells_before);
+        KRATOS_EXPECT_EQ(cell_color[idx], 1);
+    }
+}
+
+KRATOS_TEST_CASE_IN_SUITE(OctreeHybridMeshUtilityProjectToIsoSurfaceNonDestructiveAppendsBufferAndPreservesOutside, KratosCoreFastSuite)
+{
+    Model model;
+    BuildBoxSurface(model.CreateModelPart("Skin"), 0.3, 0.7);
+    const Util::TriangleSoup soup = Util::ExtractTriangleSoup(model.GetModelPart("Skin"));
+    auto octree = Util::BuildFromSurfaceMesh(model.GetModelPart("Skin"), 3, false);
+    octree->StrongConstrain2To1();
+
+    std::vector<std::array<double,3>> nodes;
+    std::vector<std::array<int,8>> cells;
+    std::vector<int> levels;
+    Util::ExtractDualHexMesh(*octree, nodes, cells, levels);
+
+    std::vector<int> cell_color;
+    Util::ClassifyInsideOutside(soup, nodes, cells, cell_color);
+    std::vector<int> core_indices;
+    for (std::size_t i = 0; i < cell_color.size(); ++i) {
+        if (cell_color[i] == 1) core_indices.push_back(static_cast<int>(i));
+    }
+    KRATOS_EXPECT_GT(core_indices.size(), 0u);
+
+    const std::size_t n_cells_before = cells.size();
+
+    Util::ClearBufferZone(nodes, cells, levels, core_indices);
+
+    std::set<int> core_set(core_indices.begin(), core_indices.end());
+
+    std::vector<int> carve_status;
+    Util::ProjectToIsoSurface(soup, nodes, cells, levels, core_indices, carve_status, 20, 10);
+
+    // Cells may have been appended (buffer shell), never removed.
+    KRATOS_EXPECT_GE(cells.size(), n_cells_before);
+    KRATOS_EXPECT_EQ(levels.size(), cells.size());
+    KRATOS_EXPECT_EQ(carve_status.size(), cells.size());
+
+    for (std::size_t i = 0; i < n_cells_before; ++i) {
+        if (core_set.count(static_cast<int>(i))) {
+            KRATOS_EXPECT_EQ(carve_status[i], 1);
+        } else {
+            KRATOS_EXPECT_EQ(carve_status[i], 0);
+        }
+    }
+    for (std::size_t i = n_cells_before; i < cells.size(); ++i) {
+        KRATOS_EXPECT_EQ(carve_status[i], 2);
+        KRATOS_EXPECT_EQ(levels[i], -2);
+    }
+
+    // All node coordinates remain finite after projection.
+    for (const auto& node : nodes) {
+        for (int d = 0; d < 3; ++d) {
+            KRATOS_EXPECT_TRUE(std::isfinite(node[d]));
+        }
+    }
+}
+
 } // namespace Kratos::Testing

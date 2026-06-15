@@ -34,12 +34,14 @@ namespace Kratos {
  *          parity test (sign) with the closest-triangle signed distance (magnitude) to
  *          produce a robust inside/outside decision for each cell's representative point.
  *
- *          ### Projected-mesh short-circuit
- *          When `OctreeHybridMesherData::mProjected == true`, the surface-projection pass has
- *          already carved away all outside cells during the extraction phase.  In that
- *          case every surviving cell is definitively inside, so the classification loop
- *          is replaced by a single `std::vector::assign` that sets all entries to 1
- *          without touching the ray-caster.
+ *          ### Projected-mesh classification
+ *          When `OctreeHybridMesherData::mProjected == true`, the surface-projection pass
+ *          is non-destructive: `OctreeHybridMesherData::mCells` retains the outside cells
+ *          alongside the core (projected) and buffer-shell cells, classified per-cell in
+ *          `OctreeHybridMesherData::mCarveStatus` (0 = outside, 1 = core, 2 = buffer
+ *          shell). In that case the ray-caster is skipped and `mCellColor[i]` is set to 1
+ *          for every cell with `mCarveStatus[i] != 0` (core or buffer shell) and to 0
+ *          otherwise (outside).
  *
  *          ### Colour convention
  *          | Value | Meaning  |
@@ -87,8 +89,9 @@ public:
 
     /**
      * @brief Classifies every hex cell in `rModeler.GetData()` as inside (1) or outside (0).
-     * @details If `rModeler.GetData().mProjected` is `true`, assigns 1 to all entries in
-     *          `mCellColor` directly (the projection pass already removed outside cells).
+     * @details If `rModeler.GetData().mProjected` is `true`, sets `mCellColor[i] = 1` for
+     *          every cell with `mCarveStatus[i] != 0` (core or buffer shell) and `0`
+     *          otherwise, without invoking the ray-caster.
      *          Otherwise delegates to `OctreeHybridMeshUtility::ClassifyInsideOutside`,
      *          passing the triangle soup, node coordinates, connectivity and the colour
      *          array to fill.
