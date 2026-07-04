@@ -19,6 +19,7 @@
 #include "python/add_strategies_to_python.h"
 #include "includes/model_part.h"
 #include "spaces/ublas_space.h"
+#include "spaces/default_spaces.h"
 #include "includes/ublas_complex_interface.h"
 #include "utilities/variable_utils.h"
 
@@ -75,11 +76,11 @@ namespace Kratos:: Python
 {
     namespace py = pybind11;
 
-    typedef UblasSpace<double, CompressedMatrix, boost::numeric::ublas::vector<double>> SparseSpaceType;
-    typedef UblasSpace<double, Matrix, Vector> LocalSpaceType;
+    typedef DefaultSparseSpaceType SparseSpaceType;
+    typedef DefaultLocalSpaceType LocalSpaceType;
 
-    typedef UblasSpace<std::complex<double>, ComplexCompressedMatrix, boost::numeric::ublas::vector<std::complex<double>>> ComplexSparseSpaceType;
-    typedef UblasSpace<std::complex<double>, ComplexMatrix, ComplexVector> ComplexLocalSpaceType;
+    typedef DefaultComplexSparseSpaceType ComplexSparseSpaceType;
+    typedef DefaultComplexLocalSpaceType ComplexLocalSpaceType;
 
     //ADDED BY PAOLO (next two)
 
@@ -509,12 +510,21 @@ namespace Kratos:: Python
         .def("SetConstantConstraints", &ResidualBasedBlockBuilderAndSolverType::SetConstantConstraints)
         ;
 
+#ifndef KRATOS_USE_EIGEN_BACKEND
+        // The Lagrange-multiplier block builder relies on uBLAS-only sparse
+        // construction (push_back, AssembleSparseMatrixByBlocks), so it is not
+        // yet available with the Eigen sparse backend.
         typedef ResidualBasedBlockBuilderAndSolverWithLagrangeMultiplier< SparseSpaceType, LocalSpaceType, LinearSolverType > ResidualBasedBlockBuilderAndSolverWithLagrangeMultiplierType;
         py::class_< ResidualBasedBlockBuilderAndSolverWithLagrangeMultiplierType, ResidualBasedBlockBuilderAndSolverWithLagrangeMultiplierType::Pointer,BuilderAndSolverType>(m,"ResidualBasedBlockBuilderAndSolverWithLagrangeMultiplier")
         .def(py::init< LinearSolverType::Pointer > ())
         .def(py::init< LinearSolverType::Pointer, Parameters > ())
         ;
+#endif
 
+#ifndef KRATOS_USE_EIGEN_BACKEND
+        // PMultigridBuilderAndSolver is explicitly instantiated for the uBLAS
+        // spaces only (its implementation lives in a source file), so it is
+        // not yet available with the Eigen sparse backend.
         typedef PMultigridBuilderAndSolver<SparseSpaceType,LocalSpaceType> PMultigridBuilderAndSolverType;
         py::class_<PMultigridBuilderAndSolverType,PMultigridBuilderAndSolverType::Pointer,BuilderAndSolverType>(m, "PMultigridBuilderAndSolver")
             .def(py::init<>())
@@ -525,6 +535,7 @@ namespace Kratos:: Python
                  py::arg("LinearSolver"),
                  py::arg("Settings"))
             ;
+#endif
 
         //********************************************************************
         //********************************************************************

@@ -74,6 +74,7 @@
 #include "processes/calculate_nodal_distance_to_skin_process.h"
 
 #include "spaces/ublas_space.h"
+#include "spaces/default_spaces.h"
 #include "linear_solvers/linear_solver.h"
 
 namespace Kratos::Python
@@ -117,8 +118,8 @@ void CalculateEmbeddedVariableFromSkinArray(
     rDistProcess.CalculateEmbeddedVariableFromSkin(rVariable, rEmbeddedVariable);
 }
 
-using SparseSpaceType = UblasSpace<double, CompressedMatrix, Vector>;
-using LocalSpaceType = UblasSpace<double, Matrix, Vector>;
+using SparseSpaceType = DefaultSparseSpaceType;
+using LocalSpaceType = DefaultLocalSpaceType;
 using LinearSolverType = LinearSolver<SparseSpaceType, LocalSpaceType>;
 
 template <std::size_t TDim, std::size_t TNumNodes, class TVariableType, const SizeType TNumNodesMaster = TNumNodes>

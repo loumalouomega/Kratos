@@ -19,6 +19,7 @@
 // Project includes
 #include "python/add_other_utilities_to_python.h"
 #include "spaces/ublas_space.h"
+#include "spaces/default_spaces.h"
 #include "linear_solvers/linear_solver_ublas.h"
 #include "includes/define_python.h"
 #include "processes/process.h"
@@ -193,8 +194,8 @@ void AddOtherUtilitiesToPython(pybind11::module &m)
 
     namespace py = pybind11;
 
-    typedef UblasSpace<double, CompressedMatrix, boost::numeric::ublas::vector<double>> SparseSpaceType;
-    typedef UblasSpace<double, Matrix, Vector> LocalSpaceType;
+    typedef DefaultSparseSpaceType SparseSpaceType;
+    typedef DefaultLocalSpaceType LocalSpaceType;
     typedef LinearSolver<SparseSpaceType, LocalSpaceType> LinearSolverType;
 
     py::class_<BasicGenericFunctionUtility,  BasicGenericFunctionUtility::Pointer >(m,"BasicGenericFunctionUtility")

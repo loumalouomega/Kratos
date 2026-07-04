@@ -26,6 +26,7 @@
 #include "includes/ublas_complex_interface.h"
 
 #include "linear_solvers/linear_solver_ublas.h"
+#include "spaces/default_spaces.h"
 #include "linear_solvers/reorderer.h"
 #include "linear_solvers/direct_solver.h"
 #include "linear_solvers/skyline_lu_factorization_solver.h"
@@ -44,9 +45,9 @@
 namespace Kratos::Python
 {
     template <class TDataType>
-    using TSpaceType = UblasSpace<TDataType, boost::numeric::ublas::compressed_matrix<TDataType>, boost::numeric::ublas::vector<TDataType>>;
+    using TSpaceType = TDefaultSparseSpace<TDataType>;
     template <class TDataType>
-    using TLocalSpaceType = UblasSpace<TDataType, DenseMatrix<TDataType>, DenseVector<TDataType>>;
+    using TLocalSpaceType = TDefaultDenseSpace<TDataType>;
     template <class TDataType, class TOtherDataType>
     using TLinearSolverType = LinearSolver<TSpaceType<TDataType>, TLocalSpaceType<TOtherDataType>>;
     template <class TDataType>
@@ -56,10 +57,10 @@ void  AddLinearSolversToPython(pybind11::module& m)
 {
     namespace py = pybind11;
 
-    using SpaceType = UblasSpace<double, CompressedMatrix, boost::numeric::ublas::vector<double>>;
-    using LocalSpaceType = UblasSpace<double, Matrix, Vector>;
-    using ComplexSpaceType = TUblasSparseSpace<std::complex<double>>;
-    using ComplexLocalSpaceType = TUblasDenseSpace<std::complex<double>>;
+    using SpaceType = DefaultSparseSpaceType;
+    using LocalSpaceType = DefaultLocalSpaceType;
+    using ComplexSpaceType = DefaultComplexSparseSpaceType;
+    using ComplexLocalSpaceType = DefaultComplexLocalSpaceType;
 
     using LinearSolverType = LinearSolver<SpaceType, LocalSpaceType>;
     using IterativeSolverType = IterativeSolver<SpaceType, LocalSpaceType>;
