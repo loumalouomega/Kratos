@@ -208,10 +208,7 @@ public:
         return IndexPartition<int>(n_chunks).template for_each<SumReduction<TDataType>>([=](int Chunk) {
             const SizeType begin = (size * Chunk) / n_chunks;
             const SizeType end = (size * (Chunk + 1)) / n_chunks;
-            TDataType accumulator = TDataType();
-            for (SizeType i = begin; i < end; ++i)
-                accumulator += x_data[i] * y_data[i];
-            return accumulator;
+            return PartialDot(x_data, y_data, begin, end);
         });
     }
 
@@ -246,9 +243,13 @@ public:
     static TDataType TwoNorm(const EigenCompressedMatrix<TDataType, TIndexType>& rA) // Frobenius norm
     {
         EnsureCompressed(rA);
-        const auto r_values = rA.value_data();
-        const TDataType aux_sum = IndexPartition<IndexType>(rA.nnz()).template for_each<SumReduction<TDataType>>([&](IndexType i) {
-            return std::pow(r_values[i], 2);
+        const auto* values = rA.valuePtr();
+        const SizeType nnz = rA.nnz();
+        const int n_chunks = ParallelUtilities::GetNumThreads();
+        const TDataType aux_sum = IndexPartition<int>(n_chunks).template for_each<SumReduction<TDataType>>([=](int Chunk) {
+            const SizeType begin = (nnz * Chunk) / n_chunks;
+            const SizeType end = (nnz * (Chunk + 1)) / n_chunks;
+            return PartialDot(values, values, begin, end);
         });
         return std::sqrt(aux_sum);
     }
@@ -488,9 +489,10 @@ public:
             // Sparse: zero the values but keep the sparsity pattern
             // (setZero() would drop the graph)
             EnsureCompressed(rA);
-            auto values = rA.value_data();
-            IndexPartition<IndexType>(values.size()).for_each([&](IndexType i) {
-                values[i] = TDataType();
+            auto* values = rA.valuePtr();
+            ParallelChunks(rA.nnz(), [=](const SizeType Begin, const SizeType End) {
+                for (SizeType i = Begin; i < End; ++i)
+                    values[i] = TDataType();
             });
         } else {
             rA.setZero();
@@ -881,6 +883,31 @@ private:
         IndexPartition<int>(n_chunks).for_each([&](int Chunk) {
             f((Size * Chunk) / n_chunks, (Size * (Chunk + 1)) / n_chunks);
         });
+    }
+
+    /// Range portion of a dot product, accumulated in four independent partial
+    /// sums: unlike a single scalar accumulator (a strict floating-point
+    /// dependency chain the compiler may not reassociate), this vectorizes,
+    /// matching what an OpenMP reduction clause permits.
+    static TDataType PartialDot(
+        const TDataType* pX,
+        const TDataType* pY,
+        const SizeType Begin,
+        const SizeType End
+        )
+    {
+        TDataType a0 = TDataType(), a1 = TDataType(), a2 = TDataType(), a3 = TDataType();
+        SizeType i = Begin;
+        for (; i + 4 <= End; i += 4) {
+            a0 += pX[i] * pY[i];
+            a1 += pX[i + 1] * pY[i + 1];
+            a2 += pX[i + 2] * pY[i + 2];
+            a3 += pX[i + 3] * pY[i + 3];
+        }
+        TDataType accumulator = (a0 + a1) + (a2 + a3);
+        for (; i < End; ++i)
+            accumulator += pX[i] * pY[i];
+        return accumulator;
     }
 
     /// Row-range portion of the sparse matrix-vector product; a plain function
