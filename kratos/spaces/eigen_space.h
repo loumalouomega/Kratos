@@ -216,9 +216,19 @@ public:
         return std::sqrt(aux_sum);
     }
 
+    /// TwoNorm of a (dense) Eigen expression, e.g. TwoNorm(y - x). The exact
+    /// template match avoids the ambiguity between the vector and dense-matrix
+    /// overloads that a converting expression argument would otherwise cause.
+    template<class TDerived>
+    static TDataType TwoNorm(const Eigen::MatrixBase<TDerived>& rX)
+    {
+        return rX.norm();
+    }
+
     template<class TIndexType>
     static TDataType TwoNorm(const EigenCompressedMatrix<TDataType, TIndexType>& rA) // Frobenius norm
     {
+        EnsureCompressed(rA);
         const auto r_values = rA.value_data();
         const TDataType aux_sum = IndexPartition<IndexType>(rA.nnz()).template for_each<SumReduction<TDataType>>([&](IndexType i) {
             return std::pow(r_values[i], 2);
@@ -247,6 +257,7 @@ public:
     template<class TIndexType>
     static TDataType JacobiNorm(const EigenCompressedMatrix<TDataType, TIndexType>& rA)
     {
+        EnsureCompressed(rA);
         const auto* row_ptr = rA.outerIndexPtr();
         const auto* col_idx = rA.innerIndexPtr();
         const auto* values = rA.valuePtr();
@@ -277,6 +288,7 @@ public:
         if (Size(rY) != rA.size1())
             rY.resize(rA.size1(), false);
 
+        EnsureCompressed(rA);
         const auto* row_ptr = rA.outerIndexPtr();
         const auto* col_idx = rA.innerIndexPtr();
         const auto* values = rA.valuePtr();
@@ -300,12 +312,14 @@ public:
 
     static inline SizeType GraphDegree(IndexType i, TMatrixType& rA)
     {
+        EnsureCompressed(rA);
         const auto* row_ptr = rA.outerIndexPtr();
         return static_cast<SizeType>(row_ptr[i + 1] - row_ptr[i]);
     }
 
     static inline void GraphNeighbors(IndexType i, TMatrixType& rA, std::vector<IndexType>& rNeighbors)
     {
+        EnsureCompressed(rA);
         rNeighbors.clear();
         const auto* row_ptr = rA.outerIndexPtr();
         const auto* col_idx = rA.innerIndexPtr();
@@ -447,6 +461,7 @@ public:
         if constexpr (requires { rA.valuePtr(); }) {
             // Sparse: zero the values but keep the sparsity pattern
             // (setZero() would drop the graph)
+            EnsureCompressed(rA);
             auto values = rA.value_data();
             IndexPartition<IndexType>(values.size()).for_each([&](IndexType i) {
                 values[i] = TDataType();
@@ -503,6 +518,7 @@ public:
         const std::size_t system_size = rA.size1();
 
         // The matrix data
+        EnsureCompressed(rA);
         auto values = rA.value_data();
         const auto row_indices = rA.index1_data();
         const auto col_indices = rA.index2_data();
@@ -586,6 +602,7 @@ public:
      */
     static double GetDiagonalNorm(const MatrixType& rA)
     {
+        EnsureCompressed(rA);
         const auto values = rA.value_data();
         const auto row_indices = rA.index1_data();
         const auto col_indices = rA.index2_data();
@@ -621,6 +638,7 @@ public:
      */
     static double GetMaxDiagonal(const MatrixType& rA)
     {
+        EnsureCompressed(rA);
         const auto values = rA.value_data();
         const auto row_indices = rA.index1_data();
         const auto col_indices = rA.index2_data();
@@ -644,6 +662,7 @@ public:
      */
     static double GetMinDiagonal(const MatrixType& rA)
     {
+        EnsureCompressed(rA);
         const auto values = rA.value_data();
         const auto row_indices = rA.index1_data();
         const auto col_indices = rA.index2_data();
@@ -746,6 +765,7 @@ public:
             mm_set_general(&mm_code);
         mm_write_banner(f, mm_code);
 
+        EnsureCompressed(rM);
         const auto* row_ptr = rM.outerIndexPtr();
         const auto* col_idx = rM.innerIndexPtr();
         const auto* values = rM.valuePtr();
@@ -817,6 +837,22 @@ public:
 
     ///@}
 private:
+    ///@name Private Operations
+    ///@{
+
+    /// The CSR-array based operations require the matrix to be in compressed
+    /// mode. Element insertion through operator() (as done e.g. from python or
+    /// by AssembleLHS) may leave it uncompressed, so it is normalized here
+    /// (logically const: the represented matrix does not change).
+    template<class TOtherMatrixType>
+    static void EnsureCompressed(const TOtherMatrixType& rA)
+    {
+        if (!rA.isCompressed()) {
+            const_cast<TOtherMatrixType&>(rA).makeCompressed();
+        }
+    }
+
+    ///@}
     ///@name Un accessible methods
     ///@{
 

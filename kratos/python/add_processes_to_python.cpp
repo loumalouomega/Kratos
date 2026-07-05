@@ -131,10 +131,10 @@ void DefineSimpleMortarMapperProcess(pybind11::module& m, const std::string& cla
     .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&>())
     .def(pybind11::init<ModelPart&, ModelPart&, Parameters>())
     .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&, Parameters>())
-    .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&, Parameters, LinearSolverType::Pointer>())
+    .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&, Parameters, typename ProcessType::LinearSolverType::Pointer>())
     .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&, TVariableType&>())
     .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&, TVariableType&, Parameters>())
-    .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&, TVariableType&, Parameters, LinearSolverType::Pointer>())
+    .def(pybind11::init<ModelPart&, ModelPart&, TVariableType&, TVariableType&, Parameters, typename ProcessType::LinearSolverType::Pointer>())
     .def("Map", &ProcessType::Map)
     ;
 }
@@ -605,7 +605,7 @@ void  AddProcessesToPython(pybind11::module& m)
     // Wrapper
     py::class_<SimpleMortarMapperProcessWrapper, SimpleMortarMapperProcessWrapper::Pointer, Process>(m, "SimpleMortarMapperProcess")
     .def(py::init<ModelPart&, ModelPart&, Parameters>())
-    .def(py::init<ModelPart&, ModelPart&, Parameters, LinearSolverType::Pointer>())
+    .def(py::init<ModelPart&, ModelPart&, Parameters, SimpleMortarMapperProcessWrapper::LinearSolverType::Pointer>())
     ;
 
     // 2D

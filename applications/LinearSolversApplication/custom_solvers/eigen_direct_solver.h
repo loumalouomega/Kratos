@@ -171,23 +171,36 @@ public:
     
         TDenseSpaceType::Resize(rX, system_size, n_rhs);
 
-        // Get/SetColumn work for any combination of dense-matrix and
-        // system-vector backends (unlike direct column() proxy assignment)
-        TDenseSpaceType::GetColumn(0, rB, rhs);
+        // Element-wise column extraction/insertion: works for any combination
+        // of dense-matrix and system-vector backends and any scalar type
+        // (unlike direct column() proxy assignment or the space GetColumn,
+        // which is bound to the real dense matrix)
+        const auto get_column = [](const std::size_t J, const DenseMatrixType& rM, VectorType& rColumn) {
+            if (static_cast<std::size_t>(rColumn.size()) != rM.size1())
+                rColumn.resize(rM.size1(), false);
+            for (std::size_t i = 0; i < rM.size1(); ++i)
+                rColumn[i] = rM(i, J);
+        };
+        const auto set_column = [](const std::size_t J, DenseMatrixType& rM, const VectorType& rColumn) {
+            for (std::size_t i = 0; i < rM.size1(); ++i)
+                rM(i, J) = rColumn[i];
+        };
+
+        get_column(0, rB, rhs);
         this->InitializeSolutionStep(rA, solution, rhs);
 
         bool success = true;
 
         for (std::size_t i_column = 0ul; i_column < n_rhs; ++i_column)
         {
-            TDenseSpaceType::GetColumn(i_column, rB, rhs);
+            get_column(i_column, rB, rhs);
 
             TSparseSpaceType::SetToZero(solution);
 
             const bool col_success = this->PerformSolutionStep(rA, solution, rhs);
             success = success && col_success;
 
-            TDenseSpaceType::SetColumn(i_column, rX, solution);
+            set_column(i_column, rX, solution);
         }
     
         this->FinalizeSolutionStep(rA, solution, rhs);

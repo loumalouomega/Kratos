@@ -615,3 +615,21 @@ with a comment: `# Options: "ublas" (default) | "eigen" — selects the sparse s
 - **Signed/unsigned index fallout** → deduced pointer types + `size_t` loop bounds with single casts (Tasks 7-8); watch `-Wsign-compare`.
 - **Accidental slow-path `coeffRef` insertion** → `KRATOS_DEBUG_ERROR_IF` in the wrapper when `operator()` would insert into a compressed matrix can be added if profiling shows hits; graph construction guarantees diagonals exist for the known write sites.
 - **Nested OpenMP in Eigen products** → `EigenSpace::Mult` uses the manual `IndexPartition` CSR loop (Task 5), sidestepping Eigen's internal threading entirely.
+
+
+---
+
+# Implementation Notes (post-execution)
+
+All tasks were executed on this branch. Deviations and discoveries relative to the plan above:
+
+- **Complex spaces stay uBLAS in both modes** (encoded in `spaces/default_spaces.h` via a selector on `TDefaultSparseSpace`): they are only used by the eigenvalue-related solvers and switching them buys nothing.
+- **`noalias`/`row`/`column`/`subrange` compat overloads take the concrete wrapper types** (`EigenMatrix`/`EigenVector`), not `Eigen::MatrixBase`: the ublas counterparts of these are fully generic templates (`template<class C> noalias(C&)`), so an exact match on the wrapper is required to win overload resolution. The expression-argument functions (`prod`, `trans`, norms, ...) are `MatrixBase`-constrained as planned.
+- **`EigenCompressedMatrix` proxies span the allocated capacity** (`data().size()`), matching ublas storage arrays; `nnz()` is the filled count derived from the row pointers (0 until `set_filled`-style filling), matching ublas semantics.
+- **`EigenSpace` normalizes uncompressed matrices lazily** (`EnsureCompressed`): element insertion through `operator()` (python, `AssembleLHS`) puts an Eigen sparse matrix into uncompressed mode, which the CSR-array loops cannot read.
+- **Registration/typedef boundary was wider than the plan's list**: `factories/register_factories.h`, `factories/linear_solver_factory.h` and `factories/preconditioner_factory.h` define namespace-scope `SparseSpaceType` typedefs and the `KRATOS_REGISTER_(LINEAR_SOLVER|PRECONDITIONER)` macros; all now follow the default spaces. `solving_strategies/builder_and_solvers/explicit_builder.cpp` registers a static prototype and follows the default spaces too (its previous mismatch caused a static-init-order segfault under eigen).
+- **Backend-neutral fixes to previously hidden uBLAS couplings**: `explicit_builder.h` zeroed the (sparse-space) lumped-mass vector through the dense space; the power-iteration/Rayleigh eigenvalue solvers initialized vectors from `ublas::zero_vector`; `RandomInitializeUtility` hardcoded ublas types (now templated); `adaptive_residualbased_newton_raphson_strategy.h` called the free `WriteMatrixMarketMatrix` instead of the space one; ILU0/skyline-LU copied matrices via ublas iterators (now CSR-array loops); `scaling_solver.h` iterator typedefs are now deduced; the mortar-mapper and condition-number python bindings now use those classes' own (uBLAS) solver types.
+- **Python surface under the eigen backend**: `Kernel.LinearAlgebraBackend()` reports the backend; `UblasSparseSpace` is always bound to the actual uBLAS space; `EigenSparseSpace`, `EigenCompressedMatrix` and `EigenVector` are additionally bound. A uBLAS-space `LinearSolver` base class (`UblasLinearSolver`) is registered so application solvers bound to uBLAS types (eigensystem/spectra) keep their pybind base.
+- **Excluded from the eigen backend for now** (uBLAS-only sparse construction, gated + documented): `deflated_cg`, `PMultigridBuilderAndSolver`, `ResidualBasedBlockBuilderAndSolverWithLagrangeMultiplier`. The `LinearSolversApplication` direct-solver python tests skip under eigen (they hand-build uBLAS containers; coverage comes from the C++ backend parity tests).
+
+Verification executed: full `KratosCoreFastSuite` and `LinearSolversApplication` python suite under both backends (identical pass/fail sets; the only failures are 6 pre-existing geometry/platform tests unrelated to linear algebra, failing identically in both modes), the uBLAS/Eigen builder-and-solve parity tests (CSR arrays, RHS and solution match), and a python smoke of the new bindings.

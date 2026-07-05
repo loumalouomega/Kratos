@@ -92,8 +92,9 @@ public:
      * @param MeanValue The mean value used in the normal distribution
      * @param VarianceValue The variance value used in the normal distribution
      */
+    template<class TVectorType>
     static inline void NormalDestributionRandom(
-        VectorType& R,
+        TVectorType& R,
         const TDataType& MeanValue,
         const TDataType& VarianceValue
         )
@@ -115,14 +116,21 @@ public:
      * @param R The vector to initialize
      * @param Inverse If consider the inverse pf the matrix norm or not
      */
+    template<class TMatrixType, class TVectorType>
     static inline void RandomInitialize(
-        const SparseMatrixType& K,
-        VectorType& R,
-        const bool Inverse = false 
+        const TMatrixType& K,
+        TVectorType& R,
+        const bool Inverse = false
         )
     {
         const TDataType threshold = std::numeric_limits<TDataType>::epsilon();
-        const TDataType normK = SparseSpaceType::TwoNorm(K);
+        // Frobenius norm computed from the CSR values so that any sparse
+        // matrix exposing the compressed_matrix member surface works
+        const auto& r_values = K.value_data();
+        TDataType sum_squared = TDataType();
+        for (SizeType i = 0; i < r_values.size(); ++i)
+            sum_squared += std::pow(r_values[i], 2);
+        const TDataType normK = std::sqrt(sum_squared);
         const TDataType aux_value = (Inverse == false) ? normK : (normK > threshold) ? 1.0/normK : 1.0;
         NormalDestributionRandom(R, aux_value, 0.25 * aux_value);
     }

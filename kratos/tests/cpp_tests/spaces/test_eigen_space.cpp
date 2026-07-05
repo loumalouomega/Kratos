@@ -276,6 +276,32 @@ KRATOS_TEST_CASE_IN_SUITE(EigenSpaceUblasParitySpMV, KratosCoreFastSuite)
     }
 }
 
+KRATOS_TEST_CASE_IN_SUITE(EigenSpaceElementInsertion, KratosCoreFastSuite)
+{
+    // Element insertion through operator() leaves the Eigen matrix in
+    // uncompressed mode; the space operations must normalize it transparently
+    using SparseSpaceType = TEigenSparseSpace<double>;
+
+    SparseSpaceType::MatrixType mat(3, 3);
+    mat(0, 0) = 2.0;
+    mat(1, 1) = 3.0;
+    mat(2, 0) = -1.0;
+    mat(2, 2) = 4.0;
+
+    SparseSpaceType::VectorType x(3), y(3);
+    for (std::size_t i = 0; i < 3; ++i) {
+        x[i] = 1.0;
+    }
+
+    SparseSpaceType::Mult(mat, x, y);
+    KRATOS_EXPECT_NEAR(y[0], 2.0, 1e-12);
+    KRATOS_EXPECT_NEAR(y[1], 3.0, 1e-12);
+    KRATOS_EXPECT_NEAR(y[2], 3.0, 1e-12);
+
+    KRATOS_EXPECT_NEAR(SparseSpaceType::TwoNorm(mat), std::sqrt(4.0 + 9.0 + 1.0 + 16.0), 1e-12);
+    KRATOS_EXPECT_NEAR(SparseSpaceType::GetMaxDiagonal(mat), 4.0, 1e-12);
+}
+
 KRATOS_TEST_CASE_IN_SUITE(EigenSpaceUblasParityGraph, KratosCoreFastSuite)
 {
     using EigenSpaceType = TEigenSparseSpace<double>;
