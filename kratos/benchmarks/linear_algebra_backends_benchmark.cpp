@@ -225,6 +225,177 @@ static void BM_CGSolve(benchmark::State& rState)
     }
 }
 
+// --- Expression-level operations ---------------------------------------------
+// The ublas idiom (prod, inner_prod, trans, sum, noalias, ...) spelled
+// IDENTICALLY for both families: for the uBLAS types the calls resolve to the
+// boost::numeric::ublas expression templates injected by ublas_interface.h,
+// for the Eigen types to the compat operations of eigen_compat_operations.h.
+
+struct UblasExprFamily
+{
+    using MatrixType = Matrix; // boost::numeric::ublas::matrix<double>
+    using VectorType = Vector; // boost::numeric::ublas::vector<double>
+};
+
+struct EigenExprFamily
+{
+    using MatrixType = EigenMatrix<double>;
+    using VectorType = EigenVector<double>;
+};
+
+namespace
+{
+
+template <class TFamily>
+typename TFamily::MatrixType MakeDenseMatrix(const std::size_t Size)
+{
+    typename TFamily::MatrixType matrix(Size, Size);
+    for (std::size_t i = 0; i < Size; ++i)
+        for (std::size_t j = 0; j < Size; ++j)
+            matrix(i, j) = 1.0 / (1.0 + static_cast<double>(i + j));
+    return matrix;
+}
+
+template <class TFamily>
+typename TFamily::VectorType MakeDenseVector(const std::size_t Size)
+{
+    typename TFamily::VectorType vector(Size);
+    for (std::size_t i = 0; i < Size; ++i)
+        vector[i] = 1.0 + 0.001 * static_cast<double>(i % 17);
+    return vector;
+}
+
+} // namespace
+
+template <class TFamily>
+static void BM_ExprDenseProdMM(benchmark::State& rState)
+{
+    auto A = MakeDenseMatrix<TFamily>(rState.range(0));
+    auto B = MakeDenseMatrix<TFamily>(rState.range(0));
+    typename TFamily::MatrixType C(rState.range(0), rState.range(0));
+    for (auto _ : rState) {
+        noalias(C) = prod(A, B);
+        benchmark::DoNotOptimize(C(0, 0));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprDenseProdMV(benchmark::State& rState)
+{
+    auto A = MakeDenseMatrix<TFamily>(rState.range(0));
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    typename TFamily::VectorType y(rState.range(0));
+    for (auto _ : rState) {
+        noalias(y) = prod(A, x);
+        benchmark::DoNotOptimize(y[0]);
+    }
+}
+
+template <class TFamily>
+static void BM_ExprTransProdMM(benchmark::State& rState)
+{
+    auto A = MakeDenseMatrix<TFamily>(rState.range(0));
+    auto B = MakeDenseMatrix<TFamily>(rState.range(0));
+    typename TFamily::MatrixType C(rState.range(0), rState.range(0));
+    for (auto _ : rState) {
+        noalias(C) = prod(trans(A), B);
+        benchmark::DoNotOptimize(C(0, 0));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprTrans(benchmark::State& rState)
+{
+    auto A = MakeDenseMatrix<TFamily>(rState.range(0));
+    typename TFamily::MatrixType C(rState.range(0), rState.range(0));
+    for (auto _ : rState) {
+        noalias(C) = trans(A);
+        benchmark::DoNotOptimize(C(0, 0));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprOuterProd(benchmark::State& rState)
+{
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    auto y = MakeDenseVector<TFamily>(rState.range(0));
+    typename TFamily::MatrixType C(rState.range(0), rState.range(0));
+    for (auto _ : rState) {
+        noalias(C) = outer_prod(x, y);
+        benchmark::DoNotOptimize(C(0, 0));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprInnerProd(benchmark::State& rState)
+{
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    auto y = MakeDenseVector<TFamily>(rState.range(0));
+    for (auto _ : rState) {
+        benchmark::DoNotOptimize(inner_prod(x, y));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprSum(benchmark::State& rState)
+{
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    for (auto _ : rState) {
+        benchmark::DoNotOptimize(sum(x));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprNorm2(benchmark::State& rState)
+{
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    for (auto _ : rState) {
+        benchmark::DoNotOptimize(norm_2(x));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprNorm1(benchmark::State& rState)
+{
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    for (auto _ : rState) {
+        benchmark::DoNotOptimize(norm_1(x));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprNormInf(benchmark::State& rState)
+{
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    for (auto _ : rState) {
+        benchmark::DoNotOptimize(norm_inf(x));
+    }
+}
+
+template <class TFamily>
+static void BM_ExprAxpy(benchmark::State& rState)
+{
+    auto x = MakeDenseVector<TFamily>(rState.range(0));
+    auto y = MakeDenseVector<TFamily>(rState.range(0));
+    typename TFamily::VectorType z(rState.range(0));
+    for (auto _ : rState) {
+        noalias(z) = 2.0 * x + y;
+        benchmark::DoNotOptimize(z[0]);
+    }
+}
+
+// Sparse product spelled as an expression, noalias(y) = prod(A, x)
+// (the space Mult is benchmarked separately above)
+template <class TSpaceType>
+static void BM_ExprSparseProdMV(benchmark::State& rState)
+{
+    auto system = MakeBandedSystem<TSpaceType>(rState.range(0));
+    for (auto _ : rState) {
+        noalias(system.y) = prod(system.A, system.x);
+        benchmark::DoNotOptimize(system.y[0]);
+    }
+}
+
 // --- Registration -------------------------------------------------------------
 
 #define KRATOS_REGISTER_BACKEND_BENCHMARK(name)                                       \
@@ -245,6 +416,29 @@ BENCHMARK_TEMPLATE(BM_CGSolve, UblasSparse)->Name("BM_CGSolve/ublas")->Arg(1<<14
 BENCHMARK_TEMPLATE(BM_CGSolve, EigenSparse)->Name("BM_CGSolve/eigen")->Arg(1<<14)->Arg(1<<18)->Unit(benchmark::kMillisecond);
 
 #undef KRATOS_REGISTER_BACKEND_BENCHMARK
+
+// Expression-level operations: dense matrix ops at element-local (16) and
+// mid (128/512) sizes, vector ops at 4k and 1M entries
+#define KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(name, ...)                                      \
+    BENCHMARK_TEMPLATE(name, UblasExprFamily)->Name(#name "/ublas")->__VA_ARGS__;             \
+    BENCHMARK_TEMPLATE(name, EigenExprFamily)->Name(#name "/eigen")->__VA_ARGS__;
+
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprDenseProdMM, Arg(16)->Arg(128))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprTransProdMM, Arg(16)->Arg(128))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprDenseProdMV, Arg(16)->Arg(512))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprTrans, Arg(16)->Arg(512))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprOuterProd, Arg(16)->Arg(512))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprInnerProd, Arg(1<<12)->Arg(1<<20))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprSum, Arg(1<<12)->Arg(1<<20))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprNorm2, Arg(1<<12)->Arg(1<<20))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprNorm1, Arg(1<<12)->Arg(1<<20))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprNormInf, Arg(1<<12)->Arg(1<<20))
+KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK(BM_ExprAxpy, Arg(1<<12)->Arg(1<<20))
+
+#undef KRATOS_REGISTER_EXPR_MATRIX_BENCHMARK
+
+BENCHMARK_TEMPLATE(BM_ExprSparseProdMV, UblasSparse)->Name("BM_ExprSparseProdMV/ublas")->Arg(1<<14)->Arg(1<<17);
+BENCHMARK_TEMPLATE(BM_ExprSparseProdMV, EigenSparse)->Name("BM_ExprSparseProdMV/eigen")->Arg(1<<14)->Arg(1<<17);
 
 } // namespace Kratos
 
