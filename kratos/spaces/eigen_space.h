@@ -187,14 +187,31 @@ public:
     /// rY = rX
     static void Copy(VectorType const& rX, VectorType& rY)
     {
-        rY = rX;
+        const SizeType size = Size(rX);
+        if (Size(rY) != size)
+            rY.resize(size, false);
+        const auto* x_data = rX.data();
+        auto* y_data = rY.data();
+        ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
+            for (SizeType i = Begin; i < End; ++i)
+                y_data[i] = x_data[i];
+        });
     }
 
     /// rX * rY (non-conjugated, as in UblasSpace)
     static TDataType Dot(VectorType const& rX, VectorType const& rY)
     {
-        return IndexPartition<IndexType>(Size(rX)).template for_each<SumReduction<TDataType>>([&](IndexType i) {
-            return rX[i] * rY[i];
+        const SizeType size = Size(rX);
+        const auto* x_data = rX.data();
+        const auto* y_data = rY.data();
+        const int n_chunks = ParallelUtilities::GetNumThreads();
+        return IndexPartition<int>(n_chunks).template for_each<SumReduction<TDataType>>([=](int Chunk) {
+            const SizeType begin = (size * Chunk) / n_chunks;
+            const SizeType end = (size * (Chunk + 1)) / n_chunks;
+            TDataType accumulator = TDataType();
+            for (SizeType i = begin; i < end; ++i)
+                accumulator += x_data[i] * y_data[i];
+            return accumulator;
         });
     }
 
@@ -282,22 +299,28 @@ public:
     /// Sparse SpMV. Deterministic manual CSR loop (as in KratosSpace) rather than
     /// Eigen's internally parallelized product, to avoid nested parallelism under
     /// the Kratos shared-memory parallelization and keep UblasSpace behavior.
+    /// The per-chunk work is delegated to a plain function taking the raw
+    /// pointers as arguments (as UblasSpace does): keeping the hot loop out of
+    /// the OpenMP-outlined lambda lets the compiler optimize it fully, which
+    /// benchmarks at parity with the uBLAS implementation.
     template<class TIndexType>
     static void Mult(const EigenCompressedMatrix<TDataType, TIndexType>& rA, const VectorType& rX, VectorType& rY)
     {
-        if (Size(rY) != rA.size1())
-            rY.resize(rA.size1(), false);
+        const SizeType n_rows = rA.size1();
+        if (Size(rY) != n_rows)
+            rY.resize(n_rows, false);
 
         EnsureCompressed(rA);
         const auto* row_ptr = rA.outerIndexPtr();
         const auto* col_idx = rA.innerIndexPtr();
         const auto* values = rA.valuePtr();
-        IndexPartition<IndexType>(rA.size1()).for_each([&](IndexType i) {
-            TDataType accumulator = TDataType();
-            for (auto k = row_ptr[i]; k < row_ptr[i + 1]; ++k) {
-                accumulator += values[k] * rX[col_idx[k]];
-            }
-            rY[i] = accumulator;
+        const auto* x_data = rX.data();
+        auto* y_data = rY.data();
+        const int n_chunks = ParallelUtilities::GetNumThreads();
+        IndexPartition<int>(n_chunks).for_each([=](int Chunk) {
+            const SizeType begin = (n_rows * Chunk) / n_chunks;
+            const SizeType end = (n_rows * (Chunk + 1)) / n_chunks;
+            PartialSpMV(row_ptr, col_idx, values, x_data, y_data, begin, end);
         });
     }
 
@@ -332,12 +355,13 @@ public:
     // checks if a multiplication is needed and tries to do otherwise
     static void InplaceMult(VectorType& rX, const double A)
     {
-        if (A == 1.00) {
-        } else if (A == -1.00) {
-            rX = -rX;
-        } else {
-            rX *= A;
-        }
+        if (A == 1.00)
+            return;
+        auto* x_data = rX.data();
+        ParallelChunks(Size(rX), [=](const SizeType Begin, const SizeType End) {
+            for (SizeType i = Begin; i < End; ++i)
+                x_data[i] *= A;
+        });
     }
 
     //********************************************************************
@@ -345,15 +369,16 @@ public:
     // X = A*y;
     static void Assign(VectorType& rX, const double A, const VectorType& rY)
     {
-        if (Size(rX) != Size(rY))
-            rX.resize(rY.size(), false);
+        const SizeType size = Size(rY);
+        if (Size(rX) != size)
+            rX.resize(size, false);
 
-        if (A == 1.00)
-            rX.noalias() = rY;
-        else if (A == -1.00)
-            rX.noalias() = -rY;
-        else
-            rX.noalias() = A * rY;
+        const auto* y_data = rY.data();
+        auto* x_data = rX.data();
+        ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
+            for (SizeType i = Begin; i < End; ++i)
+                x_data[i] = A * y_data[i];
+        });
     }
 
     //********************************************************************
@@ -361,15 +386,16 @@ public:
     // X += A*y;
     static void UnaliasedAdd(VectorType& rX, const double A, const VectorType& rY)
     {
-        if (Size(rX) != Size(rY))
-            rX.resize(rY.size(), false);
+        const SizeType size = Size(rY);
+        if (Size(rX) != size)
+            rX.resize(size, false);
 
-        if (A == 1.00)
-            rX.noalias() += rY;
-        else if (A == -1.00)
-            rX.noalias() -= rY;
-        else
-            rX.noalias() += A * rY;
+        const auto* y_data = rY.data();
+        auto* x_data = rX.data();
+        ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
+            for (SizeType i = Begin; i < End; ++i)
+                x_data[i] += A * y_data[i];
+        });
     }
 
     //********************************************************************
@@ -473,7 +499,11 @@ public:
 
     inline static void SetToZero(VectorType& rX)
     {
-        rX.setZero();
+        auto* x_data = rX.data();
+        ParallelChunks(Size(rX), [=](const SizeType Begin, const SizeType End) {
+            for (SizeType i = Begin; i < End; ++i)
+                x_data[i] = TDataType();
+        });
     }
 
     template<class TOtherMatrixType, class TEquationIdVectorType>
@@ -839,6 +869,43 @@ public:
 private:
     ///@name Private Operations
     ///@{
+
+    /// Splits [0, Size) into one contiguous chunk per thread and calls
+    /// f(Begin, End) in parallel. Keeping the hot loops in flat per-chunk
+    /// bodies (instead of per-index lambdas inside the OpenMP-outlined region)
+    /// lets the compiler optimize them fully, matching the uBLAS performance.
+    template<class TFunction>
+    static void ParallelChunks(const SizeType Size, TFunction&& f)
+    {
+        const int n_chunks = ParallelUtilities::GetNumThreads();
+        IndexPartition<int>(n_chunks).for_each([&](int Chunk) {
+            f((Size * Chunk) / n_chunks, (Size * (Chunk + 1)) / n_chunks);
+        });
+    }
+
+    /// Row-range portion of the sparse matrix-vector product; a plain function
+    /// over raw pointers so the loop fully optimizes outside the OpenMP-outlined
+    /// caller.
+    template<class TIndexType>
+    static void PartialSpMV(
+        const TIndexType* pRowIndices,
+        const TIndexType* pColumnIndices,
+        const TDataType* pValues,
+        const TDataType* pX,
+        TDataType* pY,
+        const SizeType Begin,
+        const SizeType End
+        )
+    {
+        for (SizeType i = Begin; i < End; ++i) {
+            TDataType accumulator = TDataType();
+            const auto row_end = pRowIndices[i + 1];
+            for (auto k = pRowIndices[i]; k < row_end; ++k) {
+                accumulator += pValues[k] * pX[pColumnIndices[k]];
+            }
+            pY[i] = accumulator;
+        }
+    }
 
     /// The CSR-array based operations require the matrix to be in compressed
     /// mode. Element insertion through operator() (as done e.g. from python or
