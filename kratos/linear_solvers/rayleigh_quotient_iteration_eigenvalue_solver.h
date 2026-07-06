@@ -194,7 +194,7 @@ public:
         const SizeType size_m = rM.size1();
 
         // Resize in case of not same size
-        if (rR.size() != size_m)
+        if (static_cast<SizeType>(rR.size()) != size_m)
             rR.resize(size_m);
 
         IndexPartition<std::size_t>(size_m).for_each([&](std::size_t Index){
