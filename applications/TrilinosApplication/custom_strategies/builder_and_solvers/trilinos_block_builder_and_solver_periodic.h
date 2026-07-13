@@ -15,21 +15,12 @@
 
 /* System includes */
 #include <set>
-/* #include <omp.h> */
 
 /* External includes */
-// Trilinos includes
-#include "Epetra_MpiComm.h"
-#include "Epetra_Map.h"
-#include "Epetra_Vector.h"
-#include "Epetra_FECrsGraph.h"
-#include "Epetra_FECrsMatrix.h"
-#include "Epetra_IntSerialDenseVector.h"
-#include "Epetra_SerialDenseMatrix.h"
-#include "Epetra_SerialDenseVector.h"
 
 /* Project includes */
 #include "includes/define.h"
+#include "includes/data_communicator.h"
 #include "utilities/timer.h"
 #include "custom_strategies/builder_and_solvers/trilinos_block_builder_and_solver.h"
 
@@ -103,6 +94,9 @@ public:
 
     typedef typename BaseType::ElementsContainerType ElementsContainerType;
 
+    /// The Trilinos communicator type of the space (Epetra_MpiComm or Teuchos::MpiComm<int>)
+    typedef typename BaseType::TrilinosCommunicatorType TrilinosCommunicatorType;
+
     /*@} */
     /**@name Life Cycle
     */
@@ -110,7 +104,7 @@ public:
 
     /** Constructor.
     */
-    TrilinosBlockBuilderAndSolverPeriodic(Epetra_MpiComm& Comm,
+    TrilinosBlockBuilderAndSolverPeriodic(TrilinosCommunicatorType& Comm,
                                           int guess_row_size,
                                           typename TLinearSolver::Pointer pNewLinearSystemSolver,
                                           const Kratos::Variable<int>& PeriodicIdVar):
@@ -141,7 +135,8 @@ public:
     {
         KRATOS_TRY;
 
-        const int Rank = this->mrComm.MyPID();
+        const auto& r_data_comm = rModelPart.GetCommunicator().GetDataCommunicator();
+        const int Rank = r_data_comm.Rank();
 
         // Count the Dofs on this partition (on periodic node pairs, only the dofs on the node with higher Id are counted)
         int DofCount = 0;
@@ -154,12 +149,8 @@ public:
         unsigned int ExtraDofs = SetUpEdgeDofs(rModelPart);
         DofCount += ExtraDofs;
 
-        // Comunicate the Dof counts to set a global numbering
-        int DofOffset;
-
-        int ierr = this->mrComm.ScanSum(&DofCount,&DofOffset,1);
-        if (ierr != 0)
-            KRATOS_THROW_ERROR(std::runtime_error,"In TrilinosBlockBuilderAndSolverPeriodic::SetUpSystem: Found Epetra_MpiComm::ScanSum failure with error code ",ierr);
+        // Comunicate the Dof counts to set a global numbering (inclusive scan)
+        int DofOffset = r_data_comm.ScanSum(DofCount);
 
         DofOffset -= DofCount;
         this->mFirstMyId = DofOffset;
@@ -221,10 +212,7 @@ public:
         this->CleanEdgeDofData(rModelPart);
 
         // Store local and gloabal system size
-        int TotalDofNum;
-        ierr = this->mrComm.SumAll(&DofCount,&TotalDofNum,1);
-        if (ierr != 0)
-            KRATOS_THROW_ERROR(std::runtime_error,"In TrilinosBlockBuilderAndSolverPeriodic::SetUpSystem: Found Epetra_MpiComm::SumAll failure with error code ",ierr);
+        const int TotalDofNum = r_data_comm.SumAll(DofCount);
 
         this->mLocalSystemSize = DofCount;
         this->mEquationSystemSize = TotalDofNum;
@@ -405,13 +393,12 @@ private:
       */
     unsigned int SetUpEdgeDofs(ModelPart& rModelPart)
     {
-        int LocalNodesNum = rModelPart.GetCommunicator().LocalMesh().Nodes().size();
-        int GlobalNodesNum = 0;
-        this->mrComm.SumAll(&LocalNodesNum,&GlobalNodesNum,1);
+        const auto& r_data_comm = rModelPart.GetCommunicator().GetDataCommunicator();
+        const int LocalNodesNum = rModelPart.GetCommunicator().LocalMesh().Nodes().size();
+        const int GlobalNodesNum = r_data_comm.SumAll(LocalNodesNum);
 
-        int NumProcs = this->mrComm.NumProc();
-        int* ExtraDofs = new int[NumProcs];
-        for (int i = 0; i < NumProcs; i++) ExtraDofs[i] = 0;
+        const int NumProcs = r_data_comm.Size();
+        std::vector<int> ExtraDofs(NumProcs, 0);
 
         Condition::DofsVectorType DofList;
         const ProcessInfo& rProcessInfo = rModelPart.GetProcessInfo();
@@ -433,15 +420,8 @@ private:
             }
         }
 
-        int* TotalExtraDofs = new int[NumProcs];
-        for (int i = 0; i < NumProcs; i++) TotalExtraDofs[i] = 0;
-
-        this->mrComm.SumAll(ExtraDofs,TotalExtraDofs,NumProcs);
-
-        // free memory
-        int LocalExtraDofs = TotalExtraDofs[this->mrComm.MyPID()];
-        delete [] ExtraDofs;
-        delete [] TotalExtraDofs;
+        const std::vector<int> TotalExtraDofs = r_data_comm.SumAll(ExtraDofs);
+        const int LocalExtraDofs = TotalExtraDofs[r_data_comm.Rank()];
 
         // Prepare edge dofs so only one of the duplicates gets an equation Id
         rModelPart.GetCommunicator().AssembleNonHistoricalData(mPeriodicIdVar);
