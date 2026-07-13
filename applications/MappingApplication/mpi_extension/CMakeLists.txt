@@ -13,6 +13,16 @@ file(
   ${CMAKE_CURRENT_SOURCE_DIR}/custom_utilities/*.cpp
 )
 
+# Adding Tpetra definitions (enables the experimental Trilinos space translation units)
+if(HAVE_TPETRA)
+    add_definitions(-DHAVE_TPETRA)
+    # The experimental TUs must not merge with the Epetra ones in unity batches
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/custom_utilities/mapping_matrix_utilities_mpi_experimental.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/custom_utilities/interface_vector_container_mpi_experimental.cpp
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
+endif()
+
 ## define test sources (cpp tests)
 if(${KRATOS_BUILD_TESTING} MATCHES ON)
  	file(GLOB KRATOS_MAPPING_MPI_EXTENSION_TESTING_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/cpp_tests/*.cpp)
