@@ -12,7 +12,6 @@
 // System includes
 
 // External includes
-#include "Epetra_MpiComm.h"
 
 // Project includes
 #include "solving_strategies/strategies/residualbased_linear_strategy.h"
@@ -73,7 +72,7 @@ public:
     ///@{
 
     /// Constructor
-    TrilinosSpalartAllmarasTurbulenceModel(Epetra_MpiComm& rComm,
+    TrilinosSpalartAllmarasTurbulenceModel(typename TSparseSpace::CommunicatorType& rComm,
                                            ModelPart& rModelPart,
                                            typename TLinearSolver::Pointer pLinearSolver,
                                            unsigned int DomainSize,

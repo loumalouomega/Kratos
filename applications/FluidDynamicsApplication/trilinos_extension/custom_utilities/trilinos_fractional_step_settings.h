@@ -4,7 +4,6 @@
 // System includes
 
 // External includes
-#include "Epetra_MpiComm.h"
 
 // Project includes
 #include "solving_strategies/schemes/residualbased_incrementalupdate_static_scheme_slip.h"
@@ -69,7 +68,7 @@ public:
     ///@{
 
     /// Constructor.
-    TrilinosFractionalStepSettings(Epetra_MpiComm& rComm,
+    TrilinosFractionalStepSettings(typename TSparseSpace::CommunicatorType& rComm,
                                    ModelPart& rModelPart,
                                    const unsigned int ThisDomainSize,
                                    const unsigned int ThisTimeOrder,
@@ -289,7 +288,7 @@ private:
     ///@name Member Variables
     ///@{
 
-    Epetra_MpiComm& mrComm;
+    typename TSparseSpace::CommunicatorType& mrComm;
 
     ///@}
     ///@name Private Operators

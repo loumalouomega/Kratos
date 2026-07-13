@@ -12,6 +12,11 @@ file(
   ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/*.cpp
 )
 
+# Adding Tpetra definitions (enables the experimental Trilinos space registrations)
+if(HAVE_TPETRA)
+    add_definitions(-DHAVE_TPETRA)
+endif()
+
 ## Python module
 pybind11_add_module( KratosFluidDynamicsTrilinosExtension MODULE THIN_LTO ${KRATOS_FLUID_DYNAMICS_TRILINOS_EXTENSION_PYTHON_INTERFACE_SOURCES} )
 

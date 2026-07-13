@@ -25,6 +25,9 @@
 
 // TrilinosApplication dependencies
 #include "trilinos_space.h"
+#ifdef HAVE_TPETRA
+#include "trilinos_space_experimental.h"
+#endif
 
 // FluidDynamicsApplication dependencies
 #include "custom_strategies/schemes/bdf2_turbulent_scheme.h"
@@ -34,38 +37,54 @@
 namespace Kratos {
 namespace Python {
 
-void AddTrilinosSchemesToPython(pybind11::module& m)
+namespace {
+
+template<class TSparseSpace>
+void RegisterTrilinosSchemes(pybind11::module& m, const std::string& Prefix)
 {
     namespace py = pybind11;
 
-    using TrilinosSparseSpace = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
     using UblasLocalSpace = UblasSpace<double, Matrix, Vector>;
 
-    using TrilinosBaseScheme = Scheme< TrilinosSparseSpace, UblasLocalSpace >;
+    using BaseSchemeType = Scheme< TSparseSpace, UblasLocalSpace >;
 
-    using TrilinosBDF2TurbulentScheme = BDF2TurbulentScheme<TrilinosSparseSpace, UblasLocalSpace>;
-    py::class_< TrilinosBDF2TurbulentScheme, typename TrilinosBDF2TurbulentScheme::Pointer, TrilinosBaseScheme >( m,"TrilinosBDF2TurbulentScheme")
+    using BDF2TurbulentSchemeType = BDF2TurbulentScheme<TSparseSpace, UblasLocalSpace>;
+    py::class_< BDF2TurbulentSchemeType, typename BDF2TurbulentSchemeType::Pointer, BaseSchemeType >( m, (Prefix + "BDF2TurbulentScheme").c_str())
     .def(py::init<>()) // constructor without a turbulence model
     .def(py::init<Process::Pointer>() ) // constructor with a turbulence model
     .def(py::init<const Variable<int>&>()) // constructor for periodic conditions
     ;
 
-    using TrilinosVelocityBossakSchemeTurbulent = ResidualBasedPredictorCorrectorVelocityBossakSchemeTurbulent<TrilinosSparseSpace, UblasLocalSpace>;
-    py::class_ < TrilinosVelocityBossakSchemeTurbulent, typename TrilinosVelocityBossakSchemeTurbulent::Pointer,TrilinosBaseScheme >
-    (m,"TrilinosPredictorCorrectorVelocityBossakSchemeTurbulent")
+    using VelocityBossakSchemeTurbulentType = ResidualBasedPredictorCorrectorVelocityBossakSchemeTurbulent<TSparseSpace, UblasLocalSpace>;
+    py::class_ < VelocityBossakSchemeTurbulentType, typename VelocityBossakSchemeTurbulentType::Pointer, BaseSchemeType >
+    (m, (Prefix + "PredictorCorrectorVelocityBossakSchemeTurbulent").c_str())
     .def(py::init<double, double, unsigned int, Process::Pointer >())
     .def(py::init<double, double, unsigned int, double, Process::Pointer >())
     .def(py::init<double,double,unsigned int >())
     .def(py::init<double,unsigned int, const Variable<int>&>())
     ;
 
-    using TrilinosResidualBasedSimpleSteadyScheme = ResidualBasedSimpleSteadyScheme<TrilinosSparseSpace, UblasLocalSpace>;
-    py::class_ < TrilinosResidualBasedSimpleSteadyScheme, typename TrilinosResidualBasedSimpleSteadyScheme::Pointer, TrilinosBaseScheme >
-    (m,"TrilinosResidualBasedSimpleSteadyScheme")
+    using ResidualBasedSimpleSteadySchemeType = ResidualBasedSimpleSteadyScheme<TSparseSpace, UblasLocalSpace>;
+    py::class_ < ResidualBasedSimpleSteadySchemeType, typename ResidualBasedSimpleSteadySchemeType::Pointer, BaseSchemeType >
+    (m, (Prefix + "ResidualBasedSimpleSteadyScheme").c_str())
     .def(py::init<double, double, unsigned int, Process::Pointer >())
     .def(py::init<double,double,unsigned int >())
     ;
+}
 
+} // anonymous namespace
+
+void AddTrilinosSchemesToPython(pybind11::module& m)
+{
+    using TrilinosSparseSpace = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
+
+    RegisterTrilinosSchemes<TrilinosSparseSpace>(m, "Trilinos");
+
+#ifdef HAVE_TPETRA
+    using TrilinosExperimentalSparseSpace = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>>;
+
+    RegisterTrilinosSchemes<TrilinosExperimentalSparseSpace>(m, "TrilinosExperimental");
+#endif
 }
 
 }

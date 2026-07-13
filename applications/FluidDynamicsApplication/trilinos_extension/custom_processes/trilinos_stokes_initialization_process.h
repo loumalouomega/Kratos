@@ -4,7 +4,6 @@
 // System includes
 
 // External includes
-#include "Epetra_MpiComm.h"
 
 // Project includes
 
@@ -66,7 +65,7 @@ public:
     ///@name Life Cycle
     ///@{
 
-    TrilinosStokesInitializationProcess(Epetra_MpiComm& rComm,
+    TrilinosStokesInitializationProcess(typename TSparseSpace::CommunicatorType& rComm,
                                         ModelPart& rModelPart,
                                         typename TLinearSolver::Pointer pLinearSolver,
                                         unsigned int DomainSize,
@@ -237,7 +236,7 @@ protected:
     ///@name Protected member Variables
     ///@{
 
-    Epetra_MpiComm& mrComm;
+    typename TSparseSpace::CommunicatorType& mrComm;
 
     const Variable<int>& mrPeriodicVar;
 

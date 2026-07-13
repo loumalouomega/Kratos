@@ -25,6 +25,9 @@
 
 // TrilinosApplication dependencies
 #include "trilinos_space.h"
+#ifdef HAVE_TPETRA
+#include "trilinos_space_experimental.h"
+#endif
 
 // FluidDynamics trilinos extensions
 #include "custom_strategies/strategies/fractional_step_strategy.h"
@@ -41,43 +44,62 @@
 namespace Kratos {
 namespace Python {
 
-void AddTrilinosStrategiesToPython(pybind11::module& m)
+namespace {
+
+template<class TSparseSpace, class TLinearSolverType>
+void RegisterTrilinosStrategies(pybind11::module& m, const std::string& Prefix)
 {
     namespace py = pybind11;
 
-    using TrilinosSparseSpace = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
     using UblasLocalSpace = UblasSpace<double, Matrix, Vector>;
-    using TrilinosLinearSolver = LinearSolver<TrilinosSparseSpace, UblasLocalSpace>;
 
-    using TrilinosBaseSolvingStrategy = ImplicitSolvingStrategy< TrilinosSparseSpace, UblasLocalSpace, TrilinosLinearSolver >;
-    using BaseSolverSettings = SolverSettings<TrilinosSparseSpace, UblasLocalSpace, TrilinosLinearSolver>;
-    using BaseSchemeType = Scheme<TrilinosSparseSpace, UblasLocalSpace>;
+    using BaseSolvingStrategyType = ImplicitSolvingStrategy< TSparseSpace, UblasLocalSpace, TLinearSolverType >;
+    using BaseSolverSettings = SolverSettings<TSparseSpace, UblasLocalSpace, TLinearSolverType>;
+    using BaseSchemeType = Scheme<TSparseSpace, UblasLocalSpace>;
 
-    using TrilinosFractionalStepStrategy = FractionalStepStrategy< TrilinosSparseSpace, UblasLocalSpace, TrilinosLinearSolver>;
-    py::class_< TrilinosFractionalStepStrategy, typename TrilinosFractionalStepStrategy::Pointer, TrilinosBaseSolvingStrategy >(m,"TrilinosFractionalStepStrategy")
+    using FractionalStepStrategyType = FractionalStepStrategy< TSparseSpace, UblasLocalSpace, TLinearSolverType>;
+    py::class_< FractionalStepStrategyType, typename FractionalStepStrategyType::Pointer, BaseSolvingStrategyType >(m, (Prefix + "FractionalStepStrategy").c_str())
     .def(py::init< ModelPart&, BaseSolverSettings&, bool >())
     .def(py::init< ModelPart&, BaseSolverSettings&, bool, bool >())
     .def(py::init< ModelPart&, BaseSolverSettings&, bool, const Kratos::Variable<int>& >())
     .def(py::init< ModelPart&, BaseSolverSettings&, bool, bool, const Kratos::Variable<int>& >())
-    .def("CalculateReactions", [](TrilinosFractionalStepStrategy& self) {
-        KRATOS_WARNING("TrilinosFractionalStepStrategy") << "\'CalculateReactions()\' exposure is deprecated. Use the constructor with the \'CalculateReactionsFlag\' instead." << std::endl;
+    .def("CalculateReactions", [Prefix](FractionalStepStrategyType& self) {
+        KRATOS_WARNING(Prefix + "FractionalStepStrategy") << "\'CalculateReactions()\' exposure is deprecated. Use the constructor with the \'CalculateReactionsFlag\' instead." << std::endl;
         self.CalculateReactions();})
-    .def("AddIterationStep",&TrilinosFractionalStepStrategy::AddIterationStep)
-    .def("ClearExtraIterationSteps",&TrilinosFractionalStepStrategy::ClearExtraIterationSteps)
+    .def("AddIterationStep",&FractionalStepStrategyType::AddIterationStep)
+    .def("ClearExtraIterationSteps",&FractionalStepStrategyType::ClearExtraIterationSteps)
     ;
 
-    using TrilinosSimpleSteadyAdjointSchemeType = SimpleSteadyAdjointScheme<TrilinosSparseSpace, UblasLocalSpace>;
-    py::class_<TrilinosSimpleSteadyAdjointSchemeType, typename TrilinosSimpleSteadyAdjointSchemeType::Pointer, BaseSchemeType>
-        (m, "TrilinosSimpleSteadyAdjointScheme")
+    using SimpleSteadyAdjointSchemeType = SimpleSteadyAdjointScheme<TSparseSpace, UblasLocalSpace>;
+    py::class_<SimpleSteadyAdjointSchemeType, typename SimpleSteadyAdjointSchemeType::Pointer, BaseSchemeType>
+        (m, (Prefix + "SimpleSteadyAdjointScheme").c_str())
         .def(py::init<AdjointResponseFunction::Pointer, const std::size_t, const std::size_t>())
         ;
 
-    using TrilinosVelocityBossakAdjointSchemeType = VelocityBossakAdjointScheme<TrilinosSparseSpace, UblasLocalSpace>;
-    py::class_<TrilinosVelocityBossakAdjointSchemeType, typename TrilinosVelocityBossakAdjointSchemeType::Pointer, BaseSchemeType>
-        (m, "TrilinosVelocityBossakAdjointScheme")
+    using VelocityBossakAdjointSchemeType = VelocityBossakAdjointScheme<TSparseSpace, UblasLocalSpace>;
+    py::class_<VelocityBossakAdjointSchemeType, typename VelocityBossakAdjointSchemeType::Pointer, BaseSchemeType>
+        (m, (Prefix + "VelocityBossakAdjointScheme").c_str())
         .def(py::init<Parameters, AdjointResponseFunction::Pointer, const std::size_t, const std::size_t>())
         ;
+}
 
+} // anonymous namespace
+
+void AddTrilinosStrategiesToPython(pybind11::module& m)
+{
+    using UblasLocalSpace = UblasSpace<double, Matrix, Vector>;
+
+    using TrilinosSparseSpace = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
+    using TrilinosLinearSolver = LinearSolver<TrilinosSparseSpace, UblasLocalSpace>;
+
+    RegisterTrilinosStrategies<TrilinosSparseSpace, TrilinosLinearSolver>(m, "Trilinos");
+
+#ifdef HAVE_TPETRA
+    using TrilinosExperimentalSparseSpace = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>>;
+    using TrilinosExperimentalLinearSolver = LinearSolver<TrilinosExperimentalSparseSpace, UblasLocalSpace>;
+
+    RegisterTrilinosStrategies<TrilinosExperimentalSparseSpace, TrilinosExperimentalLinearSolver>(m, "TrilinosExperimental");
+#endif
 }
 
 }
