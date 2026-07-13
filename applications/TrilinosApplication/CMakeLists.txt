@@ -67,6 +67,17 @@ if(HAVE_TPETRA)
     add_definitions(-DHAVE_TPETRA)
 endif()
 
+# Adding Tpetra-era solver package definitions (detected by FindTRILINOS.cmake)
+if(HAVE_BELOS)
+    add_definitions(-DHAVE_BELOS)
+endif()
+if(HAVE_IFPACK2)
+    add_definitions(-DHAVE_IFPACK2)
+endif()
+if(HAVE_MUELU)
+    add_definitions(-DHAVE_MUELU)
+endif()
+
 ## Kratos tests sources. Enabled by default
 if(${KRATOS_BUILD_TESTING} MATCHES ON)
     file(GLOB_RECURSE KRATOS_TRILINOS_TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp_tests/*.cpp)
@@ -127,6 +138,12 @@ set_source_files_properties (${CMAKE_CURRENT_SOURCE_DIR}/custom_utilities/linear
 if(HAVE_TPETRA)
     # Uses #define KRATOS_AMGCL_MPI / #undef around amgcl_solver_impl.hpp; macro side-effects and heavy Epetra adapter headers are incompatible with unity batches.
     set_source_files_properties (${CMAKE_CURRENT_SOURCE_DIR}/external_includes/amgcl_mpi_solver_impl.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
+    # Same rationale as above, for the Tpetra (experimental space) instantiation of the amgcl MPI solver.
+    set_source_files_properties (${CMAKE_CURRENT_SOURCE_DIR}/external_includes/amgcl_mpi_solver_experimental_impl.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
+    # MueLu headers pull MatrixMarket_Tpetra.hpp (mmio_Tpetra.h), which conflicts with Kratos' mmio.h; this TU must never merge with Kratos-including TUs.
+    # It is also compiled as C++17: Teuchos_StandardParameterEntryValidators.hpp (pulled by MueLu, Trilinos 13.2) declares
+    # constructors with a template-id, which is ill-formed in C++20. The TU includes no Kratos headers, so this is safe.
+    set_source_files_properties (${CMAKE_CURRENT_SOURCE_DIR}/external_includes/muelu_solver_internals.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE COMPILE_OPTIONS "-std=c++17")
     # Includes MatrixMarket_Tpetra.hpp whose mmio_Tpetra.h declares mm_read_mtx_crd_size with size_t* — conflicts with Kratos' mmio.h (int*) under C linkage.
     set_source_files_properties (${CMAKE_CURRENT_SOURCE_DIR}/custom_utilities/trilinos_matrix_market_io.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
     # Defines anonymous-namespace helpers (ClearMatrix, SetToZero, TwoNorm, Mult, …) that collide with identically-named helpers in add_trilinos_space_to_python.cpp when merged, causing unresolved overloads.
