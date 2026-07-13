@@ -57,10 +57,8 @@ void RelaxedDofUpdater<TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>>::Init
     Epetra_Map dof_update_map(-1, index_array.size(), &(*(index_array.begin())),
                               0, rDx.Comm());
 
-    // defining the import instance
-    std::shared_ptr<Epetra_Import> p_dof_import(
-        new Epetra_Import(dof_update_map, rDx.Map()));
-    this->mpDofImport.swap(p_dof_import);
+    // defining the import instance (stored type-erased in the base header)
+    this->mpDofImport = std::make_shared<Epetra_Import>(dof_update_map, rDx.Map());
 
     this->mImportIsInitialized = true;
 }
@@ -84,11 +82,14 @@ void RelaxedDofUpdater<TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>>::Upda
 
     int system_size = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>::Size(rDx);
 
+    // recovering the concrete import type from the type-erased member
+    const auto p_dof_import = std::static_pointer_cast<Epetra_Import>(this->mpDofImport);
+
     // defining a temporary vector to gather all of the values needed
-    Epetra_Vector local_dx(this->mpDofImport->TargetMap());
+    Epetra_Vector local_dx(p_dof_import->TargetMap());
 
     // importing in the new temp vector the values
-    int ierr = local_dx.Import(rDx, *this->mpDofImport, Insert);
+    int ierr = local_dx.Import(rDx, *p_dof_import, Insert);
     KRATOS_ERROR_IF(ierr != 0)
         << "Epetra failure found while trying to import Dx." << std::endl;
 
@@ -100,7 +101,7 @@ void RelaxedDofUpdater<TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>>::Upda
         if (it_dof->IsFree()) {
             int global_id = it_dof->EquationId();
             if (global_id < system_size) {
-                double dx_i = local_dx[this->mpDofImport->TargetMap().LID(global_id)];
+                double dx_i = local_dx[p_dof_import->TargetMap().LID(global_id)];
                 it_dof->GetSolutionStepValue() += this->mRelaxationFactor * dx_i;
             }
         }

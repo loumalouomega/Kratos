@@ -13,6 +13,15 @@ file(
   ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/*.cpp
 )
 
+# Adding Tpetra definitions (enables the experimental Trilinos space translation units)
+if(HAVE_TPETRA)
+    add_definitions(-DHAVE_TPETRA)
+    # The experimental TU must not merge with the Epetra ones in unity batches
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/custom_strategies/relaxed_dof_updater_experimental.cpp
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
+endif()
+
 ## Python module
 pybind11_add_module( KratosRANSTrilinosExtension MODULE THIN_LTO ${KRATOS_RANS_TRILINOS_EXTENSION_PYTHON_INTERFACE_SOURCES} )
 

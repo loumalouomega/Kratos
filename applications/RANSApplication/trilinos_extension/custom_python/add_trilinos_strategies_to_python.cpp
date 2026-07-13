@@ -21,6 +21,9 @@
 
 // TrilinosApplication dependencies
 #include "trilinos_space.h"
+#ifdef HAVE_TPETRA
+#include "trilinos_space_experimental.h"
+#endif
 
 // RANS trilinos extensions
 // schemes
@@ -35,28 +38,46 @@ namespace Kratos
 {
 namespace Python
 {
-void AddTrilinosStrategiesToPython(pybind11::module& m)
+
+namespace
+{
+
+template<class TSparseSpace>
+void RegisterTrilinosStrategies(pybind11::module& m, const std::string& Prefix)
 {
     namespace py = pybind11;
 
     using LocalSpaceType = UblasSpace<double, Matrix, Vector>;
-    using MPISparseSpaceType = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
-    using MPIBaseSchemeType = Scheme<MPISparseSpaceType, LocalSpaceType>;
+    using MPIBaseSchemeType = Scheme<TSparseSpace, LocalSpaceType>;
 
     // add schemes
-    using MPIAlgebraicFluxCorrectedSteadyScalarSchemeType = AlgebraicFluxCorrectedSteadyScalarScheme<MPISparseSpaceType, LocalSpaceType>;
-    py::class_<MPIAlgebraicFluxCorrectedSteadyScalarSchemeType, typename MPIAlgebraicFluxCorrectedSteadyScalarSchemeType::Pointer, MPIBaseSchemeType>(m, "MPIAlgebraicFluxCorrectedSteadyScalarScheme")
+    using MPIAlgebraicFluxCorrectedSteadyScalarSchemeType = AlgebraicFluxCorrectedSteadyScalarScheme<TSparseSpace, LocalSpaceType>;
+    py::class_<MPIAlgebraicFluxCorrectedSteadyScalarSchemeType, typename MPIAlgebraicFluxCorrectedSteadyScalarSchemeType::Pointer, MPIBaseSchemeType>(m, (Prefix + "AlgebraicFluxCorrectedSteadyScalarScheme").c_str())
         .def(py::init<const double, const Flags&>())
         .def(py::init<const double, const Flags&, const Variable<int>&>());
 
-    using MPISteadyScalarSchemeType = SteadyScalarScheme<MPISparseSpaceType, LocalSpaceType>;
-    py::class_<MPISteadyScalarSchemeType, typename MPISteadyScalarSchemeType::Pointer, MPIBaseSchemeType>(m, "MPISteadyScalarScheme")
+    using MPISteadyScalarSchemeType = SteadyScalarScheme<TSparseSpace, LocalSpaceType>;
+    py::class_<MPISteadyScalarSchemeType, typename MPISteadyScalarSchemeType::Pointer, MPIBaseSchemeType>(m, (Prefix + "SteadyScalarScheme").c_str())
         .def(py::init<const double>());
 
-    using MPIBossakRelaxationScalarSchemeType = BossakRelaxationScalarScheme<MPISparseSpaceType, LocalSpaceType>;
-    py::class_<MPIBossakRelaxationScalarSchemeType, typename MPIBossakRelaxationScalarSchemeType::Pointer, MPIBaseSchemeType>(m, "MPIBossakRelaxationScalarScheme")
+    using MPIBossakRelaxationScalarSchemeType = BossakRelaxationScalarScheme<TSparseSpace, LocalSpaceType>;
+    py::class_<MPIBossakRelaxationScalarSchemeType, typename MPIBossakRelaxationScalarSchemeType::Pointer, MPIBaseSchemeType>(m, (Prefix + "BossakRelaxationScalarScheme").c_str())
         .def(py::init<const double, const double, const Variable<double>&>());
+}
 
+} // anonymous namespace
+
+void AddTrilinosStrategiesToPython(pybind11::module& m)
+{
+    using MPISparseSpaceType = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
+
+    RegisterTrilinosStrategies<MPISparseSpaceType>(m, "MPI");
+
+#ifdef HAVE_TPETRA
+    using MPIExperimentalSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>>;
+
+    RegisterTrilinosStrategies<MPIExperimentalSparseSpaceType>(m, "MPIExperimental");
+#endif
 }
 
 } // namespace Python

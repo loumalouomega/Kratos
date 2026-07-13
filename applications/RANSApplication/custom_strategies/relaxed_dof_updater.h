@@ -13,14 +13,13 @@
 #if !defined(KRATOS_RELAXED_DOF_UPDATER_H_INCLUDED )
 #define  KRATOS_RELAXED_DOF_UPDATER_H_INCLUDED
 
+// System includes
+#include <memory>
+
 // Project includes
 #include "includes/define.h"
 #include "includes/model_part.h"
 #include "utilities/dof_updater.h"
-
-#ifdef KRATOS_USING_MPI // mpi-parallel compilation
-class Epetra_Import;
-#endif
 
 
 
@@ -151,7 +150,10 @@ private:
 
     #ifdef KRATOS_USING_MPI // mpi-parallel compilation
     /// Auxiliary trilinos data structure to import out-of-process data in the update vector.
-    std::shared_ptr<Epetra_Import> mpDofImport = nullptr;
+    /// Type-erased (the deleter is captured on assignment): each distributed space's
+    /// translation unit owns the concrete import type (Epetra_Import or Tpetra::Import),
+    /// keeping this header free of Trilinos includes.
+    std::shared_ptr<void> mpDofImport = nullptr;
     #endif
 
     ///@}
