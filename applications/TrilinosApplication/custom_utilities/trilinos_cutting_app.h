@@ -5,6 +5,10 @@
 //
 //
 
+// NOTE: Legacy Epetra-only utility. It is intentionally NOT ported to the Tpetra-based
+// experimental space (TrilinosSpaceExperimental): it has no space templating and no known
+// consumers requiring Tpetra support.
+
 #if !defined(KRATOS_TRILINOS_LOCAL_CUTTING_APP)
 #define  KRATOS_TRILINOS_LOCAL_CUTTING_APP
 
