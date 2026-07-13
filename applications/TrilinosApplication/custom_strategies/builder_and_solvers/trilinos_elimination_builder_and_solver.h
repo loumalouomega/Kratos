@@ -19,29 +19,22 @@
 #include <set>
 
 /* External includes */
-//Trilinos includes
-#include "Epetra_Map.h"
-#include "Epetra_Vector.h"
-#include "Epetra_FECrsGraph.h"
-#include "Epetra_FECrsMatrix.h"
-#include "Epetra_IntSerialDenseVector.h"
-#include "Epetra_SerialDenseMatrix.h"
-#include "Epetra_SerialDenseVector.h"
-#include "Epetra_MpiComm.h"
 
 /* Project includes */
 #include "includes/define.h"
+#include "includes/data_communicator.h"
+#include "trilinos_space.h"
 #include "utilities/timer.h"
 #include "solving_strategies/builder_and_solvers/builder_and_solver.h"
 
 #if !defined(START_TIMER)
-#define START_TIMER(label, rank) \
-    if (mrComm.MyPID() == rank)  \
+#define START_TIMER(label, rank)              \
+    if (TSparseSpace::GetRank(mrComm) == rank) \
         Timer::Start(label);
 #endif
 #if !defined(STOP_TIMER)
-#define STOP_TIMER(label, rank) \
-    if (mrComm.MyPID() == rank) \
+#define STOP_TIMER(label, rank)               \
+    if (TSparseSpace::GetRank(mrComm) == rank) \
         Timer::Stop(label);
 #endif
 
@@ -147,6 +140,14 @@ public:
 
     typedef typename BaseType::ElementsContainerType ElementsContainerType;
 
+    typedef std::size_t IndexType;
+
+    /// The Trilinos communicator type of the space (Epetra_MpiComm or Teuchos::MpiComm<int>)
+    typedef typename TSparseSpace::CommunicatorType TrilinosCommunicatorType;
+
+    /// Definition of the linear algebra library
+    static constexpr TrilinosLinearAlgebraLibrary LinearAlgebraLibrary = TSparseSpace::LinearAlgebraLibrary();
+
     /*@} */
     /**@name Life Cycle
     */
@@ -155,7 +156,7 @@ public:
     /** Constructor.
     */
     TrilinosResidualBasedEliminationBuilderAndSolver(
-        Epetra_MpiComm& Comm,
+        TrilinosCommunicatorType& Comm,
         int guess_row_size,
         typename TLinearSolver::Pointer pNewLinearSystemSolver)
         : BuilderAndSolver< TSparseSpace,TDenseSpace,TLinearSolver >(pNewLinearSystemSolver)
@@ -249,8 +250,8 @@ public:
         }
 
         //finalizing the assembly
-        A.GlobalAssemble();
-        b.GlobalAssemble();
+        TSparseSpace::GlobalAssemble(A);
+        TSparseSpace::GlobalAssemble(b);
 
 
 // std::cout << A.Comm().MyPID() << " first id " << mFirstMyId << " last id " << mLastMyId << std::endl;
@@ -311,7 +312,7 @@ public:
         }
 
         //finalizing the assembly
-        A.GlobalAssemble();
+        TSparseSpace::GlobalAssemble(A);
         KRATOS_CATCH("")
 
     }
@@ -339,7 +340,7 @@ public:
         if (norm_b != 0.00)
         {
             if (this->GetEchoLevel()>1)
-                if (mrComm.MyPID() == 0) KRATOS_WATCH("entering in the solver");
+                if (TSparseSpace::GetRank(mrComm) == 0) KRATOS_WATCH("entering in the solver");
 
             if(BaseType::mpLinearSystemSolver->AdditionalPhysicalDataIsNeeded() )
                 BaseType::mpLinearSystemSolver->ProvideAdditionalData(A, Dx, b, BaseType::mDofSet, rModelPart);
@@ -472,7 +473,7 @@ public:
         }
 
         //finalizing the assembly
-        b.GlobalAssemble();
+        TSparseSpace::GlobalAssemble(b);
 
         KRATOS_CATCH("")
 
@@ -1073,104 +1074,67 @@ public:
             std::cout << "entering ResizeAndInitializeVectors" << std::endl;
 
         //resizing the system vectors and matrix
-        if ( pA == NULL || TSparseSpace::Size1(*pA) == 0 || BaseType::GetReshapeMatrixFlag() == true) //if the matrix is not initialized
+        if ( TSparseSpace::IsNull(pA) || TSparseSpace::Size1(*pA) == 0 || BaseType::GetReshapeMatrixFlag() == true) //if the matrix is not initialized
         {
-            //creating a work array
-            unsigned int number_of_local_dofs = mLastMyId - mFirstMyId;
-
-            int temp_size = number_of_local_dofs;
-            if (temp_size <1000) temp_size = 1000;
-            int* temp = new int[temp_size]; //
-            int* assembling_temp = new int[temp_size];
-
-
-            //generate map - use the "temp" array here
-            for (unsigned int i=0; i!=number_of_local_dofs; i++)
-                temp[i] = mFirstMyId+i;
-            Epetra_Map my_map(-1, number_of_local_dofs, temp, 0, mrComm);
+            const IndexType number_of_local_dofs = mLastMyId - mFirstMyId;
 
             auto& rElements = rModelPart.Elements();
             auto& rConditions = rModelPart.Conditions();
 
-            //create and fill the graph of the matrix --> the temp array is reused here with a different meaning
-            Epetra_FECrsGraph Agraph(Copy, my_map, mguess_row_size);
-
             Element::EquationIdVectorType EquationId;
             const ProcessInfo &CurrentProcessInfo = rModelPart.GetProcessInfo();
+
+            // Collect the active (non fixed) global indices of every entity. Fixed DOFs
+            // (EquationId >= mEquationSystemSize) are dropped, following the elimination approach.
+            std::vector<std::vector<int>> all_equation_ids;
+            all_equation_ids.reserve(rElements.size() + rConditions.size());
+
+            auto collect_active_ids = [this, &all_equation_ids](const Element::EquationIdVectorType& rIds) {
+                std::vector<int> active_ids;
+                active_ids.reserve(rIds.size());
+                for (const auto id : rIds) {
+                    if (id < BaseType::mEquationSystemSize) {
+                        active_ids.push_back(static_cast<int>(id));
+                    }
+                }
+                if (!active_ids.empty()) {
+                    all_equation_ids.push_back(std::move(active_ids));
+                }
+            };
 
             // assemble all elements
             for (typename ElementsArrayType::ptr_iterator it=rElements.ptr_begin(); it!=rElements.ptr_end(); ++it)
             {
                 pScheme->EquationId( **it, EquationId, CurrentProcessInfo );
+                collect_active_ids(EquationId);
+            }
 
-                //filling the list of active global indices (non fixed)
-                unsigned int num_active_indices = 0;
-                for (unsigned int i=0; i<EquationId.size(); i++)
-                {
-                    if ( EquationId[i] < BaseType::mEquationSystemSize )
-                    {
-                        assembling_temp[num_active_indices] =  EquationId[i];
-                        num_active_indices += 1;
-                    }
-                }
+            // assemble all conditions
+            for (typename ConditionsArrayType::ptr_iterator it=rConditions.ptr_begin(); it!=rConditions.ptr_end(); ++it)
+            {
+                pScheme->EquationId( **it, EquationId, CurrentProcessInfo );
+                collect_active_ids(EquationId);
+            }
 
-                if (num_active_indices != 0)
-                {
-                    int ierr = Agraph.InsertGlobalIndices(num_active_indices,assembling_temp,num_active_indices, assembling_temp);
-                    KRATOS_ERROR_IF( ierr < 0 ) << "In " << __FILE__ << ":" << __LINE__ << ": Epetra failure in Graph.InsertGlobalIndices. Error code: " << ierr << std::endl;
-                }
-          }
+            // Ensure the row map is initialized and delegate the graph/matrix/vector
+            // construction to the space (handles both the Epetra and Tpetra backends)
+            GetMap();
+            TSparseSpace::BuildSystemStructure(
+                mrComm,
+                number_of_local_dofs,
+                mFirstMyId,
+                mguess_row_size,
+                all_equation_ids,
+                all_equation_ids,
+                pA,
+                pb,
+                pDx,
+                BaseType::mpReactionsVector,
+                BaseType::mEquationSystemSize,
+                mpMap);
 
-          // assemble all conditions
-          for (typename ConditionsArrayType::ptr_iterator it=rConditions.ptr_begin(); it!=rConditions.ptr_end(); ++it)
-          {
-              pScheme->EquationId( **it, EquationId, CurrentProcessInfo );
-
-              //filling the list of active global indices (non fixed)
-              unsigned int num_active_indices = 0;
-              for (unsigned int i=0; i<EquationId.size(); i++)
-              {
-                  if ( EquationId[i] < BaseType::mEquationSystemSize )
-                  {
-                      assembling_temp[num_active_indices] =  EquationId[i];
-                      num_active_indices += 1;
-                  }
-              }
-
-              if (num_active_indices != 0)
-              {
-                  int ierr = Agraph.InsertGlobalIndices(num_active_indices,assembling_temp,num_active_indices, assembling_temp);
-                  KRATOS_ERROR_IF( ierr < 0 ) << "In " << __FILE__ << ":" << __LINE__ << ": Epetra failure in Graph.InsertGlobalIndices. Error code: " << ierr << std::endl;
-              }
-          }
-
-          //finalizing graph construction
-          int ierr = Agraph.GlobalAssemble();
-          KRATOS_ERROR_IF( ierr != 0 ) << "In " << __FILE__ << ":" << __LINE__ << ": Epetra failure in Graph.GlobalAssemble, Error code: " << ierr << std::endl;
-
-          //generate a new matrix pointer according to this graph
-          TSystemMatrixPointerType pNewA = TSystemMatrixPointerType(new TSystemMatrixType(Copy,Agraph) );
-          pA.swap(pNewA);
-
-          //generate new vector pointers according to the given map
-          if ( pb == NULL || TSparseSpace::Size(*pb) != BaseType::mEquationSystemSize)
-          {
-              TSystemVectorPointerType pNewb = TSystemVectorPointerType(new TSystemVectorType(my_map) );
-              pb.swap(pNewb);
-          }
-          if ( pDx == NULL || TSparseSpace::Size(*pDx) != BaseType::mEquationSystemSize)
-          {
-              TSystemVectorPointerType pNewDx = TSystemVectorPointerType(new TSystemVectorType(my_map) );
-              pDx.swap(pNewDx);
-          }
-          if ( BaseType::mpReactionsVector == NULL) //if the pointer is not initialized initialize it to an empty matrix
-          {
-              TSystemVectorPointerType pNewReactionsVector = TSystemVectorPointerType(new TSystemVectorType(my_map) );
-              BaseType::mpReactionsVector.swap(pNewReactionsVector);
-          }
-
-          delete [] temp;
-          delete [] assembling_temp;
+            // Finalize assembly after all structure is built
+            TSparseSpace::GlobalAssemble(*pA);
         }
         else
         {
@@ -1294,10 +1258,45 @@ protected:
     /*@} */
     /**@name Protected member Variables */
     /*@{ */
-    Epetra_MpiComm& mrComm;
+    TrilinosCommunicatorType& mrComm;
     int mguess_row_size;
     int mFirstMyId;
     int mLastMyId;
+    typename TSparseSpace::MapPointerType mpMap = TSparseSpace::CreateEmptyMapPointer(); /// The row map used for the system matrix and vectors
+
+    /*@} */
+    /**@name Protected Operations*/
+    /*@{ */
+
+    /**
+     * Regenerates the row map covering the locally owned equation ids [mFirstMyId, mLastMyId).
+     * The map is rebuilt on every call, as the system numbering may change between reshapes.
+     */
+    const typename TSparseSpace::MapType& GetMap()
+    {
+        const IndexType number_of_local_dofs = mLastMyId - mFirstMyId;
+        std::vector<int> global_ids(number_of_local_dofs);
+        for (IndexType i = 0; i < number_of_local_dofs; ++i) {
+            global_ids[i] = mFirstMyId + i;
+        }
+
+        if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::EPETRA) {
+            mpMap = Kratos::make_shared<Epetra_Map>(-1, static_cast<int>(number_of_local_dofs), global_ids.data(), 0, mrComm);
+        } else if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::TPETRA) {
+        #if (HAVE_TPETRA)
+            using MapType = typename TSparseSpace::MapType;
+            using GO = typename MapType::global_ordinal_type;
+            std::vector<GO> tpetra_global_ids(global_ids.begin(), global_ids.end());
+            mpMap = Teuchos::rcp(new MapType(Teuchos::OrdinalTraits<GO>::invalid(), tpetra_global_ids, 0, Teuchos::rcpFromRef(mrComm)));
+        #else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+        #endif
+        } else {
+            KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
+        }
+
+        return *mpMap;
+    }
 
 
     /*@} */
