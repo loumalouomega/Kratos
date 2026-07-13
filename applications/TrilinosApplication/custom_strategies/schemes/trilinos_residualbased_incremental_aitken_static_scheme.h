@@ -20,6 +20,7 @@
 
 // Project includes
 #include "solving_strategies/schemes/residualbased_incrementalupdate_static_scheme.h"
+#include "trilinos_application.h"
 
 
 namespace Kratos
@@ -70,6 +71,11 @@ public:
     typedef typename BaseType::TSystemVectorType TSystemVectorType;
 
     typedef Kratos::shared_ptr < TSystemVectorType > SystemVectorPointerType;
+
+    typedef typename TSparseSpace::ImportPointerType ImportPointerType;
+
+    /// Definition of the linear algebra library
+    static constexpr TrilinosLinearAlgebraLibrary LinearAlgebraLibrary = TSparseSpace::LinearAlgebraLibrary();
 
     //typedef typename BaseType::LocalSystemVectorType LocalSystemVectorType;
     //typedef typename BaseType::LocalSystemMatrixType LocalSystemMatrixType;
@@ -154,7 +160,7 @@ public:
         this->UpdateWithRelaxation(rDofSet,Dx,Omega);
 
         // Store results for next iteration
-        SystemVectorPointerType Tmp = SystemVectorPointerType( new TSystemVectorType(Dx));
+        SystemVectorPointerType Tmp = CopyVector(Dx);
         mpPreviousDx.swap(Tmp);
         mOldOmega = Omega;
 
@@ -208,6 +214,22 @@ protected:
     ///@name Protected Operations
     ///@{
 
+    /// Creates a heap-allocated copy of the given vector (the Tpetra FE vectors have no copy constructor)
+    static SystemVectorPointerType CopyVector(const TSystemVectorType& rDx)
+    {
+        if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::EPETRA) {
+            return SystemVectorPointerType(new TSystemVectorType(rDx));
+        } else {
+#if (HAVE_TPETRA)
+            SystemVectorPointerType p_copy(new TSystemVectorType(rDx.getMap(), Teuchos::null, 1));
+            p_copy->update(1.0, rDx, 0.0);
+            return p_copy;
+#else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+#endif
+        }
+    }
+
     /// Calculate the value of the Aitken relaxation factor for the current iteration
     double CalculateOmega(TSystemVectorType& Dx)
     {
@@ -216,42 +238,73 @@ protected:
         double Num = 0.0;
         double Den = 0.0;
 
-        int MyLength = Dx.MyLength();
+        if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::EPETRA) {
+            int MyLength = Dx.MyLength();
 
-        // Safety check, to be sure that we didn't move nodes along processors
-        if (MyLength != mpPreviousDx->MyLength())
-        {
-            KRATOS_THROW_ERROR(std::runtime_error,"Unexpected error in Trilinos Aitken iterations: the Dx vector has a different size than in previous iteration.","");
+            // Safety check, to be sure that we didn't move nodes along processors
+            if (MyLength != mpPreviousDx->MyLength())
+            {
+                KRATOS_THROW_ERROR(std::runtime_error,"Unexpected error in Trilinos Aitken iterations: the Dx vector has a different size than in previous iteration.","");
+            }
+
+            // These point to data held by the Epetra_Vector, do not delete[] here.
+            double* pDxValues;
+            int DxLDA;
+            double* pOldDxValues;
+            int OldDxLDA;
+
+            Dx.ExtractView(&pDxValues,&DxLDA);
+            mpPreviousDx->ExtractView(&pOldDxValues,&OldDxLDA);
+
+            for (int i = 0; i < MyLength; i++)
+            {
+                double Diff = pDxValues[i] - pOldDxValues[i];
+                Num += pOldDxValues[i] * Diff;
+                Den += Diff * Diff;
+            }
+
+            Dx.Comm().Barrier();
+
+            // Sum values across processors
+            double SendBuff[2] = {Num,Den};
+            double RecvBuff[2];
+
+            Dx.Comm().SumAll(&SendBuff[0],&RecvBuff[0],2);
+
+            Num = RecvBuff[0];
+            Den = RecvBuff[1];
+        } else if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::TPETRA) {
+#if (HAVE_TPETRA)
+            const std::size_t my_length = Dx.getLocalLength();
+
+            // Safety check, to be sure that we didn't move nodes along processors
+            KRATOS_ERROR_IF(my_length != mpPreviousDx->getLocalLength())
+                << "Unexpected error in Trilinos Aitken iterations: the Dx vector has a different size than in previous iteration." << std::endl;
+
+            const auto dx_values = Dx.getData(0);
+            const auto old_dx_values = mpPreviousDx->getData(0);
+
+            for (std::size_t i = 0; i < my_length; i++)
+            {
+                const double Diff = dx_values[i] - old_dx_values[i];
+                Num += old_dx_values[i] * Diff;
+                Den += Diff * Diff;
+            }
+
+            // Sum values across processors
+            const auto p_comm = Dx.getMap()->getComm();
+            double send_buff[2] = {Num, Den};
+            double recv_buff[2];
+            Teuchos::reduceAll(*p_comm, Teuchos::REDUCE_SUM, 2, &send_buff[0], &recv_buff[0]);
+
+            Num = recv_buff[0];
+            Den = recv_buff[1];
+#else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+#endif
+        } else {
+            KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
-
-//        int NumVectors = Dx.NumVectors();
-
-        // These point to data held by the Epetra_Vector, do not delete[] here.
-        double* pDxValues;
-        int DxLDA;
-        double* pOldDxValues;
-        int OldDxLDA;
-
-        Dx.ExtractView(&pDxValues,&DxLDA);
-        mpPreviousDx->ExtractView(&pOldDxValues,&OldDxLDA);
-
-        for (int i = 0; i < MyLength; i++)
-        {
-            double Diff = pDxValues[i] - pOldDxValues[i];
-            Num += pOldDxValues[i] * Diff;
-            Den += Diff * Diff;
-        }
-
-        Dx.Comm().Barrier();
-
-        // Sum values across processors
-        double SendBuff[2] = {Num,Den};
-        double RecvBuff[2];
-
-        Dx.Comm().SumAll(&SendBuff[0],&RecvBuff[0],2);
-
-        Num = RecvBuff[0];
-        Den = RecvBuff[1];
 
         double Omega = - mOldOmega * Num / Den;
         return Omega;
@@ -268,32 +321,62 @@ protected:
         if (!this->DofImporterIsInitialized())
             this->InitializeDofImporter(rDofSet,Dx);
 
-        Kratos::shared_ptr<Epetra_Import> pImporter = this->pGetImporter();
+        ImportPointerType pImporter = this->pGetImporter();
 
-        int system_size = TSparseSpace::Size(Dx);
+        const std::size_t system_size = TSparseSpace::Size(Dx);
 
-        //defining a temporary vector to gather all of the values needed
-        Epetra_Vector temp( pImporter->TargetMap() );
+        if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::EPETRA) {
+            //defining a temporary vector to gather all of the values needed
+            Epetra_Vector temp( pImporter->TargetMap() );
 
-        //importing in the new temp vector the values
-        int ierr = temp.Import(Dx,*pImporter,Insert);
-        if(ierr != 0) KRATOS_THROW_ERROR(std::logic_error,"Epetra failure found","");
+            //importing in the new temp vector the values
+            int ierr = temp.Import(Dx,*pImporter,Insert);
+            if(ierr != 0) KRATOS_THROW_ERROR(std::logic_error,"Epetra failure found","");
 
-        double* temp_values; //DO NOT make delete of this one!!
-        temp.ExtractView( &temp_values );
+            Dx.Comm().Barrier();
 
-        Dx.Comm().Barrier();
-
-        //performing the update
-        auto dof_begin = rDofSet.begin();
-        for(unsigned int iii=0; iii<rDofSet.size(); iii++)
-        {
-            int global_id = (dof_begin+iii)->EquationId();
-            if(global_id < system_size)
+            //performing the update
+            auto dof_begin = rDofSet.begin();
+            for(unsigned int iii=0; iii<rDofSet.size(); iii++)
             {
-                double aaa = temp[pImporter->TargetMap().LID(global_id)];
-                (dof_begin+iii)->GetSolutionStepValue() += Omega * aaa;
+                const std::size_t global_id = (dof_begin+iii)->EquationId();
+                if(global_id < system_size)
+                {
+                    double aaa = temp[pImporter->TargetMap().LID(static_cast<int>(global_id))];
+                    (dof_begin+iii)->GetSolutionStepValue() += Omega * aaa;
+                }
             }
+        } else if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::TPETRA) {
+#if (HAVE_TPETRA)
+            using ST = typename TSparseSpace::ST;
+            using LO = typename TSparseSpace::LO;
+            using GO = typename TSparseSpace::GO;
+            using NT = typename TSparseSpace::NT;
+
+            //defining a temporary vector to gather all of the values needed
+            const auto p_target_map = pImporter->getTargetMap();
+            Tpetra::MultiVector<ST, LO, GO, NT> temp(p_target_map, 1);
+
+            //importing in the new temp vector the values
+            temp.doImport(Dx, *pImporter, Tpetra::INSERT);
+
+            //performing the update
+            const auto temp_data = temp.getData(0);
+            auto dof_begin = rDofSet.begin();
+            for(unsigned int iii=0; iii<rDofSet.size(); iii++)
+            {
+                const std::size_t global_id = (dof_begin+iii)->EquationId();
+                if(global_id < system_size)
+                {
+                    const LO local_id = p_target_map->getLocalElement(static_cast<GO>(global_id));
+                    (dof_begin+iii)->GetSolutionStepValue() += Omega * temp_data[local_id];
+                }
+            }
+#else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+#endif
+        } else {
+            KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
 
         KRATOS_CATCH("");
@@ -303,39 +386,8 @@ protected:
     virtual void InitializeDofImporter(DofsArrayType& rDofSet,
                                        TSystemVectorType& Dx)
     {
-        int system_size = TSparseSpace::Size(Dx);
-        int number_of_dofs = rDofSet.size();
-        std::vector< int > index_array(number_of_dofs);
-
-        //filling the array with the global ids
-        int counter = 0;
-        for(auto i_dof = rDofSet.begin() ; i_dof != rDofSet.end() ; ++i_dof)
-        {
-            int id = i_dof->EquationId();
-            if( id < system_size )
-            {
-                index_array[counter] = id;
-                counter += 1;
-            }
-        }
-
-        std::sort(index_array.begin(),index_array.end());
-        std::vector<int>::iterator NewEnd = std::unique(index_array.begin(),index_array.end());
-        index_array.resize(NewEnd-index_array.begin());
-
-        int check_size = -1;
-        int tot_update_dofs = index_array.size();
-        Dx.Comm().SumAll(&tot_update_dofs,&check_size,1);
-        KRATOS_ERROR_IF( (check_size < system_size) &&  (Dx.Comm().MyPID() == 0) )
-            << "Dof count is not correct. There are less dofs then expected." << std::endl
-            << "Expected number of active dofs = " << system_size << " dofs found = " << check_size << std::endl;
-
-        //defining a map as needed
-        Epetra_Map dof_update_map(-1,index_array.size(), &(*(index_array.begin())),0,Dx.Comm() );
-
-        //defining the importer class
-        Kratos::shared_ptr<Epetra_Import> pDofImporter = Kratos::make_shared<Epetra_Import>(dof_update_map,Dx.Map());
-        mpDofImporter.swap(pDofImporter);
+        // The space performs the global DOF-count consistency check internally
+        mpDofImporter = TSparseSpace::CreateImport(rDofSet, Dx);
 
         mImporterIsInitialized = true;
     }
@@ -344,13 +396,13 @@ protected:
     ///@name Protected  Access
     ///@{
 
-    /// Get pointer Epetra_Import instance that can be used to import values from Dx to the owner of each Dof.
+    /// Get pointer to the import instance that can be used to import values from Dx to the owner of each Dof.
     /**
      * @note Important: always check that the Importer is initialized before calling using
      * DofImporterIsInitialized or initialize it with InitializeDofImporter.
      * @return Importer
      */
-    Kratos::shared_ptr<Epetra_Import> pGetImporter()
+    ImportPointerType pGetImporter()
     {
         return mpDofImporter;
     }
@@ -397,7 +449,7 @@ private:
 
     bool mImporterIsInitialized = false;
 
-    Kratos::shared_ptr<Epetra_Import> mpDofImporter = nullptr;
+    ImportPointerType mpDofImporter = nullptr;
 
     ///@}
     ///@name Private Operators
@@ -424,10 +476,10 @@ private:
     ///@{
 
     /// Assignment operator.
-    TrilinosResidualBasedIncrementalAitkenStaticScheme& operator=(TrilinosResidualBasedIncrementalAitkenStaticScheme const& rOther) {}
+    TrilinosResidualBasedIncrementalAitkenStaticScheme& operator=(TrilinosResidualBasedIncrementalAitkenStaticScheme const& rOther) = delete;
 
     /// Copy constructor.
-    TrilinosResidualBasedIncrementalAitkenStaticScheme(TrilinosResidualBasedIncrementalAitkenStaticScheme const& rOther) {}
+    TrilinosResidualBasedIncrementalAitkenStaticScheme(TrilinosResidualBasedIncrementalAitkenStaticScheme const& rOther) = delete;
 
 
     ///@}
