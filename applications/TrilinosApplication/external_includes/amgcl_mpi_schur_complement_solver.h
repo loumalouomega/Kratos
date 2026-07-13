@@ -26,12 +26,16 @@
 #include "linear_solvers/linear_solver.h"
 #include "external_includes/amgcl_mpi_solver.h"
 #include "custom_utilities/trilinos_solver_utilities.h"
+#include "trilinos_application.h"
 
 #include <boost/range/iterator_range.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
 #include <amgcl/amg.hpp>
 #include <amgcl/adapter/epetra.hpp>
+#ifdef HAVE_TPETRA
+#include "external_includes/amgcl_tpetra_adapter.hpp"
+#endif
 
 #include <amgcl/mpi/make_solver.hpp>
 #include <amgcl/mpi/schur_pressure_correction.hpp>
@@ -66,6 +70,9 @@ public:
     using VectorType = typename TSparseSpaceType::VectorType;
 
     using DenseMatrixType = typename TDenseSpaceType::MatrixType;
+
+    /// Definition of the linear algebra library
+    static constexpr TrilinosLinearAlgebraLibrary LinearAlgebraLibrary = TSparseSpaceType::LinearAlgebraLibrary();
 
 
     AmgclMPISchurComplementSolver ( Parameters rParameters )
@@ -191,16 +198,18 @@ public:
         //using amgcl::prof;
         //prof.reset();
 
-        MPI_Comm the_comm = TrilinosSolverUtilities::GetMPICommFromEpetraComm(rA.Comm());
+        MPI_Comm the_comm = GetMPIComm(rA);
 
         amgcl::mpi::communicator world ( the_comm );
         if ( mVerbosity >=0 && world.rank == 0 ) {
             std::cout << "World size: " << world.size << std::endl;
         }
 
-        int chunk = rA.NumMyRows();
-        boost::iterator_range<double*> xrange ( rX.Values(), rX.Values() + chunk );
-        boost::iterator_range<double*> frange ( rB.Values(), rB.Values() + chunk );
+        const int chunk = LocalSize(rA);
+        double* x_data = VectorData(rX);
+        double* f_data = VectorData(rB);
+        boost::iterator_range<double*> xrange ( x_data, x_data + chunk );
+        boost::iterator_range<double*> frange ( f_data, f_data + chunk );
 
         if ( mVerbosity > 1 && world.rank == 0 ) {
             write_json ( std::cout, mprm );
@@ -245,7 +254,7 @@ public:
 
 
 
-        if ( rA.Comm().MyPID() == 0 ) {
+        if ( world.rank == 0 ) {
             if ( mVerbosity > 0 ) {
                 std::cout
                         << "------- AMGCL -------\n" << std::endl
@@ -316,11 +325,12 @@ public:
     ) override
     {
 
-        int my_pid = rA.Comm().MyPID();
+        const int my_pid = rModelPart.GetCommunicator().GetDataCommunicator().Rank();
+        const int local_rows = LocalSize(rA);
 
         //filling the pressure mask
-        if(mPressureMask.size() != static_cast<unsigned int>(rA.NumMyRows()))
-            mPressureMask.resize( rA.NumMyRows(), false );
+        if(mPressureMask.size() != static_cast<unsigned int>(local_rows))
+            mPressureMask.resize( local_rows, false );
 
         int counter = 0;
 #ifdef KRATOS_DEBUG
@@ -340,10 +350,10 @@ public:
             }
         }
 #ifdef KRATOS_DEBUG
-    std::cout << "MPI proc :" << my_pid << " npressures = " << npressures << " local rows = " << rA.NumMyRows();
+    std::cout << "MPI proc :" << my_pid << " npressures = " << npressures << " local rows = " << local_rows;
 #endif
-        if(counter != rA.NumMyRows())
-            KRATOS_ERROR << "pressure mask as a size " << mPressureMask.size() << " which does not correspond with the number of local rows:" << rA.NumMyRows() << std::endl;
+        if(counter != local_rows)
+            KRATOS_ERROR << "pressure mask as a size " << mPressureMask.size() << " which does not correspond with the number of local rows:" << local_rows << std::endl;
 
     }
 
@@ -354,6 +364,48 @@ public:
     }
 
 private:
+
+    /// Returns the raw MPI communicator of the matrix (Epetra or Tpetra backend)
+    static MPI_Comm GetMPIComm(const SparseMatrixType& rA)
+    {
+        if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::EPETRA) {
+            return TrilinosSolverUtilities::GetMPICommFromEpetraComm(rA.Comm());
+        } else {
+#if (HAVE_TPETRA)
+            return TrilinosSolverUtilities::GetMPICommFromTeuchosComm(*rA.getRowMap()->getComm());
+#else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+#endif
+        }
+    }
+
+    /// Returns the number of locally owned rows of the matrix
+    static int LocalSize(const SparseMatrixType& rA)
+    {
+        if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::EPETRA) {
+            return rA.NumMyRows();
+        } else {
+#if (HAVE_TPETRA)
+            return static_cast<int>(amgcl::adapter::tpetra_detail::GetNumLocalRows(rA));
+#else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+#endif
+        }
+    }
+
+    /// Returns a raw host pointer to the local data of the vector
+    static double* VectorData(VectorType& rV)
+    {
+        if constexpr (LinearAlgebraLibrary == TrilinosLinearAlgebraLibrary::EPETRA) {
+            return rV.Values();
+        } else {
+#if (HAVE_TPETRA)
+            return rV.getDataNonConst(0).getRawPtr();
+#else
+            KRATOS_ERROR << "You must compile Kratos with TPETRA support" << std::endl;
+#endif
+        }
+    }
 
     double mTolerance;
     int mMaxIterations;
