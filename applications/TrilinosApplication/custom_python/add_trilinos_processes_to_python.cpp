@@ -23,6 +23,9 @@
 #include "processes/process.h"
 #include "processes/variational_distance_calculation_process.h"
 #include "trilinos_space.h"
+#ifdef HAVE_TPETRA
+#include "trilinos_space_experimental.h"
+#endif
 #include "spaces/ublas_space.h"
 #include "custom_python/add_trilinos_processes_to_python.h"
 #include "custom_processes/trilinos_levelset_convection_process.h"
@@ -32,92 +35,114 @@ namespace Kratos::Python
 {
 namespace py = pybind11;
 
-typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
-typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
-typedef LinearSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType > TrilinosLinearSolverType;
+namespace {
 
-// Helpers to define Trilinos VariationalDistanceCalculatorProcess
-template<unsigned int TDim> using TrilinosVariationalDistanceCalculation = VariationalDistanceCalculationProcess<TDim,TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
-
-template< class TBinder, unsigned int TDim > void DistanceCalculatorConstructionHelper(TBinder& rBinder)
+template<class TSparseSpace, class TLocalSpace, class TLinearSolverType, class TBinder, unsigned int TDim>
+void DistanceCalculatorConstructionHelper(TBinder& rBinder)
 {
+    using TrilinosCommunicatorType = typename TSparseSpace::CommunicatorType;
+    using TrilinosBlockBuilderAndSolverType = TrilinosBlockBuilderAndSolver<TSparseSpace, TLocalSpace, TLinearSolverType>;
+    using VariationalDistanceCalculationType = VariationalDistanceCalculationProcess<TDim, TSparseSpace, TLocalSpace, TLinearSolverType>;
+
     rBinder.def(py::init([](
-        Epetra_MpiComm& rCommunicator, Model& rModel,TrilinosLinearSolverType::Pointer pLinearSolver, Parameters ThisParameters)
+        TrilinosCommunicatorType& rCommunicator, Model& rModel, typename TLinearSolverType::Pointer pLinearSolver, Parameters ThisParameters)
         {
             constexpr int row_size_guess = TDim == 2 ? 15 : 40;
-            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType > >(
+            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolverType>(
                 rCommunicator, row_size_guess, pLinearSolver);
-            return Kratos::make_shared<TrilinosVariationalDistanceCalculation<TDim>>(rModel, pLinearSolver, p_builder_solver, ThisParameters);
+            return Kratos::make_shared<VariationalDistanceCalculationType>(rModel, pLinearSolver, p_builder_solver, ThisParameters);
         }));
     rBinder.def(py::init([](
-        Epetra_MpiComm& rComm,ModelPart& rModelPart,TrilinosLinearSolverType::Pointer pLinearSolver,
-        unsigned int MaxIter,Flags TheFlags)
+        TrilinosCommunicatorType& rComm, ModelPart& rModelPart, typename TLinearSolverType::Pointer pLinearSolver,
+        unsigned int MaxIter, Flags TheFlags)
         {
             constexpr int RowSizeGuess = (TDim == 2 ? 15 : 40);
-            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType > >(
+            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolverType>(
                 rComm, RowSizeGuess, pLinearSolver);
-            return Kratos::make_shared<TrilinosVariationalDistanceCalculation<TDim>>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags);
+            return Kratos::make_shared<VariationalDistanceCalculationType>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags);
         }));
     rBinder.def(py::init([](
-        Epetra_MpiComm& rComm,ModelPart& rModelPart,TrilinosLinearSolverType::Pointer pLinearSolver,
-        unsigned int MaxIter,Flags TheFlags,std::string& rAuxName)
+        TrilinosCommunicatorType& rComm, ModelPart& rModelPart, typename TLinearSolverType::Pointer pLinearSolver,
+        unsigned int MaxIter, Flags TheFlags, std::string& rAuxName)
         {
             constexpr int RowSizeGuess = (TDim == 2 ? 15 : 40);
-            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType > >(
+            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolverType>(
                 rComm, RowSizeGuess, pLinearSolver);
-            return Kratos::make_shared<TrilinosVariationalDistanceCalculation<TDim>>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags, rAuxName);
+            return Kratos::make_shared<VariationalDistanceCalculationType>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags, rAuxName);
         }));
     rBinder.def(py::init([](
-        Epetra_MpiComm& rComm,ModelPart& rModelPart,TrilinosLinearSolverType::Pointer pLinearSolver,
-        unsigned int MaxIter,Flags TheFlags,std::string& rAuxName, double Coefficient1)
+        TrilinosCommunicatorType& rComm, ModelPart& rModelPart, typename TLinearSolverType::Pointer pLinearSolver,
+        unsigned int MaxIter, Flags TheFlags, std::string& rAuxName, double Coefficient1)
         {
             constexpr int RowSizeGuess = (TDim == 2 ? 15 : 40);
-            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType > >(
+            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolverType>(
                 rComm, RowSizeGuess, pLinearSolver);
-            return Kratos::make_shared<TrilinosVariationalDistanceCalculation<TDim>>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags, rAuxName, Coefficient1);
+            return Kratos::make_shared<VariationalDistanceCalculationType>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags, rAuxName, Coefficient1);
         }));
     rBinder.def(py::init([](
-        Epetra_MpiComm& rComm,ModelPart& rModelPart,TrilinosLinearSolverType::Pointer pLinearSolver,
-        unsigned int MaxIter,Flags TheFlags,std::string& rAuxName, double Coefficient1, double Coefficient2)
+        TrilinosCommunicatorType& rComm, ModelPart& rModelPart, typename TLinearSolverType::Pointer pLinearSolver,
+        unsigned int MaxIter, Flags TheFlags, std::string& rAuxName, double Coefficient1, double Coefficient2)
         {
             constexpr int RowSizeGuess = (TDim == 2 ? 15 : 40);
-            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType > >(
+            auto p_builder_solver = Kratos::make_shared<TrilinosBlockBuilderAndSolverType>(
                 rComm, RowSizeGuess, pLinearSolver);
-            return Kratos::make_shared<TrilinosVariationalDistanceCalculation<TDim>>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags, rAuxName, Coefficient1, Coefficient2);
+            return Kratos::make_shared<VariationalDistanceCalculationType>(rModelPart, pLinearSolver, p_builder_solver, MaxIter, TheFlags, rAuxName, Coefficient1, Coefficient2);
         }));
 }
 
-void AddProcesses(pybind11::module& m)
+template<class TSparseSpace, class TLocalSpace, class TLinearSolverType>
+void RegisterProcesses(pybind11::module& m, const std::string& Prefix)
 {
+    using TrilinosCommunicatorType = typename TSparseSpace::CommunicatorType;
+
     // Variational distance calculation processes
-    using DistanceCalculator2DBinderType = py::class_<TrilinosVariationalDistanceCalculation<2>, typename TrilinosVariationalDistanceCalculation<2>::Pointer, Process >;
-    using DistanceCalculator3DBinderType = py::class_<TrilinosVariationalDistanceCalculation<3>, typename TrilinosVariationalDistanceCalculation<3>::Pointer, Process >;
+    using DistanceCalculator2DType = VariationalDistanceCalculationProcess<2, TSparseSpace, TLocalSpace, TLinearSolverType>;
+    using DistanceCalculator3DType = VariationalDistanceCalculationProcess<3, TSparseSpace, TLocalSpace, TLinearSolverType>;
+    using DistanceCalculator2DBinderType = py::class_<DistanceCalculator2DType, typename DistanceCalculator2DType::Pointer, Process>;
+    using DistanceCalculator3DBinderType = py::class_<DistanceCalculator3DType, typename DistanceCalculator3DType::Pointer, Process>;
 
-    auto distance_calculator_2d_binder = DistanceCalculator2DBinderType(m,"TrilinosVariationalDistanceCalculationProcess2D");
-    auto distance_calculator_3d_binder = DistanceCalculator3DBinderType(m,"TrilinosVariationalDistanceCalculationProcess3D");
+    auto distance_calculator_2d_binder = DistanceCalculator2DBinderType(m, (Prefix + "VariationalDistanceCalculationProcess2D").c_str());
+    auto distance_calculator_3d_binder = DistanceCalculator3DBinderType(m, (Prefix + "VariationalDistanceCalculationProcess3D").c_str());
 
-    DistanceCalculatorConstructionHelper<DistanceCalculator2DBinderType,2>(distance_calculator_2d_binder);
-    DistanceCalculatorConstructionHelper<DistanceCalculator3DBinderType,3>(distance_calculator_3d_binder);
+    DistanceCalculatorConstructionHelper<TSparseSpace, TLocalSpace, TLinearSolverType, DistanceCalculator2DBinderType, 2>(distance_calculator_2d_binder);
+    DistanceCalculatorConstructionHelper<TSparseSpace, TLocalSpace, TLinearSolverType, DistanceCalculator3DBinderType, 3>(distance_calculator_3d_binder);
 
     // Level set convection processes
-    typedef LevelSetConvectionProcess<2, TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType> BaseLevelSetConvectionProcess2D;
-    typedef LevelSetConvectionProcess<3, TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType> BaseLevelSetConvectionProcess3D;
+    using BaseLevelSetConvectionProcess2D = LevelSetConvectionProcess<2, TSparseSpace, TLocalSpace, TLinearSolverType>;
+    using BaseLevelSetConvectionProcess3D = LevelSetConvectionProcess<3, TSparseSpace, TLocalSpace, TLinearSolverType>;
 
-    py::class_<BaseLevelSetConvectionProcess2D, BaseLevelSetConvectionProcess2D::Pointer, Process>(m,"BaseTrilinosLevelSetConvectionProcess2D");
-    py::class_<BaseLevelSetConvectionProcess3D, BaseLevelSetConvectionProcess3D::Pointer, Process>(m,"BaseTrilinosLevelSetConvectionProcess3D");
+    py::class_<BaseLevelSetConvectionProcess2D, typename BaseLevelSetConvectionProcess2D::Pointer, Process>(m, ("Base" + Prefix + "LevelSetConvectionProcess2D").c_str());
+    py::class_<BaseLevelSetConvectionProcess3D, typename BaseLevelSetConvectionProcess3D::Pointer, Process>(m, ("Base" + Prefix + "LevelSetConvectionProcess3D").c_str());
 
-    typedef TrilinosLevelSetConvectionProcess<2, TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType> TrilinosLevelSetConvectionProcess2D;
-    py::class_<TrilinosLevelSetConvectionProcess2D, TrilinosLevelSetConvectionProcess2D::Pointer, BaseLevelSetConvectionProcess2D>(m, "TrilinosLevelSetConvectionProcess2D")
-        .def(py::init<Epetra_MpiComm&, Model&, TrilinosLinearSolverType::Pointer, Parameters>())
-        .def(py::init<Epetra_MpiComm&, ModelPart&, TrilinosLinearSolverType::Pointer, Parameters>())
+    using LevelSetConvectionProcess2D = TrilinosLevelSetConvectionProcess<2, TSparseSpace, TLocalSpace, TLinearSolverType>;
+    py::class_<LevelSetConvectionProcess2D, typename LevelSetConvectionProcess2D::Pointer, BaseLevelSetConvectionProcess2D>(m, (Prefix + "LevelSetConvectionProcess2D").c_str())
+        .def(py::init<TrilinosCommunicatorType&, Model&, typename TLinearSolverType::Pointer, Parameters>())
+        .def(py::init<TrilinosCommunicatorType&, ModelPart&, typename TLinearSolverType::Pointer, Parameters>())
         ;
 
-    typedef TrilinosLevelSetConvectionProcess<3, TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType> TrilinosLevelSetConvectionProcess3D;
-    py::class_<TrilinosLevelSetConvectionProcess3D, TrilinosLevelSetConvectionProcess3D::Pointer, BaseLevelSetConvectionProcess3D>(m, "TrilinosLevelSetConvectionProcess3D")
-        .def(py::init<Epetra_MpiComm&, Model&, TrilinosLinearSolverType::Pointer, Parameters>())
-        .def(py::init<Epetra_MpiComm&, ModelPart&, TrilinosLinearSolverType::Pointer, Parameters>())
+    using LevelSetConvectionProcess3D = TrilinosLevelSetConvectionProcess<3, TSparseSpace, TLocalSpace, TLinearSolverType>;
+    py::class_<LevelSetConvectionProcess3D, typename LevelSetConvectionProcess3D::Pointer, BaseLevelSetConvectionProcess3D>(m, (Prefix + "LevelSetConvectionProcess3D").c_str())
+        .def(py::init<TrilinosCommunicatorType&, Model&, typename TLinearSolverType::Pointer, Parameters>())
+        .def(py::init<TrilinosCommunicatorType&, ModelPart&, typename TLinearSolverType::Pointer, Parameters>())
         ;
+}
 
+} // anonymous namespace
+
+void AddProcesses(pybind11::module& m)
+{
+    using TrilinosSparseSpaceType = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
+    using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
+    using TrilinosLinearSolverType = LinearSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType>;
+
+    RegisterProcesses<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>(m, "Trilinos");
+
+#ifdef HAVE_TPETRA
+    using TrilinosExperimentalSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>>;
+    using TrilinosExperimentalLinearSolverType = LinearSolver<TrilinosExperimentalSparseSpaceType, TrilinosLocalSpaceType>;
+
+    RegisterProcesses<TrilinosExperimentalSparseSpaceType, TrilinosLocalSpaceType, TrilinosExperimentalLinearSolverType>(m, "TrilinosExperimental");
+#endif
 }
 
 }
