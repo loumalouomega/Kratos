@@ -83,7 +83,7 @@ public:
 
     /** Constructor.
     */
-    TrilinosLaplacianMeshMovingStrategy(Epetra_MpiComm& Communicator,
+    TrilinosLaplacianMeshMovingStrategy(typename TSparseSpace::CommunicatorType& Communicator,
                                         ModelPart& model_part,
                                         typename TLinearSolver::Pointer pNewLinearSolver,
                                         int TimeOrder = 1,

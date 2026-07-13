@@ -24,6 +24,9 @@
 
 // Project includes
 #include "trilinos_space.h"
+#ifdef HAVE_TPETRA
+#include "trilinos_space_experimental.h"
+#endif
 #include "spaces/ublas_space.h"
 
 #include "solving_strategies/strategies/solving_strategy.h"
@@ -37,25 +40,40 @@
 namespace Kratos {
 namespace Python {
 
-void AddMeshMovingStrategies(pybind11::module& m)
+namespace {
+
+template<class TSparseSpace>
+void RegisterMeshMovingStrategies(pybind11::module& m, const std::string& Prefix)
 {
     namespace py = pybind11;
-    typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
     typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
-    typedef LinearSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType > TrilinosLinearSolverType;
+    typedef LinearSolver<TSparseSpace, TrilinosLocalSpaceType > TrilinosLinearSolverType;
+    typedef typename TSparseSpace::CommunicatorType TrilinosCommunicatorType;
 
-    typedef ImplicitSolvingStrategy< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType > TrilinosImplicitSolvingStrategyType;
+    typedef ImplicitSolvingStrategy< TSparseSpace, TrilinosLocalSpaceType, TrilinosLinearSolverType > TrilinosImplicitSolvingStrategyType;
 
-    typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
-    typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
-
-    using TrilinosLaplacianMeshMovingStrategyType = TrilinosLaplacianMeshMovingStrategy< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
+    using TrilinosLaplacianMeshMovingStrategyType = TrilinosLaplacianMeshMovingStrategy< TSparseSpace, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
     py::class_<TrilinosLaplacianMeshMovingStrategyType, typename TrilinosLaplacianMeshMovingStrategyType::Pointer, TrilinosImplicitSolvingStrategyType>
-    (m,"TrilinosLaplacianMeshMovingStrategy").def(py::init<Epetra_MpiComm&, ModelPart&, TrilinosLinearSolverType::Pointer, int, bool, bool, bool, int>());
+    (m, (Prefix + "LaplacianMeshMovingStrategy").c_str()).def(py::init<TrilinosCommunicatorType&, ModelPart&, typename TrilinosLinearSolverType::Pointer, int, bool, bool, bool, int>());
 
-    using TrilinosStructuralMeshMovingStrategyType = TrilinosStructuralMeshMovingStrategy< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
+    using TrilinosStructuralMeshMovingStrategyType = TrilinosStructuralMeshMovingStrategy< TSparseSpace, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
     py::class_<TrilinosStructuralMeshMovingStrategyType, typename TrilinosStructuralMeshMovingStrategyType::Pointer, TrilinosImplicitSolvingStrategyType>
-    (m,"TrilinosStructuralMeshMovingStrategy").def(py::init<Epetra_MpiComm&, ModelPart&, TrilinosLinearSolverType::Pointer, int, bool, bool, bool, int>());
+    (m, (Prefix + "StructuralMeshMovingStrategy").c_str()).def(py::init<TrilinosCommunicatorType&, ModelPart&, typename TrilinosLinearSolverType::Pointer, int, bool, bool, bool, int>());
+}
+
+} // anonymous namespace
+
+void AddMeshMovingStrategies(pybind11::module& m)
+{
+    typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
+
+    RegisterMeshMovingStrategies<TrilinosSparseSpaceType>(m, "Trilinos");
+
+#ifdef HAVE_TPETRA
+    typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>> TrilinosExperimentalSparseSpaceType;
+
+    RegisterMeshMovingStrategies<TrilinosExperimentalSparseSpaceType>(m, "TrilinosExperimental");
+#endif
 }
 
 } // namespace Python.
