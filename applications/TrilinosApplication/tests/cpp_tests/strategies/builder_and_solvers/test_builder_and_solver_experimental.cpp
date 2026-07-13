@@ -43,7 +43,8 @@
 
 // The builder and solvers
 #include "custom_strategies/builder_and_solvers/trilinos_block_builder_and_solver.h"
-// #include "custom_strategies/builder_and_solvers/trilinos_elimination_builder_and_solver.h"
+#include "custom_strategies/builder_and_solvers/trilinos_block_builder_and_solver_periodic.h"
+#include "custom_strategies/builder_and_solvers/trilinos_elimination_builder_and_solver.h"
 
 namespace Kratos::Testing
 {
@@ -59,7 +60,8 @@ namespace Kratos::Testing
     /// Builder and solvers definition
     using TrilinosBuilderAndSolverType = BuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
     using TrilinosBlockBuilderAndSolverType = TrilinosBlockBuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
-    // using TrilinosResidualBasedEliminationBuilderAndSolverType = TrilinosResidualBasedEliminationBuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
+    using TrilinosBlockBuilderAndSolverPeriodicType = TrilinosBlockBuilderAndSolverPeriodic< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
+    using TrilinosResidualBasedEliminationBuilderAndSolverType = TrilinosResidualBasedEliminationBuilderAndSolver< TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
 
     /// The time scheme
     using TrilinosSchemeType = Scheme< TrilinosSparseSpaceType, TrilinosLocalSpaceType>;
@@ -1608,99 +1610,98 @@ namespace Kratos::Testing
         TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(r_T, row_indexes, column_indexes, values);
     }
 
-    // NOTE: Fails with more than one partition
-    // /**
-    // * Checks if the elimination builder and solver performs correctly the assemble of the system
-    // */
-    // KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBasicDisplacementEliminationBuilderAndSolverWithZeroContribution, KratosTrilinosApplicationMPITestSuite)
-    // {
-    //     // The base model part
-    //     Model current_model;
-    //     ModelPart& r_model_part = current_model.CreateModelPart("Main", 3);
+    /**
+    * Checks if the elimination builder and solver performs correctly the assemble of the system
+    */
+    KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBasicDisplacementEliminationBuilderAndSolver, KratosTrilinosApplicationMPITestSuite)
+    {
+        // The base model part
+        Model current_model;
+        ModelPart& r_model_part = current_model.CreateModelPart("Main", 3);
 
-    //     // The data communicator
-    //     const DataCommunicator& r_comm = Testing::GetDefaultDataCommunicator();
+        // The data communicator
+        const DataCommunicator& r_comm = Testing::GetDefaultDataCommunicator();
 
-    //     // Generate Epetra communicator
-    //     KRATOS_ERROR_IF_NOT(r_comm.IsDistributed()) << "Only distributed DataCommunicators can be used!" << std::endl;
-    //     auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
-    //     Teuchos::MpiComm<int> epetra_comm(raw_mpi_comm);
+        // NOTE: The elimination builder and solver numbering fails with more than one
+        // partition (pre-existing limitation, also present in the Epetra version)
+        if (r_comm.Size() > 1) {
+            GTEST_SKIP() << "The elimination builder and solver test is limited to one partition" << std::endl;
+        }
 
-    //     // Basic build
-    //     BasicTestBuilderAndSolverDisplacement(r_model_part, r_comm);
+        // Generate Tpetra communicator
+        KRATOS_ERROR_IF_NOT(r_comm.IsDistributed()) << "Only distributed DataCommunicators can be used!" << std::endl;
+        auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+        Teuchos::MpiComm<int> tpetra_comm(raw_mpi_comm);
 
-    //     // Create the solvers and things required
-    //     auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-    //     auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
-    //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
+        // Basic build
+        BasicTestBuilderAndSolverDisplacement(r_model_part, r_comm);
 
-    //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
-    //     const auto& rA = *pA;
+        // Create the solvers and things required
+        auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
+        auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
+        auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(tpetra_comm, 15, p_solver) );
 
-    //     // // To create the solution of reference
-    //     // DebugLHS(rA);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
-    //     // The solution check
-    //     KRATOS_EXPECT_EQ(rA.getGlobalNumRows(), 2);
-    //     KRATOS_EXPECT_EQ(rA.getGlobalNumCols(), 2);
-    //     KRATOS_EXPECT_EQ(rA.getGlobalNumEntries(), 4);
+        // // To create the solution of reference
+        // DebugLHS(rA);
 
-    //     // Values to check
-    //     auto p_prop = r_model_part.pGetProperties(1);
-    //     const double E_100 = p_prop->GetValue(YOUNG_MODULUS)/100.0;
-    //     std::vector<int> row_indexes = {0, 0, 1, 1};
-    //     std::vector<int> column_indexes = {0, 1, 0, 1};
-    //     std::vector<double> values = {2 * E_100, -E_100, -E_100, E_100};
+        // The solution check
+        KRATOS_EXPECT_EQ(rA.getGlobalNumRows(), 2);
+        KRATOS_EXPECT_EQ(rA.getGlobalNumCols(), 2);
+        KRATOS_EXPECT_EQ(rA.getGlobalNumEntries(), 4);
 
-    //     // Check assembly
-    //     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(rA, row_indexes, column_indexes, values);
-    // }
+        // Values to check
+        auto p_prop = r_model_part.pGetProperties(1);
+        const double E_100 = p_prop->GetValue(YOUNG_MODULUS)/100.0;
+        std::vector<int> row_indexes = {0, 0, 1, 1};
+        std::vector<int> column_indexes = {0, 1, 0, 1};
+        std::vector<double> values = {2 * E_100, -E_100, -E_100, E_100};
 
-    // NOTE: Fails with more than one partition
-    // /**
-    // * Checks if the elimination builder and solver performs correctly the assemble of the system with zero contribution
-    // */
-    // KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBasicDisplacementEliminationBuilderAndSolver, KratosTrilinosApplicationMPITestSuite)
-    // {
-    //     // The base model part
-    //     Model current_model;
-    //     ModelPart& r_model_part = current_model.CreateModelPart("Main", 3);
+        // Check assembly
+        TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(rA, row_indexes, column_indexes, values);
+    }
 
-    //     // The data communicator
-    //     const DataCommunicator& r_comm = Testing::GetDefaultDataCommunicator();
+    /**
+    * Checks if the periodic block builder and solver behaves as the standard block one
+    * when no periodic pairs are present (exercises the periodic SetUpSystem communication)
+    */
+    KRATOS_TEST_CASE_IN_SUITE(TrilinosExperimentalBasicDisplacementBlockBuilderAndSolverPeriodic, KratosTrilinosApplicationMPITestSuite)
+    {
+        // The base model part
+        Model current_model;
+        ModelPart& r_model_part = current_model.CreateModelPart("Main", 3);
 
-    //     // Generate Epetra communicator
-    //     KRATOS_ERROR_IF_NOT(r_comm.IsDistributed()) << "Only distributed DataCommunicators can be used!" << std::endl;
-    //     auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
-    //     Teuchos::MpiComm<int> epetra_comm(raw_mpi_comm);
+        // The data communicator
+        const DataCommunicator& r_comm = Testing::GetDefaultDataCommunicator();
 
-    //     // Basic build
-    //     BasicTestBuilderAndSolverDisplacementWithZeroContribution(r_model_part, r_comm);
+        // Generate Tpetra communicator
+        KRATOS_ERROR_IF_NOT(r_comm.IsDistributed()) << "Only distributed DataCommunicators can be used!" << std::endl;
+        auto raw_mpi_comm = MPIDataCommunicator::GetMPICommunicator(r_comm);
+        Teuchos::MpiComm<int> tpetra_comm(raw_mpi_comm);
 
-    //     // Create the solvers and things required
-    //     auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
-    //     auto p_solver = nullptr; //TrilinosLinearSolverType::Pointer( new AmgclMPISolverType() );
-    //     auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosResidualBasedEliminationBuilderAndSolverType(epetra_comm, 15, p_solver) );
+        // The variable used to identify the periodic pairs (any nodal integer variable works;
+        // a value of 0 on every node means no periodic pairs are present)
+        const auto& r_periodic_id_var = RIGID_BODY_ID;
+        r_model_part.AddNodalSolutionStepVariable(r_periodic_id_var);
 
-    //     const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
-    //     const auto& rA = *pA;
+        // Basic build
+        BasicTestBuilderAndSolverDisplacement(r_model_part, r_comm);
 
-    //     // // To create the solution of reference
-    //     // DebugLHS(rA);
+        // Create the solvers and things required
+        auto p_scheme = TrilinosSchemeType::Pointer( new TrilinosResidualBasedIncrementalUpdateStaticSchemeType() );
+        auto p_solver = nullptr;
+        auto p_builder_and_solver = TrilinosBuilderAndSolverType::Pointer( new TrilinosBlockBuilderAndSolverPeriodicType(tpetra_comm, 15, p_solver, r_periodic_id_var) );
 
-    //     // The solution check
-    //     KRATOS_EXPECT_EQ(rA.getGlobalNumRows(), 2);
-    //     KRATOS_EXPECT_EQ(rA.getGlobalNumCols(), 2);
-    //     KRATOS_EXPECT_EQ(rA.getGlobalNumEntries(), 4);
+        const auto pA = BuildSystem(r_model_part, p_scheme, p_builder_and_solver);
+        const auto& rA = *pA;
 
-    //     // Values to check
-    //     std::vector<int> row_indexes = {0};
-    //     std::vector<int> column_indexes = {0};
-    //     std::vector<double> values = {E_100};
-
-    //     // Check assembly
-    //     TrilinosCPPTestExperimentalUtilities::CheckSparseMatrix(rA, row_indexes, column_indexes, values);
-    // }
+        // Without periodic pairs the system must match the standard block builder and solver one
+        KRATOS_EXPECT_EQ(rA.getGlobalNumRows(), 6);
+        KRATOS_EXPECT_EQ(rA.getGlobalNumCols(), 6);
+        KRATOS_EXPECT_EQ(rA.getGlobalNumEntries(), 28);
+    }
 
     /**
     * Checks if the block builder and solver performs correctly the assemble of the extended system
