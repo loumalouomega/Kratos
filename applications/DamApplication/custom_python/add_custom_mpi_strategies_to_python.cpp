@@ -17,6 +17,9 @@
 #include "Epetra_FECrsMatrix.h"
 #include "Epetra_FEVector.h"
 #include "trilinos_space.h"
+#ifdef HAVE_TPETRA
+#include "trilinos_space_experimental.h"
+#endif
 
 //linear solvers
 
@@ -25,8 +28,10 @@
 //builders and solvers
 
 //schemes
-#include "custom_strategies/schemes/trilinos_incrementalupdate_static_damped_scheme.hpp"
-#include "custom_strategies/schemes/trilinos_dam_UP_scheme.hpp"
+// NOTE: the historical trilinos_* scheme wrappers no longer exist; the generic
+// space-templated schemes are registered with the Trilinos spaces instead
+#include "custom_strategies/schemes/incrementalupdate_static_damped_smoothing_scheme.hpp"
+#include "custom_strategies/schemes/dam_UP_scheme.hpp"
 
 
 namespace Kratos
@@ -37,25 +42,41 @@ namespace Python
 
 namespace py = pybind11;
 
+namespace
+{
+
+template<class TSparseSpace>
+void RegisterMPIStrategies(pybind11::module& m, const std::string& Prefix)
+{
+    typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
+
+    typedef Scheme< TSparseSpace, TrilinosLocalSpaceType > TrilinosBaseSchemeType;
+
+    typedef IncrementalUpdateStaticDampedSmoothingScheme<TSparseSpace, TrilinosLocalSpaceType> TrilinosIncrementalUpdateStaticDampedSchemeType;
+    typedef DamUPScheme<TSparseSpace, TrilinosLocalSpaceType> TrilinosDamUPSchemeType;
+
+    // Schemes
+    py::class_< TrilinosIncrementalUpdateStaticDampedSchemeType, typename TrilinosIncrementalUpdateStaticDampedSchemeType::Pointer, TrilinosBaseSchemeType>
+    (m, (Prefix + "IncrementalUpdateStaticDampedScheme").c_str())
+    .def(py::init< double, double >());
+    py::class_< TrilinosDamUPSchemeType, typename TrilinosDamUPSchemeType::Pointer, TrilinosBaseSchemeType >
+    (m, (Prefix + "DamUPScheme").c_str())
+    .def(py::init< double, double, double, double >());
+}
+
+} // anonymous namespace
+
 void  AddCustomMPIStrategiesToPython(pybind11::module& m)
 {
     typedef TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector> TrilinosSparseSpaceType;
-    typedef UblasSpace<double, Matrix, Vector> TrilinosLocalSpaceType;
 
-    typedef Scheme< TrilinosSparseSpaceType, TrilinosLocalSpaceType > TrilinosBaseSchemeType;
+    RegisterMPIStrategies<TrilinosSparseSpaceType>(m, "Trilinos");
 
-    typedef TrilinosIncrementalUpdateStaticDampedScheme<TrilinosSparseSpaceType, TrilinosLocalSpaceType> TrilinosIncrementalUpdateStaticDampedSchemeType;
-    typedef TrilinosDamUPScheme<TrilinosSparseSpaceType, TrilinosLocalSpaceType> TrilinosDamUPSchemeType;
+#ifdef HAVE_TPETRA
+    typedef TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>> TrilinosExperimentalSparseSpaceType;
 
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-	// Schemes
-    py::class_< TrilinosIncrementalUpdateStaticDampedSchemeType, typename TrilinosIncrementalUpdateStaticDampedSchemeType::Pointer, TrilinosBaseSchemeType>
-    (m,  "TrilinosIncrementalUpdateStaticDampedScheme")
-    .def(py::init< double >());
-	py::class_< TrilinosDamUPSchemeType, typename TrilinosDamUPSchemeType::Pointer, TrilinosBaseSchemeType >
-    (m, "TrilinosDamUPScheme")
-    .def(py::init< double, double, double, double >());
+    RegisterMPIStrategies<TrilinosExperimentalSparseSpaceType>(m, "TrilinosExperimental");
+#endif
 }
 
 }  // namespace Python.

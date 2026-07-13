@@ -18,6 +18,9 @@
 #include "custom_python/add_custom_constitutive_laws_to_python.h"
 #include "custom_python/add_custom_processes_to_python.h"
 #include "custom_python/add_custom_utilities_to_python.h"
+#ifdef KRATOS_DAM_USE_MPI
+#include "custom_python/add_custom_mpi_strategies_to_python.h"
+#endif
 #include "dam_application.h"
 
 
@@ -41,6 +44,9 @@ PYBIND11_MODULE(KratosDamApplication, m)
     AddCustomConstitutiveLawsToPython(m);
     AddCustomProcessesToPython(m);
     AddCustomUtilitiesToPython(m);
+#ifdef KRATOS_DAM_USE_MPI
+    AddCustomMPIStrategiesToPython(m);
+#endif
 
     //Registering variables in python
     KRATOS_REGISTER_IN_PYTHON_VARIABLE( m, TIME_UNIT_CONVERTER )

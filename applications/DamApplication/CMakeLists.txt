@@ -70,6 +70,11 @@ if(${USE_DAM_MPI} MATCHES ON)
     include_directories( ${KRATOS_SOURCE_DIR}/applications/TrilinosApplication )
     include_directories(${TRILINOS_INCLUDE_DIR})
 
+    # Adding Tpetra definitions (enables the experimental Trilinos space registrations)
+    if(HAVE_TPETRA)
+        add_definitions(-DHAVE_TPETRA)
+    endif()
+
     ## Define python interface sources
     set( KRATOS_DAM_APPLICATION_PYTHON_INTERFACE_SOURCES
 
@@ -78,12 +83,17 @@ if(${USE_DAM_MPI} MATCHES ON)
         ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/add_custom_utilities_to_python.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/add_custom_processes_to_python.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/add_custom_constitutive_laws_to_python.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/dam_mpi_python_application.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/custom_python/dam_python_application.cpp
     )
+
+    # Enables the MPI strategies registration in the (single) python module
+    add_definitions(-DKRATOS_DAM_USE_MPI)
 
     ## DamApplication core library (C++ parts)
     add_library(KratosDamCore SHARED ${KRATOS_DAM_APPLICATION_CORE_SOURCES})
-    target_link_libraries(KratosDamCore PUBLIC KratosCore KratosTrilinosApplication KratosStructuralMechanicsCore KratosPoromechanicsCore)
+    # NOTE: linking KratosTrilinosCore (the shared library); KratosTrilinosApplication is the
+    # python MODULE library and cannot be linked into other targets
+    target_link_libraries(KratosDamCore PUBLIC KratosCore KratosTrilinosCore KratosStructuralMechanicsCore KratosPoromechanicsCore)
 
 else()
 
