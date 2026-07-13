@@ -37,6 +37,14 @@
 #include "external_includes/amgcl_mpi_schur_complement_solver.h"
 #include "external_includes/trilinos_monotonicity_preserving_solver.h"
 
+#if defined(HAVE_TPETRA) && defined(HAVE_BELOS)
+#include "external_includes/belos_solver.h"
+#endif
+
+#if defined(HAVE_TPETRA) && defined(HAVE_BELOS) && defined(HAVE_MUELU)
+#include "external_includes/muelu_solver.h"
+#endif
+
 namespace Kratos {
 
 namespace {
@@ -109,37 +117,61 @@ namespace {
         }
 #endif
 
+        // Belos iterative solvers (Tpetra-era replacement for AztecOO): registered under
+        // the same names the Aztec solver uses for Epetra so existing settings work unchanged
+        if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+#if defined(HAVE_TPETRA) && defined(HAVE_BELOS)
+            using BelosSolverType = BelosSolver<TSparseSpace, TrilinosLocalSpaceType >;
+            static auto BelosSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, BelosSolverType>();
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("belos",    BelosSolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("cg",       BelosSolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("bicgstab", BelosSolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("gmres",    BelosSolverFactory);
+#endif
+        }
+
+        // MueLu algebraic multigrid (Tpetra-era replacement for ML): registered under the
+        // same name the ML solver uses for Epetra so existing settings work unchanged
+        if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
+#if defined(HAVE_TPETRA) && defined(HAVE_BELOS) && defined(HAVE_MUELU)
+            using MueLuSolverType = MueLuSolver<TSparseSpace, TrilinosLocalSpaceType >;
+            static auto MueLuSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, MueLuSolverType>();
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("muelu",       MueLuSolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("multi_level", MueLuSolverFactory);
+#endif
+        }
+
+        using AmgclMPISolverType = AmgclMPISolver<TSparseSpace, TrilinosLocalSpaceType >;
+        static auto AmgclMPISolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AmgclMPISolverType>();
         if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
-            using AmgclMPISolverType = AmgclMPISolver<TSparseSpace, TrilinosLocalSpaceType >;
-            static auto AmgclMPISolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AmgclMPISolverType>();
             KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amgcl", AmgclMPISolverFactory);
         } else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
 #ifdef HAVE_TPETRA
-            // KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("amgcl", AmgclMPISolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("amgcl", AmgclMPISolverFactory);
 #endif
         } else {
             KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
 
+        using AmgclMPISchurComplementSolverType = AmgclMPISchurComplementSolver<TSparseSpace, TrilinosLocalSpaceType >;
+        static auto AmgclMPISchurComplementSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AmgclMPISchurComplementSolverType>();
         if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
-            using AmgclMPISchurComplementSolverType = AmgclMPISchurComplementSolver<TSparseSpace, TrilinosLocalSpaceType >;
-            static auto AmgclMPISchurComplementSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, AmgclMPISchurComplementSolverType>();
             KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("amgcl_schur_complement", AmgclMPISchurComplementSolverFactory);
         } else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
 #ifdef HAVE_TPETRA
-            // KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("amgcl_schur_complement", AmgclMPISchurComplementSolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("amgcl_schur_complement", AmgclMPISchurComplementSolverFactory);
 #endif
         } else {
             KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
         }
 
+        using TrilinosMonotonicityPreservingSolverType = TrilinosMonotonicityPreservingSolver<TSparseSpace, TrilinosLocalSpaceType >;
+        static auto TrilinosMonotonicityPreservingSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, TrilinosMonotonicityPreservingSolverType>();
         if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::EPETRA) {
-            using TrilinosMonotonicityPreservingSolverType = TrilinosMonotonicityPreservingSolver<TSparseSpace, TrilinosLocalSpaceType >;
-            static auto TrilinosMonotonicityPreservingSolverFactory = TrilinosLinearSolverFactory<TSparseSpace, TrilinosLocalSpaceType, TrilinosMonotonicityPreservingSolverType>();
             KRATOS_REGISTER_TRILINOS_LINEAR_SOLVER("monotonicity_preserving", TrilinosMonotonicityPreservingSolverFactory);
         } else if constexpr (TSparseSpace::LinearAlgebraLibrary() == TrilinosLinearAlgebraLibrary::TPETRA) {
 #ifdef HAVE_TPETRA
-            // KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("monotonicity_preserving", TrilinosMonotonicityPreservingSolverFactory);
+            KRATOS_REGISTER_TRILINOS_EXPERIMENTAL_LINEAR_SOLVER("monotonicity_preserving", TrilinosMonotonicityPreservingSolverFactory);
 #endif
         } else {
             KRATOS_ERROR << "Only EPETRA and TPETRA are supported for now" << std::endl;
