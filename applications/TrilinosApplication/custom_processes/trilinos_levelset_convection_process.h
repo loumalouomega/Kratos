@@ -15,7 +15,6 @@
 // System includes
 
 // External includes
-#include "Epetra_MpiComm.h"
 
 // Project includes
 #include "containers/model.h"
@@ -65,6 +64,9 @@ public:
     typedef typename TLinearSolver::Pointer LinearSolverPointerType;
     typedef typename BuilderAndSolver<TSparseSpace, TDenseSpace, TLinearSolver>::Pointer BuilderSolverPointerType;
 
+    /// The Trilinos communicator type of the space (Epetra_MpiComm or Teuchos::MpiComm<int>)
+    typedef typename TSparseSpace::CommunicatorType TrilinosCommunicatorType;
+
     ///@}
     ///@name Pointer Definitions
     ///@{
@@ -77,12 +79,12 @@ public:
     ///@{
 
     TrilinosLevelSetConvectionProcess(
-        Epetra_MpiComm& rEpetraCommunicator,
+        TrilinosCommunicatorType& rTrilinosCommunicator,
         Model& rModel,
         typename TLinearSolver::Pointer pLinearSolver,
         Parameters ThisParameters)
         : TrilinosLevelSetConvectionProcess(
-            rEpetraCommunicator,
+            rTrilinosCommunicator,
             rModel.GetModelPart(ThisParameters["model_part_name"].GetString()),
             pLinearSolver,
             ThisParameters)
@@ -90,20 +92,20 @@ public:
     }
 
     TrilinosLevelSetConvectionProcess(
-        Epetra_MpiComm& rEpetraCommunicator,
+        TrilinosCommunicatorType& rTrilinosCommunicator,
         ModelPart& rBaseModelPart,
         typename TLinearSolver::Pointer pLinearSolver,
         Parameters ThisParameters)
         : BaseType(
             rBaseModelPart,
             ThisParameters)
-        , mrEpetraCommunicator(rEpetraCommunicator)
+        , mrTrilinosCommunicator(rTrilinosCommunicator)
     {
         KRATOS_TRY
 
         const int row_size_guess = (TDim == 2 ? 15 : 40);
         auto p_builder_and_solver = Kratos::make_shared< TrilinosBlockBuilderAndSolver<TSparseSpace,TDenseSpace,TLinearSolver>>(
-            mrEpetraCommunicator,
+            mrTrilinosCommunicator,
             row_size_guess,
             pLinearSolver);
         InitializeConvectionStrategy(p_builder_and_solver);
@@ -164,7 +166,7 @@ protected:
     ///@name Protected member Variables
     ///@{
 
-    Epetra_MpiComm& mrEpetraCommunicator;
+    TrilinosCommunicatorType& mrTrilinosCommunicator;
 
     ///@}
     ///@name Protected Operators
