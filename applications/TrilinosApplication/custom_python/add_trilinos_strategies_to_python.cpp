@@ -97,6 +97,16 @@ namespace {
             .def("SetConstantConstraints", &TrilinosBlockBuilderAndSolverType::SetConstantConstraints)
             ;
 
+        using TrilinosEliminationBuilderAndSolverType = TrilinosResidualBasedEliminationBuilderAndSolver<TSparseSpace, TLocalSpace, TLinearSolverType>;
+        py::class_<TrilinosEliminationBuilderAndSolverType, typename TrilinosEliminationBuilderAndSolverType::Pointer, BuilderAndSolverType>(m, (Prefix + "EliminationBuilderAndSolver").c_str())
+            .def(py::init<TrilinosCommType&, int, typename TLinearSolverType::Pointer>())
+            ;
+
+        using TrilinosBlockBuilderAndSolverPeriodicType = TrilinosBlockBuilderAndSolverPeriodic<TSparseSpace, TLocalSpace, TLinearSolverType>;
+        py::class_<TrilinosBlockBuilderAndSolverPeriodicType, typename TrilinosBlockBuilderAndSolverPeriodicType::Pointer, TrilinosBlockBuilderAndSolverType>(m, (Prefix + "BlockBuilderAndSolverPeriodic").c_str())
+            .def(py::init<TrilinosCommType&, int, typename TLinearSolverType::Pointer, Kratos::Variable<int>&>())
+            ;
+
         // Solving strategies
         py::class_<BaseSolvingStrategyType, typename BaseSolvingStrategyType::Pointer>(m, (Prefix + "SolvingStrategy").c_str())
             .def(py::init<ModelPart&, bool>())
@@ -160,21 +170,8 @@ void AddStrategies(pybind11::module& m)
     using TrilinosSparseSpaceType = TrilinosSpace<Epetra_FECrsMatrix, Epetra_FEVector>;
     using TrilinosLocalSpaceType = UblasSpace<double, Matrix, Vector>;
     using TrilinosLinearSolverType = LinearSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType>;
-    using TrilinosBuilderAndSolverType = BuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
 
     RegisterStrategies<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>(m, "Trilinos");
-
-    // Epetra-specific concrete builder and solvers
-    using TrilinosResidualBasedEliminationBuilderAndSolverType = TrilinosResidualBasedEliminationBuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
-    py::class_<TrilinosResidualBasedEliminationBuilderAndSolverType, typename TrilinosResidualBasedEliminationBuilderAndSolverType::Pointer, TrilinosBuilderAndSolverType>(m, "TrilinosEliminationBuilderAndSolver")
-        .def(py::init<Epetra_MpiComm&, int, TrilinosLinearSolverType::Pointer>())
-        ;
-
-    using TrilinosBlockBuilderAndSolverType = TrilinosBlockBuilderAndSolver<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
-    using TrilinosBlockBuilderAndSolverPeriodicType = TrilinosBlockBuilderAndSolverPeriodic<TrilinosSparseSpaceType, TrilinosLocalSpaceType, TrilinosLinearSolverType>;
-    py::class_<TrilinosBlockBuilderAndSolverPeriodicType, typename TrilinosBlockBuilderAndSolverPeriodicType::Pointer, TrilinosBlockBuilderAndSolverType>(m, "TrilinosBlockBuilderAndSolverPeriodic")
-        .def(py::init<Epetra_MpiComm&, int, TrilinosLinearSolverType::Pointer, Kratos::Variable<int>&>())
-        ;
 
 #ifdef HAVE_TPETRA
     using TrilinosExperimentalSparseSpaceType = TrilinosSpaceExperimental<Tpetra::FECrsMatrix<>, Tpetra::FEMultiVector<>>;
