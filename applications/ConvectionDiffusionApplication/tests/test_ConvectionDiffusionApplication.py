@@ -11,6 +11,7 @@ from bfecc_convection_test import BFECCConvectionTest
 from source_term_test import SourceTermTest
 from thermal_coupling_test import ThermalCouplingTest
 from test_apply_thermal_face_process import ApplyThermalFaceProcessTest
+from test_heat_transfer_coefficient_utility import HeatTransferCoefficientUtilityTest
 from adjoint_heat_diffusion_test import AdjointHeatDiffusionTest
 from response_function_tests import TestAdjointPointTemperatureResponseFunction
 
@@ -54,6 +55,23 @@ def AssembleTestSuites():
     smallSuite.addTest(SourceTermTest('testReaction'))
     smallSuite.addTest(ThermalCouplingTest('testDirichletNeumann'))
     smallSuite.addTest(ApplyThermalFaceProcessTest('testThermalFaceProcess'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testAxisAlignedInterfaceArea'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testInclinedInterfaceArea'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testInterfaceNodalArea'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testRadiationBlackBodies'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testRadiationRecoversStefanBoltzmann'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testRadiationHasNoSingularity'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testGrayBodyExchangeFactor'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testFreeSurfaceExchangeFactor'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testSeriesConduction'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testTemperatureDependentConductivity'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testGapConduction'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testContactFractionBlending'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testTableRoundTrip'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testTableAreaWeighting'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testPartnerTemperatureModes'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testValidation'))
+    smallSuite.addTest(HeatTransferCoefficientUtilityTest('testPlaneOutsideBox'))
     smallSuite.addTest(AdjointHeatDiffusionTest('testAdjointHeatDiffusion'))
     smallSuite.addTest(AdjointHeatDiffusionTest('testAdjointHeatDiffusionWithSourceTerm'))
     smallSuite.addTest(TestAdjointPointTemperatureResponseFunction("test_execution"))

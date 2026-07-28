@@ -27,6 +27,7 @@
 // #include "custom_utilities/bfecc_elemental_convection.h"
 #include "custom_utilities/bfecc_elemental_limiter_convection.h"
 #include "custom_utilities/embedded_mls_constraint_process.h"
+#include "custom_utilities/heat_transfer_coefficient_utility.h"
 
 #include "spaces/ublas_space.h"
 #include "linear_solvers/linear_solver.h"
@@ -161,6 +162,24 @@ void  AddCustomUtilitiesToPython(pybind11::module& m)
 
     py::class_<EmbeddedMLSConstraintProcess, EmbeddedMLSConstraintProcess::Pointer, Process>(m,"EmbeddedMLSConstraintProcess")
     .def(py::init<Model&, Parameters>())
+    ;
+
+    py::class_<HeatTransferCoefficientUtility, HeatTransferCoefficientUtility::Pointer>(m,"HeatTransferCoefficientUtility")
+    // The utility keeps a pointer to a model part owned by the model, so the model must outlive it
+    .def(py::init<Model&, Parameters>(), py::arg("model"), py::arg("settings"), py::keep_alive<1,2>())
+    .def("GenerateMesh", &HeatTransferCoefficientUtility::GenerateMesh,
+        "Builds the octree mesh and the interface nodes carrying NODAL_AREA.")
+    .def("ComputeTable", &HeatTransferCoefficientUtility::ComputeTable,
+        "Returns the temperature-HTC table as Parameters, in the ReadMaterialsUtility schema.")
+    .def("ComputeHeatTransferCoefficient", &HeatTransferCoefficientUtility::ComputeHeatTransferCoefficient,
+        py::arg("temperature_1"), py::arg("temperature_2"),
+        "Returns the pointwise heat transfer coefficient for the given temperature pair.")
+    .def("GetInterfaceArea", &HeatTransferCoefficientUtility::GetInterfaceArea,
+        "Returns the total interface area, that is the sum of NODAL_AREA over the interface.")
+    .def("Execute", &HeatTransferCoefficientUtility::Execute,
+        "Generates the mesh and computes the table.")
+    .def_static("GetDefaultParameters", &HeatTransferCoefficientUtility::GetDefaultParameters,
+        "Returns the default parameters of the utility.")
     ;
 
 }
