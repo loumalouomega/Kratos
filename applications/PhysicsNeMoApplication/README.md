@@ -95,17 +95,22 @@ The application includes tests to check the proper functioning of the applicatio
 
 Candidate extensions, grouped by theme and ordered roughly by value/feasibility, each naming the concrete PhysicsNeMo API and its Kratos-side counterpart. Every remaining item is `(blocked: …)`, and the parenthesis names the gate — verified against the currently exercised **physicsnemo 2.2.0** and the reference build, not assumed. The gates fall into four kinds: **hardware** (one GPU here), **upstream** (the API does not exist yet, or raises `NotImplementedError`), **external access** (NIM/NGC checkpoints, Omniverse), and **the build** (an application that is not compiled — see the installation note above on why adding one is not a local operation).
 
+- **Document in detail the basic concepts of NVIDIA PhysicsNemo**
+   * Current documentation assumes teh user know the basic stuff and details of NVIDIA PhysicsNemo, and this is not necessary true.
+   * Include documentation explaning what every module from the library does in order to be able to understand how to properly use it for your needs
+   * Point the cdocumentation in this README
+
 - **Reorganize the scripts**
-   * Properly classify the scripts, like utils, processes, bridges, ... in the corresponding folders. Otherwise is easy to get lost. 
-   * Tests and examples hould be check for proper path.
-   * Even better documentation of everything. Is super easy to get lost, so many features and utilities. Specially thinking if someone wants to do something from scratch.
+   * Properly classify the scripts, like utils, processes, bridges, ... in the corresponding folders. Otherwise is easy to get lost
+   * Tests and examples hould be check for proper path
+   * Even better documentation of everything. Is super easy to get lost, so many features and utilities. Specially thinking if someone wants to do something from scratch
 
 - **Using CuPy insteadof numpy when possible**
-   * An idea to be chekced that may enhance performance if CuPy is available.
-   * numpy should be always the default fallback just in case.
+   * An idea to be chekced that may enhance performance if CuPy is available
+   * numpy should be always the default fallback just in case
 
 - **Adjoint integration**
-   * In the same manner there is an integration witrh ROM application, an integration with adjoint computation.  
+   * In the same manner there is an integration witrh ROM application, an integration with adjoint computation
 
 - **Infrastructure and CI**
     * GPU CI for the device-dependent paths (the app builds and runs its torch-free tests in the Linux CI; the ML-dependent tests self-skip there — see `benchmarks/benchmark_bridges.py` for the profiling that settled the former C++-acceleration item. On 196k tets / 32k hexes the nodal gather/scatter paths cost 0.11–0.83 µs per entity, but not everything per-entity is sub-µs: element scatter-back is 2.1, grid sampling 3.5, and provenance construction 4.2 on tets and ~39 on hexes. No custom C++ adaptors are warranted even so — the dominant cost was provenance being rebuilt every step, and caching it in Python removed that)
