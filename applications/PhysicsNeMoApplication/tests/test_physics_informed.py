@@ -3,8 +3,8 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import physics_informed
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.physics import physics_informed
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
 from test_grid_bridge import CreateStructuredTetModelPart
 
 try:
@@ -89,8 +89,8 @@ class TestPhysicsInformed(KratosUnittest.TestCase):
     def test_LeastSquaresOnMeshGraph(self):
         # a linear field has zero second derivatives: the least-squares
         # residual on the real mesh graph vanishes
-        from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
-        from KratosMultiphysics.PhysicsNeMoApplication.point_cloud_inference_process import (
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference.point_cloud_inference_process import (
             GatherPointCloudCoordinates)
 
         model = Kratos.Model()

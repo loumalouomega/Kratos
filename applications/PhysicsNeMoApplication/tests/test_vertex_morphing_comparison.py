@@ -37,7 +37,7 @@ import numpy
 
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import deformation
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import deformation
 
 try:
     import torch

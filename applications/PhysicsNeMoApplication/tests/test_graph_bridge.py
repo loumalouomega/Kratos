@@ -3,9 +3,7 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
-
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
 class TestGraphBridge(KratosUnittest.TestCase):
     def setUp(self):
         self.model = Kratos.Model()

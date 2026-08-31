@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 
 import KratosMultiphysics as Kratos
-from KratosMultiphysics.PhysicsNeMoApplication.validation_metrics_process import (
+from KratosMultiphysics.PhysicsNeMoApplication.processes.validation_metrics_process import (
     SUPPORTED_METRICS, ComputeMetricValues)
 
 _strategy_class = None

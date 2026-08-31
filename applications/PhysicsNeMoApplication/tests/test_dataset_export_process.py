@@ -6,9 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import dataset_export_process
-
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import dataset_export_process
 class TestDatasetExportProcess(KratosUnittest.TestCase):
     def setUp(self):
         self.model = Kratos.Model()

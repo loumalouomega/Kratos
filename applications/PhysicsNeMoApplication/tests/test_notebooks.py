@@ -1,6 +1,6 @@
 """Executes the shipped example notebooks.
 
-`examples/notebooks` is the application's worked documentation: seventeen
+`examples/notebooks` is the application's worked documentation: eighteen
 notebooks calling the same public helpers the processes call. Nothing
 executed them until this file existed, so a renamed argument or a changed
 return type broke them silently - a static import check is not enough,
@@ -10,11 +10,11 @@ and the behaviour that rot.
 Each notebook runs in a throwaway copy of the tree rather than in place,
 for two reasons. The notebooks write artifacts next to themselves
 (`output/`, `*.pt`, `*.png`), which would dirty the working tree on every
-run; and notebooks 16 and 17 load their solver cases from
+run; and notebooks 07, 16 and 17 load their solver cases from
 `tests/kratos_solver_cases`, so the copy has to preserve the relative
 layout, not just the notebook file.
 
-The notebooks are slow by test standards (~5 minutes for all seventeen) and
+The notebooks are slow by test standards (~5 minutes for all eighteen) and
 are registered on the validation suite only.
 """
 

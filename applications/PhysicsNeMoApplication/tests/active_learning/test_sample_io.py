@@ -7,7 +7,7 @@ import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
 from KratosMultiphysics.PhysicsNeMoApplication.active_learning import sample_io
-from KratosMultiphysics.PhysicsNeMoApplication.dataset_export_process import DatasetExportProcess
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export.dataset_export_process import DatasetExportProcess
 
 
 class TestApplyParameterOverrides(KratosUnittest.TestCase):

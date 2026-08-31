@@ -6,7 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from test_rom_bridge import _WriteNumpyBasis, _OrthonormalBasis
 
 try:
@@ -51,8 +51,7 @@ class TestRomSurrogateProcess(KratosUnittest.TestCase):
         torch.jit.script(ToModes(weight_rows)).save(str(self.checkpoint))
 
     def _CreateProcess(self, extra="", card_policy="advisory"):
-        from KratosMultiphysics.PhysicsNeMoApplication import rom_surrogate_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import rom_surrogate_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name"  : "Main",

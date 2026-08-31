@@ -6,8 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import graph_inference_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import graph_inference_process
 try:
     import torch
     have_torch = True
@@ -228,8 +227,7 @@ class TestGraphBridgePyGConversion(KratosUnittest.TestCase):
             import torch_geometric  # noqa: F401
         except ImportError:
             self.skipTest("Missing required python module: torch_geometric.")
-        from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
-
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
         model = Kratos.Model()
         model_part = _CreateTetPairModelPart(model)
         _, edge_index, _, node_ids = graph_bridge.BuildGraph(model_part)

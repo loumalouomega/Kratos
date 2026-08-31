@@ -7,9 +7,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import superresolution_process
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import superresolution_process
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 sys.path.insert(0, str(Path(__file__).parent))
 from test_grid_bridge import CreateStructuredTetModelPart
 
@@ -122,8 +121,7 @@ class TestGridOperators2D(KratosUnittest.TestCase):
         KratosUtilities.DeleteFileIfExisting(str(self.checkpoint))
 
     def _CreateProcess(self, model_interface="grid"):
-        from KratosMultiphysics.PhysicsNeMoApplication import grid_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import grid_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "Main",
@@ -194,8 +192,7 @@ class TestGridOperatorZoo(KratosUnittest.TestCase):
         KratosUtilities.DeleteFileIfExisting(str(self.checkpoint))
 
     def _RunThroughProcess(self, grid_shape="[8, 8, 2]"):
-        from KratosMultiphysics.PhysicsNeMoApplication import grid_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import grid_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "Main",

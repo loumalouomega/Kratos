@@ -36,8 +36,7 @@ class TestPinnSolveProcess(KratosUnittest.TestCase):
                 node.SetSolutionStepValue(Kratos.TEMPERATURE, _Harmonic(node))
 
     def test_ForwardLaplaceSolve(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import pinn_solve_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import pinn_solve_process
         self._FixBoundary()
         settings = Kratos.Parameters("""{
             "Parameters": {
@@ -72,8 +71,7 @@ class TestPinnSolveProcess(KratosUnittest.TestCase):
         self.assertLess(max(errors), 0.15)
 
     def test_InverseRecoversDiffusionCoefficient(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import pinn_solve_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import pinn_solve_process
         # observations u = x^2 + y^2 + z^2 with residual -D lap(u) + 6:
         # zero exactly at D = 1
         for node in self.model_part.Nodes:
@@ -111,8 +109,7 @@ class TestPinnSolveProcess(KratosUnittest.TestCase):
         self.assertLess(recovered, 2.0)
 
     def test_PhysicsGradientsDoNotLeakIntoDetachedField(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import pinn_solve_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import pinn_solve_process
         # inverse mode with data_weight 0: the ONLY loss is the physics term,
         # whose field gradients are detached - so the (seeded) network must
         # stay exactly at its initialization after training steps
@@ -148,8 +145,7 @@ class TestPinnSolveProcess(KratosUnittest.TestCase):
             self.assertTrue(torch.equal(frozen._network(probe), trained._network(probe)))
 
     def test_ValidationErrors(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import pinn_solve_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import pinn_solve_process
         with self.assertRaisesRegex(ValueError, "mode"):
             pinn_solve_process.Factory(Kratos.Parameters("""{
                 "Parameters": { "model_part_name" : "Main", "mode" : "adjoint" }
@@ -233,7 +229,7 @@ class TestPinnOnANonUnitDomain(KratosUnittest.TestCase):
         return settings
 
     def _SolveAndMeasure(self, normalize):
-        from KratosMultiphysics.PhysicsNeMoApplication import pinn_solve_process
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import pinn_solve_process
         model, model_part = self._StretchedModelPart()
         process = pinn_solve_process.Factory(self._Settings(normalize), model)
         process.ExecuteBeforeSolutionLoop()

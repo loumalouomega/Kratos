@@ -23,7 +23,7 @@ SelectTopCandidates is usable without it.
 import numpy
 
 import KratosMultiphysics as Kratos
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from KratosMultiphysics.PhysicsNeMoApplication.active_learning.sample_io import KratosALSample
 
 _strategy_classes = None

@@ -9,8 +9,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import diffusion_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import diffusion_utils
 try:
     import torch
     from physicsnemo.diffusion.preconditioners import EDMPrecondSuperResolution
@@ -156,8 +155,7 @@ class TestRegressionSettingsThroughProcess(KratosUnittest.TestCase):
             KratosUtilities.DeleteFileIfExisting(str(path) + ".card.json")
 
     def _CreateProcess(self, output_variable, with_regression):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import diffusion_inference_process
         regression_block = ("""
                 "regression_settings" : {
                     "checkpoint_file" : "%s",
@@ -191,9 +189,8 @@ class TestRegressionSettingsThroughProcess(KratosUnittest.TestCase):
         self._CreateProcess("TEMPERATURE", with_regression=False).ExecuteFinalizeSolutionStep()
         self._CreateProcess("NODAL_PAUX", with_regression=True).ExecuteFinalizeSolutionStep()
 
-        from KratosMultiphysics.PhysicsNeMoApplication import grid_bridge
-        from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
         # recompute the regression mean on the process's exact condition grid
         bounding_box = grid_bridge.ComputeBoundingBox(self.model_part)
         condition, _ = grid_bridge.SampleFieldsOnGrid(

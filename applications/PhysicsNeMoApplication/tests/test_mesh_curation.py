@@ -9,9 +9,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import mesh_export_process
-from KratosMultiphysics.PhysicsNeMoApplication import torch_dataset
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import mesh_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.training import torch_dataset
 try:
     import torch
     import physicsnemo.mesh

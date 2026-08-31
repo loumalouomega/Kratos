@@ -53,7 +53,7 @@ class TestRealSolverDatasetExport(KratosUnittest.TestCase):
         kratos_utils.DeleteDirectoryIfExisting(str(self.output_path))
 
     def test_ExportedFieldIsTheSolversSolution(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.dataset_export_process import DatasetExportProcess
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.export.dataset_export_process import DatasetExportProcess
 
         model = Kratos.Model()
         model_part = _RunRealSolve(model, conductivity=2.0)
@@ -135,9 +135,8 @@ class TestRealSolverSurrogateValidation(KratosUnittest.TestCase):
         kratos_utils.DeleteFileIfExisting(str(self.report))
 
     def test_SurrogateOfRealSolves(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-        from KratosMultiphysics.PhysicsNeMoApplication import validation_metrics_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
+        from KratosMultiphysics.PhysicsNeMoApplication.processes import validation_metrics_process
         # Training sweep: real solves at several conductivities. Node-local
         # inputs (x, y, k) -> solved TEMPERATURE.
         train_inputs, train_targets = [], []

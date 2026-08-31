@@ -3,8 +3,7 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import torch_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
 try:
     import torch
     have_torch = True

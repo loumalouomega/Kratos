@@ -10,9 +10,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import rom_bridge
-
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import rom_bridge
 def _WriteNumpyBasis(folder, phi, node_ids, nodal_unknowns, singular_values=None,
                      rom_format="numpy", name="RomParameters"):
     """Writes the exact CalculateRomBasisOutputProcess numpy file layout."""

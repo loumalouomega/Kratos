@@ -6,8 +6,8 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import calculus_bridge
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import calculus_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
 from test_grid_bridge import CreateStructuredTetModelPart
 

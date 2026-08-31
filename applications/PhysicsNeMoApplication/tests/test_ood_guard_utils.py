@@ -4,8 +4,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import ood_guard_utils
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import ood_guard_utils
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
 from test_grid_bridge import CreateStructuredTetModelPart
 
 try:
@@ -169,8 +169,7 @@ class TestOODGuardEndToEnd(KratosUnittest.TestCase):
         self.assertTrue(self.guard_file.is_file())
 
     def test_TrainCalibratesGuardAndProcessChecksIt(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         torch.manual_seed(0)
         inputs = torch.rand(64, 1, dtype=torch.float64)  # training inputs in [0, 1]
         dataset = torch.utils.data.TensorDataset(inputs, 2.0 * inputs)

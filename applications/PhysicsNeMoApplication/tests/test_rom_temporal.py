@@ -6,8 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import rom_temporal
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import rom_temporal
 try:
     import torch
     have_torch = True
@@ -122,8 +121,7 @@ class TestSequenceModelTraining(KratosUnittest.TestCase):
         numpy.testing.assert_allclose(reloaded, original, atol=1e-6)
 
     def test_DistributedManagerAsDist(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import distributed_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
         distributed_utils.InitializeDistributedManager(backend="gloo", port="29530")
         model = rom_temporal.CreateSequenceModel(_ToySettings())
         self.assertIsInstance(model.dist, DistributedManager)

@@ -3,8 +3,7 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import grid_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
 # Kratos hexahedron ordering -> 6 tetrahedra (fan around the 0-6 diagonal),
 # reused from the mesh bridge's decomposition table.
 _HEX_TO_TETS = ((0, 1, 2, 6), (0, 2, 3, 6), (0, 3, 7, 6), (0, 7, 4, 6), (0, 4, 5, 6), (0, 5, 1, 6))

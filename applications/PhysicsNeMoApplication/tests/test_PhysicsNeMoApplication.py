@@ -3,8 +3,14 @@ import KratosMultiphysics.KratosUnittest as KratosUnittest
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent / "mesh_bridge"))
-sys.path.insert(0, str(Path(__file__).parent / "active_learning"))
+
+# Test files live in subdirectories mirroring python_scripts/ where a package
+# earned one. Discovering them beats listing them: a new subdirectory whose
+# tests were never imported would look like a passing run.
+for _directory in sorted(Path(__file__).parent.rglob("*")):
+    if _directory.is_dir() and _directory.name != "__pycache__" \
+            and any(_directory.glob("test_*.py")):
+        sys.path.insert(0, str(_directory))
 
 from test_torch_bridge import TestTorchBridge
 from test_torch_bridge import TestTorchBridgeWithoutTorch
@@ -187,6 +193,8 @@ from test_adjoint_cross_validation import TestAdjointCrossValidation
 from test_provenance_cache import TestProvenanceCache
 from test_suite_registration import TestSuiteRegistration
 from test_suite_registration import TestDocumentedIdentifiersExist
+from test_suite_registration import TestDocumentedImportPathsResolve
+from test_suite_registration import TestCrossModuleAttributesExist
 from test_suite_registration import TestBenchmarkStillRuns
 from test_notebooks import TestNotebooks
 from test_mesh_spatial import TestSignedDistance
@@ -418,6 +426,8 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSuiteRegistration]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestProvenanceCache]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocumentedIdentifiersExist]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocumentedImportPathsResolve]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCrossModuleAttributesExist]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestBenchmarkStillRuns]))
 
     nightSuite = suites['nightly'] # These tests are executed in the nightly build

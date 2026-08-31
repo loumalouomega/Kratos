@@ -11,9 +11,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import differentiable_residual
-from KratosMultiphysics.PhysicsNeMoApplication import sensitivity_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.physics import differentiable_residual
+from KratosMultiphysics.PhysicsNeMoApplication.physics import sensitivity_utils
 try:
     import torch
     have_torch = True
@@ -119,8 +118,7 @@ class TestSensitivityUtils(KratosUnittest.TestCase):
                                    delta=1e-5 * max(1.0, abs(fd)))
 
     def test_NoGradPathUnchanged(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import point_cloud_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import point_cloud_inference_process
         model = torch.nn.Linear(4, 1).double()
         prediction, _ = point_cloud_inference_process.RunPointCloudForward(
             model, "cpu", "generic",

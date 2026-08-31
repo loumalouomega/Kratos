@@ -5,10 +5,9 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import particle_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import torch_dataset
-from KratosMultiphysics.PhysicsNeMoApplication import vfgn_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import particle_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.training import torch_dataset
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import vfgn_bridge
 try:
     import torch
     have_torch = True

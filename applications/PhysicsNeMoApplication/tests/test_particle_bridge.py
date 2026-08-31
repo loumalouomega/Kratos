@@ -3,8 +3,7 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import particle_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import particle_bridge
 try:
     import torch  # noqa: F401
     import warp  # noqa: F401 - the accelerated neighbor-search backend
@@ -119,7 +118,7 @@ class TestParticleBridge(KratosUnittest.TestCase):
 @KratosUnittest.skipUnless(have_torch, "Missing required python module: torch.")
 class TestParticleTrajectoryDataset(KratosUnittest.TestCase):
     def test_FreeFallWindows(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateParticleTrajectoryDataset
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateParticleTrajectoryDataset
 
         # free fall: x(t) = x0 - 0.5 g t^2 in z -> constant acceleration -g
         g = 9.81
@@ -142,7 +141,7 @@ class TestParticleTrajectoryDataset(KratosUnittest.TestCase):
         self.assertEqual(dataset.target_mean.shape, (3,))
 
     def test_Validation(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateParticleTrajectoryDataset
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateParticleTrajectoryDataset
 
         with self.assertRaisesRegex(ValueError, "history_size"):
             CreateParticleTrajectoryDataset(numpy.zeros((5, 2, 3)), 0, 0.1)

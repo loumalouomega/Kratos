@@ -8,8 +8,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import solver_residuals
-
+from KratosMultiphysics.PhysicsNeMoApplication.physics import solver_residuals
 have_convection_diffusion = kratos_utils.CheckIfApplicationsAvailable(
     "ConvectionDiffusionApplication", "LinearSolversApplication")
 

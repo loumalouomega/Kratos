@@ -2,8 +2,7 @@ import numpy
 
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import rollout_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import rollout_utils
 try:
     import torch
     have_torch = True

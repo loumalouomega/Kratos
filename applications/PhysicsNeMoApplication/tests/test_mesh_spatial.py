@@ -6,9 +6,9 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import grid_bridge
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import spatial
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import spatial
 
 from test_grid_bridge import CreateStructuredTetModelPart
 
@@ -100,7 +100,7 @@ class TestSignedDistance(KratosUnittest.TestCase):
         numpy.testing.assert_allclose(stored, written, atol=1e-12)
 
         # the point of writing a variable: every existing gather picks it up
-        from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
         node_features, _, _, _ = graph_bridge.BuildGraph(
             self.model_part, (("DISTANCE", "node_non_historical"),))
         numpy.testing.assert_allclose(node_features[:, 0], written, atol=1e-12)

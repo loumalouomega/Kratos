@@ -6,10 +6,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-
-from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
 try:
     import torch
     have_torch = True
@@ -161,8 +159,7 @@ class TestOutputNormalizationThroughProcess(KratosUnittest.TestCase):
                             for node in self.model_part.Nodes])
 
     def test_SingleModelOutputIsDeNormalized(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         checkpoint = self._SaveAffine(Path("test_norm_single.pt"), 2.0, 1.0)
         settings = Kratos.Parameters("""{
             "Parameters": {
@@ -187,8 +184,7 @@ class TestOutputNormalizationThroughProcess(KratosUnittest.TestCase):
         scaled and NOT shifted. This also covers the ensemble path, which
         reaches the model through _GetEnsembleModels rather than _GetModel.
         """
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         a = self._SaveAffine(Path("test_norm_ens_a.pt"), 2.0, 1.0)
         self._SaveAffine(Path("test_norm_ens_b.pt"), 4.0, 1.0, card=False)
         settings = Kratos.Parameters("""{
@@ -227,8 +223,7 @@ class TestOutputNormalizationThroughProcess(KratosUnittest.TestCase):
         self.assertLess(numpy.abs(self._Written(Kratos.NODAL_PAUX)).max(), self._MEAN)
 
     def test_WithoutACardNothingIsTransformed(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         checkpoint = self._SaveAffine(Path("test_norm_none.pt"), 2.0, 1.0, card=False)
         settings = Kratos.Parameters("""{
             "Parameters": {

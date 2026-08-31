@@ -10,11 +10,12 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import dataset_export_process
-from KratosMultiphysics.PhysicsNeMoApplication import streaming_dataset
-from KratosMultiphysics.PhysicsNeMoApplication import torch_dataset
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import dataset_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.training import streaming_dataset
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import (
+    streaming_dataset_export_process)
+from KratosMultiphysics.PhysicsNeMoApplication.training import torch_dataset
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
 sys.path.insert(0, str(Path(__file__).parent / "kratos_solver_cases"))
 
 try:
@@ -189,7 +190,7 @@ class TestStreamingMatchesTheFileRoundTrip(KratosUnittest.TestCase):
         # (b) the streaming path: push into a queue
         streamed_model = Kratos.Model()
         streamed_part = _CreateModelPart(streamed_model, "Streamed")
-        streamer = streaming_dataset.Factory(Kratos.Parameters("""{
+        streamer = streaming_dataset_export_process.Factory(Kratos.Parameters("""{
             "Parameters": { "model_part_name" : "Streamed",
                             "list_of_fields"  : %s }
         }""" % fields), streamed_model)
@@ -220,7 +221,7 @@ class TestStreamingMatchesTheFileRoundTrip(KratosUnittest.TestCase):
     def test_TrainingConsumesTheStream(self):
         model = Kratos.Model()
         model_part = _CreateModelPart(model, "TrainStream")
-        streamer = streaming_dataset.Factory(Kratos.Parameters("""{
+        streamer = streaming_dataset_export_process.Factory(Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "TrainStream",
                 "list_of_fields"  : [
@@ -339,8 +340,7 @@ class TestWarmRestart(KratosUnittest.TestCase):
                     '{"epochs": 0, "device": "cpu", "warm_restart": %s}' % block))
 
     def test_RoundTripThroughACheckpoint(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
         model = self._Model()
         first = training_utils.TrainModel(model, self.dataset, Kratos.Parameters(
             '{"epochs": 5, "device": "cpu", "seed": 0}'))

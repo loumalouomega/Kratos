@@ -4,9 +4,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 try:
     import torch
     have_torch = True

@@ -10,8 +10,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import temporal_training
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import temporal_training
 sys.path.insert(0, str(Path(__file__).parent / "kratos_solver_cases"))
 
 have_structural = kratos_utils.CheckIfApplicationsAvailable(
@@ -139,7 +138,7 @@ class TestAutoregressiveTraining(KratosUnittest.TestCase):
         self.assertEqual(len(history), 60)
         self.assertLess(history[-1], history[0])
 
-        from KratosMultiphysics.PhysicsNeMoApplication import rollout_utils
+        from KratosMultiphysics.PhysicsNeMoApplication.training import rollout_utils
         _, errors = rollout_utils.EvaluateRollout(model, self.states, history_size=2)
         untrained = _MakeModel(4, 2, seed=2)
         _, baseline = rollout_utils.EvaluateRollout(untrained, self.states, history_size=2)
@@ -177,9 +176,8 @@ class TestTransientStructuralSurrogate(KratosUnittest.TestCase):
     def test_SingleStepSurrogateOnRealTransientSolve(self):
         import structural_case
         import transient_harness
-        from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-        from KratosMultiphysics.PhysicsNeMoApplication import rollout_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
+        from KratosMultiphysics.PhysicsNeMoApplication.training import rollout_utils
         model = Kratos.Model()
         analysis = structural_case.CreateTransientStructuralAnalysis(
             model, divisions=4, time_step=0.005, end_time=0.06)

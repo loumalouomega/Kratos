@@ -6,8 +6,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import torch_dataset
-from KratosMultiphysics.PhysicsNeMoApplication.dataset_export_process import DatasetExportProcess
+from KratosMultiphysics.PhysicsNeMoApplication.training import torch_dataset
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export.dataset_export_process import DatasetExportProcess
 
 try:
     import torch

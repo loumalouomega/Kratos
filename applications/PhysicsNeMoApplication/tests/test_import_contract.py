@@ -27,62 +27,62 @@ for name in list(sys.modules):
 # The application and every non-test module must import without ML packages.
 import KratosMultiphysics
 import KratosMultiphysics.PhysicsNeMoApplication
-from KratosMultiphysics.PhysicsNeMoApplication import torch_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import torch_dataset
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-from KratosMultiphysics.PhysicsNeMoApplication import dataset_export_process
-from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import hybrid_initialization_process
-from KratosMultiphysics.PhysicsNeMoApplication import validation_metrics_process
-from KratosMultiphysics.PhysicsNeMoApplication import mesh_export_process
-from KratosMultiphysics.PhysicsNeMoApplication import distributed_utils
-from KratosMultiphysics.PhysicsNeMoApplication import grid_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import superresolution_process
-from KratosMultiphysics.PhysicsNeMoApplication import grid_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-from KratosMultiphysics.PhysicsNeMoApplication import rollout_utils
-from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import graph_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import time_series_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import solver_residuals
-from KratosMultiphysics.PhysicsNeMoApplication import sequence_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import point_cloud_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import grid_dataset_export_process
-from KratosMultiphysics.PhysicsNeMoApplication import diffusion_utils
-from KratosMultiphysics.PhysicsNeMoApplication import diffusion_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import cae_dataset_export_process
-from KratosMultiphysics.PhysicsNeMoApplication import mapping_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import rom_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import rom_surrogate_process
-from KratosMultiphysics.PhysicsNeMoApplication import rom_temporal
-from KratosMultiphysics.PhysicsNeMoApplication import cfd_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import curator_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import curator_export_process
-from KratosMultiphysics.PhysicsNeMoApplication import onnx_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import onnx_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import ood_guard_utils
-from KratosMultiphysics.PhysicsNeMoApplication import uncertainty_utils
-from KratosMultiphysics.PhysicsNeMoApplication import particle_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import particle_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import physics_informed
-from KratosMultiphysics.PhysicsNeMoApplication import pinn_solve_process
-from KratosMultiphysics.PhysicsNeMoApplication import differentiable_residual
-from KratosMultiphysics.PhysicsNeMoApplication import sensitivity_utils
-from KratosMultiphysics.PhysicsNeMoApplication import calculus_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import adaptive_remeshing
-from KratosMultiphysics.PhysicsNeMoApplication import adaptive_remesh_process
-from KratosMultiphysics.PhysicsNeMoApplication import temporal_training
-from KratosMultiphysics.PhysicsNeMoApplication import streaming_dataset
-from KratosMultiphysics.PhysicsNeMoApplication import vfgn_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import graph_partition_utils
-from KratosMultiphysics.PhysicsNeMoApplication import domino_finetune
-from KratosMultiphysics.PhysicsNeMoApplication import triton_export
-from KratosMultiphysics.PhysicsNeMoApplication import triton_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.training import torch_dataset
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import dataset_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import hybrid_initialization_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes import validation_metrics_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import mesh_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import superresolution_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import grid_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.training import rollout_utils
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import graph_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import time_series_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.physics import solver_residuals
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import sequence_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import point_cloud_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import grid_dataset_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.training import diffusion_utils
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import diffusion_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import cae_dataset_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import mapping_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import rom_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import rom_surrogate_process
+from KratosMultiphysics.PhysicsNeMoApplication.training import rom_temporal
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import cfd_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import curator_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import curator_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import onnx_utils
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import onnx_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import ood_guard_utils
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import uncertainty_utils
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import particle_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import particle_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.physics import physics_informed
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import pinn_solve_process
+from KratosMultiphysics.PhysicsNeMoApplication.physics import differentiable_residual
+from KratosMultiphysics.PhysicsNeMoApplication.physics import sensitivity_utils
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import calculus_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import adaptive_remeshing
+from KratosMultiphysics.PhysicsNeMoApplication.processes import adaptive_remesh_process
+from KratosMultiphysics.PhysicsNeMoApplication.training import temporal_training
+from KratosMultiphysics.PhysicsNeMoApplication.training import streaming_dataset
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import vfgn_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import graph_partition_utils
+from KratosMultiphysics.PhysicsNeMoApplication.training import domino_finetune
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import triton_export
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import triton_inference_process
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import tensor_adaptor_dataset_utils
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import nvtx_utils
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import shallow_water_reference
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import tessellation, curved_tessellation, provenance, domain_mesh_builder, deformation, spatial, generate
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import tessellation, curved_tessellation, provenance, domain_mesh_builder, deformation, spatial, generate
 from KratosMultiphysics.PhysicsNeMoApplication.active_learning import (
     sample_io, kratos_label_strategy, query_strategies, metrology)
 from KratosMultiphysics.PhysicsNeMoApplication.active_learning.execution_backends import (
@@ -112,8 +112,8 @@ for fn, expected in (
         (lambda: cfd_bridge._TryImportCfdEvaluationWrappers(), "github.com/NVIDIA/physicsnemo-cfd"),
         (lambda: curator_bridge._TryImportCurator(), "github.com/NVIDIA/physicsnemo-curator"),
         (lambda: curator_bridge._TryImportCuratorMeshSinks(), "github.com/NVIDIA/physicsnemo-curator"),
-        (lambda: onnx_bridge._TryImportOnnxExport(), "pip install nvidia-physicsnemo"),
-        (lambda: onnx_bridge._TryImportOnnxRuntime(), "pip install onnxruntime"),
+        (lambda: onnx_utils._TryImportOnnxExport(), "pip install nvidia-physicsnemo"),
+        (lambda: onnx_utils._TryImportOnnxRuntime(), "pip install onnxruntime"),
         (lambda: ood_guard_utils._TryImportOODGuard(), "pip install nvidia-physicsnemo"),
         (lambda: ood_guard_utils._TryImportTorch(), "pip install torch"),
         (lambda: uncertainty_utils._TryImportTorch(), "pip install torch"),

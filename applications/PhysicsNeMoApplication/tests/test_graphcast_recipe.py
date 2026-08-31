@@ -104,8 +104,8 @@ class TestGraphCastShallowWater(KratosUnittest.TestCase):
             processor_layers=3, hidden_dim=16, hidden_layers=1)
 
     def test_TrainSaveDeploy(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-        from KratosMultiphysics.PhysicsNeMoApplication import grid_inference_process
+        from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import grid_inference_process
         from test_grid_bridge import CreateStructuredTetModelPart
 
         model = self._TinyGraphCast()

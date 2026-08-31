@@ -17,8 +17,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import rom_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import rom_bridge
 have_rom = kratos_utils.CheckIfApplicationsAvailable(
     "RomApplication", "ConvectionDiffusionApplication", "LinearSolversApplication")
 
@@ -133,9 +132,8 @@ class TestRomSurrogateOnRealSolves(KratosUnittest.TestCase):
         kratos_utils.DeleteFileIfExisting(str(self.checkpoint))
 
     def test_ParameterToModesSurrogate(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import rom_surrogate_process
-        from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import rom_surrogate_process
+        from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
         _, _, snapshots = _GenerateRealBasis(self.basis_folder)
         basis = rom_bridge.LoadRomBasis(self.basis_folder)
 

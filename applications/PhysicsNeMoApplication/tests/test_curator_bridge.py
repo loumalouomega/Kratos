@@ -6,9 +6,9 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import curator_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import curator_export_process
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import curator_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import curator_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
 try:
     import physicsnemo_curator.core.base  # noqa: F401

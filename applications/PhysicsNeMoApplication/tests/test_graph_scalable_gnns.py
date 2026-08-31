@@ -10,9 +10,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import graph_inference_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import graph_inference_process
 from test_grid_bridge import CreateStructuredTetModelPart
 
 sys.path.insert(0, str(Path(__file__).parent / "kratos_solver_cases"))
@@ -316,8 +315,7 @@ class TestScalableGnnOnRealFluidSolve(KratosUnittest.TestCase):
 
     def test_BistrideSurrogateOnCavityFlow(self):
         import fluid_case
-        from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
         model = Kratos.Model()
         analysis = fluid_case.CreateFluidAnalysis(model, lid_velocity=1.0, divisions=8)
         analysis.Run()

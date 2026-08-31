@@ -14,10 +14,9 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import particle_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import torch_dataset
-from KratosMultiphysics.PhysicsNeMoApplication import vfgn_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import particle_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.training import torch_dataset
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import vfgn_bridge
 sys.path.insert(0, str(Path(__file__).parent / "kratos_solver_cases"))
 
 have_coupled = kratos_utils.CheckIfApplicationsAvailable(

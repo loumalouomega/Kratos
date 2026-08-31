@@ -27,7 +27,7 @@ if __name__ == "__main__":
         divisions=case["divisions"].GetInt())
     analysis.Run()
 
-    from KratosMultiphysics.PhysicsNeMoApplication.dataset_export_process import DatasetExportProcess
+    from KratosMultiphysics.PhysicsNeMoApplication.processes.export.dataset_export_process import DatasetExportProcess
     model_part = model["ThermalModelPart"]
     model_part.ProcessInfo[Kratos.STEP] = 1
     export = DatasetExportProcess(model, parameters["dataset_export"])

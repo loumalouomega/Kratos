@@ -77,9 +77,8 @@ class TestStructuralSolverSurrogate(KratosUnittest.TestCase):
             list(node.GetSolutionStepValue(Kratos.DISPLACEMENT)) for node in model_part.Nodes])
 
     def test_SurrogateReproducesUnseenLoad(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         # --- solve the training loads with the real solver ------------------
         train_loads = (0.5e6, 1.0e6, 2.0e6)
         samples = []

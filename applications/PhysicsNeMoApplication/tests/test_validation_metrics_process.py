@@ -6,8 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import validation_metrics_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes import validation_metrics_process
 try:
     import physicsnemo.metrics.general.mse
     have_physicsnemo = True

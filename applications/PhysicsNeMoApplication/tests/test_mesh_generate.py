@@ -9,9 +9,9 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import generate
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import spatial
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import generate
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import spatial
 
 from test_grid_bridge import CreateStructuredTetModelPart
 
@@ -305,8 +305,7 @@ class TestPopulateModelPart(KratosUnittest.TestCase):
 class TestFieldTransferToGeneratedMesh(KratosUnittest.TestCase):
 
     def test_LinearFieldMapsOntoAGeneratedMesh(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import mapping_bridge
-
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges import mapping_bridge
         model = Kratos.Model()
         source = CreateStructuredTetModelPart(
             model, "Old", 4, historical_variables=(Kratos.TEMPERATURE,))
@@ -337,8 +336,7 @@ class TestFieldTransferToGeneratedMesh(KratosUnittest.TestCase):
 class TestGeneratedMeshFeedsMmg(KratosUnittest.TestCase):
 
     def test_GeneratedMeshCanBeRemeshed(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import adaptive_remeshing
-
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import adaptive_remeshing
         model = Kratos.Model()
         sphere = generate.SdfPrimitives()["sphere"]([0.0, 0.0, 0.0], 0.7)
         part = generate.GenerateModelPart(

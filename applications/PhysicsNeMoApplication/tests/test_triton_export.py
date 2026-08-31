@@ -16,10 +16,9 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-from KratosMultiphysics.PhysicsNeMoApplication import triton_export
-from KratosMultiphysics.PhysicsNeMoApplication import triton_inference_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import triton_export
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import triton_inference_process
 try:
     import torch
     have_torch = True
@@ -174,10 +173,9 @@ class TestTritonRepositoryExport(KratosUnittest.TestCase):
 
     @KratosUnittest.skipUnless(have_onnxruntime, "Missing required python module: onnxruntime.")
     def test_ExportedArtifactServesAnyMeshSize(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import onnx_bridge
-
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import onnx_utils
         self._Export()
-        session = onnx_bridge.CreateOrtSession(
+        session = onnx_utils.CreateOrtSession(
             str(self.repository / "surrogate" / "1" / "model.onnx"), "cpu")
         ort_input = session.get_inputs()[0]
 

@@ -9,9 +9,8 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import graph_partition_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import graph_partition_utils
 try:
     import torch
     have_torch = True

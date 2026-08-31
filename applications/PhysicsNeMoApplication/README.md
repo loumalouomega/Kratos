@@ -6,6 +6,45 @@
 
 The application includes tests to check the proper functioning of the application.
 
+## 🧭 New here? Start with these three:
+
+The feature list below is long because the application is. These are the three
+pages that make it navigable:
+
+| | |
+|---|---|
+| **[PhysicsNeMo Basics](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Overview.html)** | **NVIDIA PhysicsNeMo itself** — what it is, what every one of its modules does, and which part of this application uses it. Nine pages: [core and checkpoints](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Core_And_Checkpoints.html), [models](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Models.html), [data and datapipes](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Data_And_Datapipes.html), [mesh and geometry](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Mesh_And_Geometry.html), [symbolic and physics](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Symbolic_And_Physics.html), [diffusion and deployment](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Diffusion_And_Deployment.html), [distributed and scale](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Distributed_And_Scale.html), [companion packages](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Companion_Packages.html). Read this if the rest of the documentation seems to assume things you were never told. |
+| **[Where things live](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Module_Map.html)** | Every module by folder with a one-line purpose, and an *I want to X → use Y* index. |
+| **[From scratch](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/From_Scratch.html)** | One surrogate end to end — export from a real solve, train, save with a model card, deploy in the loop, validate — naming the exact module at each step. |
+
+### Layout
+
+`python_scripts/` is a tree of packages, and the folder a module sits in says what kind of thing it is:
+
+```
+python_scripts/
+├── processes/          everything you attach to a solve - and only those have a Factory
+│   ├── inference/          run a trained model in the solution loop      (15)
+│   ├── export/             write solver data out as training data         (6)
+│   └── ...                 adaptive remeshing, validation metrics         (2)
+├── bridges/            Kratos data <-> physicsnemo data     (10 + mesh_bridge/)
+├── training/           loops, datasets, schemes                           (8)
+├── physics/            residuals, PINN machinery, sensitivities           (4)
+├── deployment/         checkpoints, cards, ONNX/Triton, uncertainty       (6)
+├── distributed/        MPI and multi-rank                                 (2)
+├── active_learning/    Kratos as the labeling oracle
+└── utilities/          small shared helpers
+```
+
+Each package's `__init__.py` says what belongs in it. A process is attached the usual way, with `kratos_module` naming the package:
+
+```json
+{
+    "python_module" : "inference_process",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference"
+}
+```
+
 ## 😎 Features:
 
 - **Tensor bridge**: zero-copy `ModelPart` data ↔ `torch.Tensor` built on the core `Kratos.TensorAdaptors`, plus a dataset-export process producing `.npz` training samples from any combination of nodal, elemental and Gauss-point fields, and a `torch.utils.data.Dataset` factory over the exported samples for direct training — plus a **streaming path** (`streaming_dataset`) that trains directly out of a running solve with no file round trip, yielding samples byte-identical to the dumped ones (asserted by running one case both ways), and **shrink-and-perturb warm restarts** in `TrainModel` for when Kratos data drifts to a new geometry family. Dataset curation for the `.pmsh` mesh series: **coherent** random rotate/scale/translate augmentations (`MakeMeshAugmentations`/`CreateAugmentedMeshDataset` — vector and rank-2 tensor fields transform *with* the coordinates, which upstream's defaults silently skip, plus the dtype cast its transforms require and reproducible per-epoch seeding) and `MultiDataset` mixing of several series (`CreateMultiMeshDataset`).
@@ -95,16 +134,6 @@ The application includes tests to check the proper functioning of the applicatio
 
 Candidate extensions, grouped by theme and ordered roughly by value/feasibility, each naming the concrete PhysicsNeMo API and its Kratos-side counterpart. Every remaining item is `(blocked: …)`, and the parenthesis names the gate — verified against the currently exercised **physicsnemo 2.2.0** and the reference build, not assumed. The gates fall into four kinds: **hardware** (one GPU here), **upstream** (the API does not exist yet, or raises `NotImplementedError`), **external access** (NIM/NGC checkpoints, Omniverse), and **the build** (an application that is not compiled — see the installation note above on why adding one is not a local operation).
 
-- **Document in detail the basic concepts of NVIDIA PhysicsNemo**
-   * Current documentation assumes teh user know the basic stuff and details of NVIDIA PhysicsNemo, and this is not necessary true.
-   * Include documentation explaning what every module from the library does in order to be able to understand how to properly use it for your needs
-   * Point the cdocumentation in this README
-
-- **Reorganize the scripts**
-   * Properly classify the scripts, like utils, processes, bridges, ... in the corresponding folders. Otherwise is easy to get lost
-   * Tests and examples hould be check for proper path
-   * Even better documentation of everything. Is super easy to get lost, so many features and utilities. Specially thinking if someone wants to do something from scratch
-
 - **Using CuPy insteadof numpy when possible**
    * An idea to be chekced that may enhance performance if CuPy is available
    * numpy should be always the default fallback just in case
@@ -117,7 +146,7 @@ Candidate extensions, grouped by theme and ordered roughly by value/feasibility,
 
 - **Model architectures and foundation models**
     * Multi-GPU validation of the shipped halo-partitioned graph training — the partitioner, halo exchange and DDP gradient sync ship and are asserted at np=2/3, but only over CPU/gloo: NCCL rejects multiple ranks on one GPU, so the accelerator transport is untested here (blocked: needs a multi-GPU machine)
-    * Volumetric (3D) diffusion U-Nets for the diffusion bridge — upstream renamed `physicsnemo.models.diffusion` to `diffusion_unets` and its U-Nets are 2D-image oriented; the shipped DiT interface covers transformers, but a true 3D U-Net denoiser is pending upstream (`physicsnemo.models.topodiff` still pairs naturally with `TopologyOptimizationApplication`)
+    * Volumetric (3D) diffusion U-Nets for the diffusion bridge — **this gate is no longer upstream**: `physicsnemo.models.diffusion_unets` is indeed 2D-image oriented, but `physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D` exists in 2.2 and implements the `physicsnemo.diffusion.base.DiffusionModel` protocol, so it composes with the preconditioners, losses and samplers the shipped bridge already uses. What remains is a `denoiser_interface` for it alongside `"dit"` — ordinary work, not a blocked item (`physicsnemo.models.topodiff` still pairs naturally with `TopologyOptimizationApplication`)
     * The PyG-based molecular-dynamics / Lennard-Jones GNN for force and potential prediction, pairing with `DEMApplication` particle interactions (blocked: no molecular architecture exists in physicsnemo 2.2 — none of the 25 models under `physicsnemo.models`, nor `experimental.models`/`datapipes`, is molecular; `DEMApplication` is also not compiled here)
 
 - **Mesh, geometry and shape optimization**
@@ -133,7 +162,9 @@ Candidate extensions, grouped by theme and ordered roughly by value/feasibility,
     * Exact NURBS geometry sampling for `IgaApplication` meshes, the isogeometric analogue of the shipped curved/isoparametric mode (blocked: needs a NURBS-aware sampler; low demand so far)
     * Digital-twin / Omniverse export of deployed-surrogate predictions for interactive visualization, on top of `HDF5Application`/XDMF output (external tooling; mostly format glue)
 
-**Where to start — the roadmap is now exhausted.** Every bullet above is gated on something outside this repository. Treat the list as a record of what is blocked, not as a queue of work.
+**Where to start.** Almost every bullet above is gated on something outside this repository — treat the list mostly as a record of what is blocked. The exception is the volumetric-denoiser item, whose gate was re-checked against the installed 2.2.0 and found stale: `DiffusionUNet3D` is there, under `experimental`.
+
+*The two documentation-and-layout items have shipped.* `python_scripts/` is now a tree of packages (see [Layout](#layout) above), so a module's folder says what kind of thing it is and everything with a `Factory` lives under `processes/`; the tests, the eighteen notebooks, the docs pages and the Examples repository were rewritten onto the new paths, and a guard resolves every documented module path and every `"kratos_module"`/`"python_module"` pair against the real tree so they cannot silently rot. And [PhysicsNeMo Basics](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Overview.html) documents NVIDIA PhysicsNeMo itself across nine pages, joined by a module map and a from-scratch walkthrough — the gap being that everything here assumed the reader already knew what a `Module`, a `.mdlus`, a datapipe or a `DistributedManager` was.
 
 *What has shipped.* The formerly "unblocked wins" are all in — GeoTransolver/FLARE, ONNX, `torch.compile`/NVTX, the CoSimulation `solver_wrapper`, the uncertainty-and-governance layer, the grid-operator zoo, DoMINO deployment and the `domino_finetune` predictor-corrector and LoRA recipes, DiT denoisers, the Lagrangian particle surrogate, and the complete physics-informed/differentiability layer: `PhysicsInformer` training terms with elasticity/Navier–Stokes builtins, `PinnSolveProcess`, and — the item long marked *blocked* — the `torch.autograd.Function` through the real FEM assembly plus exact adjoint sensitivities (`differentiable_residual`/`sensitivity_utils`).
 
@@ -151,7 +182,6 @@ So are the rest: the new-physics-domain recipes (GraphCast grid surrogates, test
 |---|---|---|
 | `ShardTensor` domain parallelism, FSDP2 round-trips, multi-GPU validation of the shipped halo partitioning, GPU CI | hardware | one GPU here; NCCL rejects two ranks on a single device. Note `ShardTensor` lives in `physicsnemo.domain_parallel`, not `distributed` |
 | Exact boundary recovery in the tetrahedral fill (the fill itself ships) | upstream | `fill_interior`'s `n = 3` raises `NotImplementedError` in 2.2 |
-| Volumetric (3D) diffusion U-Nets | upstream | `diffusion_unets` are 2D-image oriented |
 | Lennard-Jones / molecular GNN | upstream | no molecular architecture exists among the 25 `physicsnemo.models` submodules |
 | NIM client backend, Omniverse export | external access | needs an NGC API key and external tooling |
 | IGA sampling | the build | `IgaApplication` is not compiled here — see the installation note above on why adding one is not a local operation |

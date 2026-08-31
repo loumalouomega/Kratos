@@ -6,7 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import nvtx_utils
 
 try:
@@ -177,8 +177,7 @@ class TestModelCards(KratosUnittest.TestCase):
         self.assertTrue(model_registry.ValidateFieldsAgainstCard({"notes": "x"}, matching_in, [], "Test"))
 
     def test_MismatchedCardIsAdvisoryInInferenceProcess(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         # Card claims different fields than the process config: must warn but run.
         model_registry.SaveModelCard(self.checkpoint, {
             "input_fields": [{"variable_name": "PRESSURE", "data_location": "node_historical"}],

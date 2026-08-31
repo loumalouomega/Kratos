@@ -41,7 +41,7 @@ class TestGridSequenceDataset(KratosUnittest.TestCase):
         KratosUtilities.DeleteDirectoryIfExisting(str(self.directory))
 
     def test_SequenceLayout(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateGridSequenceDataset
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateGridSequenceDataset
 
         dataset = CreateGridSequenceDataset(self.directory, nr_tsteps=2)
         self.assertEqual(len(dataset), 3)
@@ -53,7 +53,7 @@ class TestGridSequenceDataset(KratosUnittest.TestCase):
         self.assertTrue(bool((future[:, 1] == 3.0).all()))
 
     def test_SqueezeAxis(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateGridSequenceDataset
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateGridSequenceDataset
 
         dataset = CreateGridSequenceDataset(self.directory, nr_tsteps=1, squeeze_axis=2)
         initial, future = dataset[0]
@@ -61,7 +61,7 @@ class TestGridSequenceDataset(KratosUnittest.TestCase):
         self.assertEqual(tuple(future.shape), (1, 1, 2, 2))
 
     def test_TooFewGridsRaise(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateGridSequenceDataset
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateGridSequenceDataset
 
         with self.assertRaisesRegex(ValueError, "nr_tsteps"):
             CreateGridSequenceDataset(self.directory, nr_tsteps=5)
@@ -91,8 +91,7 @@ class TestSequenceInferenceProcess(KratosUnittest.TestCase):
         torch.jit.script(Roll()).save(str(self.checkpoint))
 
     def _CreateProcess(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import sequence_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import sequence_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "Main",
@@ -161,8 +160,7 @@ class TestWindowAsTimeAxis(KratosUnittest.TestCase):
             node.SetSolutionStepValue(Kratos.PRESSURE, value)
 
     def _CreateProcess(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import sequence_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import sequence_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name"     : "Main",
@@ -207,8 +205,7 @@ class TestWindowAsTimeAxis(KratosUnittest.TestCase):
             self.assertAlmostEqual(temperature(), expected, places=10)
 
     def test_WindowSizeValidation(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import sequence_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import sequence_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name"     : "Main",
@@ -231,8 +228,7 @@ class TestWindowAsTimeAxis(KratosUnittest.TestCase):
         checkpoint = Path("test_sequence_fno4d.mdlus")
         fno.save(str(checkpoint))
         try:
-            from KratosMultiphysics.PhysicsNeMoApplication import sequence_inference_process
-
+            from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import sequence_inference_process
             settings = Kratos.Parameters("""{
                 "Parameters": {
                     "model_part_name"     : "Main",
@@ -286,8 +282,7 @@ class TestOne2ManyRNNThroughProcess(KratosUnittest.TestCase):
 
     def test_RealRNNRollout(self):
         from physicsnemo.models.rnn.rnn_one2many import One2ManyRNN
-        from KratosMultiphysics.PhysicsNeMoApplication import sequence_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import sequence_inference_process
         torch.manual_seed(0)
         rnn = One2ManyRNN(
             input_channels=1, dimension=3, nr_latent_channels=4,

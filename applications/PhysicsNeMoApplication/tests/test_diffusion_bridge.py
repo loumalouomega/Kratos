@@ -52,7 +52,7 @@ class TestGridPairDataset(KratosUnittest.TestCase):
         KratosUtilities.DeleteDirectoryIfExisting(str(self.hr_dir))
 
     def test_PairsMatchedByStep(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateGridPairDataset
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateGridPairDataset
 
         _WriteGrids(self.lr_dir, (1, 2, 3), lambda s: 10.0 * s)
         _WriteGrids(self.hr_dir, (1, 2, 3), lambda s: 100.0 * s)
@@ -64,7 +64,7 @@ class TestGridPairDataset(KratosUnittest.TestCase):
         self.assertTrue(bool((target == 200.0).all()))
 
     def test_StepMismatchRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateGridPairDataset
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateGridPairDataset
 
         _WriteGrids(self.lr_dir, (1, 2), lambda s: s)
         _WriteGrids(self.hr_dir, (1, 3), lambda s: s)
@@ -76,8 +76,7 @@ class TestGridPairDataset(KratosUnittest.TestCase):
                            "Missing required python modules: torch, physicsnemo.")
 class TestTrainDiffusionModel(KratosUnittest.TestCase):
     def test_LossIsFiniteOverEpochs(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.training import diffusion_utils
         model = _TinyPreconditioner()
         torch.manual_seed(1)
         conditions = torch.randn(4, 1, 8, 8)
@@ -95,15 +94,13 @@ class TestTrainDiffusionModel(KratosUnittest.TestCase):
         self.assertFalse(model.training)  # left in eval mode
 
     def test_UnsupportedLossRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.training import diffusion_utils
         with self.assertRaisesRegex(ValueError, "diffusion loss"):
             diffusion_utils.TrainDiffusionModel(
                 _TinyPreconditioner(), [], Kratos.Parameters("""{ "loss": "score_matching" }"""))
 
     def test_GenerateEnsembleShapes(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.training import diffusion_utils
         model = _TinyPreconditioner().eval()
         ensemble = diffusion_utils.GenerateEnsemble(
             model, numpy.zeros((1, 8, 8)), Kratos.Parameters("""{
@@ -133,8 +130,7 @@ class TestDiffusionInferenceProcess(KratosUnittest.TestCase):
         KratosUtilities.DeleteFileIfExisting(str(self.checkpoint))
 
     def test_EnsembleMeanAndUncertaintyAreWritten(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import diffusion_inference_process
         _TinyPreconditioner().save(str(self.checkpoint))
         settings = Kratos.Parameters("""{
             "Parameters": {
@@ -167,8 +163,7 @@ class TestDiffusionInferenceProcess(KratosUnittest.TestCase):
         self.assertGreater(spread.max(), 0.0)
 
     def test_InvalidSqueezeAxisRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import diffusion_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "Main",
@@ -207,8 +202,7 @@ class TestDitDenoiser(KratosUnittest.TestCase):
                    hidden_size=32, depth=1, num_heads=2)
 
     def test_WrapDenoiserContract(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_utils
-
+        from KratosMultiphysics.PhysicsNeMoApplication.training import diffusion_utils
         wrapper = diffusion_utils.WrapDenoiser(self._TinyDit(), "dit")
         self.assertEqual(wrapper.img_out_channels, 1)
 
@@ -224,8 +218,7 @@ class TestDitDenoiser(KratosUnittest.TestCase):
             diffusion_utils.WrapDenoiser(self._TinyDit(), "unet3d")
 
     def test_DitThroughDiffusionProcess(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import diffusion_inference_process
         self._TinyDit().save(str(self.checkpoint))
         settings = Kratos.Parameters("""{
             "Parameters": {
@@ -258,8 +251,7 @@ class TestDitDenoiser(KratosUnittest.TestCase):
         self.assertGreater(spreads.max(), 0.0)
 
     def test_UnknownDenoiserInterfaceRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import diffusion_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import diffusion_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name"    : "Main",

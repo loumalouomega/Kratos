@@ -33,7 +33,7 @@ def _SaveAffineModel(path, scale, offset):
 
 def _WrapperSettings(checkpoint, time_step=0.0):
     return Kratos.Parameters("""{
-        "type" : "KratosMultiphysics.PhysicsNeMoApplication.cosim_surrogate_solver_wrapper",
+        "type" : "KratosMultiphysics.PhysicsNeMoApplication.deployment.cosim_surrogate_solver_wrapper",
         "solver_wrapper_settings" : {
             "mdpa_file"      : "%s",
             "time_step"      : %f,
@@ -69,8 +69,7 @@ class TestCoSimSurrogateWrapper(KratosUnittest.TestCase):
         self.assertEqual(wrapper.model_part.NumberOfNodes(), 8)
 
     def test_StandaloneSolve(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import cosim_surrogate_solver_wrapper
-
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import cosim_surrogate_solver_wrapper
         wrapper = cosim_surrogate_solver_wrapper.Create(
             _WrapperSettings(self.checkpoint, time_step=1.0), None, "surrogate")
         wrapper.Initialize()
@@ -90,15 +89,13 @@ class TestCoSimSurrogateWrapper(KratosUnittest.TestCase):
                 self.assertAlmostEqual(value, 2.0 * coord + 1.0, places=6)
 
     def test_DrivenWrapperDoesNotOwnTime(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import cosim_surrogate_solver_wrapper
-
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import cosim_surrogate_solver_wrapper
         wrapper = cosim_surrogate_solver_wrapper.Create(
             _WrapperSettings(self.checkpoint), None, "surrogate")
         self.assertEqual(wrapper.AdvanceInTime(5.0), 0.0)
 
     def test_UnknownInterfaceRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import cosim_surrogate_solver_wrapper
-
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import cosim_surrogate_solver_wrapper
         settings = _WrapperSettings(self.checkpoint)
         settings["solver_wrapper_settings"].AddString("model_interface", "voxel")
         with self.assertRaisesRegex(ValueError, "model interface"):

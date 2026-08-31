@@ -6,8 +6,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-from KratosMultiphysics.PhysicsNeMoApplication import uncertainty_utils
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import uncertainty_utils
 from test_grid_bridge import CreateStructuredTetModelPart
 
 try:
@@ -124,8 +124,7 @@ class TestProcessUncertainty(KratosUnittest.TestCase):
         self.checkpoints.append(path)
 
     def test_EnsembleMeanAndStd(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         self._SaveScale(Path("test_unc_ensemble_a.pt"), 2.0)
         self._SaveScale(Path("test_unc_ensemble_b.pt"), 4.0)
 
@@ -158,8 +157,7 @@ class TestProcessUncertainty(KratosUnittest.TestCase):
                 pressure * (2.0 ** 0.5), places=10)
 
     def test_EnsembleWithoutFilesRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         self._SaveScale(Path("test_unc_single.pt"), 2.0)
         settings = Kratos.Parameters("""{
             "Parameters": {
@@ -176,8 +174,7 @@ class TestProcessUncertainty(KratosUnittest.TestCase):
             process.ExecuteFinalizeSolutionStep()
 
     def test_McDropoutThroughProcess(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         torch.manual_seed(0)
         dropout_model = torch.nn.Sequential(
             torch.nn.Linear(1, 16), torch.nn.Dropout(p=0.5), torch.nn.Linear(16, 1)).double()
@@ -209,8 +206,7 @@ class TestProcessUncertainty(KratosUnittest.TestCase):
         self.assertGreater(numpy.abs(stds).max(), 0.0)
 
     def test_UnknownMethodRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "Main",

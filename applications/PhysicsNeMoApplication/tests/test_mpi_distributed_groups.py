@@ -14,8 +14,7 @@ import os
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import distributed_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
 try:
     from physicsnemo.distributed.manager import DistributedManager
     have_physicsnemo = True

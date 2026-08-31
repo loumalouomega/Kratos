@@ -5,9 +5,8 @@ import numpy
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import cfd_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import validation_metrics_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import cfd_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.processes import validation_metrics_process
 try:
     import pyvista  # noqa: F401
     have_pyvista = True

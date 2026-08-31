@@ -6,8 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import cae_dataset_export_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import cae_dataset_export_process
 try:
     import torch  # noqa: F401
     import warp  # noqa: F401 - DoMINO preprocessing needs it (SDF)
@@ -114,7 +113,7 @@ class TestCaeDatasetExportProcess(KratosUnittest.TestCase):
 
     def test_TheTessellationIsReusedAcrossExports(self):
         """Tessellation is ~99% of an export and is identical while the mesh is."""
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
         process = CreateExportProcess(self.model, self.output_path, ', "output_interval": 1')
         process.ExecuteInitialize()
@@ -269,7 +268,7 @@ class TestCaeDatasetThroughDatapipes(KratosUnittest.TestCase):
         KratosUtilities.DeleteDirectoryIfExisting(str(self.output_path))
 
     def test_DoMINOSurfaceAndVolume(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateDoMINODataPipe
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateDoMINODataPipe
 
         for model_type in ("surface", "volume"):
             pipe = CreateDoMINODataPipe(
@@ -288,7 +287,7 @@ class TestCaeDatasetThroughDatapipes(KratosUnittest.TestCase):
                 self.assertIn("volume_fields", sample)
 
     def test_TransolverSurfaceAndVolume(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateTransolverDataPipe
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateTransolverDataPipe
 
         for model_type in ("surface", "volume"):
             pipe = CreateTransolverDataPipe(self.output_path, model_type)

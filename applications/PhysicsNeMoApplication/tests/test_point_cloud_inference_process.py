@@ -53,8 +53,7 @@ class TestPointCloudInferenceProcess(KratosUnittest.TestCase):
         KratosUtilities.DeleteFileIfExisting(str(self.checkpoint))
 
     def _CreateProcess(self, model_interface="generic", normalize=True, pass_geometry=True):
-        from KratosMultiphysics.PhysicsNeMoApplication import point_cloud_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import point_cloud_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name"       : "Main",
@@ -204,8 +203,7 @@ class TestTransolverThroughProcess(KratosUnittest.TestCase):
 
     def test_RealTransolver(self):
         from physicsnemo.models.transolver import Transolver
-        from KratosMultiphysics.PhysicsNeMoApplication import point_cloud_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import point_cloud_inference_process
         torch.manual_seed(0)
         transolver = Transolver(
             functional_dim=1, out_dim=1, embedding_dim=3, n_layers=1,
@@ -255,8 +253,7 @@ class TestGeoTransolverThroughProcess(KratosUnittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             from physicsnemo.experimental.models.geotransolver import GeoTransolver
-        from KratosMultiphysics.PhysicsNeMoApplication import point_cloud_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import point_cloud_inference_process
         torch.manual_seed(0)
         # use_te=False: transformer_engine is an optional GPU-only extra
         geotransolver = GeoTransolver(
@@ -306,8 +303,7 @@ class TestFIGConvUNetThroughProcess(KratosUnittest.TestCase):
 
     def test_RealFIGConvUNet(self):
         from physicsnemo.models.figconvnet import FIGConvUNet
-        from KratosMultiphysics.PhysicsNeMoApplication import point_cloud_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import point_cloud_inference_process
         torch.manual_seed(0)
         figconvunet = FIGConvUNet(
             in_channels=1, out_channels=1, kernel_size=3,
@@ -369,7 +365,7 @@ class TestCoordinateNormalizationOffTheUnitCube(KratosUnittest.TestCase):
         KratosUtilities.DeleteFileIfExisting(str(self.checkpoint))
 
     def test_EachAxisIsNormalizedIndependently(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.point_cloud_inference_process import (
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference.point_cloud_inference_process import (
             GatherPointCloudCoordinates)
 
         raw = GatherPointCloudCoordinates(self.model_part, normalize=False)
@@ -386,7 +382,7 @@ class TestCoordinateNormalizationOffTheUnitCube(KratosUnittest.TestCase):
 
     def test_ADegenerateAxisCollapsesToZeroNotNaN(self):
         # a planar mesh has zero extent on one axis; the guard divides by 1
-        from KratosMultiphysics.PhysicsNeMoApplication.point_cloud_inference_process import (
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference.point_cloud_inference_process import (
             GatherPointCloudCoordinates)
 
         flat = Kratos.Model()
@@ -398,8 +394,7 @@ class TestCoordinateNormalizationOffTheUnitCube(KratosUnittest.TestCase):
         numpy.testing.assert_allclose(normalized[:, 2], 0.0, atol=1e-12)
 
     def _RunOn(self, extent, normalize):
-        from KratosMultiphysics.PhysicsNeMoApplication import point_cloud_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import point_cloud_inference_process
         class GeometrySensitive(torch.nn.Module):
             """Reads the coordinates the process feeds it, so the written
             field reports exactly what the model saw."""

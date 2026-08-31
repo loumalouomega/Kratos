@@ -27,10 +27,10 @@ import time
 import numpy
 
 import KratosMultiphysics as Kratos
-from KratosMultiphysics.PhysicsNeMoApplication import grid_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import rom_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import distributed_utils
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import rom_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
 _HEX_CORNERS = ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0),
                 (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1))

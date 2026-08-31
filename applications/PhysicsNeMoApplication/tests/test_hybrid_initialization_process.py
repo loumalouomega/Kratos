@@ -4,8 +4,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import hybrid_initialization_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import hybrid_initialization_process
 try:
     import torch
     have_torch = True

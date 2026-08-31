@@ -17,9 +17,9 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import distributed_utils
-from KratosMultiphysics.PhysicsNeMoApplication.cae_dataset_export_process import CaeDatasetExportProcess
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export.cae_dataset_export_process import CaeDatasetExportProcess
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
 try:
     import physicsnemo.mesh  # noqa: F401
@@ -185,7 +185,7 @@ class TestMpiMeshExport(KratosUnittest.TestCase):
         data_communicator.Barrier()
 
     def _RunExport(self, model, model_part_name, source_container):
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_export_process import MeshExportProcess
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.export.mesh_export_process import MeshExportProcess
 
         process = MeshExportProcess(model, Kratos.Parameters("""{
             "model_part_name"  : "%s",

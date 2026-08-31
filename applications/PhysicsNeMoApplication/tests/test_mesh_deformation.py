@@ -10,11 +10,11 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import graph_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import differentiable_residual
-from KratosMultiphysics.PhysicsNeMoApplication import sensitivity_utils
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import deformation
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.physics import differentiable_residual
+from KratosMultiphysics.PhysicsNeMoApplication.physics import sensitivity_utils
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import deformation
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
 from test_grid_bridge import CreateStructuredTetModelPart
 

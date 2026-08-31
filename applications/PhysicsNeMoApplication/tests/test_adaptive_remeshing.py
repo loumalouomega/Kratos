@@ -10,9 +10,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import adaptive_remeshing
-from KratosMultiphysics.PhysicsNeMoApplication import adaptive_remesh_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import adaptive_remeshing
+from KratosMultiphysics.PhysicsNeMoApplication.processes import adaptive_remesh_process
 sys.path.insert(0, str(Path(__file__).parent / "kratos_solver_cases"))
 
 have_meshing = kratos_utils.CheckIfApplicationsAvailable("MeshingApplication")

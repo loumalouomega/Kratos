@@ -15,8 +15,7 @@ import numpy
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import domino_finetune
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import domino_finetune
 try:
     import torch
     have_torch = True

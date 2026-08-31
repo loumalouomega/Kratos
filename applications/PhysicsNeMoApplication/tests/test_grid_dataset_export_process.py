@@ -6,7 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import grid_dataset_export_process
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import grid_dataset_export_process
 from test_grid_bridge import CreateStructuredTetModelPart
 
 

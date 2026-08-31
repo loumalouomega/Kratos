@@ -48,7 +48,7 @@ def _SaveAffineModel(path, scale, offset):
 def _SolverBlock(checkpoint, time_step=0.0, distributed=True, partition_mdpa=True,
                  num_processes=0, data_communicator_name=""):
     settings = Kratos.Parameters("""{
-        "type" : "KratosMultiphysics.PhysicsNeMoApplication.cosim_surrogate_solver_wrapper",
+        "type" : "KratosMultiphysics.PhysicsNeMoApplication.deployment.cosim_surrogate_solver_wrapper",
         "solver_wrapper_settings" : {
             "mdpa_file"       : "%s",
             "time_step"       : %f,
@@ -75,7 +75,7 @@ def _SolverBlock(checkpoint, time_step=0.0, distributed=True, partition_mdpa=Tru
 
 
 def _CreateWrapper(settings, model, name):
-    from KratosMultiphysics.PhysicsNeMoApplication.cosim_surrogate_solver_wrapper import (
+    from KratosMultiphysics.PhysicsNeMoApplication.deployment.cosim_surrogate_solver_wrapper import (
         CoSimSurrogateSolverWrapper)
     return CoSimSurrogateSolverWrapper(settings, model, name)
 
@@ -151,7 +151,7 @@ class TestMpiDistributedSurrogateWrapper(KratosUnittest.TestCase):
                 self.assertAlmostEqual(value, reference, places=6)
 
     def test_GatheredPredictionReproducesSerialLayout(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import graph_partition_utils
+        from KratosMultiphysics.PhysicsNeMoApplication.distributed import graph_partition_utils
         import numpy
 
         wrapper = self._Solve(partition_mdpa=True, seed_with_ids=True)

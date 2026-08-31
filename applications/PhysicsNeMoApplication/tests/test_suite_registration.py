@@ -1,4 +1,4 @@
-"""Guards three things that rot while the suite stays green.
+"""Guards five things that rot while the suite stays green.
 
 The first two are static: they parse sources with `ast` and never import
 the tests or the application, so they run unchanged in the torch-free CI
@@ -13,6 +13,22 @@ healthy, and the tests never execute. Nothing else in the suite notices.
 **Documented identifiers.** The README and the documentation pages name
 modules and functions. A rename leaves the prose pointing at something that
 no longer exists, and no test would fail.
+
+**Documented import paths.** The identifier check above matches modules by
+*basename*, so it survives - and therefore cannot catch - a module moving
+between packages. Since python_scripts/ is a tree of packages, a wrong
+`KratosMultiphysics.PhysicsNeMoApplication.<path>` is the likeliest stale
+reference there is, and the `"kratos_module"`/`"python_module"` pair that
+`ProjectParameters.json` uses to build a process is a path too: naming the
+wrong package there fails at run time, in a user's case, not here.
+
+**Cross-module attribute access.** Resolving an import proves the module is
+importable, not that the name you then reach for is still in it - so
+*splitting* a module moves names without breaking a single import statement,
+and every caller keeps importing successfully and fails at the attribute.
+That is not hypothetical: it is what splitting the streaming process out of
+`streaming_dataset` did to its own test, which the torch-free CI would never
+have run.
 
 **The benchmark.** `benchmarks/benchmark_bridges.py` is executed by nothing
 - not CMake, not this suite, not CI - while the README cites its result to
@@ -43,6 +59,8 @@ _DOCS_DIR = (_APP_DIR.parent.parent / "docs" / "pages" / "Applications"
              / "PhysicsNeMo_Application")
 
 _RUNNERS = ("test_PhysicsNeMoApplication.py", "test_PhysicsNeMoApplication_mpi.py")
+
+_PACKAGE = "KratosMultiphysics.PhysicsNeMoApplication"
 
 # tokens ending in one of these are file names, not attribute references:
 # `graph_bridge.py` must not be read as module graph_bridge, attribute py
@@ -126,6 +144,81 @@ def _DocumentationFiles():
     return [f for f in files if f.is_file()]
 
 
+def _TopLevelNames(path):
+    """Every top-level name a module binds, not only the public ones."""
+    tree = _ParseFile(path)
+    if tree is None:
+        return set()
+    names = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            names |= {target.id for target in node.targets
+                      if isinstance(target, ast.Name)}
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names |= {alias.asname or alias.name.split(".")[0] for alias in node.names}
+    return names
+
+
+def _ResolveDottedPath(dotted):
+    """Maps a path below the application package onto the real tree.
+
+    Returns (kind, path, leftover) where kind is "package", "module" or None
+    and leftover is whatever the tree could not account for - attributes of a
+    module, or a path that does not exist at all.
+    """
+    parts = [part for part in dotted.split(".") if part]
+    current, kind, path = _SCRIPTS_DIR, "package", _SCRIPTS_DIR
+    for index, part in enumerate(parts):
+        if (current / part).is_dir():
+            current = path = current / part
+            kind = "package"
+            continue
+        if (current / f"{part}.py").is_file():
+            path = current / f"{part}.py"
+            return "module", path, parts[index + 1:]
+        return None, path, parts[index:]
+    return kind, path, []
+
+
+def _ReferenceFiles():
+    """Everything that can name a module path: prose, notebooks and code."""
+    patterns = ("README.md", "python_scripts/README.md", "python_scripts/**/*.py",
+                "tests/**/*.py", "examples/notebooks/*.ipynb", "benchmarks/*.py")
+    files = []
+    for pattern in patterns:
+        files += [Path(p) for p in glob.glob(str(_APP_DIR / pattern), recursive=True)]
+    files += [Path(p) for p in glob.glob(str(_DOCS_DIR / "**" / "*.md"), recursive=True)]
+    return [f for f in files if f.is_file() and "__pycache__" not in f.parts]
+
+
+def _ApplicationSourceFiles():
+    """Everything that imports the application: sources, tests, benchmarks."""
+    files = []
+    for pattern in ("python_scripts/**/*.py", "tests/**/*.py", "benchmarks/*.py"):
+        files += [Path(p) for p in glob.glob(str(_APP_DIR / pattern), recursive=True)]
+    return [f for f in files if f.is_file() and "__pycache__" not in f.parts]
+
+
+def _ImportedModuleAliases(tree):
+    """{local name: module file} for modules imported out of the application."""
+    aliases = {}
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.ImportFrom) and node.module
+                and node.module.startswith(_PACKAGE)):
+            continue
+        dotted = node.module[len(_PACKAGE):].lstrip(".")
+        for alias in node.names:
+            kind, path, leftover = _ResolveDottedPath(
+                f"{dotted}.{alias.name}" if dotted else alias.name)
+            if kind == "module" and not leftover:
+                aliases[alias.asname or alias.name] = path
+    return aliases
+
+
 class TestSuiteRegistration(KratosUnittest.TestCase):
 
     def test_EveryTestCaseClassIsRegisteredInASuite(self):
@@ -179,6 +272,138 @@ class TestDocumentedIdentifiersExist(KratosUnittest.TestCase):
             module_hits or attribute_hits,
             "no documented references were resolved at all, so this guard "
             "passed without checking anything")
+
+
+class TestDocumentedImportPathsResolve(KratosUnittest.TestCase):
+    """Every written-down module path must exist in the tree.
+
+    `TestDocumentedIdentifiersExist` matches modules by basename, so moving
+    one between packages leaves it green while every documented import breaks.
+    This resolves the *path*, which is the thing the reorganisation can get
+    wrong.
+    """
+
+    def test_EveryWrittenModulePathExists(self):
+        pattern = re.compile(rf"{re.escape(_PACKAGE)}((?:\.\w+)*)")
+
+        broken, resolved = [], 0
+        for document in _ReferenceFiles():
+            for match in pattern.finditer(document.read_text(errors="ignore")):
+                dotted = match.group(1).lstrip(".")
+                kind, _, leftover = _ResolveDottedPath(dotted)
+                resolved += 1
+                if kind is None:
+                    broken.append(f"{document.name}: {match.group(0)} "
+                                  f"(no '{leftover[0]}' there)")
+                elif kind == "package" and leftover:
+                    broken.append(f"{document.name}: {match.group(0)} "
+                                  f"(no module '{leftover[0]}' in that package)")
+
+        self.assertFalse(
+            broken,
+            "these module paths do not exist - a package moved without the "
+            "reference following it: " + ", ".join(sorted(set(broken))))
+        self.assertTrue(resolved > 100,
+                        f"only {resolved} paths seen; this guard is not "
+                        "actually reading the tree")
+
+    def test_EveryWrittenAttributePathExists(self):
+        """The tail of a path, when there is one, must be a real name."""
+        pattern = re.compile(rf"{re.escape(_PACKAGE)}((?:\.\w+)+)")
+
+        broken = []
+        for document in _ReferenceFiles():
+            for match in pattern.finditer(document.read_text(errors="ignore")):
+                kind, path, leftover = _ResolveDottedPath(match.group(1).lstrip("."))
+                if kind != "module" or not leftover:
+                    continue
+                if leftover[0] not in _TopLevelNames(path):
+                    broken.append(f"{document.name}: {match.group(0)} "
+                                  f"('{path.name}' defines no '{leftover[0]}')")
+
+        self.assertFalse(
+            broken,
+            "these paths name something their module does not define: "
+            + ", ".join(sorted(set(broken))))
+
+    def test_EveryDocumentedProcessFactoryIsBuildable(self):
+        """`kratos_module` + `python_module` is a path too, and a fragile one.
+
+        Kratos builds a process by importing `<kratos_module>.<python_module>`
+        and calling its `Factory`. Getting the package wrong there fails in a
+        user's case, at run time, with nothing here to catch it - so the pair
+        is resolved and the target checked for the `Factory` that makes it
+        usable at all.
+        """
+        pair = re.compile(
+            r'"python_module"\s*:\s*"(\w+)"(?:(?!"python_module").)*?'
+            r'"kratos_module"\s*:\s*"([\w.]+)"'
+            r'|"kratos_module"\s*:\s*"([\w.]+)"(?:(?!"kratos_module").)*?'
+            r'"python_module"\s*:\s*"(\w+)"', re.DOTALL)
+
+        broken, checked = [], 0
+        for document in _ReferenceFiles():
+            for match in pair.finditer(document.read_text(errors="ignore")):
+                module = match.group(1) or match.group(4)
+                package = match.group(2) or match.group(3)
+                if not package.startswith(_PACKAGE):
+                    continue          # core and other applications are not ours
+                checked += 1
+                dotted = f"{package[len(_PACKAGE):].lstrip('.')}.{module}".lstrip(".")
+                kind, path, _ = _ResolveDottedPath(dotted)
+                if kind != "module":
+                    broken.append(f"{document.name}: \"{package}\" has no "
+                                  f"\"{module}\"")
+                elif "Factory" not in _TopLevelNames(path):
+                    broken.append(f"{document.name}: {path.name} defines no "
+                                  "Factory, so it cannot be built from "
+                                  "ProjectParameters")
+
+        self.assertFalse(
+            broken,
+            "these documented process declarations cannot be instantiated: "
+            + ", ".join(sorted(set(broken))))
+        self.assertTrue(checked, "no process declarations found to check")
+
+
+class TestCrossModuleAttributesExist(KratosUnittest.TestCase):
+    """`from ... import mod` then `mod.Name` - does mod still define Name?
+
+    Import resolution stops one step short of this, and that step is exactly
+    where splitting a module hurts: the names move, every import keeps
+    working, and the failure only appears when something calls the attribute.
+    In a suite whose ML tests skip without torch, that can be never.
+    """
+
+    def test_EveryAttributeOfAnImportedModuleIsDefined(self):
+        broken, checked = [], 0
+        for path in _ApplicationSourceFiles():
+            tree = _ParseFile(path)
+            if tree is None:
+                continue
+            aliases = _ImportedModuleAliases(tree)
+            if not aliases:
+                continue
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Attribute)
+                        and isinstance(node.value, ast.Name)):
+                    continue
+                target = aliases.get(node.value.id)
+                if target is None:
+                    continue
+                checked += 1
+                if node.attr not in _TopLevelNames(target):
+                    broken.append(
+                        f"{path.name}:{node.lineno}: {node.value.id}.{node.attr} "
+                        f"- {target.name} defines no \"{node.attr}\"")
+
+        self.assertFalse(
+            broken,
+            "these call a name their module does not define - moved to "
+            "another module? " + ", ".join(sorted(set(broken))))
+        self.assertTrue(checked > 100,
+                        f"only {checked} attribute accesses seen; this guard "
+                        "is not actually reading the sources")
 
 
 class TestBenchmarkStillRuns(KratosUnittest.TestCase):

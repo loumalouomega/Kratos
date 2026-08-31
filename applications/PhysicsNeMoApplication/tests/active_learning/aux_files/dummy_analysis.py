@@ -31,7 +31,7 @@ class DummyAnalysis:
         model_part.ProcessInfo[Kratos.TIME] = 1.0
 
         if self.parameters.Has("dataset_export"):
-            from KratosMultiphysics.PhysicsNeMoApplication.dataset_export_process import DatasetExportProcess
+            from KratosMultiphysics.PhysicsNeMoApplication.processes.export.dataset_export_process import DatasetExportProcess
             export = DatasetExportProcess(self.model, self.parameters["dataset_export"])
             export.ExecuteInitialize()
             export.ExecuteFinalizeSolutionStep()

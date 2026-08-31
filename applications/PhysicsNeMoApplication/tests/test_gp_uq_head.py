@@ -9,11 +9,10 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import inference_process
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-from KratosMultiphysics.PhysicsNeMoApplication import uncertainty_utils
-from KratosMultiphysics.PhysicsNeMoApplication import validation_metrics_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import uncertainty_utils
+from KratosMultiphysics.PhysicsNeMoApplication.processes import validation_metrics_process
 try:
     import torch
     have_torch = True

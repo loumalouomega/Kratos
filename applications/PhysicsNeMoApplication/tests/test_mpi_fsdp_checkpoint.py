@@ -18,8 +18,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
 try:
     import torch
     import torch.distributed as distributed
@@ -47,7 +46,7 @@ class TestMpiFsdpCheckpoint(KratosUnittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from torch.distributed.device_mesh import init_device_mesh
-        from KratosMultiphysics.PhysicsNeMoApplication import graph_partition_utils
+        from KratosMultiphysics.PhysicsNeMoApplication.distributed import graph_partition_utils
         cls.data_communicator = Kratos.Testing.GetDefaultDataCommunicator()
         if not distributed.is_initialized():
             # InitializeTorchProcessGroup uses setdefault for MASTER_PORT, so

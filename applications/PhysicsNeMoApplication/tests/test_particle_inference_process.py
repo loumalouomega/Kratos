@@ -6,8 +6,7 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import model_registry
-
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 try:
     import torch
     have_torch = True
@@ -48,8 +47,7 @@ class TestParticleInferenceProcess(KratosUnittest.TestCase):
         KratosUtilities.DeleteFileIfExisting(str(self.checkpoint))
 
     def _CreateProcess(self, extra=""):
-        from KratosMultiphysics.PhysicsNeMoApplication import particle_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import particle_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "Particles",
@@ -220,8 +218,7 @@ class TestMeshGraphNetParticles(KratosUnittest.TestCase):
 
     def test_RealMeshGraphNet(self):
         from physicsnemo.models.meshgraphnet import MeshGraphNet
-        from KratosMultiphysics.PhysicsNeMoApplication import particle_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import particle_inference_process
         torch.manual_seed(0)
         mgn = MeshGraphNet(
             input_dim_nodes=6, input_dim_edges=4, output_dim=3,
@@ -256,8 +253,7 @@ class TestMeshGraphNetParticles(KratosUnittest.TestCase):
     @KratosUnittest.skipUnless(have_cuda, "Requires a CUDA device.")
     def test_RealMeshGraphNetOnCuda(self):
         from physicsnemo.models.meshgraphnet import MeshGraphNet
-        from KratosMultiphysics.PhysicsNeMoApplication import particle_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import particle_inference_process
         # regression: the PyG graph rebuilt every step must follow the
         # model to its resolved device, or the CUDA forward pass fails with
         # a device-mismatch RuntimeError in scatter_add

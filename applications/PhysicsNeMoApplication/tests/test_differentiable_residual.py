@@ -10,10 +10,9 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as kratos_utils
 
-from KratosMultiphysics.PhysicsNeMoApplication import differentiable_residual
-from KratosMultiphysics.PhysicsNeMoApplication import solver_residuals
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.physics import differentiable_residual
+from KratosMultiphysics.PhysicsNeMoApplication.physics import solver_residuals
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
 try:
     import torch
     have_torch = True

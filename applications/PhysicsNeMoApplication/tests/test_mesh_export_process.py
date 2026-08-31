@@ -4,11 +4,10 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import mesh_export_process
-
+from KratosMultiphysics.PhysicsNeMoApplication.processes.export import mesh_export_process
 try:
     import physicsnemo.mesh
-    from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateMeshDataset
+    from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateMeshDataset
     have_physicsnemo = True
 except ImportError:
     have_physicsnemo = False
@@ -47,7 +46,7 @@ class TestMeshExportProcess(KratosUnittest.TestCase):
 
     def test_TheTessellationIsReusedAcrossExports(self):
         """Only the field data changes between steps of a static mesh."""
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
         process = self._Process()
         calls = []
@@ -90,8 +89,7 @@ class TestMeshExportProcess(KratosUnittest.TestCase):
             "the export wrote cached geometry after the nodes moved")
 
     def test_InvalidCurvedRefinementRaises(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import mesh_export_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.export import mesh_export_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name"          : "Main",

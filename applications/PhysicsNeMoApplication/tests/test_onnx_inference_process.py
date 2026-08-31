@@ -6,8 +6,8 @@ import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 import KratosMultiphysics.kratos_utilities as KratosUtilities
 
-from KratosMultiphysics.PhysicsNeMoApplication import onnx_bridge
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import onnx_utils
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
 from test_grid_bridge import CreateStructuredTetModelPart
 
 try:
@@ -49,11 +49,11 @@ class TestOnnxDeviceParsing(KratosUnittest.TestCase):
     index) is invisible on a single-GPU machine."""
 
     def test_ParsesCpuAndCuda(self):
-        self.assertEqual(onnx_bridge.ParseDevice("cpu"), (False, 0))
-        self.assertEqual(onnx_bridge.ParseDevice("cuda"), (True, 0))
-        self.assertEqual(onnx_bridge.ParseDevice("cuda:0"), (True, 0))
-        self.assertEqual(onnx_bridge.ParseDevice("cuda:3"), (True, 3))
-        self.assertEqual(onnx_bridge.ParseDevice("CUDA:2"), (True, 2))
+        self.assertEqual(onnx_utils.ParseDevice("cpu"), (False, 0))
+        self.assertEqual(onnx_utils.ParseDevice("cuda"), (True, 0))
+        self.assertEqual(onnx_utils.ParseDevice("cuda:0"), (True, 0))
+        self.assertEqual(onnx_utils.ParseDevice("cuda:3"), (True, 3))
+        self.assertEqual(onnx_utils.ParseDevice("CUDA:2"), (True, 2))
 
     def test_MalformedDeviceRejected(self):
         # previously "cuda:x" was accepted by a substring test and the index
@@ -61,7 +61,7 @@ class TestOnnxDeviceParsing(KratosUnittest.TestCase):
         for bad in ("cuda:", "cuda:x", "cuda-1", "cuda:1:2"):
             with self.subTest(device=bad):
                 with self.assertRaisesRegex(ValueError, "cuda:N"):
-                    onnx_bridge.ParseDevice(bad)
+                    onnx_utils.ParseDevice(bad)
 
 
 @KratosUnittest.skipUnless(have_torch and have_onnx_export and have_onnxruntime,
@@ -75,8 +75,7 @@ class TestOnnxExportAndSession(KratosUnittest.TestCase):
         KratosUtilities.DeleteFileIfExisting(str(self.onnx_file) + ".card.json")
 
     def test_ExportedModelMatchesTorch(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import onnx_bridge
-
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import onnx_utils
         torch.manual_seed(0)
         model = torch.nn.Sequential(
             torch.nn.Linear(4, 8), torch.nn.Tanh(), torch.nn.Linear(8, 2))
@@ -88,7 +87,7 @@ class TestOnnxExportAndSession(KratosUnittest.TestCase):
 
         with torch.no_grad():
             expected = model(sample).numpy()
-        session = onnx_bridge.CreateOrtSession(self.onnx_file, "cpu")
+        session = onnx_utils.CreateOrtSession(self.onnx_file, "cpu")
         (actual,) = session.run(None, {session.get_inputs()[0].name: sample.numpy()})
         self.assertLess(numpy.abs(expected - actual).max(), 1e-5)
 
@@ -120,8 +119,7 @@ class TestOnnxInferenceProcess(KratosUnittest.TestCase):
             model, torch.zeros(n_nodes, 1), self.onnx_file, card=card)
 
     def _CreateProcess(self, model_card_policy="advisory"):
-        from KratosMultiphysics.PhysicsNeMoApplication import onnx_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import onnx_inference_process
         settings = Kratos.Parameters("""{
             "Parameters": {
                 "model_part_name" : "Main",
@@ -208,14 +206,14 @@ class TestOnnxCudaFallbackIsReported(KratosUnittest.TestCase):
         # A device index that cannot exist: onnxruntime answers with a
         # perfectly working CPU session, which is the whole problem.
         with self.assertRaisesRegex(RuntimeError, "does not exist|onnxruntime-gpu"):
-            onnx_bridge.CreateOrtSession(self.onnx_file, "cuda:15", require_device=True)
+            onnx_utils.CreateOrtSession(self.onnx_file, "cuda:15", require_device=True)
 
     def test_WithoutRequireDeviceItFallsBackAndStillWorks(self):
-        session = onnx_bridge.CreateOrtSession(self.onnx_file, "cuda:15")
+        session = onnx_utils.CreateOrtSession(self.onnx_file, "cuda:15")
         self.assertIn("CPUExecutionProvider", session.get_providers())
         # the export fixes the batch dimension at 1
         name = session.get_inputs()[0].name
-        values = numpy.zeros((1, 3), dtype=onnx_bridge.NumpyDtypeForOrtInput(
+        values = numpy.zeros((1, 3), dtype=onnx_utils.NumpyDtypeForOrtInput(
             session.get_inputs()[0]))
         self.assertEqual(session.run(None, {name: values})[0].shape[0], 1)
 
@@ -245,18 +243,18 @@ class TestOnnxGpuInference(KratosUnittest.TestCase):
     def test_SessionActuallyUsesTheCudaProvider(self):
         # get_providers() reports what ORT INSTANTIATED, not what was asked
         # for - the only way to tell a GPU session from a silent CPU one.
-        session = onnx_bridge.CreateOrtSession(self.onnx_file, "cuda")
+        session = onnx_utils.CreateOrtSession(self.onnx_file, "cuda")
         self.assertEqual(session.get_providers()[0], "CUDAExecutionProvider")
 
     def test_RequireDeviceSucceedsOnAWorkingGpu(self):
-        session = onnx_bridge.CreateOrtSession(self.onnx_file, "cuda:0", require_device=True)
+        session = onnx_utils.CreateOrtSession(self.onnx_file, "cuda:0", require_device=True)
         self.assertEqual(session.get_providers()[0], "CUDAExecutionProvider")
 
     def test_GpuMatchesCpuNumerically(self):
-        gpu = onnx_bridge.CreateOrtSession(self.onnx_file, "cuda")
-        cpu = onnx_bridge.CreateOrtSession(self.onnx_file, "cpu")
+        gpu = onnx_utils.CreateOrtSession(self.onnx_file, "cuda")
+        cpu = onnx_utils.CreateOrtSession(self.onnx_file, "cpu")
         name = gpu.get_inputs()[0].name
-        dtype = onnx_bridge.NumpyDtypeForOrtInput(gpu.get_inputs()[0])
+        dtype = onnx_utils.NumpyDtypeForOrtInput(gpu.get_inputs()[0])
         values = numpy.random.default_rng(0).random((self.rows, 4)).astype(dtype)
         on_gpu = gpu.run(None, {name: values})[0]
         on_cpu = cpu.run(None, {name: values})[0]

@@ -1,8 +1,7 @@
 import KratosMultiphysics as Kratos
 import KratosMultiphysics.KratosUnittest as KratosUnittest
 
-from KratosMultiphysics.PhysicsNeMoApplication import distributed_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
 try:
     from physicsnemo.distributed.manager import DistributedManager
     have_physicsnemo = True
@@ -68,7 +67,7 @@ class TestGeometryNameMap(KratosUnittest.TestCase):
     """The shadow-reconstruction name maps must stay valid and complete."""
 
     def test_ElementMapCoversAllTessellationTypes(self):
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import tessellation
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import tessellation
 
         missing = tessellation.GetSupportedGeometryTypes() - set(
             distributed_utils._ELEMENT_NAME_BY_GEOMETRY)
@@ -81,7 +80,7 @@ class TestGeometryNameMap(KratosUnittest.TestCase):
         for i in range(1, 40):
             model_part.CreateNewNode(i, 0.01 * i, 0.001 * i * i, 0.1 * (i % 7))
 
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge.tessellation import _CORNER_COUNT
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge.tessellation import _CORNER_COUNT
         entity_id = 0
         for geometry_type, name in distributed_utils._ELEMENT_NAME_BY_GEOMETRY.items():
             entity_id += 1

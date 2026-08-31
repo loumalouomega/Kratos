@@ -81,7 +81,7 @@ class _FakeScalingFactors:
 def _MakeBareProcess(**attributes):
     """A DominoInferenceProcess with only the de-normalization attributes set,
     bypassing __init__ (which needs a Model and a mesh)."""
-    from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
+    from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
     process = domino_inference_process.DominoInferenceProcess.__new__(
         domino_inference_process.DominoInferenceProcess)
     process._scaling = _FakeScalingFactors()
@@ -163,8 +163,8 @@ class TestDominoSurfaceScatter(KratosUnittest.TestCase):
         KratosUtilities.DeleteDirectoryIfExisting(str(self.scratch))
 
     def test_TriangleValuesCollapseToParentConditions(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
         process = domino_inference_process.Factory(
             _ProcessSettings(self.scratch), self.model)
@@ -187,8 +187,8 @@ class TestDominoSurfaceScatter(KratosUnittest.TestCase):
         It is the most expensive per-entity path in benchmark_bridges.py, and
         this process used to rebuild it on every ExecuteFinalizeSolutionStep.
         """
-        from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
         process = domino_inference_process.Factory(
             _ProcessSettings(self.scratch), self.model)
@@ -222,8 +222,8 @@ class TestDominoSurfaceScatter(KratosUnittest.TestCase):
 
     def test_ChangedTopologyRebuildsTheProvenanceMap(self):
         """AdaptiveRemeshProcess ships here, so the mesh can change mid-run."""
-        from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
-        from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
         process = domino_inference_process.Factory(
             _ProcessSettings(self.scratch), self.model)
@@ -254,8 +254,7 @@ class TestDominoSurfaceScatter(KratosUnittest.TestCase):
                 condition.GetValue(Kratos.TEMPERATURE), float(condition.Id), places=12)
 
     def test_ValidationErrors(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
         settings = _ProcessSettings(self.scratch)
         settings["Parameters"]["bounding_box"].SetVector(Kratos.Vector())
         with self.assertRaisesRegex(ValueError, "bounding_box"):
@@ -326,8 +325,7 @@ class TestDominoThroughProcess(KratosUnittest.TestCase):
         normalization off, once on - and asserts the closed-form relation
         between them, so removing either call fails.
         """
-        from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
         class OneChannelFactors:
             max_val = {"surface_fields": numpy.array([3.0])}
             min_val = {"surface_fields": numpy.array([-1.0])}
@@ -358,8 +356,7 @@ class TestDominoThroughProcess(KratosUnittest.TestCase):
         self.assertGreater(numpy.abs(denormalized - raw).max(), 1e-6)
 
     def test_SurfaceInferenceEndToEnd(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
-
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
         self._SaveTinyDomino()
         process = domino_inference_process.Factory(
             _ProcessSettings(self.scratch, self.checkpoint), self.model)
@@ -389,7 +386,7 @@ class TestDominoRealCheckpointDenormalization(KratosUnittest.TestCase):
     """
 
     def setUp(self):
-        from KratosMultiphysics.PhysicsNeMoApplication import domino_inference_process
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino_inference_process
         self.process = domino_inference_process.DominoInferenceProcess.__new__(
             domino_inference_process.DominoInferenceProcess)
         self.process._scaling = None
