@@ -41,7 +41,7 @@ torch/physicsnemo. Graph extraction itself needs neither.
 ```json
 {
     "python_module" : "graph_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "model_settings"  : {

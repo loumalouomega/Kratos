@@ -16,8 +16,8 @@ CorrDiff-style downscaling with `physicsnemo.diffusion`: a denoiser learns the d
 
 ```python
 from physicsnemo.diffusion.preconditioners import EDMPrecondSuperResolution
-from KratosMultiphysics.PhysicsNeMoApplication import diffusion_utils, training_utils
-from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateGridPairDataset
+from KratosMultiphysics.PhysicsNeMoApplication.training import diffusion_utils, training_utils
+from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateGridPairDataset
 
 model = EDMPrecondSuperResolution(
     img_resolution=64, img_in_channels=1, img_out_channels=1,
@@ -36,7 +36,7 @@ Settings additionally expose the EDM noise schedule (`P_mean`, `P_std`, `sigma_d
 ```json
 {
     "python_module" : "diffusion_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name"        : "CoarsePart",
         "output_model_part_name" : "FinePart",

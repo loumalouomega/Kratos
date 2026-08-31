@@ -17,7 +17,7 @@ world size, or data ends up exchanged between the wrong processes.
 consistently with the Kratos side:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication.distributed_utils import InitializeDistributedManager
+from KratosMultiphysics.PhysicsNeMoApplication.distributed.distributed_utils import InitializeDistributedManager
 
 manager = InitializeDistributedManager()      # backend defaults to "gloo"; pass "nccl" for GPU jobs
 print(manager.rank, manager.world_size, manager.device)
@@ -42,7 +42,7 @@ Manual verification on a workstation (CPU, two ranks):
 ```bash
 mpiexec -n 2 python3 -c "
 import KratosMultiphysics
-from KratosMultiphysics.PhysicsNeMoApplication.distributed_utils import InitializeDistributedManager
+from KratosMultiphysics.PhysicsNeMoApplication.distributed.distributed_utils import InitializeDistributedManager
 m = InitializeDistributedManager(backend='gloo')
 print('rank', m.rank, 'of', m.world_size)"
 ```
@@ -65,8 +65,7 @@ harvesting are rank-count-agnostic. Serial runs are untouched.
 The underlying helper is public:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import distributed_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
 ids, values = distributed_utils.GatherFieldToRank0(model_part, "VELOCITY", "node_historical")
 # rank 0: (n_global,) int64 ids ascending + (n_global, *entity_shape) float64
 # other ranks: (None, None)

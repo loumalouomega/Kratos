@@ -19,8 +19,7 @@ Numpy format = `RightBasisMatrix.npy` (Φ, `(n_nodes·n_unknowns, n_modes)`) + `
 `rom_bridge` mirrors the producer's own `VariableUtils.Get/SetSolutionStepValuesVector` calls, so orderings match by construction — scalars (`TEMPERATURE`) and components (`DISPLACEMENT_X`) alike:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import rom_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import rom_bridge
 basis = rom_bridge.LoadRomBasis("rom_data")            # RomBasis dataclass
 u = rom_bridge.GatherUnknownsVector(model_part, basis) # (n_dofs,) in basis row order
 q = rom_bridge.ProjectToReducedSpace(basis, u)         # Φᵀ u  (accepts (n_dofs, T) series too)
@@ -35,7 +34,7 @@ The json-format variant (`nodal_modes` inside the json) is not consumed — rege
 ```json
 {
     "python_module" : "rom_surrogate_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name"  : "ThermalModelPart",
         "rom_basis_folder" : "rom_data",
@@ -56,8 +55,7 @@ The parameters travel as ordinary input fields (any constant nodal carrier), MEA
 `rom_temporal` pairs the POD reduction with physicsnemo's decoder-only temporal transformer (`Sequence_Model` from `physicsnemo.models.mesh_reduced`): the basis is the encoder, attention learns the dynamics of `q(t)`:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import rom_temporal
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import rom_temporal
 model = rom_temporal.CreateSequenceModel(Kratos.Parameters("""{ "input_dim": 8 }"""))  # n_modes
 dataset = rom_temporal.CreateRomTrajectoryDataset(q_trajectories, contexts)   # (S, T, M) [+ (S, C)]
 rom_temporal.TrainRomTemporalModel(model, dataset, Kratos.Parameters("""{ "epochs": 500 }"""))

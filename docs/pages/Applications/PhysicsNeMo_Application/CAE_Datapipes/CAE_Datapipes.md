@@ -15,7 +15,7 @@ physicsnemo's large aerodynamic models come with config-driven datapipes (`physi
 ```json
 {
     "python_module" : "cae_dataset_export_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.export",
     "Parameters"    : {
         "model_part_name"         : "FluidModelPart",
         "surface_model_part_name" : "FluidModelPart.Body",
@@ -57,7 +57,7 @@ physicsnemo's large aerodynamic models come with config-driven datapipes (`physi
 `torch_dataset` provides lazy factories plus the per-pipe minimal key sets as constants (`DOMINO_SURFACE_KEYS`, `DOMINO_VOLUME_KEYS`, `TRANSOLVER_SURFACE_KEYS`, `TRANSOLVER_VOLUME_KEYS`):
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import (
+from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import (
     CreateDoMINODataPipe, CreateTransolverDataPipe, CreateCaeDataset)
 
 pipe = CreateDoMINODataPipe(
@@ -83,7 +83,7 @@ DoMINO consumes DoMINODataPipe's preprocessed sample dict (geometry encodings, S
 ```json
 {
     "python_module" : "domino_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "volume_model_part_name"  : "Main",
         "surface_model_part_name" : "Main.Skin",

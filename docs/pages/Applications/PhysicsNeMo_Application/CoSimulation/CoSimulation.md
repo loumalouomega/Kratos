@@ -15,7 +15,7 @@ Reference the wrapper in the co-simulation `ProjectParameters` by **full module 
 ```json
 "solvers" : {
     "structure_surrogate" : {
-        "type" : "KratosMultiphysics.PhysicsNeMoApplication.cosim_surrogate_solver_wrapper",
+        "type" : "KratosMultiphysics.PhysicsNeMoApplication.deployment.cosim_surrogate_solver_wrapper",
         "solver_wrapper_settings" : {
             "mdpa_file"       : "surrogate_interface",
             "time_step"       : 0.0,
@@ -59,7 +59,7 @@ By default the wrapper is serial — it takes the rank-zero data communicator, l
 
 ```json
 "surrogate" : {
-    "type" : "KratosMultiphysics.PhysicsNeMoApplication.cosim_surrogate_solver_wrapper",
+    "type" : "KratosMultiphysics.PhysicsNeMoApplication.deployment.cosim_surrogate_solver_wrapper",
     "mpi_settings" : {
         "num_processes"          : 2,
         "data_communicator_name" : "surrogate_group"

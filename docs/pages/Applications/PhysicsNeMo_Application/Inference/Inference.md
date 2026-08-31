@@ -59,7 +59,7 @@ Two opt-in `model_settings` keys tune deployed-model performance and profiling:
 ```json
 {
     "python_module" : "onnx_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "model_settings"  : {
@@ -96,7 +96,7 @@ Runs a model every `output_interval` steps at a configurable execution point, wr
 ```json
 {
     "python_module" : "inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "model_settings"  : {
@@ -132,7 +132,7 @@ output fields are scattered back onto the same model part:
 ```json
 {
     "python_module" : "grid_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name" : "ThermalModelPart",
         "model_settings"  : { "checkpoint_file" : "fno.mdlus", "checkpoint_type" : "physicsnemo" },
@@ -162,7 +162,7 @@ first `K−1` sampled steps it only warms up (logged, nothing written).
 ```json
 {
     "python_module" : "time_series_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name" : "ThermalModelPart",
         "model_settings"  : { "checkpoint_file" : "step_predictor.pt" },
@@ -183,7 +183,7 @@ first `K−1` sampled steps it only warms up (logged, nothing written).
 ```json
 {
     "python_module" : "validation_metrics_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes",
     "Parameters"    : {
         "model_part_name"     : "FluidModelPart",
         "list_of_comparisons" : [{
@@ -210,8 +210,7 @@ Supported metrics: `mse`, `rmse` (from `physicsnemo.metrics.general.mse`), `max_
 **Hybrid initialization**: `CreateFlowfield(model_part, settings)` maps nodal Kratos variables onto a `physicsnemo.cfd` `Flowfield` (`velocity_variable`/`pressure_variable`/`k_variable`/`omega_variable`; unset slots become zero arrays since the blend reads all four fields), `CreateHybridInitialization(flowfield_a, flowfield_b, settings)` blends them (`blend_strategy`: `"constant"` with `constant_weight`, the only strategy valid for point-located data; `"from_field_a_k"`, upstream's turbulence-threshold default for cell-located data; or any Python callable `(a, b) -> weight array`), and `FlowfieldToModelPart(blended, model_part, provenance, {"p": "PRESSURE", "U": "VELOCITY"})` writes the result back onto the nodes:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import cfd_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import cfd_bridge
 settings = Kratos.Parameters('{"velocity_variable": "VELOCITY", "pressure_variable": "PRESSURE"}')
 ml_field, provenance = cfd_bridge.CreateFlowfield(prediction_part, settings.Clone())
 ref_field, _ = cfd_bridge.CreateFlowfield(reference_part, settings.Clone())

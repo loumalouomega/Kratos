@@ -14,8 +14,7 @@ The tensor bridge connects `ModelPart` data with `torch.Tensor`s, built on the c
 
 ```python
 import KratosMultiphysics as Kratos
-from KratosMultiphysics.PhysicsNeMoApplication import torch_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
 ta = Kratos.TensorAdaptors.HistoricalVariableTensorAdaptor(model_part.Nodes, Kratos.VELOCITY)
 ta.CollectData()
 tensor = torch_bridge.KratosTensorToTorch(ta)   # zero-copy view of the staging buffer
@@ -34,7 +33,7 @@ The `GetTensorAdaptor` factory (`utilities/tensor_adaptor_dataset_utils.py`) bui
 ```json
 {
     "python_module" : "dataset_export_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.export",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "list_of_fields"  : [
@@ -54,7 +53,7 @@ The export has no ML dependency at all — it runs on any Kratos installation.
 `CreateNpzDataset` wraps an export directory as a `torch.utils.data.Dataset`, using the same per-entity `(n, width)` concatenated layout that `InferenceProcess` feeds to models:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateNpzDataset
+from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateNpzDataset
 
 dataset = CreateNpzDataset("training_data",
                            input_keys=["VELOCITY__node_historical"],

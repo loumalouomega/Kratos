@@ -17,7 +17,7 @@ physicsnemo's RNN pattern (`One2ManyRNN` / `Seq2SeqRNN`, the 2D Navier–Stokes 
 ```json
 {
     "python_module" : "grid_dataset_export_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.export",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "list_of_fields"  : [ { "variable_name" : "VELOCITY", "data_location" : "node_historical" } ],
@@ -33,9 +33,8 @@ physicsnemo's RNN pattern (`One2ManyRNN` / `Seq2SeqRNN`, the 2D Navier–Stokes 
 
 ```python
 from physicsnemo.models.rnn.rnn_one2many import One2ManyRNN
-from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateGridSequenceDataset
-from KratosMultiphysics.PhysicsNeMoApplication import training_utils
-
+from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateGridSequenceDataset
+from KratosMultiphysics.PhysicsNeMoApplication.training import training_utils
 dataset = CreateGridSequenceDataset("grid_series", nr_tsteps=8, squeeze_axis=2)
 model = One2ManyRNN(input_channels=2, dimension=2, nr_tsteps=8)
 training_utils.TrainModel(model, dataset, Kratos.Parameters("""{ "epochs": 200 }"""))

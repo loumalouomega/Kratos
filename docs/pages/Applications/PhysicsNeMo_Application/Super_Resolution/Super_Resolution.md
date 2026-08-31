@@ -37,7 +37,7 @@ Channel convention: fields are flattened per node and concatenated — the same 
 ```json
 {
     "python_module" : "superresolution_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "coarse_model_part_name" : "CoarseFluid",
         "fine_model_part_name"   : "FineFluid",

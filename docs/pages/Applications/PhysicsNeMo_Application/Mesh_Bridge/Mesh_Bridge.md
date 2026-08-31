@@ -48,7 +48,7 @@ Known limitations (documented and tested, by design):
 ## Round trip
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
 
 provenance = domain_mesh_builder.BuildProvenance(model_part)          # numpy only, no ML deps
 mesh, provenance = domain_mesh_builder.BuildMesh(                     # physicsnemo.mesh.Mesh
@@ -87,7 +87,7 @@ Each boundary is tessellated from the sub-model-part's Conditions container (fal
 ```json
 {
     "python_module" : "mesh_export_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.export",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "list_of_fields"  : [ { "variable_name" : "VELOCITY", "data_location" : "node_historical" } ],
@@ -104,7 +104,7 @@ the file is written with the exact serial layout — see the Distributed page.
 Training then goes through physicsnemo's own mesh datapipe:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateMeshDataset
+from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateMeshDataset
 
 dataset = CreateMeshDataset("mesh_series")           # MeshDataset(MeshReader(...))
 mesh, metadata = dataset[0]                           # physicsnemo.mesh.Mesh per sample
@@ -117,8 +117,7 @@ mesh, metadata = dataset[0]                           # physicsnemo.mesh.Mesh pe
 [physicsnemo-curator](https://github.com/NVIDIA/physicsnemo-curator) builds AI-ready datasets as `Source → Filter → Sink` pipelines. `curator_bridge` supplies the **source** side — the sinks ship upstream — so a Kratos solve becomes a curator data source:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import curator_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import curator_bridge
 source = curator_bridge.CreateKratosMeshSource(
     [model_part_a, model_part_b],                       # or (callable, count), evaluated lazily
     field_specs=[(Kratos.PRESSURE, "node_historical")],
@@ -134,7 +133,7 @@ For an in-loop export, `CuratorExportProcess` is the curator counterpart of `Mes
 ```json
 {
     "python_module" : "curator_export_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.export",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "list_of_fields"  : [ { "variable_name" : "PRESSURE", "data_location" : "node_historical" } ],
@@ -161,8 +160,7 @@ runs — `mapping_bridge` transfers fields through MappingApplication's mappers
 instead of FE interpolation:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import mapping_bridge
-
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import mapping_bridge
 grid_part = mapping_bridge.CreateBackgroundGridModelPart(
     model, "MLGrid", bounding_box, divisions=31,
     historical_variables=[Kratos.VELOCITY])

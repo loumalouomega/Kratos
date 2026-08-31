@@ -28,8 +28,8 @@ per-epoch loss history:
 | `seed` | -1 | `torch.manual_seed` when >= 0 |
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication.training_utils import TrainModel, SaveTrainedModel
-from KratosMultiphysics.PhysicsNeMoApplication.torch_dataset import CreateNpzDataset
+from KratosMultiphysics.PhysicsNeMoApplication.training.training_utils import TrainModel, SaveTrainedModel
+from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateNpzDataset
 
 dataset = CreateNpzDataset("training_data", input_keys=[...], output_keys=[...])
 history = TrainModel(model, dataset, Kratos.Parameters('{"epochs": 300, "seed": 0}'))
@@ -55,8 +55,7 @@ alongside.
 `TrainModel(..., epoch_callbacks=[...])` invokes plain-Python callables `cb(epoch, model, history)` after every epoch, with the model in eval mode inside `no_grad`. The canonical use is the **solver-residual monitor**: run the model on a held-out case, write the prediction into the case's model part, and log the real PDE residual:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import solver_residuals
-
+from KratosMultiphysics.PhysicsNeMoApplication.physics import solver_residuals
 evaluator = solver_residuals.BuildResidualEvaluator(held_out_model_part)
 
 def residual_monitor(epoch, model, history):
@@ -194,8 +193,8 @@ feeds active learning, which consumes the same keys.
 
 ```json
 {
-    "python_module" : "streaming_dataset",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "python_module" : "streaming_dataset_export_process",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.export",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "list_of_fields"  : [ { "variable_name" : "VELOCITY", "data_location" : "node_historical" } ],

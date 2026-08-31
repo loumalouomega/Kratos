@@ -13,7 +13,7 @@ Point-cloud transformers consume per-point features plus coordinates as `(1, N, 
 ```json
 {
     "python_module" : "point_cloud_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name" : "FluidModelPart",
         "model_interface" : "transolver",
@@ -59,8 +59,7 @@ Both heavy aerodynamic families are now covered: **FIGConvNet deploys in-loop** 
 **Predictor-corrector** is NVIDIA's own recipe, `Y_finetuned = Y_predictor + Y_corrector`: the pretrained checkpoint is the frozen predictor and a trainable network learns its error. It is worth being precise about what this is upstream and what it is here. Upstream's corrector is *a second full DoMINO* (~10 M parameters) trained on `ground_truth - base_prediction`; its lightness is in how fast it converges, not in its size, and at full mesh resolution it needs far more memory than a single consumer GPU has. What ships here is the same decomposition with a small residual head.
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import domino_finetune
-
+from KratosMultiphysics.PhysicsNeMoApplication.training import domino_finetune
 cached = domino_finetune.CacheBasePredictions(predictor, batches, device)
 corrector = domino_finetune.CreateCorrector(n_features, n_outputs)
 history = domino_finetune.TrainCorrector(corrector, features, residuals)

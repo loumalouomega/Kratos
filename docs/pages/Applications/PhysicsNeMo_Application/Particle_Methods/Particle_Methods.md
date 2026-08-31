@@ -19,7 +19,7 @@ Particle methods (`MPMApplication`, `SPHApplication`, `DEMApplication`, `PfemFlu
 ```json
 {
     "python_module" : "particle_inference_process",
-    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
     "Parameters"    : {
         "model_part_name" : "Particles",
         "model_settings"  : { "checkpoint_file" : "l2s.mdlus", "checkpoint_type" : "physicsnemo" },

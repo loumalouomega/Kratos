@@ -78,8 +78,7 @@ Common settings: `"max_samples"` and `"candidate_pool_size"`. `SelectTopCandidat
 `solver_residuals.BuildResidualEvaluator(model_part)` assembles the **actual PDE residual** of whatever state the model part currently holds, through the same scheme/builder-and-solver machinery a solve would use (`BuildRHS` with fixed-DOF rows zeroed). Write the surrogate's prediction into the unknown variable, then:
 
 ```python
-from KratosMultiphysics.PhysicsNeMoApplication import solver_residuals
-
+from KratosMultiphysics.PhysicsNeMoApplication.physics import solver_residuals
 evaluator = solver_residuals.BuildResidualEvaluator(model_part)  # after solver Initialize / a solve
 norm = evaluator.ComputeResidualNorm()          # scalar score
 per_dof = evaluator.ComputeNodalResiduals()     # {(node_id, variable): |r|}
