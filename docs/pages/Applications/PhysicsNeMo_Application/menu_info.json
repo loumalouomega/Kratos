@@ -20,6 +20,7 @@
         "Point_Clouds",
         "CAE_Datapipes",
         "Reduced_Order_Models",
+        "Adjoint",
         "Diffusion",
         "Uncertainty",
         "Physics_Informed",
