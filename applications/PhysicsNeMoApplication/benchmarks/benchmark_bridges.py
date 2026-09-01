@@ -27,10 +27,13 @@ import time
 import numpy
 
 import KratosMultiphysics as Kratos
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import graph_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import particle_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import rom_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.distributed import distributed_utils
 from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import domain_mesh_builder
+from KratosMultiphysics.PhysicsNeMoApplication.utilities import array_backend_utils
 
 _HEX_CORNERS = ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0),
                 (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1))
@@ -91,7 +94,23 @@ def main():
                         help="lattice points per axis for the grid-sampling case (default 64)")
     parser.add_argument("--repeat", type=int, default=3,
                         help="repetitions per case; the median is reported (default 3)")
+    parser.add_argument("--backend", choices=("numpy", "cupy", "both"), default="numpy",
+                        help="array backend for the paths that accept one; \"both\" times "
+                             "each backend and reports the speedup (default numpy)")
     arguments = parser.parse_args()
+
+    backends = ("numpy", "cupy") if arguments.backend == "both" else (arguments.backend,)
+    if "cupy" in backends:
+        if not array_backend_utils.IsCuPyAvailable():
+            print("cupy was requested but no CUDA device answered; "
+                  "the cupy column will repeat the numpy path.\n", flush=True)
+        else:
+            # Create the CUDA context and prime the allocator up front. The
+            # first device touch in a process costs ~100 ms, and letting it
+            # land inside a timed case understates that case by ~2x.
+            import cupy
+            cupy.asarray(numpy.zeros(1024)).sum()
+            cupy.cuda.Stream.null.synchronize()
 
     model = Kratos.Model()
     print(f"building structured meshes (divisions = {arguments.divisions}) ...", flush=True)
@@ -105,7 +124,41 @@ def main():
     rows = []
 
     def record(name, entity_count, seconds):
-        rows.append((name, entity_count, seconds))
+        rows.append((name, entity_count, seconds, None))
+
+    def record_per_backend(name, entity_count, call):
+        """Times a backend-accepting path once per requested backend.
+
+        The thresholds that keep small problems on the CPU are dropped for
+        the duration, so a "cupy" column is really the device path rather
+        than numpy wearing its name.
+        """
+        timings = {}
+        saved = array_backend_utils.DEFAULT_SIZE_THRESHOLD
+        saved_rom = rom_bridge._GPU_BASIS_THRESHOLD
+        array_backend_utils.DEFAULT_SIZE_THRESHOLD = 0
+        rom_bridge._GPU_BASIS_THRESHOLD = 0
+        try:
+            for backend in backends:
+                # CuPy kernels are asynchronous: without the synchronize the
+                # timer would measure the launch, not the work.
+                if backend == "cupy" and array_backend_utils.IsCuPyAvailable():
+                    import cupy
+
+                    def timed(backend=backend):
+                        result = call(backend)
+                        cupy.cuda.Stream.null.synchronize()
+                        return result
+                else:
+                    def timed(backend=backend):
+                        return call(backend)
+                timed()  # warm up: kernel load, basis upload
+                timings[backend], _ = _Time(timed, arguments.repeat)
+        finally:
+            array_backend_utils.DEFAULT_SIZE_THRESHOLD = saved
+            rom_bridge._GPU_BASIS_THRESHOLD = saved_rom
+        rows.append((name, entity_count, timings[backends[0]],
+                     timings.get("cupy") if len(backends) > 1 else None))
 
     # --- tessellation + provenance ------------------------------------------
     seconds, tet_provenance = _Time(lambda: domain_mesh_builder.BuildProvenance(tet_part),
@@ -142,18 +195,34 @@ def main():
         arguments.repeat)
     record("ScatterFieldBack element", n_tets, seconds)
 
+    # --- graph edge features (recomputed every step on a deforming mesh) ----
+    _, edge_index, _, _ = graph_bridge.BuildGraph(tet_part)
+    record_per_backend(
+        "ComputeEdgeFeatures", edge_index.shape[1],
+        lambda backend: graph_bridge.ComputeEdgeFeatures(tet_part, edge_index, backend=backend))
+
     # --- grid sampling + scatter --------------------------------------------
     grid_shape = (arguments.grid,) * 3
-    seconds, (grid, bounding_box) = _Time(
-        lambda: grid_bridge.SampleFieldsOnGrid(
-            tet_part, [("PRESSURE", "node_historical")], grid_shape),
-        arguments.repeat)
-    record(f"SampleFieldsOnGrid {arguments.grid}^3", int(numpy.prod(grid_shape)), seconds)
-    seconds, _ = _Time(
-        lambda: grid_bridge.ScatterGridToNodes(
-            grid, bounding_box, tet_part, [("TEMPERATURE", "node_historical")]),
-        arguments.repeat)
-    record("ScatterGridToNodes", n_nodes, seconds)
+    grid = bounding_box = None
+    try:
+        seconds, (grid, bounding_box) = _Time(
+            lambda: grid_bridge.SampleFieldsOnGrid(
+                tet_part, [("PRESSURE", "node_historical")], grid_shape),
+            arguments.repeat)
+        record(f"SampleFieldsOnGrid {arguments.grid}^3", int(numpy.prod(grid_shape)), seconds)
+    except TypeError as error:
+        # The vectorized locator is a compiled-core entry point, and its
+        # signature has drifted across core builds. Skipping the case keeps
+        # every other measurement in this run rather than losing the lot.
+        print(f"  skipping SampleFieldsOnGrid: {error.__class__.__name__} from "
+              f"BinBasedFastPointLocator3D.VectorizedFind (core build mismatch)\n", flush=True)
+
+    if grid is not None:
+        record_per_backend(
+            "ScatterGridToNodes", n_nodes,
+            lambda backend: grid_bridge.ScatterGridToNodes(
+                grid, bounding_box, tet_part, [("TEMPERATURE", "node_historical")],
+                backend=backend))
 
     # --- ROM gather/scatter (VariableUtils-backed) --------------------------
     basis = rom_bridge.RomBasis(
@@ -168,16 +237,44 @@ def main():
         lambda: rom_bridge.ScatterUnknownsVector(tet_part, basis, unknowns), arguments.repeat)
     record("ROM ScatterUnknownsVector", n_nodes, seconds)
 
+    # --- ROM projection (the dense basis GEMV, where the GPU pays) ----------
+    dense_basis = rom_bridge.RomBasis(
+        phi=numpy.random.default_rng(2).standard_normal((n_nodes, 64)),
+        node_ids=numpy.array(node_ids, dtype=numpy.int64),
+        nodal_unknowns=("PRESSURE",),
+        singular_values=None)
+    snapshot = numpy.random.default_rng(3).standard_normal(n_nodes)
+    record_per_backend(
+        f"ROM ProjectToReducedSpace ({n_nodes}x64)", n_nodes,
+        lambda backend: rom_bridge.ProjectToReducedSpace(dense_basis, snapshot, backend=backend))
+
+    # --- particle proximity graph (the quadratic path) ----------------------
+    particle_positions = numpy.random.default_rng(4).random((2000, 3))
+    record_per_backend(
+        "BuildParticleGraph radius (N=2000)", 2000,
+        lambda backend: particle_bridge.BuildParticleGraphFromPositions(
+            particle_positions,
+            Kratos.Parameters('{"type" : "radius", "radius" : 0.05, "backend" : "%s"}' % backend)))
+
     # --- distributed gather, serial path ------------------------------------
     seconds, _ = _Time(
         lambda: distributed_utils.GatherFieldToRank0(tet_part, "PRESSURE", "node_historical"),
         arguments.repeat)
     record("GatherFieldToRank0 (serial)", n_nodes, seconds)
 
-    print(f"{'case':40s} {'entities':>10s} {'seconds':>10s} {'us/entity':>10s}")
-    print("-" * 74)
-    for name, entity_count, seconds in rows:
-        print(f"{name:40s} {entity_count:10d} {seconds:10.3f} {1e6 * seconds / entity_count:10.2f}")
+    comparing = len(backends) > 1
+    header = f"{'case':40s} {'entities':>10s} {'seconds':>10s} {'us/entity':>10s}"
+    if comparing:
+        header += f" {'cupy s':>10s} {'speedup':>9s}"
+    print(header)
+    print("-" * (len(header) + 1))
+    for name, entity_count, seconds, cupy_seconds in rows:
+        line = (f"{name:40s} {entity_count:10d} {seconds:10.3f} "
+                f"{1e6 * seconds / entity_count:10.2f}")
+        if comparing:
+            line += (f" {cupy_seconds:10.3f} {seconds / cupy_seconds:8.2f}x"
+                     if cupy_seconds else f" {'-':>10s} {'numpy only':>9s}")
+        print(line)
 
 
 if __name__ == "__main__":

@@ -30,6 +30,12 @@ from pathlib import Path
 import numpy
 
 import KratosMultiphysics as Kratos
+from KratosMultiphysics.PhysicsNeMoApplication.utilities import array_backend_utils
+
+# Measured crossover for the dense basis GEMV. Below ~1e7 basis entries the
+# two backends are within noise of each other (the transfer and the kernel
+# launch eat the matmul saving); at 1e7 the GPU is ~6x and at 2e7 ~9x.
+_GPU_BASIS_THRESHOLD = 10000000
 
 
 @dataclasses.dataclass(frozen=True)
@@ -47,6 +53,21 @@ class RomBasis:
     node_ids: numpy.ndarray
     nodal_unknowns: tuple
     singular_values: numpy.ndarray
+    _device_phi: object = dataclasses.field(default=None, compare=False, repr=False)
+
+    def _DevicePhi(self, xp):
+        """phi in xp's memory, uploaded at most once.
+
+        The basis is the large operand and it never changes between steps,
+        so keeping it resident is what makes the GPU projection worth doing:
+        only the (small) vector crosses the bus per call. The dataclass is
+        frozen, hence object.__setattr__ for the cache slot.
+        """
+        if xp is numpy:
+            return self.phi
+        if self._device_phi is None:
+            object.__setattr__(self, "_device_phi", xp.asarray(self.phi))
+        return self._device_phi
 
     @property
     def n_nodes(self) -> int:
@@ -163,21 +184,35 @@ def ScatterUnknownsVector(model_part: Kratos.ModelPart, rom_basis: RomBasis, u) 
             model_part.Nodes, variable, Kratos.Vector(values), 0)
 
 
-def ProjectToReducedSpace(rom_basis: RomBasis, u) -> numpy.ndarray:
+def ProjectToReducedSpace(rom_basis: RomBasis, u, backend="numpy") -> numpy.ndarray:
     """q = phi^T u - the L2-optimal reduced coordinates for orthonormal-column
     bases (which the producing SVD guarantees). Accepts a (n_dofs,) vector or
-    a (n_dofs, T) snapshot series."""
+    a (n_dofs, T) snapshot series.
+
+    backend: "numpy" (default), "cupy" or "auto". The crossover measured on
+    this dense GEMV sits near phi.size = 1e7: below it the two are within
+    noise (a 46875x50 basis measures ~1.0x), at 100000x100 the GPU is ~6.3x
+    and at 200000x100 ~8.9x. Below _GPU_BASIS_THRESHOLD a CuPy request falls
+    back to numpy on its own.
+    """
     u = numpy.asarray(u, dtype=numpy.float64)
     if u.shape[0] != rom_basis.n_dofs:
         raise ValueError(
             f"Expected {rom_basis.n_dofs} row(s) (the basis DOFs), got {u.shape[0]}.")
-    return rom_basis.phi.T @ u
+    xp, _ = array_backend_utils.ResolveArrayModule(
+        backend, size_hint=rom_basis.phi.size, threshold=_GPU_BASIS_THRESHOLD)
+    return array_backend_utils.ToHost(rom_basis._DevicePhi(xp).T @ xp.asarray(u))
 
 
-def ReconstructFromReducedSpace(rom_basis: RomBasis, q) -> numpy.ndarray:
-    """u = phi q. Accepts (n_modes,) or (n_modes, T)."""
+def ReconstructFromReducedSpace(rom_basis: RomBasis, q, backend="numpy") -> numpy.ndarray:
+    """u = phi q. Accepts (n_modes,) or (n_modes, T).
+
+    backend: as in ProjectToReducedSpace.
+    """
     q = numpy.asarray(q, dtype=numpy.float64)
     if q.shape[0] != rom_basis.n_modes:
         raise ValueError(
             f"Expected {rom_basis.n_modes} reduced coordinate(s), got {q.shape[0]}.")
-    return rom_basis.phi @ q
+    xp, _ = array_backend_utils.ResolveArrayModule(
+        backend, size_hint=rom_basis.phi.size, threshold=_GPU_BASIS_THRESHOLD)
+    return array_backend_utils.ToHost(rom_basis._DevicePhi(xp) @ xp.asarray(q))

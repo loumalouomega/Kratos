@@ -88,15 +88,20 @@ distributed/                        MPI and multi-rank
 └── graph_partition_utils           halo-partitioned graph training
 
 active_learning/                    Kratos as the labeling oracle
+
 utilities/                          small shared helpers
+├── tensor_adaptor_dataset_utils    the shared gather/scatter entry point
+├── array_backend_utils             opt-in CuPy, with numpy the default
+├── nvtx_utils                      Nsight Systems ranges
+└── shallow_water_reference         a numpy-only reference integrator
 ```
 
 ## Adding a module
 
 1. Pick the folder from the rule above; if none fits, that is worth a
    conversation before it becomes a tenth package.
-2. Keep every `import torch` and `import physicsnemo` inside a lazy
-   `_TryImport*()` helper — `tests/test_import_contract.py` enforces it.
+2. Keep every `import torch`, `import physicsnemo` and `import cupy` inside a
+   lazy `_TryImport*()` helper — `tests/test_import_contract.py` enforces it.
 3. Add its tests to `tests/` and register the classes in
    `tests/test_PhysicsNeMoApplication.py`; `TestSuiteRegistration` fails
    otherwise.

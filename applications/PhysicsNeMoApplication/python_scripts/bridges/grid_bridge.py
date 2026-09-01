@@ -15,6 +15,7 @@ operators (everything else works without them).
 import numpy
 
 import KratosMultiphysics as Kratos
+from KratosMultiphysics.PhysicsNeMoApplication.utilities import array_backend_utils
 from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import GetTensorAdaptor
 
 _SIMPLEX_TYPES_3D = (
@@ -83,7 +84,10 @@ def SampleFieldsOnGrid(model_part: Kratos.ModelPart,
 
     points = _GridPointCoordinates(grid_shape, bounding_box)
 
-    node_row = {node.Id: row for row, node in enumerate(model_part.Nodes)}
+    part_ids = numpy.fromiter((node.Id for node in model_part.Nodes),
+                              dtype=numpy.int64, count=model_part.NumberOfNodes())
+    id_order = numpy.argsort(part_ids, kind="stable")
+    sorted_part_ids = part_ids[id_order]
     fields = [_GatherNodalField(model_part, name, location) for name, location in field_specs]
     widths = [field.shape[1] for field in fields]
     stacked = numpy.concatenate(fields, axis=1)  # (n_nodes, C)
@@ -104,9 +108,13 @@ def SampleFieldsOnGrid(model_part: Kratos.ModelPart,
         shape_values = numpy.asarray(shape_values)
         found = element_ids != -1  # -1 is the locator's not-found sentinel
         if found.any():
-            rows = numpy.vectorize(node_row.__getitem__)(node_ids[found])  # (n_found, 4)
+            # searchsorted rather than numpy.vectorize, which is a Python
+            # loop over every located point's corner ids.
+            rows = id_order[numpy.searchsorted(
+                sorted_part_ids, node_ids[found].astype(numpy.int64))]  # (n_found, 4)
             values[found] = numpy.einsum("pk,pkc->pc", shape_values[found], stacked[rows])
     else:
+        node_row = {node.Id: row for row, node in enumerate(model_part.Nodes)}
         for i, point in enumerate(points):
             is_found, shape_functions, element = locator.FindPointOnMesh(point)
             if not is_found:
@@ -118,25 +126,36 @@ def SampleFieldsOnGrid(model_part: Kratos.ModelPart,
     return grid, bounding_box
 
 
-def InterpolateGridAtPoints(grid, bounding_box, points):
+def InterpolateGridAtPoints(grid, bounding_box, points, backend="numpy"):
     """Trilinear interpolation of a (C, D, H, W) grid at arbitrary points.
 
     Points are clamped to the bounding box. Exact for linear fields.
 
+    Args:
+        backend: "numpy" (default), "cupy" or "auto". Eight strided gathers
+            of the whole grid is the shape of work a GPU is built for: the
+            CuPy path measured ~14.6x on a 3-channel 64^3 grid at 100k
+            points, transfers included. It loses below the size threshold
+            (~0.6x on a 1-channel 48^3 grid at 15k points), where it falls
+            back to numpy on its own.
+
     Returns:
         (n_points, C) float64 array.
     """
-    grid = numpy.asarray(grid)
-    low, high = (numpy.asarray(b, dtype=float) for b in bounding_box)
-    shape = numpy.array(grid.shape[1:])
+    n_points = len(numpy.asarray(points))
+    xp, _ = array_backend_utils.ResolveArrayModule(
+        backend, size_hint=n_points * numpy.asarray(grid).shape[0])
+    grid = xp.asarray(grid)
+    low, high = (xp.asarray(numpy.asarray(b, dtype=float)) for b in bounding_box)
+    shape = xp.asarray(numpy.array(grid.shape[1:]))
 
     # Fractional lattice coordinates, clamped inside the grid.
-    fractional = (numpy.asarray(points, dtype=float) - low) / (high - low) * (shape - 1)
-    fractional = numpy.clip(fractional, 0.0, shape - 1)
-    base = numpy.minimum(fractional.astype(int), shape - 2)
+    fractional = (xp.asarray(numpy.asarray(points, dtype=float)) - low) / (high - low) * (shape - 1)
+    fractional = xp.clip(fractional, 0.0, shape - 1)
+    base = xp.minimum(fractional.astype(int), shape - 2)
     t = fractional - base  # (n, 3) in [0, 1]
 
-    result = numpy.zeros((len(fractional), grid.shape[0]))
+    result = xp.zeros((len(fractional), grid.shape[0]))
     for dx in (0, 1):
         for dy in (0, 1):
             for dz in (0, 1):
@@ -145,19 +164,24 @@ def InterpolateGridAtPoints(grid, bounding_box, points):
                           (t[:, 2] if dz else 1.0 - t[:, 2]))
                 corner = grid[:, base[:, 0] + dx, base[:, 1] + dy, base[:, 2] + dz]  # (C, n)
                 result += weight[:, None] * corner.T
-    return result
+    return array_backend_utils.ToHost(result)
 
 
-def ScatterGridToNodes(grid, bounding_box, model_part: Kratos.ModelPart, output_field_specs) -> None:
+def ScatterGridToNodes(grid, bounding_box, model_part: Kratos.ModelPart, output_field_specs,
+                       backend="numpy") -> None:
     """Writes a (C, D, H, W) grid onto a model part's nodes.
 
     Channels are split across the output fields by each field's per-node
     width, interpolated trilinearly at the node positions, and stored via the
     tensor adaptors.
+
+    Args:
+        backend: Passed through to InterpolateGridAtPoints.
     """
     position_ta = Kratos.TensorAdaptors.NodePositionTensorAdaptor(model_part.Nodes, Kratos.Configuration.Current)
     position_ta.CollectData()
-    nodal_values = InterpolateGridAtPoints(grid, bounding_box, numpy.array(position_ta.data))
+    nodal_values = InterpolateGridAtPoints(grid, bounding_box, numpy.array(position_ta.data),
+                                           backend=backend)
 
     offset = 0
     for variable_name, data_location in output_field_specs:

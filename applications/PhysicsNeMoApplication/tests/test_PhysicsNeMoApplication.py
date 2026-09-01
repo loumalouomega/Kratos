@@ -161,6 +161,10 @@ from test_domino_finetune import TestDominoLora
 from test_domino_finetune import TestDominoLoraOnRealCheckpoint
 from test_diffusion_bridge import TestDitDenoiser
 from test_particle_bridge import TestParticleBridge
+from test_array_backend_utils import TestArrayBackendSelection
+from test_array_backend_utils import TestArrayBackendCuPy
+from test_cupy_backend_parity import TestCuPyBackendParity
+from test_cupy_backend_parity import TestCuPyBackendStaysOptIn
 from test_particle_bridge import TestParticleTrajectoryDataset
 from test_particle_inference_process import TestParticleInferenceProcess
 from test_particle_inference_process import TestMeshGraphNetParticles
@@ -242,6 +246,10 @@ def AssembleTestSuites():
 
     smallSuite = suites['small'] # These tests are executed by the continuous integration tool
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTorchBridge]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestArrayBackendSelection]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestArrayBackendCuPy]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCuPyBackendParity]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCuPyBackendStaysOptIn]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTorchBridgeWithoutTorch]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDatasetExportProcess]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTessellationTables]))

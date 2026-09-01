@@ -12,7 +12,7 @@ _PROBE = r"""
 import sys
 
 class _Blocker:
-    BLOCKED = ("torch", "physicsnemo", "torch_geometric", "torch_scatter", "pyvista", "onnxruntime", "pyacvd", "tritonclient", "gpytorch", "physicsnemo_curator")
+    BLOCKED = ("torch", "physicsnemo", "torch_geometric", "torch_scatter", "pyvista", "onnxruntime", "pyacvd", "tritonclient", "gpytorch", "physicsnemo_curator", "cupy")
     def find_module(self, name, path=None):
         if name.split(".")[0] in self.BLOCKED:
             return self
@@ -28,6 +28,7 @@ for name in list(sys.modules):
 import KratosMultiphysics
 import KratosMultiphysics.PhysicsNeMoApplication
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.utilities import array_backend_utils
 from KratosMultiphysics.PhysicsNeMoApplication.training import torch_dataset
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from KratosMultiphysics.PhysicsNeMoApplication.processes.export import dataset_export_process
@@ -121,6 +122,7 @@ for fn, expected in (
         (lambda: uncertainty_utils._TryImportGpytorch(), "pip install gpytorch"),
         (lambda: uncertainty_utils._TryImportFieldGpHead(), "pip install -U nvidia-physicsnemo"),
         (lambda: particle_bridge._TryImportNeighborSearch(), "pip install nvidia-physicsnemo"),
+        (lambda: array_backend_utils._TryImportCuPy(), "pip install cupy"),
         (lambda: physics_informed._TryImportTorch(), "pip install torch"),
         (lambda: physics_informed._TryImportPhysicsNemoSym(), "pip install nvidia-physicsnemo"),
         (lambda: differentiable_residual._TryImportTorch(), "pip install torch"),
@@ -157,6 +159,12 @@ for fn, expected in (
         assert expected in str(err), f"missing actionable hint in: {err}"
     else:
         raise AssertionError("lazy entry point did not raise ImportError")
+
+# The array backend must degrade silently: every converted path calls this
+# per step, so on a machine without cupy it has to answer False, not raise.
+assert array_backend_utils.IsCuPyAvailable() is False, "IsCuPyAvailable must be False without cupy"
+assert array_backend_utils.ResolveArrayModule("cupy", size_hint=10**9)[0] is __import__("numpy"), \
+    "a cupy request must fall back to numpy when cupy is unavailable"
 
 print("IMPORT_CONTRACT_OK")
 """
