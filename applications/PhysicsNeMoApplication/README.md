@@ -26,11 +26,11 @@ python_scripts/
 ├── processes/          everything you attach to a solve - and only those have a Factory
 │   ├── inference/          run a trained model in the solution loop      (15)
 │   ├── export/             write solver data out as training data         (6)
-│   └── ...                 adaptive remeshing, validation metrics         (2)
-├── bridges/            Kratos data <-> physicsnemo data     (10 + mesh_bridge/)
-├── training/           loops, datasets, schemes                           (8)
+│   └── ...                 adaptive remeshing, validation, adjoint dJ/dX  (3)
+├── bridges/            Kratos data <-> physicsnemo data     (11 + mesh_bridge/)
+├── training/           loops, datasets, schemes                           (9)
 ├── physics/            residuals, PINN machinery, sensitivities           (4)
-├── deployment/         checkpoints, cards, ONNX/Triton, uncertainty       (6)
+├── deployment/         checkpoints, cards, ONNX/Triton, uncertainty       (7)
 ├── distributed/        MPI and multi-rank                                 (2)
 ├── active_learning/    Kratos as the labeling oracle
 └── utilities/          small shared helpers
@@ -48,6 +48,8 @@ Each package's `__init__.py` says what belongs in it. A process is attached the 
 ## 😎 Features:
 
 - **Tensor bridge**: zero-copy `ModelPart` data ↔ `torch.Tensor` built on the core `Kratos.TensorAdaptors`, plus a dataset-export process producing `.npz` training samples from any combination of nodal, elemental and Gauss-point fields, and a `torch.utils.data.Dataset` factory over the exported samples for direct training — plus a **streaming path** (`streaming_dataset`) that trains directly out of a running solve with no file round trip, yielding samples byte-identical to the dumped ones (asserted by running one case both ways), and **shrink-and-perturb warm restarts** in `TrainModel` for when Kratos data drifts to a new geometry family. Dataset curation for the `.pmsh` mesh series: **coherent** random rotate/scale/translate augmentations (`MakeMeshAugmentations`/`CreateAugmentedMeshDataset` — vector and rank-2 tensor fields transform *with* the coordinates, which upstream's defaults silently skip, plus the dtype cast its transforms require and reproducible per-epoch seeding) and `MultiDataset` mixing of several series (`CreateMultiMeshDataset`).
+
+- **Optional CuPy acceleration** (`utilities/array_backend_utils`): a `"backend"` switch on the array-heavy bridge paths — the particle proximity graph, graph edge features, trilinear grid interpolation and the ROM basis projection — with **numpy the default and the fallback everywhere**, a measured per-site size threshold below which a CuPy request falls back on its own, and `AsTorchTensor`, which hands a device array to torch through DLPack rather than bouncing it through the host. `cupy` is optional exactly as `torch` is: nothing imports it at module scope, and `benchmarks/benchmark_bridges.py --backend both` reproduces every number claimed for it.
 
 - **Mesh bridge**: tessellation of arbitrary Kratos meshes (hexahedra, prisms, pyramids, quadrilaterals, higher-order elements) into the simplicial representation required by `physicsnemo.mesh` — watertight on unstructured meshes via the smallest-node-id diagonal rule (Dompierre et al.), with optional subdivision of quadratic geometries through their real mid-side nodes and an opt-in **curved (isoparametric) mode** that samples the exact quadratic geometry on a configurable refinement lattice with synthetic points (interpolated on gather, dropped on scatter-back), watertight across curved neighbours — plus a field-provenance map that round-trips predictions back onto the original Kratos entities; `DomainMesh` export with named boundaries from sub-model-parts, and native save/load of PhysicsNeMo's memory-mapped mesh format. On top of it:
     - **Discrete calculus** (`calculus_bridge`) — LSQ/DEC gradient, divergence, curl, Laplacian and integrals on the tessellated mesh, autograd-differentiable, with the backend-validity guards and boundary masks the upstream operators lack.
@@ -96,6 +98,11 @@ Each package's `__init__.py` says what belongs in it. A process is attached the 
 
 - **RomApplication interoperability**: `rom_bridge` consumes `CalculateRomBasisOutputProcess`'s numpy POD bases (the exact interleaved row-order contract; no compiled RomApplication needed to consume), a `RomSurrogateProcess` deploys **neural-augmented reduced bases** in the solution loop (case parameters → modal coefficients → full-field reconstruction `u = Φq`, with the model card validating against the basis's nodal unknowns automatically), and `rom_temporal` brings **mesh-reduced temporal attention in ROM space** — physicsnemo's decoder-only `Sequence_Model` trained teacher-forced on reduced trajectories with autoregressive rollout.
 
+- **Adjoint integration — gradients both ways**: what `rom_bridge` is to RomApplication, `adjoint_bridge` is to Kratos's adjoint stack, and for the same reason: the contract it consumes (`ResponseFunctionInterface`) lives in the **core**, so it needs whichever application owns the response and never a compiled optimization application. `CreateResponseFunction` dispatches `structural_mechanics` / `convection_diffusion` / `compressible_potential_flow` (plus a module-path escape hatch), and `EvaluateResponse` turns the `{entity_id: value}` dicts Kratos hands out — unordered, and keyed by an *adjoint* model part whose iteration order need not be the primal's — into arrays in this application's own row order, the one shared with `graph_bridge`, `DofFieldMap` and every gather in the tree. The bridge is cross-validated node by node against the shipped `sensitivity_utils` adjoint on **both** compiled stacks: the cantilever to 1e-4 relative (Kratos's `semi_analytic` gradient takes a *forward* difference and sets the tolerance) and a diffusion square to 1e-6, out-of-plane row exactly zero. On top of it:
+    - **`AdjointSensitivityProcess`** puts dJ/dX on the model part as an ordinary nodal variable and writes no files, deliberately — `DatasetExportProcess`, the streaming exporter, `MeshExportProcess` and the vtu outputs then carry it unchanged, and naming it in `CreateNpzDataset`'s `output_keys` yields gradient-carrying training targets with no new dataset code.
+    - **Sobolev training** (`sobolev_training.MakeSensitivityLossTerm`) grades a surrogate on Kratos's exact dJ/dX, not only on field values — measured on a held-out set at the same seed and architecture, the gradient RMSE drops **4.8x** (0.376 → 0.079) and the value RMSE improves as a by-product. `TrainModel` gained the plumbing it needs: `extra_loss_terms` now resolves arity (a four-argument term receives the batch targets, three-argument terms are untouched) and `"target_channels"` keeps the data loss on the columns the model actually predicts — without it torch does not reject a 1-channel prediction against a 4-column target, it **broadcasts**, and trains against the mean of the value and the gradient.
+    - **`SurrogateResponseFunction`** is the mirror of the co-simulation wrapper: a trained model where a *response function* goes rather than where a solver goes, with Kratos's own factory signature so any driver resolving responses by module path takes it unchanged. `"gradient_mode"` chooses autograd through the model (cheap, surrogate-accurate) or the FEM adjoint around the state it wrote (discretely exact *for that state* — a surrogate replaces the solve, not the sensitivity analysis).
+
 - **Physics-informed residuals, PINN solves, exact residual losses and adjoints**: three residual notions.
     1. `solver_residuals.ResidualEvaluator` assembles the real PDE residual of any (ML-predicted) field through the solver's own builder machinery — the cheap non-differentiable *score* feeding query strategies, epoch callbacks and validation.
     2. `physics_informed`: SymPy-defined strong-form residuals evaluated by `physicsnemo.sym`'s `PhysicsInformer` (bundled — no extra install) as real **training loss terms** (`TrainModel(..., extra_loss_terms=[...])`; autodiff at point coordinates, least-squares on mesh/particle graphs, finite-difference/spectral on grids), with builtin diffusion, convection-diffusion, **linear elasticity** and **incompressible Navier–Stokes** PDEs (vector fields auto-split into per-component sympy functions), plus a `PinnSolveProcess` for pure-PINN forward solves from the model part's Dirichlet data and inverse coefficient recovery.
@@ -134,13 +141,6 @@ Each package's `__init__.py` says what belongs in it. A process is attached the 
 
 Candidate extensions, grouped by theme and ordered roughly by value/feasibility, each naming the concrete PhysicsNeMo API and its Kratos-side counterpart. Every remaining item is `(blocked: …)`, and the parenthesis names the gate — verified against the currently exercised **physicsnemo 2.2.0** and the reference build, not assumed. The gates fall into four kinds: **hardware** (one GPU here), **upstream** (the API does not exist yet, or raises `NotImplementedError`), **external access** (NIM/NGC checkpoints, Omniverse), and **the build** (an application that is not compiled — see the installation note above on why adding one is not a local operation).
 
-- **Using CuPy insteadof numpy when possible**
-   * An idea to be chekced that may enhance performance if CuPy is available
-   * numpy should be always the default fallback just in case
-
-- **Adjoint integration**
-   * In the same manner there is an integration witrh ROM application, an integration with adjoint computation
-
 - **Infrastructure and CI**
     * GPU CI for the device-dependent paths (the app builds and runs its torch-free tests in the Linux CI; the ML-dependent tests self-skip there — see `benchmarks/benchmark_bridges.py` for the profiling that settled the former C++-acceleration item. On 196k tets / 32k hexes the nodal gather/scatter paths cost 0.11–0.83 µs per entity, but not everything per-entity is sub-µs: element scatter-back is 2.1, grid sampling 3.5, and provenance construction 4.2 on tets and ~39 on hexes. No custom C++ adaptors are warranted even so — the dominant cost was provenance being rebuilt every step, and caching it in Python removed that)
 
@@ -163,6 +163,14 @@ Candidate extensions, grouped by theme and ordered roughly by value/feasibility,
     * Digital-twin / Omniverse export of deployed-surrogate predictions for interactive visualization, on top of `HDF5Application`/XDMF output (external tooling; mostly format glue)
 
 **Where to start.** Almost every bullet above is gated on something outside this repository — treat the list mostly as a record of what is blocked. The exception is the volumetric-denoiser item, whose gate was re-checked against the installed 2.2.0 and found stale: `DiffusionUNet3D` is there, under `experimental`.
+
+*The adjoint-integration item has shipped, and the useful part was the row order.* The gradients themselves already existed on both sides — Kratos's adjoint stack and this application's `sensitivity_utils` — and had even been cross-validated against each other. What was missing was an *interface*: Kratos reports a gradient as a `{entity_id: value}` dict, keyed by an adjoint model part whose iteration order need not be the primal's, and every other quantity in this application is a row-ordered array. `adjoint_bridge` converts by id, so a gradient lines up with a field by construction, and that one conversion is what makes an adjoint usable as training data. Two things then followed almost for free: a process that writes dJ/dX into an ordinary Kratos variable (so every existing exporter carries it), and a loss term that reads it back out. The measured payoff is the surrogate's derivatives, which a value-only fit never looks at: 4.8x lower gradient error at the same architecture, seed and data. The one genuinely new number was the second physics — ConvectionDiffusion's `AdjointDiffusionElement` agreeing with the shipped adjoint to 1e-6 once the objective normalizations were made to match, which they initially did not: Kratos's `point_temperature` averages where `weighted_sum` sums, a factor that looks exactly like a wrong adjoint and is not.
+
+*The CuPy item has shipped, and the answer was "in four places, not everywhere".* `utilities/array_backend_utils` is the shared selector: `ResolveArrayModule` returns numpy or CuPy, `ToHost`/`ToDevice` move between them, and `AsTorchTensor` hands a device array straight to torch through DLPack instead of the device-to-host-to-device bounce the `torch.from_numpy(...).to(device)` idiom pays. **numpy is the default and `"auto"` resolves to it** — CuPy is opt-in per call (a `"backend"` setting) or process-wide (`KRATOS_PHYSICSNEMO_ARRAY_BACKEND`, `SetDefaultArrayBackend`), because it reorders floating-point reductions and installing it must not silently change anyone's results. Each converted site also carries a measured size threshold and falls back to numpy below it, since a host-to-device round trip costs more than the arithmetic on a small mesh.
+
+Measured on one RTX 2000 Ada, 15625 nodes / 82944 tets, transfers included (`benchmarks/benchmark_bridges.py --backend both`): `particle_bridge` brute-force proximity graph **2.1x** (the quadratic distance matrix, rebuilt every step — the one unambiguous win, since the work grows as N² while the transfer grows as N); `graph_bridge.ComputeEdgeFeatures` **1.7–4.4x**, the ratio falling as the edge count rises because the edge index has to cross the bus on every call; `grid_bridge.InterpolateGridAtPoints` **11.6x** on a 3-channel 64³ grid at 100k points, but **0.7x** on a 1-channel 48³ grid at 15k, which is what the threshold is for; `rom_bridge`'s Φᵀu/Φq **6.7x at 1e7 basis entries and 7.8x at 2e7**, within noise of numpy below 1e7 (the basis is uploaded once and kept resident, so only the vector crosses the bus per step).
+
+*And the honest negatives, which are the more useful half.* The provenance gather/scatter and `AggregateCellField` paths were converted, measured and **reverted**: 0.74–0.97x for the nodal gather and 0.49–1.42x for the cell reduction. Their operands live in Kratos-owned host buffers that must be re-read every step, so the transfer is the same O(N) as the arithmetic and no crossover exists. `model_registry.ApplyOutputNormalization` was left alone too — its torch→numpy→torch round trip is genuinely wasteful on a CUDA prediction, but the fix there is to do the arithmetic *in torch*, not in CuPy. What did pay on those paths was pure numpy: replacing the `{id: row}` dicts and `numpy.fromiter` generators with `searchsorted`, and `numpy.add.at` with `bincount`, made `GatherNodalField` **15x**, `ScatterNodalField` **10x** and `GetPointIndices` **6.7x** faster with no new dependency — which moved the nodal gather/scatter lines quoted below from 0.11–0.83 µs/entity to **0.03**, and grid sampling from 3.5 to 3.27. The lesson the roadmap item was really asking about: most of what looked like array cost here was interpreter cost.
 
 *The two documentation-and-layout items have shipped.* `python_scripts/` is now a tree of packages (see [Layout](#layout) above), so a module's folder says what kind of thing it is and everything with a `Factory` lives under `processes/`; the tests, the eighteen notebooks, the docs pages and the Examples repository were rewritten onto the new paths, and a guard resolves every documented module path and every `"kratos_module"`/`"python_module"` pair against the real tree so they cannot silently rot. And [PhysicsNeMo Basics](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Overview.html) documents NVIDIA PhysicsNeMo itself across nine pages, joined by a module map and a from-scratch walkthrough — the gap being that everything here assumed the reader already knew what a `Module`, a `.mdlus`, a datapipe or a `DistributedManager` was.
 
@@ -194,11 +202,11 @@ Contributions and prioritization requests are welcome — please open an issue o
 
 ## ⚠️ Dependency policy — read before contributing:
 
-`torch` and `nvidia-physicsnemo` (and the extras: `nvidia-physicsnemo-cfd` with `pyvista`, `torch_geometric`, ...) are **optional, pure-Python runtime dependencies**:
+`torch` and `nvidia-physicsnemo` (and the extras: `nvidia-physicsnemo-cfd` with `pyvista`, `torch_geometric`, `cupy`, ...) are **optional, pure-Python runtime dependencies**:
 
 - `import KratosMultiphysics.PhysicsNeMoApplication` always succeeds without them; only the specific submodules that need them fail — lazily, at call time, with an actionable error message.
 - There is intentionally **no CMake gating** (no `find_package(Torch)`, no `USE_PHYSICSNEMO` option): nothing in the C++ core links against torch or CUDA. Do not add such a gate.
-- New Python modules must keep all `import torch` / `import physicsnemo` statements inside lazy `_TryImport*()` helpers, never at module scope of anything imported eagerly.
+- New Python modules must keep all `import torch` / `import physicsnemo` / `import cupy` statements inside lazy `_TryImport*()` helpers, never at module scope of anything imported eagerly.
 
 **Packaging policy** (wheels / the standard `KratosMultiphysics` distribution): the application ships like any other per-application Kratos wheel — `scripts/wheels/build_wheel.py` derives the app wheels automatically from whatever was compiled, so no wheel-side registration exists or is needed. `torch` / `nvidia-physicsnemo` are **never** declared as wheel dependencies (they are large, CUDA-variant-specific, and the user's choice of build); they remain the optional runtime `pip install`s above, and the lazy-import contract (`tests/test_import_contract.py`) is exactly what guarantees a wheel installed without them stays fully importable.
 
@@ -210,6 +218,7 @@ Compile like any other Kratos application (add `add_app ${KRATOS_APP_DIR}/Physic
 pip install torch             # CPU or CUDA build, your choice
 pip install nvidia-physicsnemo
 pip install git+https://github.com/NVIDIA/physicsnemo-cfd   # optional: hybrid-initialization recipes + CFD metric registry (source only - not on PyPI)
+pip install cupy-cuda12x     # optional: the GPU array paths (match your CUDA toolkit)
 ```
 
 > **Before adding applications to an existing build — a trap worth knowing.** Kratos reads `KRATOS_APPLICATIONS` from the *environment* and never writes it to the CMake cache, and `make install` never prunes the install tree. An install directory therefore accumulates every application ever built, while the build graph covers only the ones in the current configure script — and those two sets drift apart silently. Applications outside the graph are not rebuilt, so the next `libKratosCore.so` relink leaves them ABI-stale: they keep *existing*, and `CheckIfApplicationsAvailable` keeps reporting them as present, but importing them fails with an undefined symbol or segfaults. Because several Kratos applications import their optional companions on a *presence* check rather than a working one, one stale library can take down an application that was never touched.
@@ -218,17 +227,17 @@ pip install git+https://github.com/NVIDIA/physicsnemo-cfd   # optional: hybrid-i
 
 ## ⚙️ Examples:
 
-Eighteen example notebooks covering the tensor bridge, mesh bridge, surrogate training/deployment, active learning, superresolution, transient rollouts, exact shape gradients and DoMINO fine-tuning can be found in [`examples/notebooks/`](examples/notebooks/).
+Nineteen example notebooks covering the tensor bridge, mesh bridge, surrogate training/deployment, active learning, superresolution, transient rollouts, exact shape gradients, DoMINO fine-tuning and the adjoint integration can be found in [`examples/notebooks/`](examples/notebooks/).
 
 They are **executed** by `tests/test_notebooks.py`, one test per notebook, so a
 changed signature or return type breaks a test rather than rotting silently. Each
-runs in a throwaway copy of the tree, because the notebooks write artifacts next to themselves and two of them load solver cases from `tests/kratos_solver_cases`. At roughly five minutes for all eighteen they sit on the **validation** suite, so they run only when that suite is asked for — not in CI, and not nightly.
+runs in a throwaway copy of the tree, because the notebooks write artifacts next to themselves and several of them load cases from `tests/kratos_solver_cases` and `tests/adjoint_cases`. At roughly five minutes for all nineteen they sit on the **validation** suite, so they run only when that suite is asked for — not in CI, and not nightly.
 
-Executing them proves no exception was raised, which is weaker than proving the right answer: the five notebooks making a reproducible numeric claim (03, 05, 07, 17 and 18) assert it, and the unseeded ones deliberately assert nothing.
+Executing them proves no exception was raised, which is weaker than proving the right answer: the six notebooks making a reproducible numeric claim (03, 05, 07, 17, 18 and 19) assert it, and the unseeded ones deliberately assert nothing.
 
 ### Worked examples
 
-Eighteen fully documented use cases live in the [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application): self-contained scripts against real Kratos solves, with every figure regenerated by the code. Highlights (each image links to its case):
+Nineteen fully documented use cases live in the [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application): self-contained scripts against real Kratos solves, with every figure regenerated by the code. Highlights (each image links to its case):
 
 **[Thermal surrogate lifecycle](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/thermal_surrogate_lifecycle)** — dataset from real solves, FNO ensemble with model cards and an OOD guard, governed in-loop deployment, validation, ONNX distillation and a Triton serving layout:
 
@@ -240,6 +249,12 @@ Eighteen fully documented use cases live in the [Examples repository](https://gi
 
 <p align="center">
   <a href="https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/transient_thermomechanical_surrogate"><img src="https://raw.githubusercontent.com/KratosMultiphysics/Examples/master/physics_nemo_application/use_cases/transient_thermomechanical_surrogate/data/rollout.gif" alt="Coupled solver vs surrogate rollout." width="620"/></a>
+</p>
+
+**[Adjoint integration](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/adjoint_integration)** — Kratos's own adjoint stack read through `adjoint_bridge` on two physics (agreeing with the shipped adjoint to 7e-7 and 8e-9), a surrogate trained on those gradients (46x better `dJ/dθ` at held-out designs), and the descent that spends the difference — plus the model deployed back as a Kratos response function:
+
+<p align="center">
+  <a href="https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/adjoint_integration"><img src="https://raw.githubusercontent.com/KratosMultiphysics/Examples/master/physics_nemo_application/use_cases/adjoint_integration/data/gradient_enhanced_surrogate.png" alt="Training curves and the surrogate's dJ/dtheta against the exact adjoint." width="700"/></a>
 </p>
 
 **[GNN + exact shape optimization](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/gnn_and_exact_shape_optimization)** — MeshGraphNet on the mesh's own graph, exact adjoint shape gradients verified against re-solved finite differences to ~1e-10, an FFD optimization hitting its target exactly:
