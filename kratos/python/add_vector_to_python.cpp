@@ -269,7 +269,7 @@ void CreateArray1DInterface(pybind11::module& m, const std::string& Name )
     /*binder.def_buffer( [](array_1d<double,TSize>& self)-> py::buffer_info
     {
         return py::buffer_info(
-            &self.data()[0], // pointer for the Eigen data(), unbounded_array for uBLAS
+            self.data().begin(),
             sizeof(typename array_1d<double,TSize>::value_type),
             py::format_descriptor<typename array_1d<double,TSize>::value_type>::format(),
             1,
@@ -444,7 +444,7 @@ void  AddVectorToPython(pybind11::module& m)
     vector_binder.def_buffer( [](Vector& self)-> py::buffer_info
     {
         return py::buffer_info(
-            &self.data()[0], // pointer for the Eigen data(), unbounded_array for uBLAS
+            self.data().begin(),
             sizeof(typename Vector::value_type),
             py::format_descriptor<typename Vector::value_type>::format(),
             1,
@@ -537,7 +537,7 @@ void  AddVectorToPython(pybind11::module& m)
     int_vector_binder.def_buffer( [](DenseVector<int>& self)-> py::buffer_info
     {
         return py::buffer_info(
-            &self.data()[0], // pointer for the Eigen data(), unbounded_array for uBLAS
+            self.data().begin(),
             sizeof(typename DenseVector<int>::value_type),
             py::format_descriptor<typename DenseVector<int>::value_type>::format(),
             1,
@@ -575,7 +575,7 @@ void  AddVectorToPython(pybind11::module& m)
     unsigned_int_vector_binder.def_buffer( [](DenseVector<unsigned int>& self)-> py::buffer_info
     {
         return py::buffer_info(
-            &self.data()[0], // pointer for the Eigen data(), unbounded_array for uBLAS
+            self.data().begin(),
             sizeof(typename DenseVector<unsigned int>::value_type),
             py::format_descriptor<typename DenseVector<unsigned int>::value_type>::format(),
             1,

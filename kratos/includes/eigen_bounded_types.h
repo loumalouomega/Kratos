@@ -34,6 +34,7 @@
 
 // Project includes
 #include "includes/define.h"
+#include "includes/eigen_array_proxy.h"
 
 namespace Kratos
 {
@@ -298,8 +299,12 @@ public:
     constexpr size_type size1() const { return TSize1; }
     constexpr size_type size2() const { return TSize2; }
 
-    /// Raw contiguous storage pointer (row-major, matching ublas::bounded_matrix).
-    using BaseType::data;
+    /// uBLAS-style storage access: the boost containers return an array with
+    /// begin()/end()/operator[], Eigen returns a raw pointer. The proxy offers
+    /// both surfaces (it decays to the pointer), so data().begin() and
+    /// &data()[0] compile unchanged on either backend.
+    Internals::EigenArrayProxy<T> data() { return {BaseType::data(), TSize1 * TSize2}; }
+    Internals::EigenArrayProxy<const T> data() const { return {BaseType::data(), TSize1 * TSize2}; }
 
     iterator begin() { return BaseType::data(); }
     const_iterator begin() const { return BaseType::data(); }
@@ -555,8 +560,12 @@ public:
         return TSize;
     }
 
-    /// Raw contiguous storage pointer.
-    using BaseType::data;
+    /// uBLAS-style storage access: the boost containers return an array with
+    /// begin()/end()/operator[], Eigen returns a raw pointer. The proxy offers
+    /// both surfaces (it decays to the pointer), so data().begin() and
+    /// &data()[0] compile unchanged on either backend.
+    Internals::EigenArrayProxy<T> data() { return {BaseType::data(), TSize}; }
+    Internals::EigenArrayProxy<const T> data() const { return {BaseType::data(), TSize}; }
 
     iterator begin() { return BaseType::data(); }
     const_iterator begin() const { return BaseType::data(); }

@@ -25,6 +25,7 @@
 
 // Project includes
 #include "includes/exception.h"
+#include "includes/eigen_array_proxy.h"
 
 namespace Kratos {
 
@@ -45,43 +46,6 @@ using KratosEigenIndexType = int;
 #endif
 static_assert(std::is_signed_v<KratosEigenIndexType>,
               "Eigen requires a signed sparse StorageIndex.");
-
-namespace Internals {
-
-/**
- * @class EigenArrayProxy
- * @brief Iterable view over a raw backend array.
- * @details Gives Eigen's CSR storage arrays the same begin()/end()/operator[]
- * surface that the uBLAS unbounded_array storage exposes, so code written
- * against compressed_matrix::value_data()/index1_data()/index2_data() works
- * unchanged on the Eigen wrapper types.
- */
-template<class T>
-class EigenArrayProxy
-{
-public:
-    using value_type = std::remove_const_t<T>;
-    using iterator = T*;
-    using const_iterator = const T*;
-
-    EigenArrayProxy(T* pData, const std::size_t Size) : mpData(pData), mSize(Size) {}
-
-    T* begin() { return mpData; }
-    T* end() { return mpData + mSize; }
-    const T* begin() const { return mpData; }
-    const T* end() const { return mpData + mSize; }
-
-    T& operator[](const std::size_t Index) { return mpData[Index]; }
-    const T& operator[](const std::size_t Index) const { return mpData[Index]; }
-
-    std::size_t size() const { return mSize; }
-
-private:
-    T* mpData;
-    std::size_t mSize;
-};
-
-} // namespace Internals
 
 /**
  * @class EigenMatrix
@@ -182,6 +146,13 @@ public:
     {
         this->setZero();
     }
+
+    /// uBLAS-style storage access: boost::numeric::ublas::matrix::data()
+    /// returns an array with begin()/end()/operator[], Eigen's returns a raw
+    /// pointer. The proxy provides both surfaces (it decays to the pointer),
+    /// so data().begin() and &data()[0] compile on either backend.
+    Internals::EigenArrayProxy<TDataType> data() { return {BaseType::data(), size1() * size2()}; }
+    Internals::EigenArrayProxy<const TDataType> data() const { return {BaseType::data(), size1() * size2()}; }
 };
 
 /**
@@ -276,6 +247,10 @@ public:
 
     /// uBLAS-style emptiness check
     bool empty() const { return BaseType::size() == 0; }
+
+    /// uBLAS-style storage access; see EigenMatrix::data().
+    Internals::EigenArrayProxy<TDataType> data() { return {BaseType::data(), size()}; }
+    Internals::EigenArrayProxy<const TDataType> data() const { return {BaseType::data(), size()}; }
 };
 
 /**
@@ -405,6 +380,37 @@ public:
     void clear()
     {
         this->setZero();
+    }
+
+    /// uBLAS idiom `SparseMatrixType m = IdentityMatrix(n, n);` (and the
+    /// assignment form). Kept non-explicit and specialized on the uBLAS
+    /// generator types so the copy-initialization spelling of the call sites
+    /// compiles, and so the identity is built in O(n) instead of walking a
+    /// dense n x n expression as the generic matrix_expression path would.
+    EigenCompressedMatrix(const boost::numeric::ublas::identity_matrix<TDataType>& rIdentity)
+        : BaseType(rIdentity.size1(), rIdentity.size2())
+    {
+        this->setIdentity();
+    }
+
+    EigenCompressedMatrix& operator=(const boost::numeric::ublas::identity_matrix<TDataType>& rIdentity)
+    {
+        BaseType::resize(rIdentity.size1(), rIdentity.size2());
+        this->setIdentity();
+        return *this;
+    }
+
+    /// uBLAS idiom `SparseMatrixType m = ZeroMatrix(n, n);` (and the
+    /// assignment form); an all-zero sparse matrix stores nothing.
+    EigenCompressedMatrix(const boost::numeric::ublas::zero_matrix<TDataType>& rZero)
+        : BaseType(rZero.size1(), rZero.size2())
+    {
+    }
+
+    EigenCompressedMatrix& operator=(const boost::numeric::ublas::zero_matrix<TDataType>& rZero)
+    {
+        BaseType::resize(rZero.size1(), rZero.size2());
+        return *this;
     }
 
     /// uBLAS-style element insertion. As for operator() on a missing entry

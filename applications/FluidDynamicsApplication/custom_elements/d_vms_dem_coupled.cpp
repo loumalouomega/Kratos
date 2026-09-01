@@ -1453,7 +1453,7 @@ void DVMSDEMCoupled<TElementData>::UpdateSubscaleVelocity(
     const array_1d<double,3>& r_old_subscale_velocity = mOldSubscaleVelocity[rData.IntegrationPointIndex];
     // the previous-velocity history is stored with Dim components
     array_1d<double, 3> previous_velocity = ZeroVector(3);
-    const auto& r_previous_velocity = mPreviousVelocity[rData.IntegrationPointIndex];
+    const array_1d<double,Dim>& r_previous_velocity = mPreviousVelocity[rData.IntegrationPointIndex];
     for (unsigned int d = 0; d < Dim; ++d)
         previous_velocity[d] = r_previous_velocity[d];
     array_1d<double, 3> subscale_velocity_on_previous_iteration = mPredictedSubscaleVelocity[rData.IntegrationPointIndex];

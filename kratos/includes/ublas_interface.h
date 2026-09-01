@@ -13,6 +13,7 @@
 #pragma once
 
 // System includes
+#include <type_traits>
 #include <string>
 #include <iostream>
 
@@ -112,7 +113,33 @@ namespace Kratos
     typedef matrix_range<DenseMatrix<double>> MatrixRange;
     typedef matrix_slice<DenseMatrix<double>> MatrixSlice;
 
+#ifdef KRATOS_USE_EIGEN_BACKEND
+    namespace Internals {
+    // A boost matrix_row over an Eigen-backed Matrix is not a valid type, so
+    // MatrixRow resolves to Eigen's own row view for the Eigen-backed dense
+    // matrices (detected by the presence of RowXpr) and stays the uBLAS proxy
+    // for everything else. Both are non-owning views with the same read/write
+    // surface, so the generic code using MatrixRow<...> compiles unchanged.
+    template <typename TExpressionType, typename = void>
+    struct MatrixRowSelector { using Type = matrix_row<TExpressionType>; };
+
+    // Spelled through row() itself rather than through Eigen's RowXpr: the
+    // Kratos row() transposes the row block so that, as for a uBLAS
+    // matrix_row, the result models a (column) VECTOR. MatrixRow must name
+    // exactly what row() returns.
+    template <typename TExpressionType>
+    struct MatrixRowSelector<TExpressionType,
+                             std::void_t<decltype(std::declval<TExpressionType&>().row(0))>>
+    {
+        using Type = decltype(std::declval<TExpressionType&>().row(0).transpose());
+    };
+    } // namespace Internals
+
+    template <typename TExpressionType>
+    using MatrixRow = typename Internals::MatrixRowSelector<TExpressionType>::Type;
+#else
 	template <typename TExpressionType> using MatrixRow = matrix_row<TExpressionType>;
+#endif
 
     typedef boost::numeric::ublas::compressed_matrix<double> CompressedMatrix;
 

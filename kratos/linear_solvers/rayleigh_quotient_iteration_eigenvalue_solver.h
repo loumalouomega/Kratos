@@ -5,20 +5,26 @@
 //                   Multi-Physics
 //
 //  License:         BSD License
-//                   Kratos default license: kratos/license.txt
+//                     Kratos default license: kratos/license.txt
 //
 //  Main authors:    Pooyan Dadvand
 //  Collaborator:    Vicente Mataix Ferrandiz
 //
 //
 
-#pragma once
+#if !defined(KRATOS_RAYLEIGH_QUOTIENT_ITERATION_EIGENVALUE_SOLVER_H_INCLUDED )
+#define  KRATOS_RAYLEIGH_QUOTIENT_ITERATION_EIGENVALUE_SOLVER_H_INCLUDED
 
 // System includes
+#include <string>
+#include <iostream>
+#include <numeric>
+#include <vector>
 
 // External includes
 
 // Project includes
+#include "includes/define.h"
 #include "linear_solvers/iterative_solver.h"
 #include "utilities/sparse_matrix_multiplication_utility.h"
 #include "linear_solvers/skyline_lu_factorization_solver.h"
@@ -65,25 +71,25 @@ public:
     KRATOS_CLASS_POINTER_DEFINITION(RayleighQuotientIterationEigenvalueSolver);
 
     /// The base class definition
-    using BaseType = IterativeSolver<TSparseSpaceType, TDenseSpaceType, TPreconditionerType, TReordererType>;
+    typedef IterativeSolver<TSparseSpaceType, TDenseSpaceType, TPreconditionerType, TReordererType> BaseType;
 
     /// The sparse matrix defintion
-    using SparseMatrixType = typename TSparseSpaceType::MatrixType;
+    typedef typename TSparseSpaceType::MatrixType SparseMatrixType;
 
     /// The vector definition ("sparse")
-    using VectorType = typename TSparseSpaceType::VectorType;
+    typedef typename TSparseSpaceType::VectorType VectorType;
 
     /// The dense matrix definition
-    using DenseMatrixType = typename TDenseSpaceType::MatrixType;
+    typedef typename TDenseSpaceType::MatrixType DenseMatrixType;
 
     /// The "dense" vector definition
-    using DenseVectorType = typename TDenseSpaceType::VectorType;
+    typedef typename TDenseSpaceType::VectorType DenseVectorType;
 
     /// The size type definiton
-    using SizeType = std::size_t;
+    typedef std::size_t SizeType;
 
     /// The index type definition
-    using IndexType = std::size_t;
+    typedef std::size_t IndexType;
 
     ///@}
     ///@name Life Cycle
@@ -188,9 +194,8 @@ public:
         const SizeType size_m = rM.size1();
 
         // Resize in case of not same size
-        if (static_cast<SizeType>(rR.size()) != size_m) {
+        if (static_cast<SizeType>(rR.size()) != size_m)
             rR.resize(size_m);
-        }
 
         IndexPartition<std::size_t>(size_m).for_each([&](std::size_t Index){
             rR[Index] = rM(Index, Index);
@@ -391,9 +396,11 @@ public:
     ///@name Access
     ///@{
 
+
     ///@}
     ///@name Inquiry
     ///@{
+
 
     ///@}
     ///@name Input and output
@@ -423,86 +430,105 @@ public:
     ///@name Friends
     ///@{
 
+
     ///@}
+
 protected:
     ///@name Protected static Member Variables
     ///@{
+
 
     ///@}
     ///@name Protected member Variables
     ///@{
 
+
     ///@}
     ///@name Protected Operators
     ///@{
+
 
     ///@}
     ///@name Protected Operations
     ///@{
 
+
     ///@}
     ///@name Protected  Access
     ///@{
+
 
     ///@}
     ///@name Protected Inquiry
     ///@{
 
+
     ///@}
     ///@name Protected LifeCycle
     ///@{
 
+
     ///@}
+
 private:
     ///@name Static Member Variables
     ///@{
+
 
     ///@}
     ///@name Member Variables
     ///@{
 
-    unsigned int mRequiredEigenvalueNumber;             /// The number of required eigenvalues
+    unsigned int mRequiredEigenvalueNumber;
 
-    unsigned int mEchoLevel;                            /// The level of echo for the solver 
+    unsigned int mEchoLevel;
 
-    typename TLinearSolverType::Pointer mpLinearSolver; /// The linear solver considered
+    typename TLinearSolverType::Pointer mpLinearSolver;
 
-    double mShiftingConvergence;                        /// The convergence parameter of shifting
+    double mShiftingConvergence;
 
-    std::vector<DenseVectorType> mQVector;              /// The vector containing the orthonormalized eigenvectors
-    std::vector<DenseVectorType> mPVector;              /// The vector containing the orthonormalized eigenvectors
-    std::vector<DenseVectorType> mRVector;              /// The vector containing the orthonormalized eigenvectors
+    std::vector<DenseVectorType> mQVector;
+    std::vector<DenseVectorType> mPVector;
+    std::vector<DenseVectorType> mRVector;
 
     ///@}
     ///@name Private Operators
     ///@{
 
+
     ///@}
     ///@name Private Operations
     ///@{
+
 
     ///@}
     ///@name Private  Access
     ///@{
 
+
     ///@}
     ///@name Private Inquiry
     ///@{
+
 
     ///@}
     ///@name Un accessible methods
     ///@{
 
+
     ///@}
+
 }; // Class RayleighQuotientIterationEigenvalueSolver
 ///@}
 
 ///@name Type Definitions
 ///@{
 
+
 ///@}
 ///@name Input and output
 ///@{
+
 
 /// input stream function
 template<class TSparseSpaceType, class TDenseSpaceType,
@@ -531,7 +557,18 @@ inline std::ostream& operator << (std::ostream& OStream,
 }
 ///@}
 
+
 }  // namespace Kratos.
+
+#endif // KRATOS_RAYLEIGH_QUOTIENT_ITERATION_EIGENVALUE_SOLVER_H_INCLUDED defined
+
+
+
+
+
+
+
+
 
 
 

@@ -7,7 +7,8 @@
 //  Authors: Armin Geiser
 */
 
-#pragma once
+#if !defined(KRATOS_SPECTRA_SYM_G_EIGS_SHIFT_SOLVER_H_INCLUDED)
+#define KRATOS_SPECTRA_SYM_G_EIGS_SHIFT_SOLVER_H_INCLUDED
 
 // External includes
 #include <Eigen/Core>
@@ -17,6 +18,7 @@
 #endif // defined EIGEN_USE_MKL_ALL
 
 // Project includes
+#include "includes/define.h"
 #include "linear_solvers_define.h"
 #include "includes/kratos_parameters.h"
 #include "linear_solvers/iterative_solver.h"
@@ -40,11 +42,11 @@ class SpectraSymGEigsShiftSolver
   public:
     KRATOS_CLASS_POINTER_DEFINITION(SpectraSymGEigsShiftSolver);
 
-    using BaseType = IterativeSolver<TSparseSpaceType, TDenseSpaceType, TPreconditionerType, TReordererType>;
+    typedef IterativeSolver<TSparseSpaceType, TDenseSpaceType, TPreconditionerType, TReordererType> BaseType;
 
-    using SparseMatrixType = typename TSparseSpaceType::MatrixType;
+    typedef typename TSparseSpaceType::MatrixType SparseMatrixType;
 
-    using VectorType = typename TSparseSpaceType::VectorType;
+    typedef typename TSparseSpaceType::VectorType VectorType;
 
     using DenseMatrixType = typename TDenseSpaceType::MatrixType;
 
@@ -132,8 +134,8 @@ class SpectraSymGEigsShiftSolver
             rEigenvectors.resize(nroot, rK.size1());
         }
 
-        Eigen::Map<vector_t> eigvals (&rEigenvalues.data()[0], rEigenvalues.size());
-        Eigen::Map<matrix_t> eigvecs (&rEigenvectors.data()[0], rEigenvectors.size1(), rEigenvectors.size2());
+        Eigen::Map<vector_t> eigvals (rEigenvalues.data().begin(), rEigenvalues.size());
+        Eigen::Map<matrix_t> eigvecs (rEigenvectors.data().begin(), rEigenvectors.size1(), rEigenvectors.size2());
 
         // Spectra::SortRule::LargestAlge results in values being in descending order
         eigvals = eigs.eigenvalues().reverse();
@@ -399,3 +401,5 @@ inline std::ostream& operator <<(
 }
 
 } // namespace Kratos
+
+#endif // defined(KRATOS_SPECTRA_SYM_G_EIGS_SHIFT_SOLVER_H_INCLUDED)

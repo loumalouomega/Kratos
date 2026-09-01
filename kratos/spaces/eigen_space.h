@@ -189,8 +189,8 @@ public:
         const SizeType size = Size(rX);
         if (Size(rY) != size)
             rY.resize(size, false);
-        const auto* x_data = rX.data();
-        auto* y_data = rY.data();
+        const auto* x_data = rX.data().begin();
+        auto* y_data = rY.data().begin();
         ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
             for (SizeType i = Begin; i < End; ++i)
                 y_data[i] = x_data[i];
@@ -201,8 +201,8 @@ public:
     static TDataType Dot(VectorType const& rX, VectorType const& rY)
     {
         const SizeType size = Size(rX);
-        const auto* x_data = rX.data();
-        const auto* y_data = rY.data();
+        const auto* x_data = rX.data().begin();
+        const auto* y_data = rY.data().begin();
         const int n_chunks = ParallelUtilities::GetNumThreads();
         if (n_chunks == 1) {
             return PartialDot(x_data, y_data, SizeType(0), size);
@@ -317,8 +317,8 @@ public:
         const auto* row_ptr = rA.outerIndexPtr();
         const auto* col_idx = rA.innerIndexPtr();
         const auto* values = rA.valuePtr();
-        const auto* x_data = rX.data();
-        auto* y_data = rY.data();
+        const auto* x_data = rX.data().begin();
+        auto* y_data = rY.data().begin();
         const int n_chunks = ParallelUtilities::GetNumThreads();
         if (n_chunks == 1) {
             PartialSpMV(row_ptr, col_idx, values, x_data, y_data, SizeType(0), n_rows);
@@ -358,8 +358,8 @@ public:
         const auto* row_ptr = rA.outerIndexPtr();
         const auto* col_idx = rA.innerIndexPtr();
         const auto* values = rA.valuePtr();
-        const auto* x_data = rX.data();
-        auto* y_data = rY.data();
+        const auto* x_data = rX.data().begin();
+        auto* y_data = rY.data().begin();
 
         SetToZero(rY);
         for (SizeType i = 0; i < n_rows; ++i) {
@@ -395,7 +395,7 @@ public:
     {
         if (A == 1.00)
             return;
-        auto* x_data = rX.data();
+        auto* x_data = rX.data().begin();
         ParallelChunks(Size(rX), [=](const SizeType Begin, const SizeType End) {
             for (SizeType i = Begin; i < End; ++i)
                 x_data[i] *= A;
@@ -411,8 +411,8 @@ public:
         if (Size(rX) != size)
             rX.resize(size, false);
 
-        const auto* y_data = rY.data();
-        auto* x_data = rX.data();
+        const auto* y_data = rY.data().begin();
+        auto* x_data = rX.data().begin();
         // A == +-1 fast paths, as in UblasSpace
         if (A == 1.00) {
             ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
@@ -441,8 +441,8 @@ public:
         if (Size(rX) != size)
             rX.resize(size, false);
 
-        const auto* y_data = rY.data();
-        auto* x_data = rX.data();
+        const auto* y_data = rY.data().begin();
+        auto* x_data = rX.data().begin();
         // A == +-1 fast paths, as in UblasSpace
         if (A == 1.00) {
             ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
@@ -475,9 +475,9 @@ public:
         if (Size(rZ) != size)
             rZ.resize(size, false);
 
-        const auto* x_data = rX.data();
-        const auto* y_data = rY.data();
-        auto* z_data = rZ.data();
+        const auto* x_data = rX.data().begin();
+        const auto* y_data = rY.data().begin();
+        auto* z_data = rZ.data().begin();
         ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
             for (SizeType i = Begin; i < End; ++i)
                 z_data[i] = A * x_data[i] + B * y_data[i];
@@ -487,8 +487,8 @@ public:
     static void ScaleAndAdd(const double A, const VectorType& rX, const double B, VectorType& rY) // rY = (A * rX) + (B * rY)
     {
         const SizeType size = Size(rX);
-        const auto* x_data = rX.data();
-        auto* y_data = rY.data();
+        const auto* x_data = rX.data().begin();
+        auto* y_data = rY.data().begin();
         ParallelChunks(size, [=](const SizeType Begin, const SizeType End) {
             for (SizeType i = Begin; i < End; ++i)
                 y_data[i] = A * x_data[i] + B * y_data[i];
@@ -583,7 +583,7 @@ public:
 
     inline static void SetToZero(VectorType& rX)
     {
-        auto* x_data = rX.data();
+        auto* x_data = rX.data().begin();
         ParallelChunks(Size(rX), [=](const SizeType Begin, const SizeType End) {
             for (SizeType i = Begin; i < End; ++i)
                 x_data[i] = TDataType();

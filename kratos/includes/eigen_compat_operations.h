@@ -122,6 +122,36 @@ inline typename TDerived::PlainObject trans(const Eigen::SparseMatrixBase<TDeriv
     return rM.transpose();
 }
 
+/// Row / column view of a SPARSE matrix, as ublas row()/column() over a
+/// compressed_matrix. Used by idioms such as
+///     inner_prod(row(rDenseMatrix, j), row(rSparseMatrix, i))
+/// so they do not have to be unrolled over the CSR arrays at the call site.
+template<class TDerived>
+inline auto row(const Eigen::SparseMatrixBase<TDerived>& rM, const std::size_t I)
+{
+    return rM.derived().row(static_cast<Eigen::Index>(I));
+}
+
+template<class TDerived>
+inline auto column(const Eigen::SparseMatrixBase<TDerived>& rM, const std::size_t J)
+{
+    return rM.derived().col(static_cast<Eigen::Index>(J));
+}
+
+/// Mixed sparse/dense inner product (either argument order), as ublas
+/// inner_prod over a sparse and a dense vector expression.
+template<class TDerived1, class TDerived2>
+inline auto inner_prod(const Eigen::SparseMatrixBase<TDerived1>& rX, const Eigen::MatrixBase<TDerived2>& rY)
+{
+    return rX.derived().dot(rY.derived());
+}
+
+template<class TDerived1, class TDerived2>
+inline auto inner_prod(const Eigen::MatrixBase<TDerived1>& rX, const Eigen::SparseMatrixBase<TDerived2>& rY)
+{
+    return rY.derived().dot(rX.derived());
+}
+
 /// 1-norm.
 template<class TDerived>
 inline auto norm_1(const Eigen::MatrixBase<TDerived>& rX)

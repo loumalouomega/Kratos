@@ -7,12 +7,14 @@
 //  Author: Thomas Oberbichler
 */
 
-#pragma once
+#if !defined(KRATOS_EIGEN_SPARSE_CG_SOLVER_H_INCLUDED)
+#define KRATOS_EIGEN_SPARSE_CG_SOLVER_H_INCLUDED
 
 // External includes
 #include <Eigen/Sparse>
 
 // Project includes
+#include "includes/define.h"
 #include "linear_solvers_define.h"
 #include "linear_solvers/direct_solver.h"
 #include "spaces/ublas_space.h"
@@ -75,3 +77,5 @@ public:
 };
 
 } // namespace Kratos
+
+#endif // defined(KRATOS_EIGEN_SPARSE_CG_SOLVER_H_INCLUDED)

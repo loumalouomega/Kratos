@@ -1378,7 +1378,7 @@ private:
 
         rData.resize(size1,size2,false);
 
-        read(rData.data(), rData.data() + size1 * size2, sizeof(TDataType));
+        read(rData.data().begin(), rData.data().begin() + size1 * size2, sizeof(TDataType));
 
         KRATOS_SERIALIZER_MODE_ASCII
 
@@ -1392,7 +1392,7 @@ private:
 
         rData.resize(size1,size2,false);
 
-        read(rData.data(), rData.data() + size1 * size2, 0);
+        read(rData.data().begin(), rData.data().begin() + size1 * size2, 0);
 
         KRATOS_SERIALIZER_MODE_END
     }
@@ -1411,14 +1411,14 @@ private:
         mpBuffer->write(data1,sizeof(SizeType));
         mpBuffer->write(data2,sizeof(SizeType));
 
-        write(rData.data(), rData.data() + rData.size1() * rData.size2(), sizeof(TDataType));
+        write(rData.data().begin(), rData.data().begin() + rData.size1() * rData.size2(), sizeof(TDataType));
 
         KRATOS_SERIALIZER_MODE_ASCII
 
         *mpBuffer << rData.size1() << std::endl;
         *mpBuffer << rData.size2() << std::endl;
 
-        write(rData.data(), rData.data() + rData.size1() * rData.size2(), 0);
+        write(rData.data().begin(), rData.data().begin() + rData.size1() * rData.size2(), 0);
 
         KRATOS_SERIALIZER_MODE_END
     }

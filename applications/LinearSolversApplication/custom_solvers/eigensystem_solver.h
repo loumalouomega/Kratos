@@ -8,7 +8,8 @@
 //           Armin Geiser
 */
 
-#pragma once
+#if !defined(KRATOS_EIGENSYSTEM_SOLVER_H_INCLUDED)
+#define KRATOS_EIGENSYSTEM_SOLVER_H_INCLUDED
 
 // System includes
 #include <type_traits>
@@ -18,6 +19,7 @@
 #include <Eigen/Eigenvalues>
 
 // Project includes
+#include "includes/define.h"
 #include "linear_solvers_define.h"
 #if defined EIGEN_USE_MKL_ALL
 #include "eigen_pardiso_lu_solver.h"
@@ -45,11 +47,11 @@ class EigensystemSolver
   public:
     KRATOS_CLASS_POINTER_DEFINITION(EigensystemSolver);
 
-    using BaseType = IterativeSolver<TSparseSpaceType, TDenseSpaceType, TPreconditionerType, TReordererType>;
+    typedef IterativeSolver<TSparseSpaceType, TDenseSpaceType, TPreconditionerType, TReordererType> BaseType;
 
-    using SparseMatrixType = typename TSparseSpaceType::MatrixType;
+    typedef typename TSparseSpaceType::MatrixType SparseMatrixType;
 
-    using VectorType = typename TSparseSpaceType::VectorType;
+    typedef typename TSparseSpaceType::VectorType VectorType;
 
     using DenseMatrixType = typename TDenseSpaceType::MatrixType;
 
@@ -263,8 +265,8 @@ class EigensystemSolver
             rEigenvectors.resize(nroot, nn);
         }
 
-        Eigen::Map<vector_t> eigvals (&rEigenvalues.data()[0], rEigenvalues.size());
-        Eigen::Map<matrix_t> eigvecs (&rEigenvectors.data()[0], rEigenvectors.size1(), rEigenvectors.size2());
+        Eigen::Map<vector_t> eigvals (rEigenvalues.data().begin(), rEigenvalues.size());
+        Eigen::Map<matrix_t> eigvecs (rEigenvectors.data().begin(), rEigenvectors.size1(), rEigenvectors.size2());
 
         eigvals = eig.eigenvalues().head(nroot);
 
@@ -316,10 +318,10 @@ private:
 
     struct DirectSolverWrapperBase
     {
-        using MatrixMapType = Eigen::Map<const Kratos::EigenSparseMatrix<double>>;
-        using EigenVectorType = Kratos::EigenDynamicVector<double>;
-        using ConstVectorRefType = Eigen::Ref<const EigenVectorType>;
-        using VectorRefType = Eigen::Ref<EigenVectorType>;
+        typedef Eigen::Map<const Kratos::EigenSparseMatrix<double>> MatrixMapType;
+        typedef Kratos::EigenDynamicVector<double> EigenVectorType;
+        typedef Eigen::Ref<const EigenVectorType> ConstVectorRefType;
+        typedef Eigen::Ref<EigenVectorType> VectorRefType;
 
         virtual ~DirectSolverWrapperBase() = default;
         virtual void Compute(MatrixMapType a) = 0;
@@ -329,10 +331,10 @@ private:
     template<class TSolver>
     struct DirectSolverWrapper : DirectSolverWrapperBase
     {
-        using BaseType = DirectSolverWrapperBase;
-        using MatrixMapType = typename BaseType::MatrixMapType;
-        using VectorRefType = typename BaseType::VectorRefType;
-        using ConstVectorRefType = typename BaseType::ConstVectorRefType;
+        typedef DirectSolverWrapperBase BaseType;
+        typedef typename BaseType::MatrixMapType MatrixMapType;
+        typedef typename BaseType::VectorRefType VectorRefType;
+        typedef typename BaseType::ConstVectorRefType ConstVectorRefType;
 
         void Compute(MatrixMapType a) override
         {
@@ -390,3 +392,5 @@ inline std::ostream& operator <<(
 }
 
 } // namespace Kratos
+
+#endif // defined(KRATOS_EIGENSYSTEM_SOLVER_H_INCLUDED)

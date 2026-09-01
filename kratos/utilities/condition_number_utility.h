@@ -175,20 +175,9 @@ public:
 
         const SizeType size_matrix = rInputMatrix.size1();
 
-        // Build the identity by writing the CSR arrays directly: works for both
-        // the uBLAS and the Eigen backend matrix (push_back/operator() insertion
-        // is a uBLAS-only idiom).
-        SparseMatrixType identity_matrix(size_matrix, size_matrix, size_matrix);
-        auto row_ptr = identity_matrix.index1_data().begin();
-        auto col_ptr = identity_matrix.index2_data().begin();
-        auto val_ptr = identity_matrix.value_data().begin();
-        row_ptr[0] = 0;
-        for (IndexType i = 0; i < size_matrix; ++i) {
-            col_ptr[i] = i;
-            val_ptr[i] = 1.0;
-            row_ptr[i + 1] = i + 1;
-        }
-        identity_matrix.set_filled(size_matrix + 1, size_matrix);
+        SparseMatrixType identity_matrix(size_matrix, size_matrix);
+        for (IndexType i = 0; i < size_matrix; ++i)
+            identity_matrix.push_back(i, i, 1.0);
 
         pEigenSolverMax->Solve(rInputMatrix, identity_matrix, eigen_values, eigen_vectors);
         const double max_lambda = eigen_values[0];

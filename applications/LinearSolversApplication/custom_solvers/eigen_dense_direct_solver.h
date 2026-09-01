@@ -7,7 +7,8 @@
 //  Author: Thomas Oberbichler
 */
 
-#pragma once
+#if !defined(KRATOS_EIGEN_DENSE_DIRECT_SOLVER_H_INCLUDED)
+#define KRATOS_EIGEN_DENSE_DIRECT_SOLVER_H_INCLUDED
 
 // External includes
 #include <Eigen/Core>
@@ -39,15 +40,15 @@ private:
 public:
     KRATOS_CLASS_POINTER_DEFINITION(EigenDenseDirectSolver);
 
-    using BaseType = DirectSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>;
+    typedef DirectSolver<TSparseSpaceType, TDenseSpaceType, TReordererType> BaseType;
 
-    using MatrixType = typename TSparseSpaceType::MatrixType;
+    typedef typename TSparseSpaceType::MatrixType MatrixType;
 
-    using VectorType = typename TSparseSpaceType::VectorType;
+    typedef typename TSparseSpaceType::VectorType VectorType;
 
-    using DataType = typename TSparseSpaceType::DataType;
+    typedef typename TSparseSpaceType::DataType DataType;
 
-    using DenseMatrixType = typename TDenseSpaceType::MatrixType;
+    typedef typename TDenseSpaceType::MatrixType DenseMatrixType;
 
     EigenDenseDirectSolver() {}
 
@@ -69,7 +70,7 @@ public:
      */
     void InitializeSolutionStep(MatrixType& rA, VectorType& rX, VectorType& rB) override
     {
-        Eigen::Map<Kratos::EigenDynamicMatrix<DataType>> A(&rA.data()[0], rA.size1(), rA.size2());
+        Eigen::Map<Kratos::EigenDynamicMatrix<DataType>> A(rA.data().begin(), rA.size1(), rA.size2());
 
         const bool success = m_solver.Compute(A);
 
@@ -85,8 +86,8 @@ public:
      */
     bool PerformSolutionStep(MatrixType& rA, VectorType& rX, VectorType& rB) override
     {
-        Eigen::Map<Kratos::EigenDynamicVector<DataType>> x(&rX.data()[0], rX.size());
-        Eigen::Map<Kratos::EigenDynamicVector<DataType>> b(&rB.data()[0], rB.size());
+        Eigen::Map<Kratos::EigenDynamicVector<DataType>> x(rX.data().begin(), rX.size());
+        Eigen::Map<Kratos::EigenDynamicVector<DataType>> b(rB.data().begin(), rB.size());
 
         const bool success = m_solver.Solve(b, x);
 
@@ -118,8 +119,8 @@ public:
         VectorType dummy;
         InitializeSolutionStep(rA, dummy, dummy);
 
-        Eigen::Map<Kratos::EigenDynamicMatrix<DataType>> X(&rX.data()[0], rX.size1(), rX.size2());
-        Eigen::Map<Kratos::EigenDynamicMatrix<DataType>> B(&rB.data()[0], rB.size1(), rB.size2());
+        Eigen::Map<Kratos::EigenDynamicMatrix<DataType>> X(rX.data().begin(), rX.size1(), rX.size2());
+        Eigen::Map<Kratos::EigenDynamicMatrix<DataType>> B(rB.data().begin(), rB.size1(), rB.size2());
 
         const bool success = m_solver.SolveMultiple(B, X);
 
@@ -185,3 +186,5 @@ inline std::ostream &operator<<(
 }
 
 } // namespace Kratos
+
+#endif // defined(KRATOS_EIGEN_DENSE_DIRECT_SOLVER_H_INCLUDED)

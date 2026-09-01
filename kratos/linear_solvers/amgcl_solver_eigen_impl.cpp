@@ -82,13 +82,13 @@ struct AMGCLAdaptor<TEigenSparseSpace<TValue>>
     auto MakeVectorIterator(const typename TEigenSparseSpace<TValue>::VectorType& rVector) const
     {
         KRATOS_ERROR_IF(rVector.size() == 0);
-        return rVector.data();
+        return rVector.data().begin();
     }
 
     auto MakeVectorIterator(typename TEigenSparseSpace<TValue>::VectorType& rVector) const
     {
         KRATOS_ERROR_IF(rVector.size() == 0);
-        return rVector.data();
+        return rVector.data().begin();
     }
 
 private:

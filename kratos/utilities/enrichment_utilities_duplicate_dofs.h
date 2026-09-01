@@ -677,7 +677,7 @@ static inline double CalculateVolume2D(
 }
 
 template<class TCoordinatesType>
-    static inline bool CalculatePosition(const TCoordinatesType& coordinates,
+static inline bool CalculatePosition(const TCoordinatesType& coordinates,
                                      const double xc, const double yc, const double zc,
                                      array_1d<double, 3 > & N
                                     )

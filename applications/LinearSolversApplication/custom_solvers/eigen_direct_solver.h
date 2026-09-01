@@ -69,17 +69,17 @@ private:
 public:
     KRATOS_CLASS_POINTER_DEFINITION(EigenDirectSolver);
 
-    using BaseType = DirectSolver<TSparseSpaceType, TDenseSpaceType, TReordererType>;
+    typedef DirectSolver<TSparseSpaceType, TDenseSpaceType, TReordererType> BaseType;
 
-    using SparseMatrixType = typename TSparseSpaceType::MatrixType;
+    typedef typename TSparseSpaceType::MatrixType SparseMatrixType;
 
-    using VectorType = typename TSparseSpaceType::VectorType;
+    typedef typename TSparseSpaceType::VectorType VectorType;
 
-    using DataType = typename TSparseSpaceType::DataType;
+    typedef typename TSparseSpaceType::DataType DataType;
 
-    using DenseMatrixType = typename TDenseSpaceType::MatrixType;
+    typedef typename TDenseSpaceType::MatrixType DenseMatrixType;
 
-    using FactoryType = StandardLinearSolverFactory<TSparseSpaceType, TDenseSpaceType, EigenDirectSolver>;
+    typedef StandardLinearSolverFactory<TSparseSpaceType, TDenseSpaceType, EigenDirectSolver> FactoryType;
 
     EigenDirectSolver() {}
 

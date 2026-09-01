@@ -18,6 +18,7 @@
 // External includes
 
 // Project includes
+#include "includes/define.h"
 #include "includes/kratos_parameters.h"
 #include "includes/kratos_components.h"
 #include "linear_solvers/preconditioner.h"

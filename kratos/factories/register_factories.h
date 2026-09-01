@@ -17,6 +17,7 @@
 // External includes
 
 // Project includes
+#include "includes/define.h"
 #include "factories/factory.h"
 #include "includes/kratos_components.h"
 #include "solving_strategies/builder_and_solvers/explicit_builder.h"
