@@ -190,6 +190,18 @@ from test_mesh_deformation import TestMeshMovingInteriorSmoothing
 from test_mesh_deformation import TestExactControlSensitivities
 from test_vertex_morphing_comparison import TestVertexMorphingComparison
 from test_adjoint_cross_validation import TestAdjointCrossValidation
+from test_adjoint_bridge import TestAdjointBridgeConversion
+from test_adjoint_bridge import TestAdjointBridgeFactory
+from test_adjoint_bridge import TestAdjointBridgeFields
+from test_adjoint_bridge import TestAdjointObjectiveWeights
+from test_adjoint_integration import TestAdjointBridgeStructuralMechanics
+from test_adjoint_integration import TestAdjointBridgeConvectionDiffusion
+from test_adjoint_integration import TestAdjointSensitivityProcess
+from test_sobolev_training import TestSensitivityGradient
+from test_sobolev_training import TestSensitivityLossTerm
+from test_sobolev_training import TestSobolevTrainingImprovesGradients
+from test_surrogate_response_function import TestSurrogateResponseFunction
+from test_surrogate_response_function import TestSurrogateResponseFunctionExactMode
 from test_provenance_cache import TestProvenanceCache
 from test_suite_registration import TestSuiteRegistration
 from test_suite_registration import TestDocumentedIdentifiersExist
@@ -383,6 +395,18 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestExactControlSensitivities]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestVertexMorphingComparison]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointCrossValidation]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointBridgeConversion]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointBridgeFactory]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointBridgeFields]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointObjectiveWeights]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointBridgeStructuralMechanics]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointBridgeConvectionDiffusion]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAdjointSensitivityProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSensitivityGradient]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSensitivityLossTerm]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSobolevTrainingImprovesGradients]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSurrogateResponseFunction]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSurrogateResponseFunctionExactMode]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSignedDistance]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGridVectorOperators]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestImplicitDomainGeneration]))

@@ -1,6 +1,6 @@
 """Executes the shipped example notebooks.
 
-`examples/notebooks` is the application's worked documentation: eighteen
+`examples/notebooks` is the application's worked documentation: nineteen
 notebooks calling the same public helpers the processes call. Nothing
 executed them until this file existed, so a renamed argument or a changed
 return type broke them silently - a static import check is not enough,
@@ -10,11 +10,11 @@ and the behaviour that rot.
 Each notebook runs in a throwaway copy of the tree rather than in place,
 for two reasons. The notebooks write artifacts next to themselves
 (`output/`, `*.pt`, `*.png`), which would dirty the working tree on every
-run; and notebooks 07, 16 and 17 load their solver cases from
-`tests/kratos_solver_cases`, so the copy has to preserve the relative
-layout, not just the notebook file.
+run; and notebooks 07, 16, 17 and 19 load their cases from
+`tests/kratos_solver_cases` - 19 also from `tests/adjoint_cases` - so the
+copy has to preserve the relative layout, not just the notebook file.
 
-The notebooks are slow by test standards (~5 minutes for all eighteen) and
+The notebooks are slow by test standards (~5 minutes for all nineteen) and
 are registered on the validation suite only.
 """
 
@@ -28,6 +28,7 @@ import KratosMultiphysics.KratosUnittest as KratosUnittest
 _TESTS_DIR = Path(__file__).resolve().parent
 _NOTEBOOK_DIR = _TESTS_DIR.parent / "examples" / "notebooks"
 _CASE_DIR = _TESTS_DIR / "kratos_solver_cases"
+_ADJOINT_CASE_DIR = _TESTS_DIR / "adjoint_cases"
 
 _CELL_TIMEOUT = 900
 
@@ -87,8 +88,10 @@ def _RunNotebook(notebook_path):
         root = Path(temp_dir)
         run_dir = root / "examples" / "notebooks"
         run_dir.mkdir(parents=True)
-        # 16 and 17 reach out to ../../tests/kratos_solver_cases
+        # 16 and 17 reach out to ../../tests/kratos_solver_cases, and 19
+        # additionally to ../../tests/adjoint_cases
         shutil.copytree(_CASE_DIR, root / "tests" / "kratos_solver_cases")
+        shutil.copytree(_ADJOINT_CASE_DIR, root / "tests" / "adjoint_cases")
         shutil.copy(notebook_path, run_dir / notebook_path.name)
 
         # the plotting notebooks must not need a display
