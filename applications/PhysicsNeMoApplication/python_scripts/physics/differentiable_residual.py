@@ -197,6 +197,9 @@ class DofFieldMap:
                     column_of[f"{variable_name}_{axis}"] = offset
                     offset += 1
         self.total_width = offset
+        # exposed so a caller can place a per-variable quantity (an
+        # objective's weights, say) into the right column block
+        self.column_of = column_of
 
         node_row = {node.Id: row for row, node in enumerate(self.model_part.Nodes)}
         self.n_nodes = len(node_row)

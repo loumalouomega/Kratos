@@ -14,6 +14,8 @@ Module                             Provides
                                    plus its generated ``config.pbtxt``
 ``cosim_surrogate_solver_wrapper`` a trained model as a first-class
                                    CoSimulationApplication *solver*
+``surrogate_response_function``    a trained model as a Kratos *response
+                                   function* - J and dJ/dX for optimization
 ``uncertainty_utils``              MC dropout, checkpoint ensembles and GP heads
                                    - calibrated error bars on any prediction
 ``ood_guard_utils``                out-of-distribution guardrails, calibrated at

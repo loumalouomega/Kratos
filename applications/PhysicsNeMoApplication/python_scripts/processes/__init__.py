@@ -16,8 +16,9 @@ Subpackages
 ``export``
     Write solver data out as training data.
 
-Two processes sit at this level because they are neither: ``adaptive_remesh_process``
-changes the mesh, and ``validation_metrics_process`` measures the result.
+Three processes sit at this level because they are neither: ``adaptive_remesh_process``
+changes the mesh, ``validation_metrics_process`` measures the result, and
+``adjoint_sensitivity_process`` puts an exact dJ/dX field on the model part.
 
 Anything without a ``Factory`` belongs somewhere else - ``bridges``, ``training``,
 ``physics``, ``deployment`` or ``distributed``.

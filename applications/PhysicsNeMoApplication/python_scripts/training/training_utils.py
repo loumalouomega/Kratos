@@ -10,6 +10,8 @@ optionally with a model card sidecar.
 torch is imported lazily; module import stays ML-free.
 """
 
+import inspect
+
 import KratosMultiphysics as Kratos
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 def _TryImportTorch():
@@ -44,6 +46,31 @@ def _GuardCalibrationRows(inputs):
     return inputs.reshape(-1, inputs.shape[-1])
 
 
+def _WantsTargets(loss_term) -> bool:
+    """Whether an extra loss term takes the batch targets as a 4th argument.
+
+    Most terms grade the prediction against physics and need nothing else
+    (physics_informed, differentiable_residual); a derivative-matching term
+    needs the stored adjoint gradient, which travels in the targets. Rather
+    than break the three-argument contract those terms were written against,
+    the arity is resolved here - once, before the epoch loop, never per batch.
+
+    A callable whose signature cannot be read (a C callable, an exotic
+    wrapper) is treated as three-argument: that is the older contract, so
+    guessing it is the safe direction.
+    """
+    try:
+        parameters = list(inspect.signature(loss_term).parameters.values())
+    except (TypeError, ValueError):
+        return False
+    if any(p.kind is inspect.Parameter.VAR_POSITIONAL for p in parameters):
+        return True
+    positional = [p for p in parameters
+                  if p.kind in (inspect.Parameter.POSITIONAL_ONLY,
+                                inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+    return len(positional) >= 4
+
+
 def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None,
                extra_loss_terms=None):
     """Trains a model on an (inputs, targets) dataset.
@@ -60,6 +87,12 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
             concrete_dropout_reg_weight (0.0 = off; > 0 adds that multiple
                 of the summed physicsnemo.nn.ConcreteDropout regularization
                 losses to the objective, making the dropout rates learnable),
+            target_channels ([] = the whole target): restrict the DATA loss
+                to these target columns. Needed when the targets carry more
+                than the model predicts - a sample exported with an adjoint
+                sensitivity field alongside the solution has the gradient in
+                its trailing columns, there for a loss term rather than for
+                the model to reproduce (see sobolev_training).
             ood_guard ({} = off; {"guard_file": "...", "buffer_size": 0 =
                 len(dataset), "knn_k", "sensitivity"} calibrates an OOD
                 guard on the training inputs during the first epoch and
@@ -85,6 +118,12 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
             residuals via physicsnemo.sym) and
             differentiable_residual.MakeExactResidualLossTerm (the exact
             discrete residual through the real FEM assembly).
+            A term declaring a FOURTH positional argument is called
+            term(model, inputs, prediction, targets) instead - the batch
+            targets, for terms that grade against stored data rather than
+            against physics alone. sobolev_training.MakeSensitivityLossTerm
+            is the one that needs it (the adjoint gradient rides in the
+            targets). The arity is resolved once, before training starts.
 
     Returns:
         list[float]: mean training loss per epoch. The model ends up on the
@@ -103,6 +142,7 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
         "echo_interval"               : 0,
         "seed"                        : -1,
         "concrete_dropout_reg_weight" : 0.0,
+        "target_channels"             : [],
         "streaming"                   : false,
         "warm_restart"                : {},
         "ood_guard"                   : {}
@@ -177,6 +217,9 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
             shuffle=settings["shuffle"].GetBool())
     echo_interval = settings["echo_interval"].GetInt()
 
+    resolved_loss_terms = [(term, _WantsTargets(term)) for term in (extra_loss_terms or ())]
+    target_channels = [int(v) for v in settings["target_channels"].GetVector()]
+
     history = []
     model.train()
     for epoch in range(settings["epochs"].GetInt()):
@@ -185,11 +228,13 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
         for inputs, targets in loader:
             optimizer.zero_grad()
             inputs = inputs.to(device)
+            targets = targets.to(device)
             prediction = model(inputs)
-            loss = loss_fn(prediction, targets.to(device))
-            if extra_loss_terms:
-                for loss_term in extra_loss_terms:
-                    loss = loss + loss_term(model, inputs, prediction)
+            loss = loss_fn(prediction,
+                           targets[..., target_channels] if target_channels else targets)
+            for loss_term, wants_targets in resolved_loss_terms:
+                loss = loss + (loss_term(model, inputs, prediction, targets) if wants_targets
+                               else loss_term(model, inputs, prediction))
             if concrete_reg_weight > 0.0:
                 from KratosMultiphysics.PhysicsNeMoApplication.deployment import uncertainty_utils
                 loss = loss + concrete_reg_weight * uncertainty_utils.CollectConcreteDropoutLosses(model)

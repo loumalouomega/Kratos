@@ -21,6 +21,8 @@ Module                   Provides
                          training in ROM space
 ``rollout_utils``        ``EvaluateRollout`` - multi-step error growth of a
                          trained time-series surrogate
+``sobolev_training``     ``MakeSensitivityLossTerm`` - derivative-informed
+                         training against Kratos's adjoint dJ/dX
 ======================== ======================================================
 
 Nothing here defines a Kratos ``Process``; the process that fills the streaming

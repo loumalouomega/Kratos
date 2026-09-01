@@ -16,6 +16,8 @@ Module                Kratos side  ->  PhysicsNeMo side
 ``mapping_bridge``    non-matching transfer via MappingApplication mappers
 ``calculus_bridge``   tessellated mesh -> gradient/divergence/curl/Laplacian
 ``rom_bridge``        RomApplication POD bases <-> reduced coordinates
+``adjoint_bridge``    Kratos response functions / ``SensitivityBuilder``
+                      output -> row-ordered dJ/dX arrays
 ``cfd_bridge``        ``ModelPart`` <-> pyvista, plus ``physicsnemo-cfd`` metrics
 ``curator_bridge``    a running solve -> a ``physicsnemo-curator`` ETL source
 ``vfgn_bridge``       sintering/AM state <-> Virtual Foundry GraphNet sequences
