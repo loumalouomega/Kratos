@@ -3,12 +3,17 @@ title: Overview
 keywords: physicsnemo machine learning surrogate
 tags: [Overview.md]
 sidebar: physicsnemo_application
-summary: 
+summary: The bridge between Kratos Multiphysics and NVIDIA PhysicsNeMo - what it covers, its dependency policy, and where everything is documented.
 ---
 
 # PhysicsNeMo Application
 
 The *PhysicsNeMo Application* bridges *Kratos Multiphysics* with [NVIDIA PhysicsNeMo](https://docs.nvidia.com/physicsnemo/latest/index.html), a PyTorch-based framework for physics-ML. It covers the full loop between a finite-element solver and a machine-learning workflow:
+
+<p align="center">
+    <img src="images/architecture.svg" alt="Kratos on the left, PhysicsNeMo on the right, the application's packages in between, artifacts along the bottom"/>
+</p>
+<p align="center">Figure 1: The application sits between the two frameworks; <a href="Architecture.html">Architecture</a> explains the columns.</p>
 
 - **Data out**: export simulation fields as training datasets ([Tensor Bridge](../Tensor_Bridge/Tensor_Bridge.html)).
 - **Geometry out**: convert arbitrary Kratos meshes into PhysicsNeMo's simplicial mesh representation, with provenance to map predictions back ([Mesh Bridge](../Mesh_Bridge/Mesh_Bridge.html)).
@@ -23,6 +28,22 @@ Built on those four, the rest of the application covers:
 - **Trust and scale**: prediction uncertainty and governance ([Uncertainty](../Uncertainty/Uncertainty.html)), MPI-distributed training and inference ([Distributed](../Distributed/Distributed.html)), and deploying a surrogate as a co-simulation solver ([CoSimulation](../CoSimulation/CoSimulation.html)).
 
 Serving (ONNX export and Triton) is covered in [Inference](../Inference/Inference.html); adaptive remeshing in [Mesh Bridge](../Mesh_Bridge/Mesh_Bridge.html); streaming datasets and warm restarts in [Training](../Training/Training.html).
+
+## Documentation map
+
+| Section | Read it for |
+|---|---|
+| **General** | [Architecture](Architecture.html), [Kratos concepts for ML readers](Kratos_Concepts_For_ML.html), [Where things live](Module_Map.html), [From scratch](From_Scratch.html), the [Process reference](Process_Reference.html), [Installation and environment](Installation_And_Environment.html), [Performance](Performance.html), [Testing and contributing](Testing_And_Contributing.html), [Troubleshooting and traps](Troubleshooting_And_Traps.html), a [Glossary](Glossary.html), and the [Retrospectives](Retrospectives.html) of how the roadmap moved |
+| **PhysicsNeMo Basics** | NVIDIA PhysicsNeMo itself, in fourteen pages from [what it is](../PhysicsNeMo_Basics/Overview.html) to [versions and compatibility](../PhysicsNeMo_Basics/Versions_And_Compatibility.html) |
+| **Tensor Bridge**, **Mesh Bridge** | data and geometry out of Kratos, and predictions back |
+| **Training**, **Inference** | the loop, the checkpoints and cards, every way to run a model inside a solve |
+| **Active Learning** | Kratos as the labeling oracle |
+| **Super-Resolution**, **Graph Neural Networks**, **Particle Methods**, **Sequence Models**, **Point Clouds**, **CAE Datapipes**, **Reduced Order Models**, **Diffusion** | one page per data shape and model family |
+| **Adjoint**, **Physics-Informed** | gradients and residuals through the real solver |
+| **Uncertainty**, **CoSimulation**, **Distributed** | trust, coupling, ranks |
+| **Examples** | the gallery of twenty-one use cases and the nineteen notebooks |
+
+The README's roadmap lists what is pending, with its gate; nothing there is duplicated here.
 
 ## Dependency policy
 
@@ -50,7 +71,7 @@ Tests are always registered and skip cleanly (with an explanatory message) on bu
 
 ## Examples
 
-Runnable example notebooks (tensor bridge, mesh bridge, surrogate training and deployment, active learning) live in `applications/PhysicsNeMoApplication/examples/notebooks/`.
+Nineteen runnable notebooks live in `applications/PhysicsNeMoApplication/examples/notebooks/`, and twenty-one documented use cases against real solves in the Examples repository; both are indexed on the [Examples](../Examples/Examples.html) page.
 
 ## Installation
 

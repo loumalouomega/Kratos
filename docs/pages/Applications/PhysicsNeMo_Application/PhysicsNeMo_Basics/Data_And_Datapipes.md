@@ -33,6 +33,11 @@ These are not obvious from the API, and this application encodes all four:
 
 Two routes, and the difference is whether the data touches disk.
 
+<p align="center">
+    <img src="images/datapipe_pipeline.svg" alt="Readers, transforms, datasets and the DataLoader in a row, and below them the two Kratos entry routes, through files and through a live queue"/>
+</p>
+<p align="center">Figure 1: The datapipe stages, and the two places a Kratos solve feeds them.</p>
+
 **Through files.** A process writes `.npz` (or `.pmsh`, or Zarr) during the solve; a dataset factory reads them back afterwards. Samples are reusable, shuffleable and inspectable — the right default.
 
 ```

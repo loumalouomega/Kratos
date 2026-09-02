@@ -3,7 +3,7 @@ title: Adjoint Integration
 keywords: adjoint sensitivity shape gradient sobolev response function
 tags: [Adjoint.md]
 sidebar: physicsnemo_application
-summary: 
+summary: Kratos's own adjoint stack through adjoint_bridge - what is consumed, the row-order contract, one objective for both adjoints, cross-validation on two physics, the sensitivity process, Sobolev training and a surrogate as a response function.
 ---
 
 # Adjoint integration
@@ -18,6 +18,11 @@ The adjoint integration closes both directions, and it is built the same way the
 | **`processes/adjoint_sensitivity_process`** | puts that field on the model part, where every export process already picks it up |
 | **`training/sobolev_training`** | trains a surrogate to match it — derivative-informed learning |
 | **`deployment/surrogate_response_function`** | a trained model *as* a Kratos response function |
+
+<p align="center">
+    <img src="images/id_to_row.svg" alt="Kratos's id-keyed gradient dictionary converted by id into the application's row order and consumed as a field and as a training target"/>
+</p>
+<p align="center">Figure 1: The one conversion that makes an adjoint usable as data.</p>
 
 ## What is being consumed
 

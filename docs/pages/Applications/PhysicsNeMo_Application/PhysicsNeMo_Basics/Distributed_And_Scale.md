@@ -10,6 +10,11 @@ summary: DistributedManager, process groups, ShardTensor - and which of them a o
 
 Two different subpackages, two different kinds of parallelism, and confusing them is the usual mistake.
 
+<p align="center">
+    <img src="images/parallelism.svg" alt="Data parallelism with a full model copy per rank and an all-reduce of gradients, next to domain parallelism with one tensor split into uneven shards and halo exchange at the shard boundaries"/>
+</p>
+<p align="center">Figure 1: Data parallelism replicates the model and splits the batch; domain parallelism splits the sample itself.</p>
+
 ## `physicsnemo.distributed` — data parallelism
 
 Every rank holds the **whole model** and a **different slice of the data**. Gradients are averaged across ranks; the model is replicated.

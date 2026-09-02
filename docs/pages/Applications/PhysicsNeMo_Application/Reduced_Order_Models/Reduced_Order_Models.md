@@ -3,12 +3,17 @@ title: Reduced Order Models
 keywords: rom pod basis surrogate temporal attention
 tags: [Reduced_Order_Models.md]
 sidebar: physicsnemo_application
-summary: 
+summary: RomApplication's POD bases consumed in their exact row order, RomSurrogateProcess deploying neural-augmented reduced bases in the loop, and temporal attention in ROM space.
 ---
 
 # Neural-augmented reduced bases (RomApplication interop)
 
 RomApplication's `CalculateRomBasisOutputProcess` computes a POD basis from solve snapshots; this application consumes its **numpy output format** and puts torch/physicsnemo models on top: a surrogate maps case parameters to the reduced coordinates `q`, and the full-order field is reconstructed as `u = Φ q` — a full-field prediction at the cost of an `n_modes`-sized network. Only the *file format* is consumed: `rom_bridge` needs numpy and the core, never the compiled RomApplication (which is only required to produce a basis).
+
+<p align="center">
+    <img src="images/rom_rows.svg" alt="u equals Phi q with the node-major, alphabetically sorted unknown-minor row order of the basis"/>
+</p>
+<p align="center">Figure 1: The row-order contract read from CalculateRomBasisOutputProcess, and the two ways this application uses the basis.</p>
 
 ## The basis format and its row-order contract
 

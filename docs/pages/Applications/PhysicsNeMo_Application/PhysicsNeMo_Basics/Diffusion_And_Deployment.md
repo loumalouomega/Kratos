@@ -20,7 +20,15 @@ The subpackage splits the problem into three replaceable parts, and knowing the 
 | **Preconditioner** | How is noise scaled and the network conditioned on the noise level? | `EDMPrecond`, `VEPrecond`, `VPPrecond`, `iDDPMPrecond`, `EDMPrecondSuperResolution` |
 | **Sampler** | How do we walk from noise to a sample? | `deterministic_sampler`, `stochastic_sampler`, `EDMStochasticHeunSolver`, `EulerSolver`, `HeunSolver` |
 
-Also: `diffusion.guidance` (classifier-free style steering), `diffusion.noise_schedulers`, `diffusion.multi_diffusion` (tiling a large domain), and `diffusion.metrics` with the EDM losses.
+
+<p align="center">
+    <img src="images/diffusion_split.svg" alt="Denoiser, preconditioner and sampler as three swappable boxes, and the CorrDiff two-stage recipe below them"/>
+</p>
+<p align="center">Figure 1: The three replaceable parts, and CorrDiff's regression-plus-residual split.</p>
+
+Also: `diffusion.guidance` (diffusion posterior sampling - `DataConsistencyDPSGuidance` steers samples toward masked observations, `ModelConsistencyDPSGuidance` toward a differentiable forward model, both at sampling time and without retraining), `diffusion.noise_schedulers` (EDM, VE, VP, iDDPM, one module per class since 2.2), `diffusion.multi_diffusion` (patch-based tiling of a 2-D domain larger than the training resolution), and `diffusion.metrics` with the EDM losses.
+
+**Two APIs coexist in 2.2.** The *protocol* API - `DiffusionModel`, `Predictor` and `Denoiser` protocols, `EDMNoiseScheduler`, `EDMPreconditioner`, `MSEDSMLoss`, `samplers.sample(denoiser, latents, scheduler, solver=)` - is what guidance and multi-diffusion are written against. The *legacy* modules (`samplers.legacy_deterministic_sampler`, `metrics.legacy_losses`, `preconditioners.legacy`) each warn that they will be deprecated in a future release. This application's diffusion bridge still runs on the legacy ones; migrating it is the first upstream item on the README's roadmap, and DPS guidance and multi-diffusion follow from it.
 
 **CorrDiff** is the two-stage recipe that matters for physics: a *regression* model predicts the conditional mean, then a *residual* diffusion model learns what the regression could not. Predicting the mean with a deterministic model is much easier than making diffusion learn it, and the split shows.
 

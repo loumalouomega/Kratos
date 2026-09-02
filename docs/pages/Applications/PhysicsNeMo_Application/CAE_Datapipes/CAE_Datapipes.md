@@ -3,12 +3,17 @@ title: CAE Datapipes
 keywords: domino transolver cae datapipe stl export
 tags: [CAE_Datapipes.md]
 sidebar: physicsnemo_application
-summary: 
+summary: The CAE exporter writing per-case .npz files in physicsnemo.datapipes.cae's exact layout, the DoMINO and Transolver pipe factories, and in-loop DoMINO deployment with pretrained checkpoints.
 ---
 
 # CAE datapipes: DoMINO and Transolver on Kratos data
 
 physicsnemo's large aerodynamic models come with config-driven datapipes (`physicsnemo.datapipes.cae`) that read per-case dictionaries. `CaeDatasetExportProcess` writes Kratos results in exactly that layout — one `.npz` per case with the **superset** of the keys `DoMINODataPipe` and `TransolverDataPipe` consume (each pipe selects its subset; extra keys are ignored) — so both pipes run on Kratos data out of the box. FIGConvNet remains bring-your-own-datapipe.
+
+<p align="center">
+    <img src="images/npz_layout.svg" alt="The arrays of one CAE case file and which pipelines consume them"/>
+</p>
+<p align="center">Figure 1: One case file, its arrays and shapes, and the two pipelines that read it.</p>
 
 ## The exporter
 

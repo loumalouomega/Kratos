@@ -3,10 +3,15 @@ title: Training
 keywords: training model card rollout checkpoint
 tags: [Training.md]
 sidebar: physicsnemo_application
-summary: 
+summary: The Parameters-driven training loop, checkpoints and model cards, physics terms and callbacks, rollout evaluation, augmentation, temporal schemes, streaming from a running solve and warm restarts.
 ---
 
 # Training utilities
+
+<p align="center">
+    <img src="images/train_model_loop.svg" alt="TrainModel's loop from dataset to optimizer step, with the extra loss terms, callbacks, OOD calibration and the checkpoint with its card"/>
+</p>
+<p align="center">Figure 1: What TrainModel does, and the three things it deliberately leaves to you.</p>
 
 ## TrainModel
 

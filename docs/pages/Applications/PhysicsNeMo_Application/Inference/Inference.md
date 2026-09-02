@@ -3,10 +3,20 @@ title: Inference
 keywords: inference surrogate warm start hybrid initialization onnx torch.compile nvtx
 tags: [Inference.md]
 sidebar: physicsnemo_application
-summary: 
+summary: Running a trained model inside a solution loop - checkpoints and cards, de-normalization both ways, the base InferenceProcess and hybrid initialization, grids and transients, validation, physicsnemo-cfd delegation, Triton and NIM.
 ---
 
 # Inference inside a solution loop
+
+<p align="center">
+    <img src="../General/images/execution_points.svg" alt="The AnalysisStage timeline with every inference, export and validation hook placed under the stage it fires in"/>
+</p>
+<p align="center">Figure 1: Where an inference process runs. The default is after the solve; initialize_solution_step predicts before it, and hybrid initialization runs once before the loop.</p>
+
+<p align="center">
+    <img src="../Tensor_Bridge/images/data_locations.svg" alt="Entity data to the concatenated tensor and back"/>
+</p>
+<p align="center">Figure 2: The gather/forward/scatter contract every inference process follows, with the card's normalization applied on the way in and inverted on the way out.</p>
 
 ## Checkpoints and model cards
 

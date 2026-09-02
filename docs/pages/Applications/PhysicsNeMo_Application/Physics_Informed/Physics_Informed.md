@@ -3,7 +3,7 @@ title: Physics Informed
 keywords: physics-informed pinn residual physicsnemo.sym phy_informer inverse
 tags: [Physics_Informed.md]
 sidebar: physicsnemo_application
-summary: 
+summary: Physics as a signal - SymPy PDEs as training terms, PinnSolveProcess for forward and inverse solves, the exact discrete residual as a differentiable loss, design sensitivities, transient residuals and cross-validation against Kratos's adjoint.
 ---
 
 # Differentiable physics: residual losses, PINN solves, exact residuals and adjoints
@@ -15,6 +15,11 @@ Three residual notions coexist in this application:
 3. **Exact discrete, with gradients** — `differentiable_residual` wraps the *same assembled residual* as (1) in a `torch.autograd.Function` whose backward is the consistent tangent's transpose, lifting the former "scores, never losses" restriction; `sensitivity_utils` builds exact adjoint design sensitivities on top.
 
 Tensor layout (pinned by tests against the installed 2.2.0): channels-first — fields `(B, C, N)` point clouds or `(B, C, *spatial)` grids, coordinates `(B, 3, N)`; for `"least_squares"` the layout is per-point `(N, C)` with `coordinates (N, 3)`, `nodes` = node **ids** `(N, 1)` and `edges (E, 2)`.
+
+<p align="center">
+    <img src="../PhysicsNeMo_Basics/images/three_residuals.svg" alt="The strong-form PDE residual, the assembled solver residual and the differentiable discrete residual side by side"/>
+</p>
+<p align="center">Figure 1: The three residuals this page implements, and which to use when.</p>
 
 ## PDEs
 

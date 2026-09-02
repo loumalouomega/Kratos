@@ -3,12 +3,17 @@ title: Tensor Bridge
 keywords: tensor adaptor torch dataset export
 tags: [Tensor_Bridge.md]
 sidebar: physicsnemo_application
-summary: 
+summary: ModelPart data as torch tensors through the core tensor adaptors, the dataset exporter, and the torch Dataset over the exported samples - the layout every process shares.
 ---
 
 # Tensor bridge
 
 The tensor bridge connects `ModelPart` data with `torch.Tensor`s, built on the core `Kratos.TensorAdaptors` (which expose zero-copy NumPy views of Kratos data).
+
+<p align="center">
+    <img src="images/data_locations.svg" alt="The six data locations, the tensor adaptor staging buffer, and the (n_entities, width) concatenated tensor with its VARIABLE__location keys"/>
+</p>
+<p align="center">Figure 1: From entity data to the tensor a model sees, and back. The (n_entities, width) layout is the one contract every exporter, dataset and inference process shares.</p>
 
 ## ModelPart data as torch tensors
 

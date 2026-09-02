@@ -31,6 +31,11 @@ A zip archive containing:
 - the constructor arguments — the architecture;
 - the class's registry name, so `from_checkpoint` can find the class again.
 
+<p align="center">
+    <img src="images/mdlus_and_card.svg" alt="A .mdlus archive, a TorchScript file and the model-card sidecar side by side, and the gather, normalize, forward, de-normalize, scatter sequence a deployment process runs with them"/>
+</p>
+<p align="center">Figure 1: The two checkpoint formats, the card that gives their tensors meaning, and what a deployment process does with all three every step.</p>
+
 The consequences matter in practice:
 
 - **A `.mdlus` needs physicsnemo installed to load.** The class it names has to exist. If you want an artifact that runs without physicsnemo, export to ONNX (see [Diffusion and deployment](Diffusion_And_Deployment.html)).

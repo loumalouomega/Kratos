@@ -16,6 +16,11 @@ If PhysicsNeMo itself is new to you, read [PhysicsNeMo Basics](../PhysicsNeMo_Ba
 
 ## The shape of it
 
+<p align="center">
+    <img src="images/lifecycle.svg" alt="Export, train, save, deploy, validate, with the Kratos, application and PhysicsNeMo pieces under each step"/>
+</p>
+<p align="center">Figure 1: The five steps and who owns what at each.</p>
+
 ```
  1. export     a real solve  ---> sample_0.npz, sample_1.npz, ...
  2. train      those files   ---> a torch model

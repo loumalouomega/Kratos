@@ -3,12 +3,17 @@ title: Diffusion
 keywords: diffusion corrdiff downscaling generative uncertainty
 tags: [Diffusion.md]
 sidebar: physicsnemo_application
-summary: 
+summary: Conditional diffusion on grids - training with the EDM loss, ensemble deployment with uncertainty fields, DiT and volumetric U-Net denoisers, the CorrDiff two-stage recipe and FWI-style inversion.
 ---
 
 # Conditional diffusion field models
 
 CorrDiff-style downscaling with `physicsnemo.diffusion`: a denoiser learns the distribution of fine fields **conditioned** on a coarse (or otherwise partial) field, and sampling it repeatedly yields an ensemble whose mean is the prediction and whose spread is a calibrated uncertainty band.
+
+<p align="center">
+    <img src="../PhysicsNeMo_Basics/images/diffusion_split.svg" alt="Denoiser, preconditioner and sampler, and the CorrDiff two-stage recipe"/>
+</p>
+<p align="center">Figure 1: The three replaceable parts, and the regression-plus-residual split this page's recipe implements.</p>
 
 ## Training
 

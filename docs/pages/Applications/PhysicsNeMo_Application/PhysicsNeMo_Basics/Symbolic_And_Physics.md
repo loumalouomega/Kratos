@@ -24,6 +24,11 @@ It ships **bundled** with physicsnemo 2.2 — no separate `physicsnemo-sym` inst
 
 This is the distinction that matters most, and getting it wrong wastes weeks. All three are shipped here, in `physics/`.
 
+<p align="center">
+    <img src="images/three_residuals.svg" alt="A predicted field feeding three residual notions - strong-form PDE residual, assembled solver residual, differentiable discrete residual - each with its properties, uses and module"/>
+</p>
+<p align="center">Figure 1: The three residuals, what each is exact or differentiable about, and what to use it for.</p>
+
 ### 1. The PDE residual (approximate, differentiable)
 
 Substitute the network's output into the **strong form** of the PDE and see what is left over. `PhysicsInformer` does this.

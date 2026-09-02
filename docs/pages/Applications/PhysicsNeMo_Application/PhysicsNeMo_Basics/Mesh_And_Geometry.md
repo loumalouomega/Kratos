@@ -20,6 +20,11 @@ Kratos meshes are not simplicial. Hexahedra, prisms, pyramids, quadrilaterals an
 
 Meshes save and load in a memory-mapped format (`.pmsh`), which is what `MeshDataset` reads.
 
+<p align="center">
+    <img src="images/mesh_data_model.svg" alt="The Mesh tensorclass with points, cells, point_data, cell_data and global_data, the manifold and spatial dimensions that parametrize its type, and the four simplices"/>
+</p>
+<p align="center">Figure 1: The data model. Field rank lives in the tensor shape; the type is parametrized by two dimensions; cells are simplices and nothing else.</p>
+
 ## What is in there
 
 | Submodule | What it does |
@@ -27,7 +32,7 @@ Meshes save and load in a memory-mapped format (`.pmsh`), which is what `MeshDat
 | `tessellation` | `triangulate`, `fill_interior` — simplices from polygons and surfaces |
 | `calculus` | gradient, divergence, curl, Laplacian, integrals on a mesh — LSQ and discrete-exterior-calculus backends, autograd-differentiable |
 | `generate` | implicit geometry: `sdf_box`/`sdf_sphere`-style primitives, `sdf_union`/`sdf_difference`/`sdf_intersection` combinators, `marching_cubes`, `mesh_implicit_domain`, `refit_mesh_to_implicit` |
-| `spatial` | `signed_distance_field`, a BVH and a cluster tree |
+| `spatial` | `signed_distance_field` (a 3-tuple since 2.2: distances, hit points, hit faces), `BVH` for containing-cell and nearest-facet queries, `ClusterTree` for Barnes-Hut style far-field aggregation |
 | `remeshing` | `remesh` (Warp-backed) and `partition_cells` surface clustering |
 | `deformation` | mesh-quality energies: strain, measure, bending, and **simplex inversion** — the term that stops an optimizer tearing the mesh |
 | `geometry` | areas, normals, circumcenters, cotangent weights, dual volumes |
@@ -37,7 +42,13 @@ Meshes save and load in a memory-mapped format (`.pmsh`), which is what `MeshDat
 | `repair` | hole filling, orientation fixing, duplicate and degenerate removal |
 | `subdivision` | linear, loop and butterfly refinement |
 | `transformations` | rotate, scale, translate, deform |
-| `curvature`, `smoothing`, `projections`, `primitives`, `validation`, `visualization`, `io` | as named; `io` converts to and from pyvista and Zarr |
+| `curvature` | `mean_curvature_vertices`, `gaussian_curvature_vertices` (cotangent Laplace-Beltrami) - not bridged yet, a natural node feature next to the SDF |
+| `smoothing` | `smooth_laplacian` - not bridged |
+| `projections` | `extrude` (an N-D mesh swept into N+1), `embed`, `project` - not bridged; extrusion would turn a 2-D Kratos case into a 3-D mesh |
+| `primitives` | canonical meshes (cubes, spheres, planar shapes, procedural surfaces) for tests and demos |
+| `validation` | `validate`, `quality_metrics`, `statistics` - the checks the generated-mesh bridge runs on its output |
+| `visualization` | `draw` through matplotlib or pyvista |
+| `io` | `from_pyvista`/`to_pyvista` (auto-triangulates polyhedral cells - no provenance), `to_zarr`/`from_zarr` (2.2) |
 
 ## Two upstream behaviours worth knowing
 
@@ -58,6 +69,8 @@ Meshes save and load in a memory-mapped format (`.pmsh`), which is what `MeshDat
 
 **Curved geometry.** Quadratic elements can be subdivided through their real mid-side nodes, or sampled on a refinement lattice in an opt-in *isoparametric* mode with synthetic points — interpolated on gather, dropped on scatter-back, watertight across curved neighbours.
 
-**Tetrahedral filling** of watertight 3-D surfaces ships (`FillSurfaceWithTetrahedra`): winding-number-carved, so non-convex solids fill correctly, and self-validating against the input's own volume and boundary area. Exact boundary recovery is still gated on upstream — `fill_interior` raises `NotImplementedError` for `n = 3` in 2.2.
+**Tetrahedral filling** of watertight 3-D surfaces ships (`FillSurfaceWithTetrahedra`): winding-number-carved, so non-convex solids fill correctly, and self-validating against the input's own volume and boundary area. Upstream's `fill_interior` still raises `NotImplementedError` for `n = 3` in 2.2; exact boundary recovery is available locally through the opt-in `"method": "tetgen"` backend (AGPL, never chosen by `"auto"`).
+
+**Generation** goes the other way too: `PopulateModelPartFromMesh` turns a generated PhysicsNeMo mesh into real Kratos nodes and elements, so an SDF-defined shape can be meshed, handed to MMG or a solver, and solved.
 
 Next: [Symbolic and physics](Symbolic_And_Physics.html).

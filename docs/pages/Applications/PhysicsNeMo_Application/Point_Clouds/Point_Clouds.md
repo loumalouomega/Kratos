@@ -3,7 +3,7 @@ title: Point Clouds
 keywords: point cloud transolver geotransolver flare domino transformer
 tags: [Point_Clouds.md]
 sidebar: physicsnemo_application
-summary: 
+summary: PointCloudInferenceProcess on the nodes as an unordered cloud - the generic, Transolver, GeoTransolver, FLARE and FIGConvNet interfaces, pretrained checkpoints, DoMINO and its fine-tuning.
 ---
 
 # Point-cloud models on the mesh nodes
@@ -23,6 +23,11 @@ Point-cloud transformers consume per-point features plus coordinates as `(1, N, 
     }
 }
 ```
+
+<p align="center">
+    <img src="images/interfaces.svg" alt="How the gathered coordinates and features are arranged for each model_interface value"/>
+</p>
+<p align="center">Figure 1: The interfaces. They differ only in how the tensors are handed to the model; the write-back is the same for all.</p>
 
 ## Model interfaces
 

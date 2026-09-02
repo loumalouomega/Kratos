@@ -3,12 +3,17 @@ title: Sequence Models
 keywords: rnn sequence grid time series surrogate
 tags: [Sequence_Models.md]
 sidebar: physicsnemo_application
-summary: 
+summary: Exporting grid time series, training one-to-many RNN surrogates on them, seed-once/roll-forward deployment with SequenceInferenceProcess, the thin-axis idiom and FNO as a spatiotemporal block operator.
 ---
 
 # RNN surrogates over grid time series
 
 physicsnemo's RNN pattern (`One2ManyRNN` / `Seq2SeqRNN`, the 2D Navier–Stokes and Gray–Scott examples) predicts a whole trajectory from one state: `(N, C, 1, *spatial) → (N, C, T, *spatial)`. This application closes the loop around it with a grid-series exporter, a sequence dataset, and a deployment process.
+
+<p align="center">
+    <img src="images/window_conventions.svg" alt="The rolling history of the time-series process, the seed-once roll-forward of the sequence process, and the three training window schemes"/>
+</p>
+<p align="center">Figure 1: Every time-dependent process and training scheme shares one convention: windows are oldest first, and the model's own output feeds the next window.</p>
 
 ## Exporting a grid series
 

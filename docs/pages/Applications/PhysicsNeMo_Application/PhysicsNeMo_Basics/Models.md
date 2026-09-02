@@ -14,7 +14,7 @@ summary: The 25 architecture families under physicsnemo.models, and which ones t
 
 | Your data is | Use | Deployed here by |
 |---|---|---|
-| A regular grid, same resolution in and out | FNO, AFNO, UNet, DPOT | `grid_inference_process` |
+| A regular grid, same resolution in and out | FNO, AFNO, UNet (DPOT fits mechanically, not yet pinned) | `grid_inference_process` |
 | A coarse grid in, a fine grid out | SRResNet (`srrn`) | `superresolution_process` |
 | An unstructured mesh with connectivity | MeshGraphNet family | `graph_inference_process` |
 | An unordered point cloud | Transolver, FIGConvNet, FLARE | `point_cloud_inference_process` |
@@ -23,6 +23,37 @@ summary: The 25 architecture families under physicsnemo.models, and which ones t
 | Particles with trajectories | MeshGraphNet, VFGN | `particle_inference_process` |
 | A distribution, not a single answer | diffusion U-Nets, DiT | `diffusion_inference_process` |
 | The globe | GraphCast, Pangu, FengWu, DLWP | `grid_inference_process` (GraphCast) |
+
+The same choice as a chart - start from the shape of one sample and follow the arrows to the process that deploys it:
+
+<div class="mermaid">
+flowchart TD
+    start([What does one sample look like?]) --> grid{a regular grid?}
+    grid -->|same resolution in and out| fno[FNO, AFNO, UNet]
+    grid -->|coarse in, fine out| srrn[SRResNet]
+    grid -->|a time series of grids| rnn[One2ManyRNN, FNO dimension 4]
+    grid -->|a distribution, not one answer| diff[diffusion U-Nets, DiT, DiffusionUNet3D]
+    start --> mesh{an unstructured mesh?}
+    mesh -->|use the connectivity| mgn[MeshGraphNet, BiStride, Hybrid, KAN]
+    mesh -->|ignore it, points only| pc[Transolver, GeoTransolver, FLARE, FIGConvUNet]
+    mesh -->|a CAD surface plus a volume| domino[DoMINO]
+    mesh -->|a time series of nodal states| ts[any per-node model, rolled forward]
+    start --> other{something else?}
+    other -->|particles with trajectories| part[MeshGraphNet on a proximity graph, VFGN]
+    other -->|a few parameters to a whole field| mlp[FullyConnected, or a POD basis plus a small net]
+    other -->|no data, only the PDE| pinn[a PINN network]
+    fno --> p1[grid_inference_process]
+    srrn --> p2[superresolution_process]
+    rnn --> p3[sequence_inference_process]
+    diff --> p4[diffusion_inference_process]
+    mgn --> p5[graph_inference_process]
+    pc --> p6[point_cloud_inference_process]
+    domino --> p7[domino_inference_process]
+    ts --> p8[time_series_inference_process]
+    part --> p9[particle_inference_process]
+    mlp --> p10[inference_process, rom_surrogate_process]
+    pinn --> p11[pinn_solve_process]
+</div>
 
 ## The families
 
@@ -73,6 +104,21 @@ A **volumetric** 3-D denoiser exists too, under `physicsnemo.experimental.models
 ### The plain one
 
 `mlp` (`FullyConnected`) — a multilayer perceptron. It is the right first model far more often than it looks: if your input is a handful of case parameters and your output is a field, you want this, not a neural operator.
+
+### In physicsnemo 2.2 but not deployed here
+
+Each of these exists in the installed release and is a roadmap item, with the gate recorded in the README's roadmap table.
+
+| Family | Class | What it would bring to Kratos |
+|---|---|---|
+| `dpot` | `DPOTNet` | a PDE *foundation model* (AFNO mixing, pretrained across equation families) to fine-tune on Kratos grids the way `domino_finetune` does for DoMINO |
+| `topodiff` | `TopoDiff` | generative topology optimization with constraint channels, on StructuralMechanics compliance data |
+| `pix2pix` | `Pix2Pix`, `Pix2PixUnet` | a plain convolutional image-to-image translator; fits the grid process mechanically |
+| `experimental.xdeeponet` | `DeepONet` | branch (parameters) plus trunk (coordinates) operator learning - parameters in, field at the Kratos nodes out, without a POD basis |
+| `experimental.globe` | `GLOBE` | boundary-driven elliptic problems from the named boundary meshes `BuildDomainMesh` already produces |
+| `experimental.aerojepa` | `AeroJEPA` | self-supervised pretraining on geometry alone before any labels exist |
+| `experimental.strata`, `experimental.healda` | `Strata`, `VideoHealDA` | weather emulation on the sphere and HEALPix data assimilation; the assimilation idea matters for digital twins, the API is calendar-shaped |
+| `pangu`, `fengwu`, `swinvrnn`, `dlwp_healpix` | as named | global weather architectures with no Kratos counterpart |
 
 ## Building blocks
 

@@ -3,12 +3,28 @@ title: Active Learning
 keywords: active learning label strategy driver
 tags: [Active_Learning.md]
 sidebar: physicsnemo_application
-summary: 
+summary: Kratos as the ground-truth solver inside a physicsnemo.active_learning loop - the sample type, the in-process and subprocess execution backends, wiring into a Driver, query strategies including the solver residual, and metrology.
 ---
 
 # Kratos as the ground-truth solver in an active-learning loop
 
 `physicsnemo.active_learning` orchestrates train → metrology → query → label cycles through its `Driver`, and defines a `LabelStrategy` protocol explicitly designed to wrap an expensive external solver. This application implements that protocol so **Kratos is the labeling oracle**: the query strategy proposes design points, and each one is labeled by an actual Kratos solve.
+
+<div class="mermaid">
+flowchart LR
+    query[query strategy picks cases] -->|query queue| label[CreateKratosLabelStrategy]
+    subgraph backends [execution backends]
+        direction TB
+        inproc[InProcessBackend, this interpreter]
+        sub[SubprocessBackend, one Kratos process per case]
+        hpc[SubprocessBackend with an srun or sbatch prefix]
+    end
+    label --> backends
+    backends -->|dataset_export_process writes .npz| harvest[labeled KratosALSample]
+    harvest -->|serialize queue| driver[Driver drains into the training pool]
+    driver --> train[fine-tune] --> metro[metrology] --> query
+</div>
+<p align="center">Figure 1: The seat Kratos takes in the loop. The framework itself is explained in <a href="../PhysicsNeMo_Basics/Active_Learning_Concepts.html">Active learning</a> under PhysicsNeMo Basics.</p>
 
 ## The sample type
 

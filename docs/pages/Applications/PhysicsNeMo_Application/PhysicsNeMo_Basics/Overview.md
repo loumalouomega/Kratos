@@ -10,7 +10,7 @@ summary: What NVIDIA PhysicsNeMo is, what each of its modules does, and which pa
 
 The rest of this documentation assumes you already know what a `Module`, a `.mdlus` checkpoint, a datapipe or a `DistributedManager` is. This section does not. It explains **NVIDIA PhysicsNeMo itself** — what it is, what lives in each of its modules, and which piece of this application uses which piece of it — so that you can tell, before writing anything, which part of a large library is relevant to your problem.
 
-Everything here was read off the version this application is exercised against, **physicsnemo 2.2.0**. Where an API is missing, renamed or unusable in that release, it says so.
+Everything here was read off the version this application is exercised against, **physicsnemo 2.2.0**. Where an API is missing, renamed or unusable in that release, it says so; [Versions and compatibility](Versions_And_Compatibility.html) lists what changed from 2.1 and what is installed where this was written.
 
 ## What PhysicsNeMo is
 
@@ -37,6 +37,11 @@ Almost everything in this application is one of four steps. Knowing which step y
 
 A surrogate that never leaves step 2 is a research result. The reason this application exists is step 4: predictions written back onto real Kratos entities, in the solution loop, with the units and normalization the model was trained under.
 
+<p align="center">
+    <img src="../General/images/lifecycle.svg" alt="The five steps of a surrogate's life - export, train, save, deploy, validate - with the Kratos, application and PhysicsNeMo pieces at each step"/>
+</p>
+<p align="center">Figure 1: The five steps, and which side owns what at each of them. Step 5 wired back to step 1 is active learning.</p>
+
 ## Two words worth pinning down
 
 **Surrogate.** A model that replaces an expensive computation with a cheap approximation of its *output*. Here: input fields or parameters go in, the field the solver would have produced comes out. It is not a solver — it does not iterate, it does not converge, and it is only as trustworthy as its training distribution. That last point is why [Uncertainty](../Uncertainty/Uncertainty.html) exists.
@@ -50,13 +55,18 @@ Read in order if you are new; jump if you are not.
 | Page | Read it when you want to know |
 |---|---|
 | [Core and checkpoints](Core_And_Checkpoints.html) | What a `Module` is, and what is actually inside a `.mdlus` file |
-| [Models](Models.html) | Which of the 25 architecture families fits your problem |
+| [Models](Models.html) | Which of the 25 architecture families fits your problem, as a decision chart |
+| [Layers and functionals](Layers_And_Functionals.html) | The blocks the models are made of, and the GPU operations you can call on Kratos data with no model at all |
 | [Data and datapipes](Data_And_Datapipes.html) | How simulation output becomes batched tensors |
 | [Mesh and geometry](Mesh_And_Geometry.html) | The mesh representation, its calculus, and generating geometry |
 | [Symbolic and physics](Symbolic_And_Physics.html) | Putting a PDE in the loss, and the three ways to do it |
 | [Diffusion and deployment](Diffusion_And_Deployment.html) | Generative models, samplers, metrics, ONNX |
+| [Uncertainty and guardrails](Uncertainty_And_Guardrails.html) | Error bars, whether they are honest, and refusing inputs the model never saw |
+| [Active learning](Active_Learning_Concepts.html) | The loop that lets the model choose its own solves |
+| [Training utilities and performance](Training_Utilities_And_Performance.html) | CUDA graphs, AMP, profiling, checkpoints - and where the time actually goes |
 | [Distributed and scale](Distributed_And_Scale.html) | Running across ranks, and what is not possible on one GPU |
-| [Companion packages](Companion_Packages.html) | Active learning, `physicsnemo-cfd`, `physicsnemo-curator`, `experimental` |
+| [Companion packages](Companion_Packages.html) | `physicsnemo-cfd`, `physicsnemo-curator`, `experimental`, and every optional dependency |
+| [Versions and compatibility](Versions_And_Compatibility.html) | The 2.2 pin, the extras, what changed from 2.1, how to upgrade safely |
 
 Then go to [Where things live](../General/Module_Map.html) for the Kratos side, or [From scratch](../General/From_Scratch.html) to build something end to end.
 

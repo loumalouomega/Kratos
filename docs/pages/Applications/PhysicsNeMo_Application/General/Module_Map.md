@@ -18,7 +18,7 @@ The application is a hundred-odd Python modules. This page is the map: what each
 |---|---|---|
 | `processes/inference/` | run a trained model in the solution loop | `...PhysicsNeMoApplication.processes.inference` |
 | `processes/export/` | write solver data out as training data | `...PhysicsNeMoApplication.processes.export` |
-| `processes/` | adaptive remeshing, validation metrics | `...PhysicsNeMoApplication.processes` |
+| `processes/` | adaptive remeshing, validation metrics, adjoint sensitivities | `...PhysicsNeMoApplication.processes` |
 | `bridges/` | convert Kratos data to and from PhysicsNeMo data | `...PhysicsNeMoApplication.bridges` |
 | `training/` | training loops, datasets, schemes | `...PhysicsNeMoApplication.training` |
 | `physics/` | residuals, PINN machinery, sensitivities | `...PhysicsNeMoApplication.physics` |
@@ -27,7 +27,7 @@ The application is a hundred-odd Python modules. This page is the map: what each
 | `active_learning/` | Kratos as the labeling oracle | `...PhysicsNeMoApplication.active_learning` |
 | `utilities/` | small shared helpers | `...PhysicsNeMoApplication.utilities` |
 
-**The rule that keeps it navigable:** everything under `processes/` has a `Factory`, so it can be attached from `ProjectParameters.json`. Nothing outside `processes/` does. If you are looking for something to put in a process list, you only have to look in one place.
+**The rule that keeps it navigable:** everything under `processes/` has a `Factory`, so it can be attached from `ProjectParameters.json`. Nothing outside `processes/` does. If you are looking for something to put in a process list, you only have to look in one place - and the [Process reference](Process_Reference.html) lists all twenty-six with their settings.
 
 Each package's `__init__.py` carries a docstring saying what belongs in it — read that before adding a module.
 
@@ -55,6 +55,7 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 | A `.pmsh` mesh series | `processes.export.mesh_export_process` |
 | AI-ready Zarr or VTU | `processes.export.curator_export_process` |
 | A scrubbable digital twin (OpenUSD) | `processes.export.usd_export_process` + `deployment.usd_export` |
+| Kratos's adjoint gradient as an array, or as a training target | `bridges.adjoint_bridge`, `processes.adjoint_sensitivity_process` |
 | Train while the solve is still running | `processes.export.streaming_dataset_export_process` + `training.streaming_dataset` |
 | Raw tensors, no process | `bridges.torch_bridge` |
 
@@ -69,6 +70,7 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 | Adapt a pretrained DoMINO | `training.domino_finetune` |
 | Learn dynamics in ROM space | `training.rom_temporal` |
 | Add a physics term to the loss | `physics.physics_informed`, `physics.differentiable_residual` |
+| Train on exact gradients too (Sobolev) | `training.sobolev_training` |
 | Measure multi-step error growth | `training.rollout_utils.EvaluateRollout` |
 | Save it | `training.training_utils.SaveTrainedModel` |
 
@@ -89,6 +91,9 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 | Ship it without physicsnemo | `training.training_utils.ExportOnnxModel` + `processes.inference.onnx_inference_process` |
 | Ship it to a server | `deployment.triton_export` + `processes.inference.triton_inference_process` |
 | Call NVIDIA's packaged models (NIM) | `deployment.nim_client` + `processes.inference.nim_inference_process` |
+| Run it where a Kratos response function goes | `deployment.surrogate_response_function` |
+| Deploy a pretrained DoMINO, de-normalized | `processes.inference.domino_inference_process` |
+| Fine-tune that DoMINO on your data | `training.domino_finetune` |
 
 ### Trust it
 
@@ -100,6 +105,7 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 | Record what a checkpoint's fields mean | `deployment.model_registry` (model cards) |
 | Score with the real PDE residual | `physics.solver_residuals` |
 | Let the model choose its own training data | `active_learning` |
+| Score a whole ensemble, check calibration | `processes.validation_metrics_process`, `deployment.uncertainty_utils` |
 
 ### Work with geometry
 
@@ -122,11 +128,14 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 |---|---|
 | Align physicsnemo's ranks with Kratos's | `distributed.distributed_utils` |
 | Train a graph model across ranks | `distributed.graph_partition_utils` |
+| Split one field or grid across ranks (domain parallelism) | `distributed.domain_parallel_utils` |
+| Speed up the array-heavy paths on a GPU | `utilities.array_backend_utils` |
+| See the surrogate in an Nsight timeline | `utilities.nvtx_utils` |
 
 ## Tests and examples
 
 - `tests/` mirrors the sources by name: `test_<module>.py`. Subdirectories (`tests/bridges/mesh_bridge/`, `tests/active_learning/`) are discovered automatically by the suite runner.
-- `examples/notebooks/` — eighteen notebooks, executed by `tests/test_notebooks.py` so a changed signature breaks a test rather than rotting.
-- The [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application) holds eighteen fully documented use cases against real solves.
+- `examples/notebooks/` — nineteen notebooks, executed by `tests/test_notebooks.py` so a changed signature breaks a test rather than rotting.
+- The [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application) holds twenty-one fully documented use cases against real solves; both are indexed on [Examples](../Examples/Examples.html).
 
 New here? [From scratch](From_Scratch.html) walks one path end to end. New to PhysicsNeMo itself? [PhysicsNeMo Basics](../PhysicsNeMo_Basics/Overview.html).

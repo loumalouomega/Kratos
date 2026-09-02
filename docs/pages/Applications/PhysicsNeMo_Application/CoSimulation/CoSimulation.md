@@ -3,7 +3,7 @@ title: CoSimulation
 keywords: cosimulation surrogate solver wrapper coupling fsi
 tags: [CoSimulation.md]
 sidebar: physicsnemo_application
-summary: 
+summary: A trained model as a first-class solver in Kratos co-simulation - the wrapper, its settings, weak and strong coupling patterns, and running the surrogate across MPI ranks.
 ---
 
 # A surrogate as a co-simulation solver
@@ -32,6 +32,28 @@ Reference the wrapper in the co-simulation `ProjectParameters` by **full module 
     "fluid" : { "..." : "any other solver wrapper" }
 }
 ```
+
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as CoSimulation coupled solver
+    participant K as Kratos solver wrapper
+    participant M as kratos_mapping data transfer
+    participant S as cosim_surrogate_solver_wrapper
+    participant A as Aitken accelerator
+    loop each coupling iteration
+        C->>K: SolveSolutionStep
+        K-->>C: interface field
+        C->>M: transfer to the surrogate interface
+        M->>S: interface field on the surrogate nodes
+        S->>S: gather, normalize, forward, de-normalize, scatter
+        S-->>C: predicted interface field
+        C->>A: residual of the interface field
+        A-->>C: relaxed update
+        C->>C: converged? (relative criterion, seed a nonzero state)
+    end
+</div>
+<p align="center">Figure 1: One Gauss-Seidel strong-coupling iteration with the surrogate in the solver seat. Weak coupling is the same loop without the accelerator, run once per step.</p>
 
 ## Settings
 
