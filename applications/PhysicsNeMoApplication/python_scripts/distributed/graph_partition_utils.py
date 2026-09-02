@@ -31,9 +31,9 @@ Two rules worth stating because the obvious alternatives fail:
   explicitly rather than read off the communicator.
 
 Scope: this is DATA parallelism - each rank trains the same model on its own
-subgraph and gradients are averaged. It is not domain-parallel sharding of a
-single graph's activations (physicsnemo's ShardTensor story), which needs
-device meshes this module does not build.
+subgraph and gradients are averaged. Domain-parallel sharding of a single
+tensor's activations (physicsnemo's ShardTensor story) lives in
+domain_parallel_utils, which builds the device mesh this module does not.
 
 torch is imported lazily; the partitioning itself is pure Kratos + numpy.
 """

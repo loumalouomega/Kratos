@@ -97,6 +97,27 @@ def WriteOutputFields(model_part, field_specs, prediction, n_entities,
         offset += width
 
 
+def SynchronizeOutputFields(model_part, field_specs) -> None:
+    """Refreshes every rank's ghost copies after an owned-only write.
+
+    The counterpart of WriteOutputFields(local_only=True): the owned values
+    are authoritative, so each ghost is overwritten from its owner. A no-op
+    on a serial model part. Shared by the CoSimulation surrogate wrapper and
+    the domain-parallel write-back.
+    """
+    if not model_part.IsDistributed():
+        return
+    communicator = model_part.GetCommunicator()
+    for variable_name, data_location in field_specs:
+        variable = Kratos.KratosGlobals.GetVariable(variable_name)
+        if hasattr(variable, "GetSourceVariable"):
+            variable = variable.GetSourceVariable()
+        if data_location == "node_historical":
+            communicator.SynchronizeVariable(variable)
+        elif data_location == "node_non_historical":
+            communicator.SynchronizeNonHistoricalVariable(variable)
+
+
 def Factory(settings: Kratos.Parameters, model: Kratos.Model) -> "InferenceProcess":
     if not isinstance(settings, Kratos.Parameters):
         raise TypeError("Expected input shall be a Parameters object, encapsulating a json string")
@@ -222,6 +243,13 @@ class InferenceProcess(Kratos.Process):
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
         return self._model
 
+    def _NormalizationCardFile(self):
+        """The checkpoint path the model card is keyed off, or None to let
+        the registry resolve "checkpoint_file"/"checkpoint_files" itself.
+        ONNX and Triton override this: they key off "onnx_file" and
+        "card_file", where the base lookup would find nothing."""
+        return None
+
     def _GetNormalization(self):
         """The card's output de-normalization, or None.
 
@@ -231,8 +259,34 @@ class InferenceProcess(Kratos.Process):
         meant the other silently skipped de-normalization entirely.
         """
         if not hasattr(self, "_normalization"):
-            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
+            self._normalization = model_registry.LoadOutputNormalization(
+                self.model_settings, checkpoint_file=self._NormalizationCardFile())
         return self._normalization
+
+    def _GetInputNormalization(self):
+        """The card's input normalization, or None - the symmetric half of
+        _GetNormalization (see model_registry.LoadInputNormalization)."""
+        if not hasattr(self, "_input_normalization"):
+            self._input_normalization = model_registry.LoadInputNormalization(
+                self.model_settings, checkpoint_file=self._NormalizationCardFile())
+        return self._input_normalization
+
+    def _GatherFeatures(self):
+        """The input fields as ONE (n_entities, total_width) tensor, with the
+        card's "input_normalization" applied.
+
+        Every subclass feeds its model from here, so the key reaches all of
+        them at once - and before the OOD guard check, which was calibrated
+        on what the model saw in training.
+
+        Returns:
+            (features, n_entities).
+        """
+        torch = torch_bridge._TryImportTorch()
+        inputs, n_entities = self._GatherInputs()
+        features = torch.cat(inputs, dim=-1)
+        features = model_registry.ApplyInputNormalization(features, self._GetInputNormalization())
+        return features, n_entities
 
     def _GetEnsembleModels(self):
         """Loads the checkpoint ensemble named by model_settings["checkpoint_files"]."""
@@ -296,9 +350,11 @@ class InferenceProcess(Kratos.Process):
         torch = torch_bridge._TryImportTorch()
         prediction = forward_fn(self._GetModel())
 
-        feature_specs = self.gp_feature_specs or self.input_specs
-        features, _ = GatherInputFields(self.model_part, feature_specs)
-        features = torch.cat(features, dim=-1)
+        if self.gp_feature_specs:
+            features, _ = GatherInputFields(self.model_part, self.gp_feature_specs)
+            features = torch.cat(features, dim=-1)
+        else:  # the model's own inputs, normalized exactly as the model sees them
+            features, _ = self._GatherFeatures()
 
         if self._gp_head is None:
             self._gp_head = uncertainty_utils.LoadGpHead(
@@ -331,8 +387,7 @@ class InferenceProcess(Kratos.Process):
         torch = torch_bridge._TryImportTorch()
 
         with NvtxRange("PhysicsNeMo::GatherInputs"):
-            inputs, n_entities = self._GatherInputs()
-            features = torch.cat(inputs, dim=-1)
+            features, n_entities = self._GatherFeatures()
         self._CheckOOD(features)
 
         def forward(model):

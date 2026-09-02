@@ -68,13 +68,15 @@ class RomSurrogateProcess(InferenceProcess):
             settings["output_fields"].Append(entry)
 
         super().__init__(model, settings)
+        self._permutation = None
+        self._permutation_nodes = None
 
     def RunInference(self) -> None:
         model = self._GetModel()
         torch = torch_bridge._TryImportTorch()
 
-        inputs, _ = self._GatherInputs()
-        features = torch.cat(inputs, dim=-1).mean(dim=0, keepdim=True)  # (1, C_in)
+        features, _ = self._GatherFeatures()
+        features = features.mean(dim=0, keepdim=True)  # (1, C_in)
         parameter = next(model.parameters(), None)
         if parameter is not None:
             features = features.to(parameter.dtype)
@@ -91,5 +93,12 @@ class RomSurrogateProcess(InferenceProcess):
         u = rom_bridge.ReconstructFromReducedSpace(
             self.rom_basis, q[0].to(torch.float64).numpy())
         # the basis row ordering owns the write-back (not the parent's
-        # _WriteOutputs, which knows nothing about the interleaving)
-        rom_bridge.ScatterUnknownsVector(self.model_part, self.rom_basis, u)
+        # _WriteOutputs, which knows nothing about the interleaving); the
+        # permutation is topology, built once and reused until the node
+        # count changes (AdaptiveRemeshProcess ships in this application)
+        n_nodes = self.model_part.NumberOfNodes()
+        if self._permutation is None or self._permutation_nodes != n_nodes:
+            self._permutation = rom_bridge.NodePermutation(self.model_part, self.rom_basis)
+            self._permutation_nodes = n_nodes
+        rom_bridge.ScatterUnknownsVector(self.model_part, self.rom_basis, u,
+                                         permutation=self._permutation)

@@ -129,6 +129,8 @@ class SuperResolutionProcess(Kratos.Process):
 
         self._model = None
         self._device = None
+        self._normalization = None
+        self._input_normalization = None
 
     def ExecuteInitializeSolutionStep(self) -> None:
         if self.execution_point == "initialize_solution_step":
@@ -147,12 +149,17 @@ class SuperResolutionProcess(Kratos.Process):
         if self._model is None:
             self._model, self._device = model_registry.LoadModelWithCardCheck(
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
+            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
+            self._input_normalization = model_registry.LoadInputNormalization(self.model_settings)
 
         with NvtxRange("PhysicsNeMo::SampleFieldsOnGrid"):
             coarse_grid, _ = grid_bridge.SampleFieldsOnGrid(
                 self.coarse_model_part, self.input_specs, self.coarse_grid_shape, self.bounding_box)
         if self.squeeze_axis is not None:
             coarse_grid = coarse_grid.mean(axis=1 + self.squeeze_axis)  # (C, A, B)
+        # the card's "input_normalization", per channel along axis 0
+        coarse_grid = model_registry.ApplyInputNormalization(
+            coarse_grid, self._input_normalization, channel_axis=0)
 
         if self._ood_guard.enabled:  # grid (C, *spatial) -> (prod(spatial), C) features
             self._ood_guard.Check(
@@ -195,6 +202,11 @@ class SuperResolutionProcess(Kratos.Process):
                 numpy.expand_dims(prediction, 1 + self.squeeze_axis), thin_size,
                 axis=1 + self.squeeze_axis)
 
+        # the card's "output_normalization" makes a normalized prediction
+        # physical - per channel along axis 0, the grid layout
+        prediction = model_registry.ApplyOutputNormalization(
+            prediction.astype(numpy.float64), self._normalization, channel_axis=0)
+
         with NvtxRange("PhysicsNeMo::ScatterGridToNodes"):
             grid_bridge.ScatterGridToNodes(
-                prediction.astype(numpy.float64), self.bounding_box, self.fine_model_part, self.output_specs)
+                prediction, self.bounding_box, self.fine_model_part, self.output_specs)

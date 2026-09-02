@@ -15,7 +15,10 @@ the meaning of the condition channels differs.
 Denoisers with 2D spatial layout (SongUNet-based preconditioners) consume
 planar Kratos cases through the thin-axis idiom: "squeeze_axis" collapses
 the thin grid axis before sampling and duplicates predictions across it on
-the way back.
+the way back. Volumetric denoisers ("denoiser_interface": "unet3d",
+physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D) consume
+the full (C, D, H, W) grid instead - squeeze_axis stays off, and each grid
+extent must be a power of 2 or a multiple of 2**(num_levels - 1).
 
 torch/physicsnemo are imported lazily on first execution.
 """
@@ -94,11 +97,13 @@ class DiffusionInferenceProcess(Kratos.Process):
         self.model_settings = settings["model_settings"].Clone()
         self.sampler_settings = settings["sampler_settings"].Clone()
         self.denoiser_interface = settings["denoiser_interface"].GetString()
-        if self.denoiser_interface not in ("edm", "dit"):
+        if self.denoiser_interface not in ("edm", "dit", "unet3d"):
             raise ValueError(
                 f"Unsupported denoiser interface \"{self.denoiser_interface}\". "
-                "Use \"edm\" (net(x, img_lr, sigma) denoisers) or \"dit\" "
-                "(physicsnemo.models.dit.DiT, wrapped via diffusion_utils.WrapDenoiser).")
+                "Use \"edm\" (net(x, img_lr, sigma) denoisers), \"dit\" "
+                "(physicsnemo.models.dit.DiT) or \"unet3d\" (the volumetric "
+                "physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D), "
+                "the latter two wrapped via diffusion_utils.WrapDenoiser.")
         self.input_specs = self._ReadFieldSpecs(settings["input_fields"])
         self.output_specs = self._ReadFieldSpecs(settings["output_fields"])
         self.uncertainty_specs = self._ReadFieldSpecs(settings["uncertainty_fields"])
@@ -122,6 +127,11 @@ class DiffusionInferenceProcess(Kratos.Process):
             self.squeeze_axis = squeeze_axis
         else:
             raise ValueError(f"\"squeeze_axis\" must be -1 (off), 0, 1 or 2, got {squeeze_axis}.")
+        if self.denoiser_interface == "unet3d" and self.squeeze_axis is not None:
+            raise ValueError(
+                "\"squeeze_axis\" cannot be combined with the volumetric \"unet3d\" "
+                "denoiser interface: a squeezed (C, H, W) condition cannot feed a 3D "
+                "U-Net. Leave squeeze_axis at -1, or use a 2D interface.")
 
         self.execution_point = settings["execution_point"].GetString()
         if self.execution_point not in _EXECUTION_POINTS:
@@ -135,6 +145,8 @@ class DiffusionInferenceProcess(Kratos.Process):
         self._model = None
         self._device = None
         self._regression_model = None
+        self._normalization = None
+        self._input_normalization = None
 
     @staticmethod
     def _ReadFieldSpecs(fields: Kratos.Parameters):
@@ -166,8 +178,12 @@ class DiffusionInferenceProcess(Kratos.Process):
         if self._model is None:
             self._model, self._device = model_registry.LoadModelWithCardCheck(
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
-            if self.denoiser_interface == "dit":
-                self._model = diffusion_utils.WrapDenoiser(self._model, "dit")
+            if self.denoiser_interface in ("dit", "unet3d"):
+                self._model = diffusion_utils.WrapDenoiser(self._model, self.denoiser_interface)
+            # the denoiser's card carries the scaling of what the ensemble
+            # emits (regression mean included, in the two-stage recipe)
+            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
+            self._input_normalization = model_registry.LoadInputNormalization(self.model_settings)
             if self.regression_settings is not None:
                 self._regression_model, _ = model_registry.LoadModelWithCardCheck(
                     self.regression_settings, self.input_specs, self.output_specs,
@@ -179,6 +195,10 @@ class DiffusionInferenceProcess(Kratos.Process):
             self.model_part, self.input_specs, self.grid_shape, self.bounding_box)
         if self.squeeze_axis is not None:
             condition = condition.mean(axis=1 + self.squeeze_axis)
+        # the card's "input_normalization" on the condition, per channel
+        # along axis 0 (the regression stage sees the same condition)
+        condition = model_registry.ApplyInputNormalization(
+            condition, self._input_normalization, channel_axis=0)
 
         if self._ood_guard.enabled:  # grid (C, *spatial) -> (prod(spatial), C) features
             torch = torch_bridge._TryImportTorch()
@@ -195,10 +215,16 @@ class DiffusionInferenceProcess(Kratos.Process):
                 self._regression_model, condition,
                 output_channels=ensemble.shape[1])[None]
 
-        mean = self._Unsqueeze(ensemble.mean(axis=0))
+        # the card's "output_normalization" makes the ensemble physical: the
+        # mean is scaled AND shifted, the spread scaled only (a standard
+        # deviation shifted by the training mean is meaningless)
+        mean = model_registry.ApplyOutputNormalization(
+            self._Unsqueeze(ensemble.mean(axis=0)), self._normalization, channel_axis=0)
         grid_bridge.ScatterGridToNodes(
             mean, self.bounding_box, self.output_model_part, self.output_specs)
         if self.uncertainty_specs:
-            spread = self._Unsqueeze(ensemble.std(axis=0))
+            spread = model_registry.ApplyOutputNormalization(
+                self._Unsqueeze(ensemble.std(axis=0)), self._normalization,
+                scale_only=True, channel_axis=0)
             grid_bridge.ScatterGridToNodes(
                 spread, self.bounding_box, self.output_model_part, self.uncertainty_specs)

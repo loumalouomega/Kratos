@@ -21,6 +21,7 @@ Module                              Gathers
 ``domino_inference_process``        a preprocessed DoMINO datapipe case
 ``onnx_inference_process``          as ``inference_process``, via ONNX Runtime
 ``triton_inference_process``        as ``inference_process``, via a Triton server
+``nim_inference_process``           a triangle skin, POSTed to a PhysicsNeMo NIM
 ``superresolution_process``         a coarse grid, writing a fine one
 ``rom_surrogate_process``           case parameters, writing ``u = phi q``
 ``hybrid_initialization_process``   nothing - it seeds the solver before it runs

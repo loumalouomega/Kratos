@@ -123,24 +123,19 @@ class TritonInferenceProcess(InferenceProcess):
         infer_input.set_data_from_numpy(features)
         return [infer_input], [InferRequestedOutput(self.output_name)]
 
-    def _GetNormalization(self):
+    def _NormalizationCardFile(self):
         """This process keys its model card off "card_file", not
         "checkpoint_file", so the base lookup would find nothing."""
-        if not hasattr(self, "_normalization"):
-            name = self.model_settings["card_file"].GetString() \
-                if self.model_settings.Has("card_file") else None
-            self._normalization = model_registry.LoadOutputNormalization(
-                self.model_settings, checkpoint_file=name)
-        return self._normalization
+        return self.model_settings["card_file"].GetString() \
+            if self.model_settings.Has("card_file") else None
 
     def RunInference(self) -> None:
         client = self._GetClient()
         torch = torch_bridge._TryImportTorch()
 
         with NvtxRange("PhysicsNeMo::GatherInputs"):
-            inputs, n_entities = self._GatherInputs()
-        features = numpy.ascontiguousarray(
-            torch.cat(inputs, dim=-1).numpy().astype(numpy.float32))
+            features, n_entities = self._GatherFeatures()
+        features = numpy.ascontiguousarray(features.numpy().astype(numpy.float32))
 
         with NvtxRange("PhysicsNeMo::Forward"):
             request_inputs, requested_outputs = self._MakeRequest(features)

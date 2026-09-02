@@ -80,3 +80,40 @@ def GetTensorAdaptor(model_part: Kratos.ModelPart, data_location: str, variable:
             f"Unsupported data location \"{data_location}\". "
             f"Supported locations: {', '.join(SUPPORTED_DATA_LOCATIONS)}.")
     return GetContainerTensorAdaptor(container, data_location, variable, model_part.ProcessInfo, collect)
+
+
+def RowsOfIds(container_ids, query_ids):
+    """Row indices of ``query_ids`` inside a container's id array.
+
+    The one implementation of the id -> row lookup the bridges share
+    (graph scatter, ROM basis permutation, grid sampling): ``argsort`` +
+    ``searchsorted`` rather than a ``{id: row}`` dict plus a generator,
+    both of which are interpreter-level loops over every entity. The
+    container is NOT assumed id-sorted - the argsort makes it correct
+    either way. A query id absent from the container raises KeyError
+    naming it.
+
+    Args:
+        container_ids: (n,) int array of the container's ids in row order
+            (e.g. ``numpy.fromiter((node.Id for node in model_part.Nodes), ...)``).
+        query_ids: The ids to locate, any shape; the result has the same shape.
+
+    Returns:
+        int64 row indices, ``container_ids[result] == query_ids``.
+    """
+    import numpy
+
+    part_ids = numpy.asarray(container_ids, dtype=numpy.int64).ravel()
+    query = numpy.asarray(query_ids, dtype=numpy.int64)
+    flat = query.ravel()
+    if part_ids.size == 0:
+        if flat.size:
+            raise KeyError(int(flat[0]))
+        return numpy.empty(query.shape, dtype=numpy.int64)
+    order = numpy.argsort(part_ids, kind="stable")
+    position = numpy.searchsorted(part_ids[order], flat)
+    clipped = numpy.minimum(position, part_ids.size - 1)
+    missing = part_ids[order][clipped] != flat
+    if missing.any():
+        raise KeyError(int(flat[missing][0]))
+    return order[clipped].reshape(query.shape)

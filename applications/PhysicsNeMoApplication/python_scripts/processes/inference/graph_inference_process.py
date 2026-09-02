@@ -189,6 +189,8 @@ class GraphInferenceProcess(Kratos.Process):
         self._multiscale = None
         self._world_edge_features = None
         self._scatter_rows = None
+        self._normalization = None
+        self._input_normalization = None
 
     def ExecuteInitialize(self) -> None:
         # Topology is fixed; extract the graph once.
@@ -221,6 +223,8 @@ class GraphInferenceProcess(Kratos.Process):
         if self._model is None:
             self._model, self._device = model_registry.LoadModelWithCardCheck(
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
+            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
+            self._input_normalization = model_registry.LoadInputNormalization(self.model_settings)
         if self._graph is None:
             self._BuildGraphObject()
 
@@ -231,6 +235,9 @@ class GraphInferenceProcess(Kratos.Process):
         with NvtxRange("PhysicsNeMo::GatherNodeFeatures"):
             node_features = graph_bridge.GatherNodeFeatures(
                 self.model_part, self.input_specs, len(self._node_ids))
+            # the card's "input_normalization": what the model saw in training
+            node_features = model_registry.ApplyInputNormalization(
+                node_features, self._input_normalization)
         if self.update_edge_features:
             # geometry, not topology: recomputed from the cached index
             with NvtxRange("PhysicsNeMo::ComputeEdgeFeatures"):
@@ -244,6 +251,9 @@ class GraphInferenceProcess(Kratos.Process):
         prediction = RunGraphForward(
             self._model, self._device, self.model_interface, node_features, edge_features,
             self._graph, self._multiscale, self._world_edge_features)
+        # a model trained on normalized targets predicts normalized values;
+        # the card's "output_normalization" makes them physical
+        prediction = model_registry.ApplyOutputNormalization(prediction, self._normalization)
 
         with NvtxRange("PhysicsNeMo::ScatterNodeFeatures"):
             if self._scatter_rows is None:

@@ -22,7 +22,10 @@ grid data this application exports:
 The same machinery covers the documented variations: TopoDiff-style
 generative design (condition = constraint masks) and flow reconstruction
 from sparse data (condition = masked observations) differ only in what the
-condition channels contain.
+condition channels contain. Volumetric denoisers (WrapDenoiser's "unet3d"
+interface around physicsnemo.experimental.models.diffusion_unets.
+DiffusionUNet3D) run the same train/sample path on full 5-D grids - no
+thin-axis squeeze.
 
 torch and physicsnemo are optional runtime dependencies, imported lazily.
 """
@@ -53,6 +56,17 @@ def _TryImportPhysicsNemoDiffusion():
             "be imported. Install it with e.g. 'pip install nvidia-physicsnemo'.") from e
 
 
+def _TryImportTensorDict():
+    try:
+        from tensordict import TensorDict
+        return TensorDict
+    except ImportError as e:
+        raise ImportError(
+            "The \"unet3d\" denoiser interface requires tensordict (a physicsnemo "
+            "dependency), which could not be imported. Install it with e.g. "
+            "'pip install nvidia-physicsnemo'.") from e
+
+
 def WrapDenoiser(model, interface: str = "dit", out_channels: int = 0):
     """Adapts a denoiser to the EDM sampler/loss contract net(x, img_lr, sigma).
 
@@ -67,24 +81,79 @@ def WrapDenoiser(model, interface: str = "dit", out_channels: int = 0):
     the denoiser D(x, sigma) directly (no EDM pre/post-scaling), so train it
     through the same wrapper (TrainDiffusionModel accepts it as-is).
 
+    The "unet3d" interface does the same for the volumetric
+    physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D, which
+    speaks ``unet(x, t, condition=TensorDict)``: the conditioning grid is
+    NOT concatenated but passed natively as ``condition["volume"]``
+    (construct the model with x_channels = C_out and vol_cond_channels =
+    C_cond), sigma broadcasts to the timestep tensor exactly as for DiT.
+    Latents are 5-D (B, C, D, H, W) and each spatial extent must be a power
+    of 2 or a multiple of 2**(num_levels - 1) - the model validates this
+    itself.
+
     RoPE, invalid-region masking and alternative attention backends are DiT
     construction choices (block_kwargs/attn_kwargs/attention_backend) - the
     wrapper only standardizes the forward call.
 
     Args:
-        model: The denoiser to wrap (a DiT for interface "dit").
-        interface: Only "dit" currently.
+        model: The denoiser to wrap (a DiT for interface "dit", a
+            DiffusionUNet3D for "unet3d").
+        interface: "dit" or "unet3d".
         out_channels: The number of predicted channels; 0 reads the DiT's
-            out_channels attribute.
+            out_channels / the DiffusionUNet3D's x_channels attribute.
 
     Returns:
         A torch.nn.Module with the net(x, img_lr, sigma) interface.
     """
     torch = _TryImportTorch()
-    if interface != "dit":
+    if interface not in ("dit", "unet3d"):
         raise ValueError(
-            f"Unsupported denoiser interface \"{interface}\". Only \"dit\" needs wrapping - "
-            "EDM-preconditioned denoisers already speak net(x, img_lr, sigma).")
+            f"Unsupported denoiser interface \"{interface}\". Use \"dit\" "
+            "(physicsnemo.models.dit.DiT) or \"unet3d\" (physicsnemo.experimental."
+            "models.diffusion_unets.DiffusionUNet3D) - EDM-preconditioned denoisers "
+            "already speak net(x, img_lr, sigma).")
+
+    if interface == "unet3d":
+        # DiffusionUNet3D predicts as many channels as its latent input
+        resolved_out_channels = out_channels or getattr(model, "x_channels", 0)
+        if not resolved_out_channels:
+            raise ValueError(
+                "\"out_channels\" is 0 and the model exposes no x_channels; "
+                "set it explicitly.")
+        TensorDict = _TryImportTensorDict()
+
+        class Unet3dDenoiser(torch.nn.Module):
+            # EDM interface attributes the samplers read from the net
+            sigma_min = 0.0
+            sigma_max = float("inf")
+
+            def __init__(self, unet):
+                super().__init__()
+                self.unet = unet
+                self.img_out_channels = resolved_out_channels
+
+            @staticmethod
+            def round_sigma(sigma):
+                return torch.as_tensor(sigma)
+
+            def forward(self, x, img_lr, sigma, class_labels=None, **kwargs):
+                if x.ndim != 5:
+                    raise ValueError(
+                        "The \"unet3d\" denoiser is volumetric: expected a 5-D "
+                        f"(B, C, D, H, W) latent, got shape {tuple(x.shape)}. "
+                        "Planar (squeezed) grids need a 2D interface such as \"dit\".")
+                parameter = next(self.unet.parameters(), None)
+                dtype = parameter.dtype if parameter is not None else x.dtype
+                t = torch.atleast_1d(torch.as_tensor(sigma, device=x.device, dtype=dtype))
+                if t.numel() == 1:
+                    t = t.expand(x.shape[0])
+                condition = TensorDict(
+                    {"volume": img_lr.to(dtype)}, batch_size=[x.shape[0]])
+                denoised = self.unet(
+                    x.to(dtype), t.reshape(x.shape[0]), condition=condition)
+                return denoised.to(x.dtype)
+
+        return Unet3dDenoiser(model)
 
     resolved_out_channels = out_channels or getattr(model, "out_channels", 0)
     if not resolved_out_channels:
@@ -120,6 +189,40 @@ def WrapDenoiser(model, interface: str = "dit", out_channels: int = 0):
     return DitDenoiser(model)
 
 
+class _VolumetricEdmLossSR:
+    """physicsnemo's legacy EDMLossSR generalized to volumetric batches.
+
+    The upstream loss hard-codes the 2D image rank - its noise-level draw is
+    ``randn([B, 1, 1, 1])`` - so a 5-D (B, C, D, H, W) batch cannot
+    broadcast against it. Same math and parameters; only the draw follows
+    the batch rank. For 4-D batches the upstream class is used unchanged
+    (TrainDiffusionModel picks per dataset layout), so existing 2D results
+    are untouched.
+    """
+
+    def __init__(self, P_mean: float = -1.2, P_std: float = 1.2, sigma_data: float = 0.5):
+        self.P_mean = P_mean
+        self.P_std = P_std
+        self.sigma_data = sigma_data
+
+    def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
+        torch = _TryImportTorch()
+        rnd_normal = torch.randn(
+            [img_clean.shape[0]] + [1] * (img_clean.ndim - 1), device=img_clean.device)
+        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
+        weight = (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
+
+        img_tot = torch.cat((img_clean, img_lr), dim=1)
+        y_tot, augment_labels = (
+            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None))
+        y = y_tot[:, : img_clean.shape[1]]
+        y_lr = y_tot[:, img_clean.shape[1]:]
+
+        n = torch.randn_like(y) * sigma
+        D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
+        return weight * ((D_yn - y) ** 2)
+
+
 def TrainDiffusionModel(model, dataset, settings: Kratos.Parameters, regression_model=None):
     """Trains a conditional diffusion (or CorrDiff-stage) model on
     (condition, target) pairs.
@@ -133,6 +236,9 @@ def TrainDiffusionModel(model, dataset, settings: Kratos.Parameters, regression_
             physicsnemo.models.diffusion_unets.CorrDiffRegressionUNet.
             2D spatial layout (C, H, W): planar Kratos cases use the
             thin-axis idiom (CreateGridPairDataset squeeze_axis).
+            Volumetric (C, D, H, W) samples are supported for "edm_sr"
+            (e.g. a WrapDenoiser("unet3d")-wrapped DiffusionUNet3D); the
+            2D-only CorrDiff losses reject them with a clear error.
         dataset: A torch Dataset yielding (condition_grid, target_grid)
             float pairs, e.g. CreateGridPairDataset output.
         settings: Kratos Parameters; defaults:
@@ -196,8 +302,22 @@ def TrainDiffusionModel(model, dataset, settings: Kratos.Parameters, regression_
     if not user_set_p_mean and loss_name == "residual":
         p_mean = 0.0
 
+    # unbatched (C, D, H, W) samples mean volumetric 5-D batches, which the
+    # upstream legacy losses cannot broadcast against (see _VolumetricEdmLossSR)
+    volumetric = False
+    try:
+        volumetric = getattr(dataset[0][1], "ndim", 3) == 4
+    except TypeError:
+        pass  # non-indexable dataset: assume the 2D image layout
+    if volumetric and loss_name != "edm_sr":
+        raise ValueError(
+            f"Loss \"{loss_name}\" is 2D-only (upstream CorrDiff is an image recipe "
+            "whose losses hard-code the 4-D batch rank); volumetric (C, D, H, W) "
+            "samples train with \"edm_sr\".")
+
     if loss_name == "edm_sr":
-        loss_fn = EDMLossSR(
+        loss_class = _VolumetricEdmLossSR if volumetric else EDMLossSR
+        loss_fn = loss_class(
             P_mean=p_mean,
             P_std=settings["P_std"].GetDouble(),
             sigma_data=settings["sigma_data"].GetDouble())

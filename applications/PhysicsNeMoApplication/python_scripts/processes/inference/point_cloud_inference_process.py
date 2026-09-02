@@ -168,8 +168,7 @@ class PointCloudInferenceProcess(InferenceProcess):
         torch = torch_bridge._TryImportTorch()
 
         with NvtxRange("PhysicsNeMo::GatherInputs"):
-            inputs, n_entities = self._GatherInputs()
-            features = torch.cat(inputs, dim=-1)  # (N, C_in)
+            features, n_entities = self._GatherFeatures()  # (N, C_in), card-normalized
             coordinates = torch.from_numpy(GatherPointCloudCoordinates(
                 self.model_part, self.normalize_coordinates))  # (N, 3)
         self._CheckOOD(features)

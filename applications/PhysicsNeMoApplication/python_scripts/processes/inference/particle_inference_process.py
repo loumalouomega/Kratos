@@ -136,6 +136,12 @@ class ParticleInferenceProcess(Kratos.Process):
 
     def _GatherNodeFeatures(self):
         features = numpy.concatenate(list(self._history), axis=1)  # oldest first
+        # The card's "input_normalization" standardizes the velocity history
+        # exactly as CreateParticleTrajectoryDataset(normalize=True) did:
+        # width K*3, BEFORE the node-type one-hot is appended. Fed raw, a
+        # model trained that way drifted 18% over a rollout.
+        features = model_registry.ApplyInputNormalization(
+            features, getattr(self, "_input_normalization", None))
         if self.node_type_variable:
             variable = Kratos.KratosGlobals.GetVariable(self.node_type_variable)
             one_hot = numpy.zeros((features.shape[0], self.num_node_types))
@@ -161,6 +167,8 @@ class ParticleInferenceProcess(Kratos.Process):
             # (v += dt*a, then x += dt*v), so leaving it normalized
             # compounds the error straight into node positions.
             self._normalization = model_registry.LoadOutputNormalization(
+                self.model_settings)
+            self._input_normalization = model_registry.LoadInputNormalization(
                 self.model_settings)
 
         with NvtxRange("PhysicsNeMo::BuildParticleGraph"):

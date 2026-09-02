@@ -66,22 +66,18 @@ class OnnxInferenceProcess(InferenceProcess):
                 require_device=self.model_settings["require_device"].GetBool())
         return self._session
 
-    def _GetNormalization(self):
+    def _NormalizationCardFile(self):
         """This process keys its model card off "onnx_file", not
         "checkpoint_file", so the base lookup would find nothing."""
-        if not hasattr(self, "_normalization"):
-            name = self.model_settings["onnx_file"].GetString() \
-                if self.model_settings.Has("onnx_file") else None
-            self._normalization = model_registry.LoadOutputNormalization(
-                self.model_settings, checkpoint_file=name)
-        return self._normalization
+        return self.model_settings["onnx_file"].GetString() \
+            if self.model_settings.Has("onnx_file") else None
 
     def RunInference(self) -> None:
         session = self._GetSession()
         torch = torch_bridge._TryImportTorch()
 
         with NvtxRange("PhysicsNeMo::GatherInputs"):
-            inputs, n_entities = self._GatherInputs()
+            features, n_entities = self._GatherFeatures()
 
         ort_inputs = session.get_inputs()
         if len(ort_inputs) != 1:
@@ -91,7 +87,7 @@ class OnnxInferenceProcess(InferenceProcess):
                 "(n_entities, total_width) tensor.")
         ort_input = ort_inputs[0]
         dtype = onnx_utils.NumpyDtypeForOrtInput(ort_input)
-        features = torch.cat(inputs, dim=-1).numpy().astype(dtype)
+        features = features.numpy().astype(dtype)
 
         with NvtxRange("PhysicsNeMo::Forward"):
             outputs = session.run(None, {ort_input.name: features})

@@ -374,9 +374,12 @@ def CreateParticleTrajectoryDataset(trajectories, history_size, delta_time,
     dataset.positions[i] (numpy (N, 3)). Normalization statistics over all
     samples are computed either way (dataset.feature_mean/std and
     dataset.target_mean/std, per channel); normalize=True bakes them into
-    the returned tensors. Write target_mean/target_std into the model card's
-    "output_normalization" key (see model_registry.LoadOutputNormalization)
-    so deployment undoes them; ParticleInferenceProcess reads it.
+    the returned tensors - FEATURES included, so a model trained this way
+    expects standardized velocity histories too. Write BOTH halves into the
+    model card (MakeNormalizationCardEntries: the feature statistics as
+    "input_normalization", the target statistics as "output_normalization");
+    ParticleInferenceProcess reads both, standardizing the history it
+    gathers and de-normalizing the acceleration it integrates.
 
     Args:
         trajectories: One (T, N, 3) array or an iterable of them.
@@ -438,6 +441,30 @@ def CreateParticleTrajectoryDataset(trajectories, history_size, delta_time,
     dataset.target_mean = target_mean
     dataset.target_std = target_std
     return dataset
+
+
+def MakeNormalizationCardEntries(dataset) -> dict:
+    """The model-card entries a model trained on a normalize=True particle
+    dataset needs: {"input_normalization": ..., "output_normalization": ...}
+    from the dataset's feature_mean/std and target_mean/std.
+
+    Both halves of the standardization then travel with the checkpoint -
+    ParticleInferenceProcess standardizes the velocity history it gathers
+    with the first and de-normalizes the predicted acceleration with the
+    second. Merge the result into the card dict handed to SaveTrainedModel.
+    """
+    from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+    for name in ("feature_mean", "feature_std", "target_mean", "target_std"):
+        if not hasattr(dataset, name):
+            raise ValueError(
+                f"The dataset has no \"{name}\" attribute; pass the dataset returned by "
+                "CreateParticleTrajectoryDataset.")
+    return {
+        "input_normalization": model_registry.MakeMeanStdNormalization(
+            dataset.feature_mean, dataset.feature_std),
+        "output_normalization": model_registry.MakeMeanStdNormalization(
+            dataset.target_mean, dataset.target_std),
+    }
 
 
 def _TryImportMeshTransforms():

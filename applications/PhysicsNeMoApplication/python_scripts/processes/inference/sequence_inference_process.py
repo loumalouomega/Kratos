@@ -114,6 +114,7 @@ class SequenceInferenceProcess(Kratos.Process):
             raise ValueError(f"\"output_interval\" must be >= 1 [ output_interval = {self.output_interval} ].")
 
         self._model = None
+        self._normalization = None
         self._device = None
         self._buffer = None  # None = not seeded yet; list afterwards
         self._window = []    # window_as_time_axis: sampled states awaiting seeding
@@ -154,6 +155,14 @@ class SequenceInferenceProcess(Kratos.Process):
         else:
             self._WriteNextState()
 
+    def _GetInputNormalization(self):
+        """The card's input normalization, or None. Lazy rather than loaded
+        with the model: the input window accumulates BEFORE the model is
+        loaded, and every sampled grid must already be normalized."""
+        if not hasattr(self, "_input_normalization"):
+            self._input_normalization = model_registry.LoadInputNormalization(self.model_settings)
+        return self._input_normalization
+
     def _SampleGrid(self):
         if self.bounding_box is None:
             self.bounding_box = grid_bridge.ComputeBoundingBox(self.model_part)
@@ -161,13 +170,16 @@ class SequenceInferenceProcess(Kratos.Process):
             self.model_part, self.input_specs, self.grid_shape, self.bounding_box)
         if self.squeeze_axis is not None:
             grid = grid.mean(axis=1 + self.squeeze_axis)
-        return grid
+        # the card's "input_normalization", per channel along axis 0
+        return model_registry.ApplyInputNormalization(
+            grid, self._GetInputNormalization(), channel_axis=0)
 
     def _SeedRollout(self) -> None:
         torch = torch_bridge._TryImportTorch()
         if self._model is None:
             self._model, self._device = model_registry.LoadModelWithCardCheck(
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
+            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
 
         if self.window_as_time_axis:
             # (1, C, K, *spatial): the accumulated window as the time axis
@@ -207,6 +219,9 @@ class SequenceInferenceProcess(Kratos.Process):
             return
 
         state = numpy.asarray(self._buffer.pop(0), dtype=numpy.float64)
+        # the card's "output_normalization" makes a normalized state physical
+        # (per channel along axis 0, the grid layout)
+        state = model_registry.ApplyOutputNormalization(state, self._normalization, channel_axis=0)
         if self.squeeze_axis is not None:
             # duplicate the prediction across the collapsed thin axis
             thin_size = self.grid_shape[self.squeeze_axis]

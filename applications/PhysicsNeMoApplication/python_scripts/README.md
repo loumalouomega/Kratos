@@ -24,6 +24,7 @@ processes/                          attach to a solve
 │   ├── domino_inference_process    a preprocessed DoMINO datapipe case
 │   ├── onnx_inference_process      ONNX Runtime instead of torch
 │   ├── triton_inference_process    a remote Triton server
+│   ├── nim_inference_process       a running PhysicsNeMo NIM microservice
 │   ├── superresolution_process     coarse grid in, fine grid out
 │   ├── rom_surrogate_process       parameters in, u = phi q out
 │   ├── hybrid_initialization_process   seeds the solver instead of replacing it
@@ -34,8 +35,10 @@ processes/                          attach to a solve
 │   ├── cae_dataset_export_process  physicsnemo.datapipes.cae layout
 │   ├── mesh_export_process         .pmsh mesh series
 │   ├── curator_export_process      AI-ready Zarr / VTU
+│   ├── usd_export_process          a time-sampled OpenUSD digital twin
 │   └── streaming_dataset_export_process   a live queue, no files
 ├── adaptive_remesh_process         changes the mesh
+├── adjoint_sensitivity_process     dJ/dX onto the model part, exporters carry it
 └── validation_metrics_process      measures the result
 
 bridges/                            Kratos data <-> physicsnemo data
@@ -46,6 +49,7 @@ bridges/                            Kratos data <-> physicsnemo data
 │   ├── provenance                  predictions back onto the original entities
 │   ├── domain_mesh_builder         DomainMesh with named boundaries
 │   ├── generate                    geometry from implicit functions
+│   ├── nurbs_sampling              exact NURBS (IGA) geometry on a lattice
 │   ├── spatial                     signed distance fields as features
 │   ├── deformation                 differentiable shape parameterizations
 │   └── adaptive_remeshing          residual-driven MMG adaptation
@@ -55,6 +59,7 @@ bridges/                            Kratos data <-> physicsnemo data
 ├── mapping_bridge                  non-matching transfer via MappingApplication
 ├── calculus_bridge                 gradient, divergence, curl, Laplacian
 ├── rom_bridge                      RomApplication POD bases
+├── adjoint_bridge                  Kratos adjoint gradients in row order
 ├── cfd_bridge                      pyvista and physicsnemo-cfd
 ├── curator_bridge                  a solve as a physicsnemo-curator source
 └── vfgn_bridge                     Virtual Foundry GraphNet, sintering / AM
@@ -65,6 +70,7 @@ training/                           loops, datasets, schemes
 ├── streaming_dataset               train out of a running solve
 ├── temporal_training               window datasets, BPTT through a rollout
 ├── diffusion_utils                 diffusion and the CorrDiff two-stage recipe
+├── sobolev_training                grade the surrogate on exact gradients too
 ├── domino_finetune                 predictor-corrector and LoRA adaptation
 ├── rom_temporal                    temporal attention in ROM space
 └── rollout_utils                   multi-step error growth
@@ -79,13 +85,17 @@ deployment/                         checkpoint -> production
 ├── model_registry                  loading, model cards, de-normalization
 ├── onnx_utils                      the ONNX Runtime session and its devices
 ├── triton_export                   a Triton model repository
+├── nim_client                      the documented physics-NIM HTTP contract
+├── usd_export                      time-sampled OpenUSD stages (digital twins)
 ├── cosim_surrogate_solver_wrapper  a model as a CoSimulation solver
+├── surrogate_response_function     a model as a Kratos response function
 ├── uncertainty_utils               MC dropout, ensembles, GP heads
 └── ood_guard_utils                 out-of-distribution guardrails
 
 distributed/                        MPI and multi-rank
 ├── distributed_utils               DistributedManager <-> DataCommunicator
-└── graph_partition_utils           halo-partitioned graph training
+├── graph_partition_utils           halo-partitioned graph training (data parallel)
+└── domain_parallel_utils           ShardTensor over the Kratos ranks (domain parallel)
 
 active_learning/                    Kratos as the labeling oracle
 
@@ -93,7 +103,8 @@ utilities/                          small shared helpers
 ├── tensor_adaptor_dataset_utils    the shared gather/scatter entry point
 ├── array_backend_utils             opt-in CuPy, with numpy the default
 ├── nvtx_utils                      Nsight Systems ranges
-└── shallow_water_reference         a numpy-only reference integrator
+├── shallow_water_reference         a numpy-only reference integrator (GraphCast recipe)
+└── lennard_jones_reference         a numpy-only MD integrator (Lennard-Jones recipe)
 ```
 
 ## Adding a module

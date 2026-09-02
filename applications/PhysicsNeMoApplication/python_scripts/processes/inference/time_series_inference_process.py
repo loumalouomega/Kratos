@@ -94,6 +94,8 @@ class TimeSeriesInferenceProcess(Kratos.Process):
         self.history = collections.deque(maxlen=self.history_size)
         self._model = None
         self._device = None
+        self._normalization = None
+        self._input_normalization = None
 
     def ExecuteInitializeSolutionStep(self) -> None:
         if self.execution_point == "initialize_solution_step":
@@ -128,8 +130,12 @@ class TimeSeriesInferenceProcess(Kratos.Process):
         if self._model is None:
             self._model, self._device = model_registry.LoadModelWithCardCheck(
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
+            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
+            self._input_normalization = model_registry.LoadInputNormalization(self.model_settings)
 
         window = numpy.concatenate(list(self.history), axis=1)  # (N, K*W_in), oldest first
+        # the card's "input_normalization" (width K*W_in, the whole window)
+        window = model_registry.ApplyInputNormalization(window, self._input_normalization)
         if self._ood_guard.enabled:
             self._ood_guard.Check(torch.from_numpy(window), type(self).__name__)
         parameter = next(self._model.parameters(), None)
@@ -137,6 +143,8 @@ class TimeSeriesInferenceProcess(Kratos.Process):
         with torch.no_grad():
             prediction = self._model(
                 torch.from_numpy(window).to(self._device, dtype)).cpu().double().numpy()
+        # the card's "output_normalization" makes a normalized prediction physical
+        prediction = model_registry.ApplyOutputNormalization(prediction, self._normalization)
 
         offset = 0
         for variable_name, data_location in self.output_specs:
