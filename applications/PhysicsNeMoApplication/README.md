@@ -6,6 +6,10 @@
 
 The application includes tests to check the proper functioning of the application.
 
+<p align="center">
+  <img src="../../docs/pages/Applications/PhysicsNeMo_Application/General/images/architecture.svg" alt="Kratos on the left, NVIDIA PhysicsNeMo on the right, the application's packages in between, and the artifacts that travel between the steps along the bottom" width="900"/>
+</p>
+
 ## 🧭 New here? Start with these three:
 
 The feature list below is long because the application is. These are the three
@@ -16,6 +20,18 @@ pages that make it navigable:
 | **[PhysicsNeMo Basics](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Overview.html)** | **NVIDIA PhysicsNeMo itself** — what it is, what every one of its modules does, and which part of this application uses it. Nine pages: [core and checkpoints](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Core_And_Checkpoints.html), [models](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Models.html), [data and datapipes](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Data_And_Datapipes.html), [mesh and geometry](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Mesh_And_Geometry.html), [symbolic and physics](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Symbolic_And_Physics.html), [diffusion and deployment](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Diffusion_And_Deployment.html), [distributed and scale](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Distributed_And_Scale.html), [companion packages](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/PhysicsNeMo_Basics/Companion_Packages.html). Read this if the rest of the documentation seems to assume things you were never told. |
 | **[Where things live](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Module_Map.html)** | Every module by folder with a one-line purpose, and an *I want to X → use Y* index. |
 | **[From scratch](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/From_Scratch.html)** | One surrogate end to end — export from a real solve, train, save with a model card, deploy in the loop, validate — naming the exact module at each step. |
+
+### Documentation map
+
+| Section | Read it for |
+|---|---|
+| [Architecture](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Architecture.html) | the three columns of the figure above, where processes hook into the solution loop, and which artifact each step writes |
+| [Kratos concepts for ML readers](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Kratos_Concepts_For_ML.html) | ModelPart, Variables and data locations, Processes and execution points, TensorAdaptors - and what each becomes on the PhysicsNeMo side |
+| [Process reference](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Process_Reference.html) | all twenty-six processes with the JSON that attaches them and every setting's default |
+| [Installation and environment](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Installation_And_Environment.html), [Testing and contributing](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Testing_And_Contributing.html) | the dependency matrix with verified versions, the suites and the guards |
+| [Performance](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Performance.html), [Troubleshooting and traps](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Troubleshooting_And_Traps.html), [Glossary](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Glossary.html) | what the bridge costs, every failure the history produced as symptom-cause-fix, and the vocabulary |
+| [Examples](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/Examples/Examples.html) | the gallery of twenty-one use cases and the nineteen notebooks |
+| one page per topic | tensor and mesh bridges, training, inference, active learning, superresolution, graphs, particles, sequences, point clouds, CAE datapipes, ROM, adjoint, diffusion, uncertainty, physics-informed, co-simulation, distributed - each with a diagram |
 
 ### Layout
 
@@ -31,7 +47,7 @@ python_scripts/
 ├── training/           loops, datasets, schemes                           (9)
 ├── physics/            residuals, PINN machinery, sensitivities           (4)
 ├── deployment/         checkpoints, cards, ONNX/Triton/NIM/USD, uncertainty (9)
-├── distributed/        MPI and multi-rank                                 (2)
+├── distributed/        MPI, halo-partitioned graphs, ShardTensor          (3)
 ├── active_learning/    Kratos as the labeling oracle
 └── utilities/          small shared helpers
 ```
@@ -141,7 +157,9 @@ Each package's `__init__.py` says what belongs in it. A process is attached the 
 
 ## 🗺️ Roadmap:
 
-Pending work, and nothing else. Every entry is verified live against **physicsnemo 2.2.0** and the reference build rather than assumed. Each names its gate: **hardware** (one GPU on the reference machine, no GPU CI runner), **upstream** (the API does not exist yet, or raises `NotImplementedError`), **external access** (a credential or service this environment lacks), or **open** (nothing blocks it — it needs data, or someone's time). What has shipped is described under Features above and in the documentation; how items left this list, and what each round learned doing so, is kept on the [Retrospectives](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Retrospectives.html) page.
+Pending work, and nothing else. Every entry is verified live against **physicsnemo 2.2.0** — 2.2.1 is a fix-only release and the upstream 2.3.0 changelog is still empty, so 2.2 *is* the current surface — and against the reference build, rather than assumed. Each names its gate: **hardware** (one GPU on the reference machine, no GPU CI runner), **upstream** (the API does not exist yet, raises `NotImplementedError`, or does not import), **external access** (a credential, service or download this environment lacks), **build** (a Kratos application the reference build does not compile), or **open** (nothing blocks it — it needs data, or someone's time). Items marked *experimental* live under `physicsnemo.experimental`, whose API may change between releases without notice. What has shipped is described under Features above and in the documentation; how items left this list, and what each round learned doing so, is kept on the [Retrospectives](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Retrospectives.html) page.
+
+### Verification gates on shipped machinery
 
 | # | Item | Gate | What is missing, specifically |
 |---|---|---|---|
@@ -150,9 +168,57 @@ Pending work, and nothing else. Every entry is verified live against **physicsne
 | 3 | The CUDA-only `ShardTensor` paths — ring attention, the sharded kNN/radius search, `scatter_tensor`, `sharding_shapes="infer"` | hardware | upstream runs them on CUDA streams (and `scatter_tensor` through the `DistributedManager`); none can run on the CPU mesh the shipped `domain_parallel_utils` builds |
 | 4 | Upstream 3-D `fill_interior` | upstream | its `n = 3` raises `NotImplementedError` in 2.2 ("pending exact 3D boundary recovery"); the *need* is closed locally by the opt-in `"method": "tetgen"` backend, so this is about dropping that optional dependency |
 | 5 | Live verification of the NIM client | external access | `nim_client`, `NimInferenceProcess` and the payload contract ship stub-pinned; running a NIM needs an NGC API key and docker. `TestNimLive` self-skips until `PHYSICSNEMO_NIM_URL` points at one |
+
+### Recipes that ship test-pinned but lack data or a worked example
+
+| # | Item | Gate | What is missing, specifically |
+|---|---|---|---|
 | 6 | A worked notebook and an Examples-repository case for the Lennard-Jones recipe | open | the recipe itself is test-pinned (`tests/test_lennard_jones_recipe.py`); the notebook and Examples case every other recipe has are not written |
 | 7 | Richer crash architectures | open | modeling work on the shipped structural-surrogate pattern; needs a crash dataset, not new machinery |
 | 8 | Virtual Foundry / additive-manufacturing datasets | open | `vfgn_bridge` and the real sintering case ship; furnace and AM trajectories at scale do not |
+
+### physicsnemo 2.2 capabilities not yet bridged
+
+Read off the installed package's module tree and the 2.2.0 changelog; each signature below was checked with `inspect.signature` against 2.2.0.
+
+| # | Item | Gate | What is missing, specifically |
+|---|---|---|---|
+| 9 | Move the diffusion bridge off the legacy API | open | `diffusion_utils` and `DiffusionInferenceProcess` run on `physicsnemo.diffusion`'s legacy modules — `samplers.legacy_deterministic_sampler`, `metrics.legacy_losses` (`EDMLossSR`, `RegressionLoss`, `ResidualLoss`) and `preconditioners.legacy` (`EDMPrecondSuperResolution`) — each of which warns that it "will be deprecated in a future release". The 2.2 protocol API (`noise_schedulers`, `preconditioners`, `samplers.sample`, `metrics.MSEDSMLoss`, the `DiffusionModel`/`Predictor`/`Denoiser` protocols, per-class modules since 2.2) is what items 10 and 11 are written against, so this migration comes first |
+| 10 | Diffusion posterior sampling (DPS) guidance for observation-consistent fields | open, after 9 | `physicsnemo.diffusion.guidance` ships `DataConsistencyDPSGuidance(mask, y, std_y, ...)` for masked observations and `ModelConsistencyDPSGuidance` for a differentiable forward operator. The sparse-sensor inversion recipe trains a *mask-conditioned* model instead; DPS would enforce the sensor readings at sampling time on any trained denoiser — including the exact discrete residual of `differentiable_residual` as the consistency operator — without retraining |
+| 11 | Multi-diffusion patching for grids beyond the training resolution | open, after 9 | `physicsnemo.diffusion.multi_diffusion` (`MultiDiffusionModel2D(model, global_spatial_shape, ...)`, `GridPatching2D`/`RandomPatching2D`, `MultiDiffusionMSEDSMLoss`) tiles a large 2-D latent through a model trained on patches. Only 2-D upstream, so the volumetric `"unet3d"` path stays whole-grid |
+| 12 | Geometry guardrail — out-of-distribution detection on the *shape*, not the fields | open, *experimental* | `physicsnemo.experimental.guardrails.geometry` (`GeometryGuardrail(method="gmm", warn_pct, reject_pct, ...)`, `extract_features(mesh)`, `validate_mesh`) fits a density model to non-invariant descriptors of a triangular surface and flags geometries far from the training family. The shipped `OODGuard` looks only at model inputs; the bridge's outward-oriented `spatial.BoundarySurface` is exactly the surface this needs |
+| 13 | xDeepONet as a point-cloud `model_interface` | open, *experimental* | `physicsnemo.experimental.models.xdeeponet.DeepONet(branch1, trunk=, branch2=, dimension=2|3, out_channels, decoder_type, output_window, ...)` learns an operator from a branch input (case parameters, boundary data, a field) to values at trunk coordinates — a natural fit for the parameters-in/field-at-Kratos-nodes-out pattern `RomSurrogateProcess` covers only through a POD basis. `FNO4DWrapper` gives the spatiotemporal variant |
+| 14 | GLOBE for boundary-driven elliptic problems | open, *experimental* | `physicsnemo.experimental.models.globe.GLOBE(n_spatial_dims, output_field_ranks, boundary_source_data_ranks, reference_length_names, reference_area, ...)` takes `boundary_meshes: dict[name, Mesh]` plus reference lengths and predicts fields at arbitrary points with Green's-function-like kernels on a dual-tree Barnes-Hut cluster tree — the data `domain_mesh_builder.BuildDomainMesh` already produces from sub-model-parts. Whether its cluster-tree kernels run on CPU is to be verified before anything else |
+| 15 | DPOT, the PDE foundation model, on Kratos grids | open for the architecture; external access for weights | `physicsnemo.models.dpot.DPOTNet(inp_shape, patch_size, in_channels, out_channels, in_timesteps, out_timesteps, ...)` is an AFNO-mixing operator transformer meant for pretraining across PDE families; a pin through `GridInferenceProcess`/`SequenceInferenceProcess` plus the LoRA/fine-tuning recipe `domino_finetune` already established. The authors' pretrained weights are not verified from here |
+| 16 | TopoDiff generative design on real compliance data | open | `physicsnemo.models.topodiff.TopoDiff(img_resolution, in_channels, out_channels, ...)` with `forward(x, cons, timesteps)` takes constraint channels natively. The Diffusion page documents a "TopoDiff-style" variation through the generic bridge; the class itself, its constraint contract and a density→compliance dataset from `StructuralMechanicsApplication` on a structured grid are not pinned. No optimization application is required |
+| 17 | AeroJEPA self-supervised geometry pretraining | open, *experimental* | `physicsnemo.experimental.models.aerojepa.AeroJEPA(trunk=, predictor=)` learns geometry embeddings from context/query point sets (`context_pos`, `context_feat`, `gen_params`, `query_pos`, `query_sdf`) before any labels exist — pretraining on a family of Kratos surface clouds (the SDF-generated family of `mesh_bridge/generate` is one source), then a supervised head. Needs that family |
+| 18 | Point-cloud token budgets | open | `physicsnemo.nn.functional.farthest_point_sampling(points, num_samples, ...)` and the datapipe transforms `SubsamplePoints`/`BoundingBoxFilter` are not used by `PointCloudInferenceProcess`, which feeds every node to Transolver/FLARE; the DoMINO pipe subsamples, the point-cloud process does not |
+| 19 | Mesh operations still unbridged | open | in `physicsnemo.mesh`: `curvature.mean_curvature_vertices`/`gaussian_curvature_vertices` as node features next to the SDF; `repair.repair_mesh` (duplicates, degenerates, orientation, holes) before SDF or export; `subdivision` (loop/butterfly/linear), `smoothing.smooth_laplacian`, `projections.extrude` (a 2-D Kratos case swept into a 3-D mesh); `integrate_moment`; and the two 2.2 deformers `shrinkwrap(mesh, target, ...)` and `sobolev_deform(mesh, displacement, length_scale, fixed_points)` absent from `deformation.DeformPoints`'s ffd/rbf/morph/displace |
+| 20 | Torch-native point sampling and non-matching transfer | open | `physicsnemo.mesh.sampling.sample_data_at_points(mesh, query_points, data_source, bvh=)` over `mesh.spatial.BVH` is GPU-resident and autograd-friendly where `grid_bridge` uses the Kratos locator and `mapping_bridge` uses `MappingApplication`. Measure against both before switching anything |
+| 21 | AI-ready Zarr without physicsnemo-curator | open | 2.2 added `mesh.io.to_zarr`/`from_zarr` (tensordict's zarr backend) for `Mesh` and `DomainMesh`; `CuratorExportProcess`'s Zarr sink currently needs the git-only, Rust-toolchain-building curator |
+| 22 | Kratos's own outputs through upstream readers | open (VTK), build (HDF5) | `physicsnemo.datapipes.readers.VTKReader` reads `.vtu`/`.vtp`/`.stl` one sample per subdirectory, and `mesh.io.from_pyvista` auto-triangulates polyhedra — a training-only path over `VtkOutputProcess` output with no provenance and no scatter-back, worth documenting and pinning; `HDF5Reader` over `HDF5Application` output is gated on that application, not compiled here |
+| 23 | Spectral and distributional validation metrics | open | `ValidationMetricsProcess` covers mse/rmse/max-abs/wasserstein/relative-L2/weighted and the ensemble and calibration blocks; missing from `physicsnemo.metrics.general` are `power_spectrum` (the azimuthally averaged spectrum a superresolution model should reproduce), `entropy`/`histogram`, and 2.2's `relative_mse` and weighted `mse` |
+| 24 | A training performance layer in `TrainModel` | open | none of `physicsnemo.utils`'s training tooling is used: `StaticCaptureTraining`/`StaticCaptureEvaluateNoGrad` (CUDA graphs + AMP, `physicsnemo.Module` only), bf16/fp16 autocast, `Profiler`, `LaunchLogger` with mlflow/wandb, resumable `save_checkpoint`/`load_checkpoint` (optimizer, scheduler, scaler, epoch), and `physicsnemo.optim.Muon`/`CombinedOptimizer`. `torch.compile` is opt-in at deployment only |
+| 25 | physicsnemo-cfd evaluation benchmarks and reports on Kratos data | upstream | `physicsnemo.cfd.evaluation.benchmarks` declares `run_benchmark`/`write_report` and `reports.register_visual`, but the installed 0.0.3a0 source clone raises `ImportError` on the import; revisit on the next physicsnemo-cfd release |
+| 26 | Differentiable ragged collectives and distributed FFTs | open (collectives), hardware (FFT) | `physicsnemo.distributed.autograd` (`gather_v`, `all_gather_v`, `indexed_all_to_all_v`) could replace the up-front connectivity-and-feature exchange in `graph_partition_utils` with an autograd-carrying halo exchange, verifiable over gloo; `physicsnemo.distributed.fft` and the distributed AFNO for domain-parallel spectral models need NCCL |
+| 27 | Equivariant surrogates instead of augmentation | open, *experimental* | `physicsnemo.experimental.nn.symmetry` (SO(2)/SO(3) convolutions, equivariant norms, gate activations) would make rotated Kratos geometries invariant by construction where `MakeMeshAugmentations` teaches it from data. Modeling work |
+| 28 | HealDA-style data assimilation for transient twins | upstream | `physicsnemo.experimental.models.healda.VideoHealDA` maps sparse observations plus a prior state to an assimilated field, which is what a sensor-fed digital twin wants — but its API is HEALPix-pixel and calendar-shaped (`npix`, `second_of_day`, `day_of_year`). Watch item until a domain-agnostic variant exists |
+
+### Kratos applications compiled in the reference build and not yet exercised
+
+Each of these imports cleanly here (checked this round); what is missing is a case, not a build.
+
+| # | Item | Gate | What is missing, specifically |
+|---|---|---|---|
+| 29 | Lid-driven-cavity PINN | open | NVIDIA's LDC tutorial mirrored on the in-memory VMS cavity of `tests/kratos_solver_cases/fluid_case.py`: `PinnSolveProcess` with the builtin incompressible Navier–Stokes PDE, compared against the FEM solve |
+| 30 | Transient vortex shedding with MeshGraphNet | open | upstream's canonical `vortex_shedding_mgn` example on a `FluidDynamicsApplication` cylinder case through `GraphInferenceProcess` + `TimeSeriesInferenceProcess`; needs a *transient* fluid case in `tests/kratos_solver_cases` (the cavity is steady) |
+| 31 | Learned turbulence closure | open | `RANSApplication` is compiled: a surrogate writing turbulent viscosity or the turbulence-model quantities into the loop through `InferenceProcess`, validated against the modelled closure |
+| 32 | Aerodynamic surrogate on compressible potential flow | open | `adjoint_bridge` already dispatches `compressible_potential_flow` responses; an airfoil lift/drag point-cloud surrogate with adjoint cross-validation on a compiled aero application is the missing case |
+| 33 | Geomechanics transients | open | `GeoMechanicsApplication`, `PoromechanicsApplication` and `DamApplication` are compiled: consolidation and seepage surrogates through the temporal training schemes, and a second physics behind `vfgn_bridge` if a geomechanical case fits sintering better than the thermo-mechanical one |
+| 34 | Contact | open | `ContactStructuralMechanicsApplication` is compiled: a contact-pressure surrogate, or `HybridInitializationProcess` warm-starting the contact Newton iterations |
+| 35 | An IGA solve as training data | open | `nurbs_sampling`'s exact sampling and the `IgaApplication` modeler route are test-pinned; no IGA *analysis* yet feeds the isogeometric gather with real control-point solutions |
+| 36 | A closed-loop shape optimizer with cross-validation | build | `ComputeControlSensitivities` + `MeshMovingApplication` smoothing are shipped; a driver loop cross-validated against `ShapeOptimizationApplication`/`OptimizationApplication` needs those two compiled (the committed vertex-morphing fixture stands in for now) |
+| 37 | Particle applications behind `ParticleInferenceProcess` | build | the process reads any particle node cloud; `MPMApplication`, `SPHApplication`, `DEMApplication` and `PfemFluidDynamicsApplication` are not compiled here, so the tests drive synthetic clouds |
 
 Contributions and prioritization requests are welcome — please open an issue on the Kratos repository mentioning `PhysicsNeMoApplication`.
 

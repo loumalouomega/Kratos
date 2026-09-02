@@ -1,7 +1,7 @@
 # PhysicsNeMoApplication example notebooks
 
 A learning path through the application, in order. Every notebook runs on CPU in a few
-seconds with small analytic problems, and writes its outputs to a local `./output/`
+seconds to minutes with small analytic problems (07 and later use real solves), and writes its outputs to a local `./output/`
 folder.
 
 | Notebook | What it shows |
@@ -23,6 +23,8 @@ folder.
 | [15 — CorrDiff two-stage downscaling](15_corrdiff_two_stage_downscaling.ipynb) | The regression + residual-diffusion split: `TrainCorrDiffPair` (upstream `RegressionLoss`/`ResidualLoss`, `SongUNetPosEmbd` sizing) and `DiffusionInferenceProcess` with `"regression_settings"` adding the regression mean to the ensemble — sharper mean, calibrated spread |
 | [16 — Transient structural surrogate](16_transient_structural_surrogate.ipynb) | Temporal schemes on a real implicit-dynamic (Bossak) cantilever solve: `RunTransientAnalysis` trajectories, single-step window training, `TrainAutoregressive` BPTT with gradient checkpointing (2.7x lower rollout error), and deployment through `TimeSeriesInferenceProcess` |
 | [17 — Exact shape gradients and shape optimization](17_exact_shape_gradients.ipynb) | The discretely exact `dJ/dX` of a real FEM solve from one element-local pass (`ComputeShapeSensitivityField`), the measured crossover against the per-parameter global path, `ComputeControlSensitivities` chaining it onto an FFD lattice, and a gradient descent driving the shape onto a target — validated against re-solve finite differences to ten digits |
+| [18 — Fine-tuning a pretrained DoMINO](18_domino_finetuning.ipynb) | The public `nvidia/domino_drivaerml` checkpoint loaded through `model_registry`, the de-normalization a pretrained DoMINO needs, and both adaptation recipes of `domino_finetune`: the predictor-corrector decomposition with the frozen predictor's output cached, and LoRA adapters merged back into an ordinary `.mdlus` |
+| [19 — Adjoint integration](19_adjoint_integration.ipynb) | Kratos's own adjoint stack read through `adjoint_bridge` (row order by id, never by iteration), `AdjointSensitivityProcess` putting dJ/dX on the model part so every exporter carries it, Sobolev training on the exact gradients, and `SurrogateResponseFunction` deploying the model where a Kratos response goes |
 
 ## Environment
 

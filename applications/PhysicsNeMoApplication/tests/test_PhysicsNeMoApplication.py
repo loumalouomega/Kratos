@@ -223,6 +223,8 @@ from test_suite_registration import TestDocumentedIdentifiersExist
 from test_suite_registration import TestDocumentedImportPathsResolve
 from test_suite_registration import TestCrossModuleAttributesExist
 from test_suite_registration import TestBenchmarkStillRuns
+from test_docs_links import TestDocumentationLinks
+from test_docs_figures import TestDocsFigures
 from test_notebooks import TestNotebooks
 from test_mesh_spatial import TestSignedDistance
 from test_mesh_spatial import TestGridVectorOperators
@@ -499,6 +501,8 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocumentedImportPathsResolve]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCrossModuleAttributesExist]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestBenchmarkStillRuns]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocumentationLinks]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocsFigures]))
 
     nightSuite = suites['nightly'] # These tests are executed in the nightly build
     nightSuite.addTests(smallSuite)

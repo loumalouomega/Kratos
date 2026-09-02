@@ -9,6 +9,13 @@
 ``nvtx_utils``
     Opt-in NVTX ranges around deployment hot paths, for Nsight Systems.
 ``shallow_water_reference``
+    A numpy-only linear shallow-water integrator generating trajectories for
+    the GraphCast grid recipe.
+``lennard_jones_reference``
+    A numpy-only velocity-Verlet molecular-dynamics integrator, the data
+    source of the Lennard-Jones particle recipe when neither OpenMM nor
+    ``DEMApplication`` is at hand.
+``shallow_water_reference``
     A numpy-only shallow-water integrator generating reference trajectories for
     the GraphCast recipe. No torch, no physicsnemo.
 
