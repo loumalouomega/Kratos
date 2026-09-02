@@ -220,6 +220,38 @@ def LoadOutputNormalization(model_settings: Kratos.Parameters, checkpoint_file=N
     Returns:
         The entry dict, or None (the identity path).
     """
+    return _LoadNormalizationEntry(model_settings, "output_normalization", checkpoint_file)
+
+
+def LoadInputNormalization(model_settings: Kratos.Parameters, checkpoint_file=None):
+    """The card's "input_normalization" entry, or None when there is none.
+
+    The symmetric half of LoadOutputNormalization: a model trained on
+    standardized FEATURES expects standardized features, and feeding it
+    the raw Kratos fields is wrong by the same silent factor - measured as
+    an 18% position drift on the particle path, where
+    CreateParticleTrajectoryDataset(normalize=True) standardizes the
+    velocity history the deployment process then fed raw. Same schema,
+    same broadcast rule (length 1 or the concatenated input_fields width),
+    same "read regardless of the policy" rule. The rule every process
+    follows: inputs are normalized BEFORE the OOD-guard check, since the
+    guard was calibrated on what the model saw in training.
+    """
+    return _LoadNormalizationEntry(model_settings, "input_normalization", checkpoint_file)
+
+
+def MakeMeanStdNormalization(mean, std) -> dict:
+    """A "mean_std" card entry from per-channel statistics (array-likes)."""
+    mean = numpy.asarray(mean, dtype=numpy.float64).reshape(-1)
+    std = numpy.asarray(std, dtype=numpy.float64).reshape(-1)
+    if mean.size != std.size:
+        raise ValueError(
+            f"mean has {mean.size} entries but std has {std.size}; they describe the "
+            "same channels.")
+    return {"type": "mean_std", "mean": mean.tolist(), "std": std.tolist()}
+
+
+def _LoadNormalizationEntry(model_settings: Kratos.Parameters, key: str, checkpoint_file=None):
     if checkpoint_file is None:
         # Not every process keys its card off "checkpoint_file": ONNX uses
         # "onnx_file", Triton "card_file", and an ensemble names its members
@@ -236,59 +268,41 @@ def LoadOutputNormalization(model_settings: Kratos.Parameters, checkpoint_file=N
     card = LoadModelCard(checkpoint_file)
     if not card:
         return None
-    normalization = card.get("output_normalization")
+    normalization = card.get(key)
     if not normalization:
         return None
 
     kind = normalization.get("type", "none")
     if kind not in _NORMALIZATION_TYPES:
         raise ValueError(
-            f"Unsupported \"output_normalization\" type \"{kind}\" in the model card. "
+            f"Unsupported \"{key}\" type \"{kind}\" in the model card. "
             f"Supported: {', '.join(_NORMALIZATION_TYPES)}.")
     if kind == "none":
         return None
 
     required = ("mean", "std") if kind == "mean_std" else ("min", "max")
-    for key in required:
-        if key not in normalization:
+    for name in required:
+        if name not in normalization:
             raise ValueError(
-                f"\"output_normalization\" of type \"{kind}\" needs \"{key}\".")
+                f"\"{key}\" of type \"{kind}\" needs \"{name}\".")
     return normalization
 
 
-def ApplyOutputNormalization(prediction, normalization, scale_only: bool = False):
-    """Inverts a training normalization on a model's prediction.
+def _IsTorchTensor(value) -> bool:
+    # duck-typed so the numpy path never imports torch
+    return hasattr(value, "detach") and hasattr(value, "cpu")
 
-    Args:
-        prediction: (n_entities, total_width) array-like. Returned
-            unchanged - the same object - when normalization is None, so
-            the identity path costs nothing and preserves dtype.
-        normalization: A LoadOutputNormalization entry.
-        scale_only: Apply the scale but NOT the offset. Required for a
-            standard deviation or any other spread: shifting a spread by
-            the mean is meaningless, and doing so is the mistake a single
-            shared hook most easily makes.
 
-    Returns:
-        The de-normalized prediction, with the same type as the input - a
-        torch tensor in, a torch tensor out. WriteOutputFields hands the
-        result straight to torch_bridge, which needs a tensor; returning
-        numpy there raised AttributeError on .detach(). Returns the
-        untouched input object when there is nothing to do.
-    """
-    if normalization is None:
-        return prediction
-
-    is_tensor = hasattr(prediction, "detach") and hasattr(prediction, "cpu")
-    source = prediction.detach().cpu().numpy() if is_tensor else prediction
-    values = numpy.asarray(source, dtype=numpy.float64)
-    n_channels = values.shape[-1] if values.ndim > 1 else 1
-
+def _NormalizationScaleOffset(normalization, n_channels: int,
+                              key: str = "output_normalization"):
+    """The validated (scale, offset) of a card entry: physical =
+    normalized * scale + offset, each a float64 vector of length 1
+    (broadcast) or n_channels."""
     def _Vector(name):
         vector = numpy.asarray(normalization[name], dtype=numpy.float64).reshape(-1)
         if vector.size not in (1, n_channels):
             raise ValueError(
-                f"\"output_normalization\" has {vector.size} entries for \"{name}\" but "
+                f"\"{key}\" has {vector.size} entries for \"{name}\" but "
                 f"the prediction has {n_channels} channels; the card does not belong to "
                 "this model.")
         return vector
@@ -300,23 +314,113 @@ def ApplyOutputNormalization(prediction, normalization, scale_only: bool = False
         interval = normalization.get("range", [0.0, 1.0])
         span = float(interval[1]) - float(interval[0])
         if span == 0.0:
-            raise ValueError("\"output_normalization\" range must not be degenerate.")
+            raise ValueError(f"\"{key}\" range must not be degenerate.")
         scale = (high - low) / span
         offset = low - float(interval[0]) * scale
 
     if numpy.any(scale == 0.0):
         raise ValueError(
-            "\"output_normalization\" has a zero scale, which would make the inverse "
+            f"\"{key}\" has a zero scale, which would make the inverse "
             "undefined (a constant channel needs a scale of 1, not 0).")
+    return scale, offset
 
-    values = values * scale
-    if not scale_only:
-        values = values + offset
+
+def _BroadcastAlongAxis(vector, ndim: int, channel_axis: int):
+    """Reshapes a length-1-or-C vector to broadcast along channel_axis."""
+    if ndim < 2:
+        return vector
+    shape = [1] * ndim
+    shape[channel_axis % ndim] = vector.size
+    return vector.reshape(shape)
+
+
+def ApplyOutputNormalization(prediction, normalization, scale_only: bool = False,
+                             channel_axis: int = -1):
+    """Inverts a training normalization on a model's prediction.
+
+    Args:
+        prediction: An array-like with the channels on channel_axis -
+            (n_entities, total_width) for the row-ordered writers, or a
+            channels-first (C, *spatial) grid with channel_axis=0. Returned
+            unchanged - the same object - when normalization is None, so
+            the identity path costs nothing and preserves dtype.
+        normalization: A LoadOutputNormalization entry.
+        scale_only: Apply the scale but NOT the offset. Required for a
+            standard deviation or any other spread: shifting a spread by
+            the mean is meaningless, and doing so is the mistake a single
+            shared hook most easily makes.
+        channel_axis: The axis the card's per-channel vectors run along.
+
+    Returns:
+        The de-normalized prediction, with the same type as the input - a
+        torch tensor in, a torch tensor out, on the SAME device and dtype
+        and with its autograd graph intact: the arithmetic runs in torch
+        for a tensor (it used to bounce through numpy, which returned a
+        CUDA prediction on the host and cut every gradient - and the
+        surrogate response function differentiates through this). numpy
+        in, float64 numpy out. Returns the untouched input object when
+        there is nothing to do.
+    """
+    if normalization is None:
+        return prediction
+
+    is_tensor = _IsTorchTensor(prediction)
+    if not is_tensor:
+        prediction = numpy.asarray(prediction, dtype=numpy.float64)
+    ndim = int(prediction.ndim)
+    n_channels = int(prediction.shape[channel_axis]) if ndim > 1 else 1
+    scale, offset = _NormalizationScaleOffset(normalization, n_channels)
+    scale = _BroadcastAlongAxis(scale, ndim, channel_axis)
+    offset = _BroadcastAlongAxis(offset, ndim, channel_axis)
 
     if is_tensor:
-        import torch
-        return torch.as_tensor(values, dtype=prediction.dtype)
+        torch = _TryImportTorch()
+        result = prediction * torch.as_tensor(
+            scale, dtype=prediction.dtype, device=prediction.device)
+        if not scale_only:
+            result = result + torch.as_tensor(
+                offset, dtype=prediction.dtype, device=prediction.device)
+        return result
+
+    values = prediction * scale
+    if not scale_only:
+        values = values + offset
     return values
+
+
+def ApplyInputNormalization(features, normalization, channel_axis: int = -1):
+    """Applies a training normalization to the features a model is fed.
+
+    The forward map - (x - mean) / std, or (x - min) / (max - min) onto
+    "range" - i.e. the exact inverse of ApplyOutputNormalization for the
+    same entry, so the two round-trip to the identity. Same type
+    preservation (torch stays torch, on its device and dtype; numpy gives
+    float64) and the same identity-object path for None.
+
+    Args:
+        features: An array-like with the channels on channel_axis - the
+            concatenated (n_entities, total_input_width) features, or a
+            channels-first (C, *spatial) grid with channel_axis=0.
+        normalization: A LoadInputNormalization entry.
+        channel_axis: The axis the card's per-channel vectors run along.
+    """
+    if normalization is None:
+        return features
+
+    is_tensor = _IsTorchTensor(features)
+    if not is_tensor:
+        features = numpy.asarray(features, dtype=numpy.float64)
+    ndim = int(features.ndim)
+    n_channels = int(features.shape[channel_axis]) if ndim > 1 else 1
+    scale, offset = _NormalizationScaleOffset(normalization, n_channels, key="input_normalization")
+    scale = _BroadcastAlongAxis(scale, ndim, channel_axis)
+    offset = _BroadcastAlongAxis(offset, ndim, channel_axis)
+
+    if is_tensor:
+        torch = _TryImportTorch()
+        return (features - torch.as_tensor(offset, dtype=features.dtype, device=features.device)) \
+            / torch.as_tensor(scale, dtype=features.dtype, device=features.device)
+    return (features - offset) / scale
 
 
 def LoadModelWithCardCheck(model_settings: Kratos.Parameters, input_specs, output_specs, tag: str):

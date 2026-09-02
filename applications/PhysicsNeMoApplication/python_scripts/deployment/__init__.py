@@ -12,6 +12,11 @@ Module                             Provides
                                    other save paths in ``training_utils``
 ``triton_export``                  a Triton Inference Server model repository
                                    plus its generated ``config.pbtxt``
+``nim_client``                     the documented HTTP contract of PhysicsNeMo
+                                   NIM microservices - multipart STL in,
+                                   ``.npz`` out, stdlib urllib + numpy only
+``usd_export``                     time-sampled OpenUSD stages (digital twins)
+                                   from plain arrays, via optional ``usd-core``
 ``cosim_surrogate_solver_wrapper`` a trained model as a first-class
                                    CoSimulationApplication *solver*
 ``surrogate_response_function``    a trained model as a Kratos *response

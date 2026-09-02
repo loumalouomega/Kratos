@@ -76,7 +76,8 @@ from KratosMultiphysics.CoSimulationApplication.utilities.data_communicator_util
 
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
-from KratosMultiphysics.PhysicsNeMoApplication.processes.inference.inference_process import GatherInputFields, WriteOutputFields
+from KratosMultiphysics.PhysicsNeMoApplication.processes.inference.inference_process import (
+    GatherInputFields, SynchronizeOutputFields, WriteOutputFields)
 from KratosMultiphysics.PhysicsNeMoApplication.processes.inference.point_cloud_inference_process import (
     GatherPointCloudCoordinates, RunPointCloudForward, _MODEL_INTERFACES)
 from KratosMultiphysics.PhysicsNeMoApplication.utilities.nvtx_utils import NvtxRange
@@ -258,6 +259,22 @@ class CoSimSurrogateSolverWrapper(CoSimulationSolverWrapper):
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
         return self._model
 
+    def _GetNormalization(self):
+        """The card's output de-normalization, or None - the same contract
+        as InferenceProcess._GetNormalization. This wrapper writes through
+        WriteOutputFields like every other deployment path and was
+        documented as covered, but passed no normalization, so a card was
+        silently ignored here."""
+        if not hasattr(self, "_normalization"):
+            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
+        return self._normalization
+
+    def _GetInputNormalization(self):
+        """The card's input normalization, or None (the symmetric half)."""
+        if not hasattr(self, "_input_normalization"):
+            self._input_normalization = model_registry.LoadInputNormalization(self.model_settings)
+        return self._input_normalization
+
     def AdvanceInTime(self, current_time):
         if self.time_step <= 0.0:
             return 0.0  # another solver owns the time
@@ -279,7 +296,8 @@ class CoSimSurrogateSolverWrapper(CoSimulationSolverWrapper):
         with NvtxRange("PhysicsNeMo::GatherInputs"):
             inputs, n_entities = GatherInputFields(
                 self.model_part, self.input_specs, local_only=local_only)
-            features = torch.cat(inputs, dim=-1)  # (N, C_in)
+            features = model_registry.ApplyInputNormalization(
+                torch.cat(inputs, dim=-1), self._GetInputNormalization())  # (N, C_in)
 
         if self.model_interface == "flat":
             with torch.no_grad(), NvtxRange("PhysicsNeMo::Forward"):
@@ -293,19 +311,11 @@ class CoSimSurrogateSolverWrapper(CoSimulationSolverWrapper):
 
         with NvtxRange("PhysicsNeMo::WriteOutputs"):
             WriteOutputFields(self.model_part, self.output_specs, prediction, n_entities,
-                              local_only=local_only)
+                              local_only=local_only, normalization=self._GetNormalization())
 
         if local_only:
             # owned values are authoritative; refresh every rank's ghosts
-            communicator = self.model_part.GetCommunicator()
-            for variable_name, data_location in self.output_specs:
-                variable = Kratos.KratosGlobals.GetVariable(variable_name)
-                if hasattr(variable, "GetSourceVariable"):
-                    variable = variable.GetSourceVariable()
-                if data_location == "node_historical":
-                    communicator.SynchronizeVariable(variable)
-                elif data_location == "node_non_historical":
-                    communicator.SynchronizeNonHistoricalVariable(variable)
+            SynchronizeOutputFields(self.model_part, self.output_specs)
 
     def Check(self):
         field_variables = {name for name, _ in self.input_specs + self.output_specs}

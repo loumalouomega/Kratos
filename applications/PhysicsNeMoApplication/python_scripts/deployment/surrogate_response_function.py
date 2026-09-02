@@ -175,6 +175,27 @@ class SurrogateResponseFunction(ResponseFunctionInterface):
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
         return self._model
 
+    def _GetNormalization(self):
+        """The card's output de-normalization, or None.
+
+        J is a function of the PHYSICAL prediction, so this is applied on
+        the write path and inside the autograd objective alike - a
+        de-normalization applied only where the field is written would
+        leave dJ/dX wrong by exactly the training scale.
+        """
+        if not hasattr(self, "_normalization"):
+            self._normalization = model_registry.LoadOutputNormalization(self.model_settings)
+        return self._normalization
+
+    def _GetInputNormalization(self):
+        """The card's input normalization, or None (the symmetric half).
+        Applied to the FIELD features only - the coordinates keep their own
+        convention (``normalize_coordinates``), so the chain rule above is
+        untouched by it."""
+        if not hasattr(self, "_input_normalization"):
+            self._input_normalization = model_registry.LoadInputNormalization(self.model_settings)
+        return self._input_normalization
+
     def _ObjectiveWeights(self):
         return adjoint_bridge.MakeObjectiveWeights(self.objective_settings, self.model_part)
 
@@ -195,7 +216,8 @@ class SurrogateResponseFunction(ResponseFunctionInterface):
         torch = torch_bridge._TryImportTorch()
 
         inputs, n_entities = GatherInputFields(self.model_part, self.input_specs)
-        features = torch.cat(inputs, dim=-1)
+        features = model_registry.ApplyInputNormalization(
+            torch.cat(inputs, dim=-1), self._GetInputNormalization())
 
         if self.model_interface == "flat":
             with torch.no_grad():
@@ -207,7 +229,8 @@ class SurrogateResponseFunction(ResponseFunctionInterface):
                 model, self._device, self.model_interface, features, coordinates,
                 self.pass_geometry)
 
-        WriteOutputFields(self.model_part, self.output_specs, prediction, n_entities)
+        WriteOutputFields(self.model_part, self.output_specs, prediction, n_entities,
+                          normalization=self._GetNormalization())
 
         weights = self._ObjectiveWeights()
         variable = self._ObjectiveVariable()
@@ -260,7 +283,8 @@ class SurrogateResponseFunction(ResponseFunctionInterface):
         torch = torch_bridge._TryImportTorch()
 
         inputs, _ = GatherInputFields(self.model_part, self.input_specs)
-        features = torch.cat(inputs, dim=-1)
+        features = model_registry.ApplyInputNormalization(
+            torch.cat(inputs, dim=-1), self._GetInputNormalization())
         raw_coordinates = GatherPointCloudCoordinates(self.model_part, normalize=False)
         extent = numpy.ones(3, dtype=numpy.float64)
         if self.normalize_coordinates:
@@ -275,8 +299,13 @@ class SurrogateResponseFunction(ResponseFunctionInterface):
         variable_name = self._ObjectiveVariable().Name()
         offset, width = self._PredictionColumns(variable_name)
         weight_tensor = torch.as_tensor(weights, dtype=torch.float64)
+        normalization = self._GetNormalization()
 
         def Objective(prediction):
+            # de-normalized INSIDE the graph (torch-native), so the gradient
+            # carries the training scale, and the value matches the field
+            # CalculateValue wrote
+            prediction = model_registry.ApplyOutputNormalization(prediction, normalization)
             block = prediction[..., offset:offset + width].reshape(weight_tensor.shape)
             return (block.to(torch.float64) * weight_tensor).sum()
 
