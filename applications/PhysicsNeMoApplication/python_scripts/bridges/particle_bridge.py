@@ -17,6 +17,14 @@ brute-force path otherwise ("backend": "numpy" forces it - also the
 reference the accelerated path is tested against). "backend": "cupy" runs
 that same exact brute-force search on the GPU, needing no physicsnemo.
 
+"box_size" in the connectivity block makes the search PERIODIC (minimum-image
+convention): a pair straddling the box boundary is a neighbour with the short
+edge vector, which is what a molecular-dynamics cloud (the Lennard-Jones
+recipe) needs. Positions may be unwrapped - the images are taken modulo the
+box. The periodic search runs on scipy's cKDTree (exact, O(N log N)) for
+"auto", and on the brute-force distance matrix for "numpy"/"cupy"; warp's
+radius_search is not periodic and is never used with a box.
+
 BuildKinematicFeatures assembles the standard Learning-to-Simulate node
 features: the last K velocity states from the historical buffer, oldest
 first (matching the TimeSeriesInferenceProcess window convention).
@@ -45,12 +53,30 @@ def _TryImportNeighborSearch():
             "'pip install nvidia-physicsnemo', or use the \"numpy\" backend.") from e
 
 
+def _ReadBox(settings: Kratos.Parameters):
+    """The periodic box as a (3,) array, or None (the default: open space).
+
+    "box_size" is [] (non-periodic), [L] (cubic) or [Lx, Ly, Lz].
+    """
+    box = numpy.asarray(settings["box_size"].GetVector(), dtype=numpy.float64).reshape(-1)
+    if box.size == 0:
+        return None
+    if box.size == 1:
+        box = numpy.repeat(box, 3)
+    if box.size != 3 or numpy.any(box <= 0.0):
+        raise ValueError(
+            f"\"box_size\" must be [] (non-periodic), [L] or [Lx, Ly, Lz] with positive "
+            f"lengths; got {settings['box_size'].GetVector()}.")
+    return box
+
+
 def _ReadConnectivity(settings: Kratos.Parameters):
     defaults = Kratos.Parameters("""{
         "type"          : "radius",
         "radius"        : 0.015,
         "max_neighbors" : 16,
-        "backend"       : "auto"
+        "backend"       : "auto",
+        "box_size"      : []
     }""")
     settings = settings.Clone()
     settings.ValidateAndAssignDefaults(defaults)
@@ -68,10 +94,39 @@ def _ReadConnectivity(settings: Kratos.Parameters):
     max_neighbors = settings["max_neighbors"].GetInt()
     if connectivity_type == "knn" and max_neighbors < 1:
         raise ValueError(f"\"max_neighbors\" must be >= 1 [ max_neighbors = {max_neighbors} ].")
-    return connectivity_type, radius, max_neighbors, backend
+    box = _ReadBox(settings)
+    if box is not None and connectivity_type == "radius" and radius > 0.5 * box.min():
+        raise ValueError(
+            f"\"radius\" ({radius}) exceeds half the box ({0.5 * box.min()}); the minimum "
+            "image of a pair is then ambiguous.")
+    return connectivity_type, radius, max_neighbors, backend, box
 
 
-def _BruteForcePairs(positions, connectivity_type, radius, max_neighbors, backend="numpy"):
+def _PeriodicPairs(positions, connectivity_type, radius, max_neighbors, box):
+    """Exact periodic neighbour pairs -> (2, E) directed, via scipy's
+    cKDTree with boxsize (the tree wants positions inside the box)."""
+    from scipy.spatial import cKDTree
+
+    wrapped = numpy.mod(positions, box)
+    wrapped[wrapped >= box] -= box[numpy.nonzero(wrapped >= box)[1]]  # exact-boundary guard
+    tree = cKDTree(wrapped, boxsize=box)
+    n = positions.shape[0]
+    if connectivity_type == "radius":
+        pairs = tree.query_pairs(radius, output_type="ndarray")  # (P, 2), i < j
+        if pairs.size == 0:
+            return numpy.zeros((2, 0), dtype=numpy.int64)
+        return numpy.concatenate([pairs.T, pairs.T[::-1]], axis=1).astype(numpy.int64)
+    k = min(max_neighbors + 1, n)  # +1: the nearest match is self
+    _, indices = tree.query(wrapped, k=k)
+    indices = numpy.asarray(indices).reshape(n, -1)
+    receiver = numpy.repeat(numpy.arange(n), indices.shape[1])
+    sender = indices.ravel()
+    keep = receiver != sender
+    return numpy.stack([sender[keep], receiver[keep]]).astype(numpy.int64)
+
+
+def _BruteForcePairs(positions, connectivity_type, radius, max_neighbors, backend="numpy",
+                     box=None):
     """Exact O(N^2) neighbor pairs -> (2, E) directed [sender, receiver].
 
     The quadratic distance matrix is the one place in this application where
@@ -85,6 +140,9 @@ def _BruteForcePairs(positions, connectivity_type, radius, max_neighbors, backen
     positions = xp.asarray(positions)
     n = positions.shape[0]
     deltas = positions[None, :, :] - positions[:, None, :]  # [receiver, sender]
+    if box is not None:  # minimum image
+        box = xp.asarray(box)
+        deltas = deltas - box * xp.round(deltas / box)
     distances = xp.linalg.norm(deltas, axis=-1)
     xp.fill_diagonal(distances, xp.inf)  # no self-edges
     if connectivity_type == "radius":
@@ -123,12 +181,15 @@ def BuildParticleGraphFromPositions(positions, connectivity: Kratos.Parameters):
     (receiver - sender) plus the distance.
     """
     positions = numpy.asarray(positions, dtype=numpy.float64).reshape(-1, 3)
-    connectivity_type, radius, max_neighbors, backend = _ReadConnectivity(connectivity)
+    connectivity_type, radius, max_neighbors, backend, box = _ReadConnectivity(connectivity)
 
     if backend in ("numpy", "cupy"):
         # Both force the exact brute-force path; they differ only in where
         # the distance matrix is formed.
-        pairs = _BruteForcePairs(positions, connectivity_type, radius, max_neighbors, backend)
+        pairs = _BruteForcePairs(positions, connectivity_type, radius, max_neighbors, backend,
+                                 box=box)
+    elif box is not None:  # periodic: warp's search is not, the KD-tree is
+        pairs = _PeriodicPairs(positions, connectivity_type, radius, max_neighbors, box)
     else:  # "auto": the warp-backed neighbour search, exact numpy otherwise
         try:
             pairs = _AcceleratedPairs(positions, connectivity_type, radius, max_neighbors)
@@ -142,6 +203,8 @@ def BuildParticleGraphFromPositions(positions, connectivity: Kratos.Parameters):
     sender, receiver = directed[0], directed[1]
 
     relative = positions[receiver] - positions[sender]
+    if box is not None:  # the short image, so a boundary-straddling edge is short
+        relative = relative - box * numpy.round(relative / box)
     distance = numpy.linalg.norm(relative, axis=1, keepdims=True)
     edge_features = numpy.concatenate([relative, distance], axis=1)
     return directed, edge_features

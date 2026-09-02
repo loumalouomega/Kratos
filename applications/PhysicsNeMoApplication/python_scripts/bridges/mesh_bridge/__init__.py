@@ -18,6 +18,10 @@
     Meshes from implicit geometry: SDF primitives and combinators, marching
     cubes, 2D loop filling, tetrahedral filling of watertight surfaces, and
     ``PopulateModelPartFromMesh`` - generated geometry as real Kratos entities.
+``nurbs_sampling``
+    Exact NURBS (IGA) geometry sampled on a parametric lattice - the
+    isogeometric analogue of the curved mode, with the gather through the
+    geometry's own basis.
 ``spatial``
     Signed distance fields written into ordinary nodal variables, so every
     existing gather picks them up as features.

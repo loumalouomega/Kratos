@@ -16,7 +16,8 @@ import numpy
 
 import KratosMultiphysics as Kratos
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import array_backend_utils
-from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import GetTensorAdaptor
+from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import (
+    GetTensorAdaptor, RowsOfIds)
 
 _SIMPLEX_TYPES_3D = (
     Kratos.GeometryData.KratosGeometryType.Kratos_Tetrahedra3D4,
@@ -114,12 +115,16 @@ def SampleFieldsOnGrid(model_part: Kratos.ModelPart,
                 sorted_part_ids, node_ids[found].astype(numpy.int64))]  # (n_found, 4)
             values[found] = numpy.einsum("pk,pkc->pc", shape_values[found], stacked[rows])
     else:
-        node_row = {node.Id: row for row, node in enumerate(model_part.Nodes)}
+        # per-point locator for general geometries (hexahedra, prisms, ...);
+        # the corner rows come from the same sorted-id lookup as above, not
+        # from a per-call {id: row} dict
         for i, point in enumerate(points):
             is_found, shape_functions, element = locator.FindPointOnMesh(point)
             if not is_found:
                 continue
-            rows = [node_row[node.Id] for node in element.GetGeometry()]
+            corner_ids = numpy.fromiter((node.Id for node in element.GetGeometry()),
+                                        dtype=numpy.int64)
+            rows = id_order[numpy.searchsorted(sorted_part_ids, corner_ids)]
             values[i] = numpy.asarray(shape_functions) @ stacked[rows]
 
     grid = values.T.reshape((total_width,) + grid_shape)

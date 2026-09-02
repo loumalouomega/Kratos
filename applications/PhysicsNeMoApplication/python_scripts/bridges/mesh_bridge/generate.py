@@ -73,6 +73,18 @@ def _TryImportFillInterior():
             "with e.g. 'pip install -U nvidia-physicsnemo'.") from e
 
 
+def _TryImportTetgen():
+    try:
+        import tetgen
+        return tetgen
+    except ImportError as e:
+        raise ImportError(
+            "\"method\": \"tetgen\" requires the tetgen package (Python bindings of "
+            "TetGen - note TetGen itself is AGPL-licensed, which is why this backend "
+            "is an explicit opt-in), which could not be imported. Install it with "
+            "e.g. 'pip install tetgen'.") from e
+
+
 def SdfPrimitives():
     """The implicit-geometry building blocks, as a namespace dict.
 
@@ -321,26 +333,66 @@ def _CarveDelaunay(surface, points):
     return tetrahedra
 
 
+def _FillWithTetgen(points, triangles, preserve_boundary, quality):
+    """Constrained tetrahedralization through TetGen (pip "tetgen").
+
+    Boundary recovery is exact. With preserve_boundary the input facets are
+    kept verbatim (TetGen's -Y: Steiner points go only in the interior -
+    which is all the Schoenhardt class needs, so those solids fill here);
+    without it TetGen may also split boundary facets, still conforming to
+    the input surface. Input vertices survive bit-identically in the leading
+    rows either way; Steiner points append after them.
+
+    TetGen itself is AGPL-licensed, which is why this backend is an explicit
+    opt-in method and never part of "auto".
+    """
+    tetgen = _TryImportTetgen()
+
+    generator = tetgen.TetGen(
+        numpy.ascontiguousarray(points), numpy.ascontiguousarray(triangles))
+    result = generator.tetrahedralize(
+        order=1, nobisect=bool(preserve_boundary), quality=bool(quality))
+    nodes = numpy.ascontiguousarray(result[0], dtype=numpy.float64)
+    tetrahedra = numpy.asarray(result[1], dtype=numpy.int64)
+
+    # same orientation contract as the Delaunay route: positive Jacobians
+    a, b, c, d = (nodes[tetrahedra[:, i]] for i in range(4))
+    negative = numpy.einsum("ij,ij->i", b - a, numpy.cross(c - a, d - a)) < 0.0
+    tetrahedra[negative, 2], tetrahedra[negative, 3] = (
+        tetrahedra[negative, 3], tetrahedra[negative, 2].copy())
+    return nodes, tetrahedra
+
+
 def FillSurfaceWithTetrahedra(surface, settings: Kratos.Parameters = None):
     """Fills a watertight 3D triangle surface with tetrahedra.
 
     Upstream's fill_interior is 2D-only in physicsnemo 2.2 (n = 3 raises
-    NotImplementedError - "exact 3D boundary recovery is planned"), so this
+    NotImplementedError - "exact 3D boundary recovery is planned"), so "auto"
     tries it first and otherwise carves a Delaunay tetrahedralization by the
-    winding-number sign.
+    winding-number sign. "tetgen" opts into a constrained tetrahedralization
+    through the optional tetgen package instead - the exact-boundary-recovery
+    route (see below).
 
-    What the fallback guarantees: every input vertex survives bit-identically
-    in the leading rows, the filled volume and the boundary area match the
-    input surface, and the boundary is edge-manifold - all three are checked,
-    and by default a mismatch raises.
+    What the Delaunay fallback guarantees: every input vertex survives
+    bit-identically in the leading rows, the filled volume and the boundary
+    area match the input surface, and the boundary is edge-manifold - all
+    three are checked, and by default a mismatch raises.
 
-    What it does NOT guarantee, unlike upstream's planned n = 3: individual
-    input facets are not preserved. Delaunay retriangulates planar faces with
-    its own diagonals, so the boundary covers the same surface while its
-    triangles may differ (a cube keeps 8 of its 12 facets). Solids that need
-    Steiner points for boundary recovery - the Schoenhardt class - cannot be
-    filled this way at all, and fail the validation rather than returning
-    something wrong.
+    What it does NOT guarantee: individual input facets are not preserved.
+    Delaunay retriangulates planar faces with its own diagonals, so the
+    boundary covers the same surface while its triangles may differ (a cube
+    keeps 8 of its 12 facets). Solids that need Steiner points for boundary
+    recovery - the Schoenhardt class - cannot be filled this way at all, and
+    fail the validation rather than returning something wrong.
+
+    "method": "tetgen" closes both gaps: with "preserve_boundary" (the
+    default) the input facets survive VERBATIM (Steiner points are inserted
+    only in the interior, which is exactly what fills a Schoenhardt-class
+    solid), and the facets_preserved diagnostic asserts it. It is an
+    explicit opt-in - never chosen by "auto" - both because an installed
+    optional dependency must not silently change results and because TetGen
+    is AGPL-licensed. Its Steiner points append after the input vertices, so
+    the bit-identical-leading-rows guarantee holds there too.
 
     The tolerances are relative and deliberately not tighter than 1e-3: on a
     curved surface, retriangulating a non-planar boundary patch along the
@@ -353,8 +405,9 @@ def FillSurfaceWithTetrahedra(surface, settings: Kratos.Parameters = None):
     them would open it, but they are counted in the diagnostics and warned
     about - they are zero-Jacobian elements, so adapt before solving.
 
-    No Steiner points are inserted: cell size follows the input's vertex
-    density. For quality or size control, adapt afterwards with
+    The Delaunay route inserts no Steiner points: cell size follows the
+    input's vertex density. For quality or size control, use "tetgen" (its
+    quality pass is on by default) or adapt afterwards with
     adaptive_remeshing.RunMmgAdaptation.
 
     Args:
@@ -362,10 +415,12 @@ def FillSurfaceWithTetrahedra(surface, settings: Kratos.Parameters = None):
             forming a closed, consistently wound surface.
         settings: Optional Kratos Parameters:
             {
-                "method"                  : "auto",  // "upstream" | "delaunay"
+                "method"                  : "auto",  // "upstream" | "delaunay" | "tetgen"
                 "strict"                  : true,    // raise if validation fails
                 "volume_tolerance"        : 1e-3,    // relative
                 "boundary_area_tolerance" : 1e-3,    // relative
+                "preserve_boundary"       : true,    // tetgen only: keep facets verbatim
+                "quality"                 : true,    // tetgen only: TetGen's quality pass
                 "full_output"             : false
             }
 
@@ -380,15 +435,17 @@ def FillSurfaceWithTetrahedra(surface, settings: Kratos.Parameters = None):
         "strict"                  : true,
         "volume_tolerance"        : 1e-3,
         "boundary_area_tolerance" : 1e-3,
+        "preserve_boundary"       : true,
+        "quality"                 : true,
         "full_output"             : false
     }""")
     settings = Kratos.Parameters("{}") if settings is None else settings.Clone()
     settings.ValidateAndAssignDefaults(defaults)
 
     method = settings["method"].GetString()
-    if method not in ("auto", "upstream", "delaunay"):
+    if method not in ("auto", "upstream", "delaunay", "tetgen"):
         raise ValueError(
-            f"Unsupported \"method\" \"{method}\". Supported: auto, upstream, delaunay.")
+            f"Unsupported \"method\" \"{method}\". Supported: auto, upstream, delaunay, tetgen.")
     if int(surface.cells.shape[1]) != 3 or int(surface.points.shape[1]) != 3:
         raise ValueError(
             "FillSurfaceWithTetrahedra needs a 3D surface of TRIANGLES (cells of shape "
@@ -408,30 +465,42 @@ def FillSurfaceWithTetrahedra(surface, settings: Kratos.Parameters = None):
     points = numpy.ascontiguousarray(
         numpy.asarray(surface.points.detach().cpu(), dtype=numpy.float64))
     triangles = numpy.asarray(surface.cells.detach().cpu(), dtype=numpy.int64)
-    tetrahedra = _CarveDelaunay(surface, points)
+    if method == "tetgen":
+        filled_points, tetrahedra = _FillWithTetgen(
+            points, triangles,
+            settings["preserve_boundary"].GetBool(), settings["quality"].GetBool())
+    else:
+        filled_points, tetrahedra = points, _CarveDelaunay(surface, points)
 
     reference_volume, reference_area = _SurfaceMetrics(points, triangles)
-    a, b, c, d = (points[tetrahedra[:, i]] for i in range(4))
+    a, b, c, d = (filled_points[tetrahedra[:, i]] for i in range(4))
     filled_volume = float(
         numpy.einsum("ij,ij->i", b - a, numpy.cross(c - a, d - a)).sum() / 6.0)
     degenerate = int((numpy.abs(
         numpy.einsum("ij,ij->i", b - a, numpy.cross(c - a, d - a))
         / 6.0) <= 1e-12 * max(abs(reference_volume), 1e-300)).sum())
     boundary_faces = _BoundaryFaces(tetrahedra)
-    _, filled_area = _SurfaceMetrics(points, boundary_faces) if len(boundary_faces) else (0.0, 0.0)
+    _, filled_area = _SurfaceMetrics(filled_points, boundary_faces) if len(boundary_faces) else (0.0, 0.0)
 
     scale = abs(reference_volume) if abs(reference_volume) > 0.0 else 1.0
     area_scale = reference_area if reference_area > 0.0 else 1.0
+    input_facets = {tuple(sorted(map(int, face))) for face in triangles}
     diagnostics = {
         "volume_ratio": filled_volume / scale,
         "boundary_area_ratio": filled_area / area_scale,
         "boundary_manifold": _IsEdgeManifold(boundary_faces),
         "tetrahedra": int(len(tetrahedra)),
-        "unreferenced_points": int(len(points) - len(numpy.unique(tetrahedra))),
+        "unreferenced_points": int(len(filled_points) - len(numpy.unique(tetrahedra))),
         "degenerate_tetrahedra": degenerate,
+        "steiner_points": int(len(filled_points) - len(points)),
+        "facets_preserved": {tuple(map(int, face)) for face in boundary_faces} == input_facets,
     }
 
     failures = []
+    if (method == "tetgen" and settings["preserve_boundary"].GetBool()
+            and not diagnostics["facets_preserved"]):
+        failures.append(
+            "TetGen did not return the input facets verbatim despite preserve_boundary")
     if abs(diagnostics["volume_ratio"] - 1.0) > settings["volume_tolerance"].GetDouble():
         failures.append(
             f"filled volume {filled_volume:.9g} differs from the surface's enclosed volume "
@@ -453,15 +522,16 @@ def FillSurfaceWithTetrahedra(surface, settings: Kratos.Parameters = None):
         message = (
             "FillSurfaceWithTetrahedra could not fill this surface: " + "; ".join(failures) +
             ". The surface may be open, self-intersecting or need Steiner points for "
-            "boundary recovery (the Schoenhardt class), which this route cannot insert. "
-            "Compile MeshingApplication with tetgen for a constrained tetrahedralization, "
-            "or set \"strict\": false to take the result anyway.")
+            "boundary recovery (the Schoenhardt class), which the Delaunay route cannot "
+            "insert. Use \"method\": \"tetgen\" (pip install tetgen) for a constrained "
+            "tetrahedralization with exact boundary recovery, or set \"strict\": false "
+            "to take the result anyway.")
         if settings["strict"].GetBool():
             raise ValueError(message)
         Kratos.Logger.PrintWarning("FillSurfaceWithTetrahedra", message)
 
     from physicsnemo.mesh import Mesh
-    mesh = Mesh(points=torch.as_tensor(points), cells=torch.as_tensor(tetrahedra))
+    mesh = Mesh(points=torch.as_tensor(filled_points), cells=torch.as_tensor(tetrahedra))
     return _WithDiagnostics(mesh, diagnostics, settings)
 
 
@@ -471,7 +541,8 @@ def _WithDiagnostics(mesh, diagnostics, settings):
     if diagnostics is None:      # upstream filled it; it reports nothing of its own
         diagnostics = {"volume_ratio": None, "boundary_area_ratio": None,
                        "boundary_manifold": None,
-                       "tetrahedra": int(mesh.cells.shape[0]), "unreferenced_points": None}
+                       "tetrahedra": int(mesh.cells.shape[0]), "unreferenced_points": None,
+                       "steiner_points": None, "facets_preserved": None}
     return mesh, diagnostics
 
 

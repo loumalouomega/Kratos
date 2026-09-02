@@ -84,14 +84,15 @@ def _TryImportCfdEvaluationWrappers(name: str = "geotransolver"):
     recipes; this helper only resolves them so a user can feed them Kratos
     data via ModelPartToPolyData/NodesToPolyData. In-loop deployment goes
     through PointCloudInferenceProcess (model_interface "geotransolver")
-    - but note it applies no scaling of its own, while these wrappers
-    normalize their inputs AND call unscale_model_targets on the way out.
-    A pretrained checkpoint deployed in-loop therefore needs its output
-    scaling expressed in the model card ("output_normalization"), and its
-    input convention checked: upstream centres on the STL centre of mass
-    and divides by a reference scale, where GatherPointCloudCoordinates
-    min-max normalizes per part
-    instead. physicsnemo-cfd is alpha - its wrapper APIs may change.
+    - but note it applies only what the model card says, while these
+    wrappers normalize their inputs AND call unscale_model_targets on the
+    way out. A pretrained checkpoint deployed in-loop therefore needs its
+    scalings expressed in the model card - "output_normalization" for the
+    targets, "input_normalization" for the field features - and its
+    COORDINATE convention checked separately: upstream centres on the STL
+    centre of mass and divides by a reference scale, where
+    GatherPointCloudCoordinates min-max normalizes per part instead.
+    physicsnemo-cfd is alpha - its wrapper APIs may change.
     """
     try:
         import importlib

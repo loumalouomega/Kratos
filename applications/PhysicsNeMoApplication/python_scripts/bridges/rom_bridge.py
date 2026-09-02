@@ -139,23 +139,40 @@ def LoadRomBasis(folder, rom_parameters_name: str = "RomParameters") -> RomBasis
                     singular_values=singular_values)
 
 
-def _NodePermutation(model_part: Kratos.ModelPart, rom_basis: RomBasis) -> numpy.ndarray:
-    """Positions of the basis's node ids inside the model part's Nodes order."""
-    position_of_id = {node.Id: position for position, node in enumerate(model_part.Nodes)}
+def NodePermutation(model_part: Kratos.ModelPart, rom_basis: RomBasis) -> numpy.ndarray:
+    """Positions of the basis's node ids inside the model part's Nodes order.
+
+    Topology: a caller stepping a static mesh (RomSurrogateProcess) builds
+    this once and hands it to Gather/ScatterUnknownsVector as
+    ``permutation=`` instead of paying the O(N) lookup every step. The
+    lookup is the shared ``RowsOfIds`` (argsort + searchsorted), not a
+    per-call ``{id: row}`` dict plus a generator.
+    """
+    from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import (
+        RowsOfIds)
+    part_ids = numpy.fromiter((node.Id for node in model_part.Nodes),
+                              dtype=numpy.int64, count=model_part.NumberOfNodes())
     try:
-        return numpy.fromiter(
-            (position_of_id[int(node_id)] for node_id in rom_basis.node_ids),
-            dtype=numpy.int64, count=rom_basis.n_nodes)
+        return RowsOfIds(part_ids, rom_basis.node_ids)
     except KeyError as error:
         raise RuntimeError(
             f"Basis node id {error.args[0]} is not in model part "
             f"\"{model_part.FullName()}\" - the basis belongs to a different mesh.") from None
 
 
-def GatherUnknownsVector(model_part: Kratos.ModelPart, rom_basis: RomBasis) -> numpy.ndarray:
+_NodePermutation = NodePermutation  # the pre-public name
+
+
+def GatherUnknownsVector(model_part: Kratos.ModelPart, rom_basis: RomBasis,
+                         permutation=None) -> numpy.ndarray:
     """Reads the basis's nodal unknowns into a (n_dofs,) vector in the exact
-    basis row order (node-major in NodeIds order, unknown-minor)."""
-    permutation = _NodePermutation(model_part, rom_basis)
+    basis row order (node-major in NodeIds order, unknown-minor).
+
+    Args:
+        permutation: Optional precomputed NodePermutation result.
+    """
+    if permutation is None:
+        permutation = NodePermutation(model_part, rom_basis)
     columns = []
     for name in rom_basis.nodal_unknowns:
         variable = Kratos.KratosGlobals.GetVariable(name)
@@ -165,13 +182,19 @@ def GatherUnknownsVector(model_part: Kratos.ModelPart, rom_basis: RomBasis) -> n
     return numpy.stack(columns, axis=1).reshape(-1)
 
 
-def ScatterUnknownsVector(model_part: Kratos.ModelPart, rom_basis: RomBasis, u) -> None:
-    """Writes a (n_dofs,) vector in basis row order back onto the nodes."""
+def ScatterUnknownsVector(model_part: Kratos.ModelPart, rom_basis: RomBasis, u,
+                          permutation=None) -> None:
+    """Writes a (n_dofs,) vector in basis row order back onto the nodes.
+
+    Args:
+        permutation: Optional precomputed NodePermutation result.
+    """
     u = numpy.asarray(u, dtype=numpy.float64)
     if u.shape != (rom_basis.n_dofs,):
         raise ValueError(
             f"Expected a ({rom_basis.n_dofs},) unknowns vector, got shape {list(u.shape)}.")
-    permutation = _NodePermutation(model_part, rom_basis)
+    if permutation is None:
+        permutation = NodePermutation(model_part, rom_basis)
     inverse = numpy.empty_like(permutation)
     inverse[permutation] = numpy.arange(len(permutation))
     per_node = u.reshape(rom_basis.n_nodes, rom_basis.n_unknowns)

@@ -20,7 +20,8 @@ import numpy
 
 import KratosMultiphysics as Kratos
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import array_backend_utils
-from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import GetTensorAdaptor
+from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import (
+    GetTensorAdaptor, RowsOfIds)
 
 _GEOMETRY_TYPE = Kratos.GeometryData.KratosGeometryType
 
@@ -202,22 +203,10 @@ def BuildScatterRows(model_part: Kratos.ModelPart, node_ids):
     """
     part_ids = numpy.fromiter((node.Id for node in model_part.Nodes),
                               dtype=numpy.int64, count=model_part.NumberOfNodes())
-    query = numpy.asarray(node_ids, dtype=numpy.int64).ravel()
-    # searchsorted rather than a {id: row} dict plus a generator: both of
-    # those are interpreter-level loops, and this is the fallback path when
-    # a caller has not cached the mapping. Not assuming the container is
-    # id-sorted - the argsort makes it correct either way.
-    order = numpy.argsort(part_ids, kind="stable")
-    position = numpy.searchsorted(part_ids[order], query)
-    if part_ids.size == 0:
-        if query.size:
-            raise KeyError(int(query[0]))
-        return numpy.empty(0, dtype=numpy.int64)
-    clipped = numpy.minimum(position, part_ids.size - 1)
-    missing = part_ids[order][clipped] != query
-    if missing.any():
-        raise KeyError(int(query[missing][0]))
-    return order[clipped]
+    # the shared searchsorted lookup (utilities.tensor_adaptor_dataset_utils
+    # .RowsOfIds) rather than a {id: row} dict plus a generator; this is the
+    # fallback path when a caller has not cached the mapping
+    return RowsOfIds(part_ids, numpy.asarray(node_ids, dtype=numpy.int64).ravel())
 
 
 def ScatterNodeFeatures(model_part: Kratos.ModelPart, node_ids, values,
