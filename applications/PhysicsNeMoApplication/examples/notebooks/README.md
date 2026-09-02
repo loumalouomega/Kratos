@@ -4,6 +4,11 @@ A learning path through the application, in order. Every notebook runs on CPU in
 seconds to minutes with small analytic problems (07 and later use real solves), and writes its outputs to a local `./output/`
 folder.
 
+Every notebook is committed **with its outputs executed**, and every one renders what it
+solves - the model part, the field a process wrote, the error - with pyvista through the
+core `KratosMultiphysics.pyvista_utilities` bridge (mesh-aware renders, or point renders
+for node-only parts), so the mesh and the fields are visible before any number is read.
+
 | Notebook | What it shows |
 |---|---|
 | [01 — Tensor bridge and dataset export](01_tensor_bridge_and_dataset_export.ipynb) | `ModelPart` ↔ `torch.Tensor` (zero-copy in, checked copy out), `DatasetExportProcess`, `CreateNpzDataset` + `DataLoader` |
