@@ -80,6 +80,27 @@ class TestRomSurrogateProcess(KratosUnittest.TestCase):
             self.assertAlmostEqual(
                 node.GetSolutionStepValue(Kratos.TEMPERATURE), expected_u[row], places=10)
 
+    def test_PermutationIsCachedAcrossStepsAndCorrectOnPermutedIds(self):
+        # the basis lists the nodes in a different order than the part holds
+        # them; every step must still land on the right node, and the
+        # permutation (topology) must be built once, not per step
+        model_part = self._CreateModelPart([Kratos.TEMPERATURE])
+        _WriteNumpyBasis(self.basis_folder, numpy.eye(4)[:, :2], [3, 1, 4, 2], ["TEMPERATURE"])
+        self._SaveLinearModel([[1.0], [2.0]])  # q = (2, 4) for the parameter 2
+        process = self._CreateProcess()
+        for step in (1, 2):
+            model_part.ProcessInfo[Kratos.STEP] = step
+            process.ExecuteFinalizeSolutionStep()
+            if step == 1:
+                permutation = process._permutation
+            else:
+                self.assertIs(process._permutation, permutation)
+        # u = phi q = (2, 4, 0, 0) in basis row order [3, 1, 4, 2]
+        self.assertAlmostEqual(model_part.GetNode(3).GetSolutionStepValue(Kratos.TEMPERATURE), 2.0)
+        self.assertAlmostEqual(model_part.GetNode(1).GetSolutionStepValue(Kratos.TEMPERATURE), 4.0)
+        self.assertAlmostEqual(model_part.GetNode(4).GetSolutionStepValue(Kratos.TEMPERATURE), 0.0)
+        self.assertAlmostEqual(model_part.GetNode(2).GetSolutionStepValue(Kratos.TEMPERATURE), 0.0)
+
     def test_ComponentUnknowns(self):
         model_part = self._CreateModelPart([Kratos.DISPLACEMENT])
         phi = _OrthonormalBasis(8, 3)

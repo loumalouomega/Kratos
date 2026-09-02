@@ -93,6 +93,35 @@ class TestParticleInferenceProcess(KratosUnittest.TestCase):
             node.GetSolutionStepValue(Kratos.DISPLACEMENT)[2] for node in self.model_part.Nodes])
         self.assertTrue(numpy.allclose(disp_z, z - z0, atol=1e-12))
 
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        """CreateParticleTrajectoryDataset(normalize=True) standardizes the
+        FEATURES too, so the network expects standardized velocity
+        histories - fed raw, an 18% position drift was measured on the
+        Examples case. The stub echoes its last velocity slot as the
+        acceleration, so the process must have handed it (v - mean) / std
+        exactly, over the whole K*3-wide history."""
+        class EchoLastVelocity(torch.nn.Module):
+            def forward(self, nodes, edges, edge_index):
+                return nodes[:, -3:]
+
+        torch.jit.script(EchoLastVelocity()).save(str(self.checkpoint))
+        mean, std = [1.0, 2.0, 3.0] * 2, [2.0, 4.0, 8.0] * 2  # history_size 2 -> width 6
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": mean, "std": std}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting,
+                        str(self.checkpoint) + ".card.json")
+        for node in self.model_part.Nodes:
+            node.SetSolutionStepValue(Kratos.VELOCITY, [5.0, 6.0, 7.0])
+
+        process = self._CreateProcess()
+        for step in (1, 2):  # step 1 warms the history up
+            self.model_part.ProcessInfo[Kratos.STEP] = step
+            process.ExecuteFinalizeSolutionStep()
+        acceleration = numpy.array([
+            node.GetSolutionStepValue(Kratos.ACCELERATION) for node in self.model_part.Nodes])
+        numpy.testing.assert_allclose(
+            acceleration, numpy.tile([2.0, 1.0, 0.5], (acceleration.shape[0], 1)), rtol=1e-12)
+
     def test_NormalizedModelIsDeNormalizedFromTheCard(self):
         """A model trained on standardized accelerations must not be
         deployed raw.

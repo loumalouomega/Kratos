@@ -90,6 +90,53 @@ class TestGraphInferenceProcess(KratosUnittest.TestCase):
             }
         }""")
 
+    def test_OutputNormalizationFromTheCardIsApplied(self):
+        """Same checkpoint, same mesh, with and without a card: the written
+        field must differ by exactly the card's affine map. The raw run is
+        the reference because the meshgraphnet interface takes a PyG graph,
+        which TorchScript cannot script into an affine stand-in."""
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+
+        def Run():
+            process = graph_inference_process.Factory(self._Settings(), self.model)
+            process.ExecuteInitialize()
+            self.model_part.ProcessInfo[Kratos.STEP] = 1
+            process.ExecuteFinalizeSolutionStep()
+            return numpy.array([
+                node.GetSolutionStepValue(Kratos.TEMPERATURE) for node in self.model_part.Nodes])
+
+        raw = Run()
+        mean, std = 5.0, 3.0
+        model_registry.SaveModelCard(self.checkpoint, {
+            "output_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+        numpy.testing.assert_allclose(Run(), std * raw + mean, rtol=1e-10, atol=1e-12)
+
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        """A card standardizing the raw field must give exactly the output
+        of the same checkpoint fed the pre-standardized field without one."""
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        mean, std = 2.0, 4.0
+
+        def Run():
+            process = graph_inference_process.Factory(self._Settings(), self.model)
+            process.ExecuteInitialize()
+            self.model_part.ProcessInfo[Kratos.STEP] = 1
+            process.ExecuteFinalizeSolutionStep()
+            return numpy.array([
+                node.GetSolutionStepValue(Kratos.TEMPERATURE) for node in self.model_part.Nodes])
+
+        for node in self.model_part.Nodes:  # pre-standardized, no card
+            node.SetSolutionStepValue(Kratos.PRESSURE, (float(node.Id) - mean) / std)
+        reference = Run()
+        for node in self.model_part.Nodes:  # raw field, card does the work
+            node.SetSolutionStepValue(Kratos.PRESSURE, float(node.Id))
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+        numpy.testing.assert_allclose(Run(), reference, rtol=1e-10, atol=1e-12)
+        self.assertGreater(numpy.abs(reference).max(), 0.0)
+
     def test_TheGraphIsNotReExtractedEveryStep(self):
         """The edge set is topology, extracted once in ExecuteInitialize.
 

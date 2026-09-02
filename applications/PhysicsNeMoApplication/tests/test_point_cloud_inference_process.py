@@ -86,6 +86,29 @@ class TestPointCloudInferenceProcess(KratosUnittest.TestCase):
                 node.GetSolutionStepValue(Kratos.TEMPERATURE),
                 node.X + node.Y + node.Z + 10.0 * node.X, places=6)
 
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        # the FIELD features are standardized by the card; the coordinates
+        # keep their own convention (normalize_coordinates) and are not
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+
+        class SumFeatures(torch.nn.Module):
+            def forward(self, x):  # (1, N, 4) -> (1, N, 1)
+                return x.sum(dim=-1, keepdim=True)
+
+        torch.jit.script(SumFeatures()).save(str(self.checkpoint))
+        mean, std = 4.0, 2.0
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+        process = self._CreateProcess()
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+
+        for node in self.model_part.Nodes:
+            self.assertAlmostEqual(
+                node.GetSolutionStepValue(Kratos.TEMPERATURE),
+                node.X + node.Y + node.Z + (10.0 * node.X - mean) / std, places=6)
+
     def test_TransolverInterfaceContract(self):
         # a toy two-argument model exercising the (fx, embedding) call path
         class TwoArgs(torch.nn.Module):

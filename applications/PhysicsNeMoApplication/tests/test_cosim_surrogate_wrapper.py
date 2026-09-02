@@ -88,6 +88,56 @@ class TestCoSimSurrogateWrapper(KratosUnittest.TestCase):
             for value, coord in zip(disp, (node.X, node.Y, node.Z)):
                 self.assertAlmostEqual(value, 2.0 * coord + 1.0, places=6)
 
+    def test_OutputNormalizationFromTheCardIsApplied(self):
+        """The wrapper writes through WriteOutputFields like every other
+        deployment path, and the docs listed it as covered - but it passed
+        no normalization, so a card was silently ignored here. Affine
+        stand-in, so a missing shift cannot hide."""
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import cosim_surrogate_solver_wrapper
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        mean, std = [10.0, 20.0, 30.0], [2.0, 3.0, 4.0]
+        model_registry.SaveModelCard(self.checkpoint, {
+            "output_normalization": {"type": "mean_std", "mean": mean, "std": std}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+
+        wrapper = cosim_surrogate_solver_wrapper.Create(
+            _WrapperSettings(self.checkpoint, time_step=1.0), None, "surrogate")
+        wrapper.Initialize()
+        for node in wrapper.model_part.Nodes:
+            node.SetSolutionStepValue(Kratos.FORCE, [node.X, node.Y, node.Z])
+        wrapper.AdvanceInTime(0.0)
+        wrapper.SolveSolutionStep()
+        wrapper.Finalize()
+
+        for node in wrapper.model_part.Nodes:
+            disp = node.GetSolutionStepValue(Kratos.DISPLACEMENT)
+            for axis, coord in enumerate((node.X, node.Y, node.Z)):
+                self.assertAlmostEqual(
+                    disp[axis], (2.0 * coord + 1.0) * std[axis] + mean[axis], places=6)
+
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import cosim_surrogate_solver_wrapper
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        mean, std = [1.0, 2.0, 3.0], [2.0, 4.0, 8.0]
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": mean, "std": std}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+
+        wrapper = cosim_surrogate_solver_wrapper.Create(
+            _WrapperSettings(self.checkpoint, time_step=1.0), None, "surrogate")
+        wrapper.Initialize()
+        for node in wrapper.model_part.Nodes:
+            node.SetSolutionStepValue(Kratos.FORCE, [node.X, node.Y, node.Z])
+        wrapper.AdvanceInTime(0.0)
+        wrapper.SolveSolutionStep()
+        wrapper.Finalize()
+
+        for node in wrapper.model_part.Nodes:
+            disp = node.GetSolutionStepValue(Kratos.DISPLACEMENT)
+            for axis, coord in enumerate((node.X, node.Y, node.Z)):
+                self.assertAlmostEqual(
+                    disp[axis], 2.0 * (coord - mean[axis]) / std[axis] + 1.0, places=6)
+
     def test_DrivenWrapperDoesNotOwnTime(self):
         from KratosMultiphysics.PhysicsNeMoApplication.deployment import cosim_surrogate_solver_wrapper
         wrapper = cosim_surrogate_solver_wrapper.Create(

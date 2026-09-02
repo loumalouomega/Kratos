@@ -222,6 +222,31 @@ class TestOutputNormalizationThroughProcess(KratosUnittest.TestCase):
             self._Written(Kratos.NODAL_PAUX), raw_std * self._STD, rtol=1e-6)
         self.assertLess(numpy.abs(self._Written(Kratos.NODAL_PAUX)).max(), self._MEAN)
 
+    def test_InputsAreNormalizedFromTheCard(self):
+        """The symmetric half: a model trained on standardized features
+        expects standardized features. Both keys on one card, so the
+        expected value is the full chain: (2 * (p - m_in) / s_in + 1) *
+        s_out + m_out - an affine stand-in again, for the same reason."""
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
+        checkpoint = self._SaveAffine(Path("test_norm_input.pt"), 2.0, 1.0, card=False)
+        in_mean, in_std = 2.5, 0.5
+        model_registry.SaveModelCard(checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": [in_mean], "std": [in_std]},
+            "output_normalization": {"type": "mean_std", "mean": [self._MEAN], "std": [self._STD]}})
+        settings = Kratos.Parameters("""{
+            "Parameters": {
+                "model_part_name" : "Main",
+                "model_settings"  : { "checkpoint_file" : "%s", "device" : "cpu" },
+                "input_fields"    : [ { "variable_name" : "PRESSURE",    "data_location" : "node_historical" } ],
+                "output_fields"   : [ { "variable_name" : "TEMPERATURE", "data_location" : "node_historical" } ]
+            }
+        }""" % checkpoint)
+        process = inference_process.Factory(settings, self.model)
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        expected = (2.0 * (self._Pressures() - in_mean) / in_std + 1.0) * self._STD + self._MEAN
+        numpy.testing.assert_allclose(self._Written(Kratos.TEMPERATURE), expected, rtol=1e-9)
+
     def test_WithoutACardNothingIsTransformed(self):
         from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import inference_process
         checkpoint = self._SaveAffine(Path("test_norm_none.pt"), 2.0, 1.0, card=False)

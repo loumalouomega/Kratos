@@ -140,6 +140,32 @@ class TestParticleTrajectoryDataset(KratosUnittest.TestCase):
         self.assertEqual(len(dataset.positions), len(dataset))
         self.assertEqual(dataset.target_mean.shape, (3,))
 
+    def test_NormalizationCardEntriesCarryBothHalves(self):
+        from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import (
+            CreateParticleTrajectoryDataset, MakeNormalizationCardEntries)
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+
+        rng = numpy.random.default_rng(3)
+        trajectory = numpy.cumsum(rng.random((8, 4, 3)), axis=0)
+        dataset = CreateParticleTrajectoryDataset(trajectory, history_size=2, delta_time=0.1,
+                                                  normalize=True)
+        entries = MakeNormalizationCardEntries(dataset)
+        self.assertEqual(sorted(entries), ["input_normalization", "output_normalization"])
+        numpy.testing.assert_allclose(entries["input_normalization"]["mean"], dataset.feature_mean)
+        numpy.testing.assert_allclose(entries["input_normalization"]["std"], dataset.feature_std)
+        numpy.testing.assert_allclose(entries["output_normalization"]["std"], dataset.target_std)
+        # the entries undo exactly what normalize=True did: the first raw
+        # window, standardized by the card, is the dataset's first sample
+        raw = CreateParticleTrajectoryDataset(trajectory, history_size=2, delta_time=0.1)
+        numpy.testing.assert_allclose(
+            model_registry.ApplyInputNormalization(raw[0][0].numpy(), entries["input_normalization"]),
+            dataset[0][0].numpy(), rtol=1e-10)
+        numpy.testing.assert_allclose(
+            model_registry.ApplyOutputNormalization(dataset[0][1].numpy(), entries["output_normalization"]),
+            raw[0][1].numpy(), rtol=1e-10)
+        with self.assertRaisesRegex(ValueError, "feature_mean"):
+            MakeNormalizationCardEntries(object())
+
     def test_Validation(self):
         from KratosMultiphysics.PhysicsNeMoApplication.training.torch_dataset import CreateParticleTrajectoryDataset
 

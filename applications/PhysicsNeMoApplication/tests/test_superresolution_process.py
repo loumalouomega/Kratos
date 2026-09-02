@@ -80,6 +80,64 @@ class TestSuperResolutionProcess(KratosUnittest.TestCase):
             expected = 1.0 + 2.0 * node.X + 3.0 * node.Y - node.Z
             self.assertAlmostEqual(node.GetSolutionStepValue(Kratos.TEMPERATURE), expected, places=8)
 
+    def _CreateTwoChannelProcess(self, card):
+        """Two channels with different scalings: the card's per-channel
+        vectors must run along axis 0 (the grid layout), so applying them
+        along the last, spatial axis raises instead of passing by
+        broadcast. PRESSURE = 1 + 2x, TEMPERATURE = 3y - z on the coarse
+        part; the upsampler is exact on both."""
+        coarse = CreateStructuredTetModelPart(
+            self.model, "Coarse2", divisions=3,
+            historical_variables=(Kratos.PRESSURE, Kratos.TEMPERATURE))
+        fine = CreateStructuredTetModelPart(
+            self.model, "Fine2", divisions=5,
+            historical_variables=(Kratos.PRESSURE, Kratos.TEMPERATURE))
+        for node in coarse.Nodes:
+            node.SetSolutionStepValue(Kratos.PRESSURE, 1.0 + 2.0 * node.X)
+            node.SetSolutionStepValue(Kratos.TEMPERATURE, 3.0 * node.Y - node.Z)
+        model_registry.SaveModelCard(self.checkpoint, card)
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+
+        settings = Kratos.Parameters("""{
+            "Parameters": {
+                "coarse_model_part_name" : "Coarse2",
+                "fine_model_part_name"   : "Fine2",
+                "model_settings"         : {
+                    "checkpoint_file" : "test_superresolution_upsampler.pt",
+                    "device"          : "cpu"
+                },
+                "input_fields"           : [ { "variable_name" : "PRESSURE",    "data_location" : "node_historical" },
+                                             { "variable_name" : "TEMPERATURE", "data_location" : "node_historical" } ],
+                "output_fields"          : [ { "variable_name" : "TEMPERATURE", "data_location" : "node_historical" },
+                                             { "variable_name" : "PRESSURE",    "data_location" : "node_historical" } ],
+                "coarse_grid_shape"      : [6, 6, 6]
+            }
+        }""")
+        process = superresolution_process.Factory(settings, self.model)
+        coarse.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        return fine
+
+    def test_OutputNormalizationFromTheCardIsApplied(self):
+        mean, std = [-4.0, 100.0], [2.5, 0.1]
+        fine = self._CreateTwoChannelProcess({
+            "output_normalization": {"type": "mean_std", "mean": mean, "std": std}})
+        for node in fine.Nodes:
+            self.assertAlmostEqual(node.GetSolutionStepValue(Kratos.TEMPERATURE),
+                                   std[0] * (1.0 + 2.0 * node.X) + mean[0], places=8)
+            self.assertAlmostEqual(node.GetSolutionStepValue(Kratos.PRESSURE),
+                                   std[1] * (3.0 * node.Y - node.Z) + mean[1], places=8)
+
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        mean, std = [1.0, -2.0], [2.0, 0.5]
+        fine = self._CreateTwoChannelProcess({
+            "input_normalization": {"type": "mean_std", "mean": mean, "std": std}})
+        for node in fine.Nodes:
+            self.assertAlmostEqual(node.GetSolutionStepValue(Kratos.TEMPERATURE),
+                                   ((1.0 + 2.0 * node.X) - mean[0]) / std[0], places=8)
+            self.assertAlmostEqual(node.GetSolutionStepValue(Kratos.PRESSURE),
+                                   ((3.0 * node.Y - node.Z) - mean[1]) / std[1], places=8)
+
     def test_IntervalGating(self):
         process = self._CreateProcess(output_interval=2)
         self.coarse.ProcessInfo[Kratos.STEP] = 1
@@ -223,6 +281,38 @@ class TestGridOperatorZoo(KratosUnittest.TestCase):
                   latent_channels=8, num_fno_layers=2, num_fno_modes=2, padding=2)
         fno.save(str(self.checkpoint))
         self._RunThroughProcess()
+
+    def test_DlwpThroughProcess(self):
+        """DLWP's five-dimensional (B, C, 6, H, H) cubed-sphere layout maps
+        onto the 3D (C, D, H, W) path with D as the face axis - here on a
+        [6, 8, 8] grid without the squeeze idiom (physics semantics aside:
+        the cubed-sphere padding stays weather-specific)."""
+        from physicsnemo.models.dlwp import DLWP
+        from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import grid_inference_process
+
+        torch.manual_seed(0)
+        DLWP(nr_input_channels=1, nr_output_channels=1, nr_initial_channels=4, depth=1).save(
+            str(self.checkpoint))
+        settings = Kratos.Parameters("""{
+            "Parameters": {
+                "model_part_name" : "Main",
+                "model_settings"  : {
+                    "checkpoint_file" : "%s",
+                    "checkpoint_type" : "physicsnemo",
+                    "device"          : "cpu"
+                },
+                "input_fields"    : [ { "variable_name" : "PRESSURE",    "data_location" : "node_historical" } ],
+                "output_fields"   : [ { "variable_name" : "TEMPERATURE", "data_location" : "node_historical" } ],
+                "grid_shape"      : [6, 8, 8]
+            }
+        }""" % self.checkpoint)
+        process = grid_inference_process.Factory(settings, self.model)
+        self.part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        values = numpy.array([
+            node.GetSolutionStepValue(Kratos.TEMPERATURE) for node in self.part.Nodes])
+        self.assertTrue(numpy.isfinite(values).all())
+        self.assertGreater(numpy.abs(values).max(), 0.0)
 
     def test_AfnoThroughProcess(self):
         from physicsnemo.models.afno import AFNO

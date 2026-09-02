@@ -21,6 +21,7 @@ from test_mpi_graph_partition import TestMpiDataParallelTraining
 from test_mpi_cosim_surrogate import TestMpiDistributedSurrogateWrapper
 from test_mpi_cosim_surrogate import TestMpiDistributedSurrogateCoupledLoop
 from test_mpi_fsdp_checkpoint import TestMpiFsdpCheckpoint
+from test_mpi_domain_parallel import TestMpiDomainParallel
 
 
 def AssembleTestSuites():
@@ -49,6 +50,7 @@ def AssembleTestSuites():
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiDistributedSurrogateWrapper]))
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiDistributedSurrogateCoupledLoop]))
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiFsdpCheckpoint]))
+    smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiDomainParallel]))
 
     nightlyMPISuite = suites['mpi_nightly']
     nightlyMPISuite.addTests(smallMPISuite)

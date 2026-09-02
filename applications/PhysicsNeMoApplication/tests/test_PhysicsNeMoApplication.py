@@ -32,6 +32,9 @@ from test_domain_mesh import TestDomainMesh
 from test_model_registry import TestModelRegistry
 from test_model_registry import TestModelCards
 from test_model_registry import TestOutputNormalization
+from test_model_registry import TestOutputNormalizationTensorPath
+from test_model_registry import TestInputNormalization
+from test_domain_parallel_utils import TestDomainParallelUtilsSerial
 from test_model_registry import TestLoadOutputNormalization
 from test_training_utils import TestTrainModel
 from test_training_utils import TestSaveTrainedModel
@@ -107,6 +110,7 @@ from test_distributed_utils import TestProcessGroupHelpers
 from test_cae_dataset_export_process import TestCaeDatasetExportProcess
 from test_cae_dataset_export_process import TestCaeDatasetThroughDatapipes
 from test_rom_bridge import TestRomBridge
+from test_rom_bridge import TestRowsOfIds
 from test_rom_surrogate_process import TestRomSurrogateProcess
 from test_rom_temporal import TestRomTrajectoryDataset
 from test_rom_temporal import TestSequenceModelTraining
@@ -121,6 +125,12 @@ from test_cfd_bridge import TestCfdEvaluationWrappers
 from test_curator_bridge import TestCuratorSource
 from test_curator_bridge import TestCuratorPipeline
 from test_curator_bridge import TestCuratorExportProcess
+from test_usd_export import TestUsdExportCore
+from test_usd_export import TestUsdPointsKind
+from test_usd_export import TestUsdExportProcess
+from test_nim_client import TestNimClient
+from test_nim_client import TestNimInferenceProcess
+from test_nim_client import TestNimLive
 from test_model_registry import TestTorchCompile
 from test_model_registry import TestNvtxUtils
 from test_point_cloud_inference_process import TestGeoTransolverThroughProcess
@@ -160,6 +170,7 @@ from test_domino_finetune import TestDominoCorrector
 from test_domino_finetune import TestDominoLora
 from test_domino_finetune import TestDominoLoraOnRealCheckpoint
 from test_diffusion_bridge import TestDitDenoiser
+from test_diffusion_bridge import TestUnet3dDenoiser
 from test_particle_bridge import TestParticleBridge
 from test_array_backend_utils import TestArrayBackendSelection
 from test_array_backend_utils import TestArrayBackendCuPy
@@ -220,11 +231,19 @@ from test_mesh_generate import TestRefitToImplicit
 from test_mesh_generate import TestSurfaceFromLevelSet
 from test_mesh_generate import TestFillBoundaryLoop
 from test_mesh_generate import TestFillSurfaceWithTetrahedra
+from test_mesh_generate import TestTetgenFill
+from test_mesh_generate import TestTetgenMissingPackage
+from test_nurbs_sampling import TestNurbsSampling
+from test_nurbs_sampling import TestNurbsSamplingWithIgaModeler
+from test_nurbs_sampling import TestNurbsMeshBuild
 from test_mesh_generate import TestPopulateModelPart
 from test_mesh_generate import TestFieldTransferToGeneratedMesh
 from test_mesh_generate import TestGeneratedMeshFeedsMmg
 from test_graphcast_recipe import TestShallowWaterReference
 from test_graphcast_recipe import TestGraphCastShallowWater
+from test_lennard_jones_recipe import TestLennardJonesReference
+from test_lennard_jones_recipe import TestPeriodicParticleGraph
+from test_lennard_jones_recipe import TestLennardJonesMeshGraphNet
 from test_corrdiff_recipe import TestCorrDiffTwoStage
 from test_corrdiff_recipe import TestRegressionSettingsThroughProcess
 from test_corrdiff_recipe import TestFwiInversionRecipe
@@ -304,6 +323,7 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCaeDatasetExportProcess]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCaeDatasetThroughDatapipes]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestRomBridge]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestRowsOfIds]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestRomSurrogateProcess]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestRomTrajectoryDataset]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSequenceModelTraining]))
@@ -314,6 +334,9 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestModelRegistry]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestModelCards]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestOutputNormalization]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestOutputNormalizationTensorPath]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestInputNormalization]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDomainParallelUtilsSerial]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestLoadOutputNormalization]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTrainModel]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSaveTrainedModel]))
@@ -334,6 +357,12 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCuratorSource]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCuratorPipeline]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCuratorExportProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestUsdExportCore]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestUsdPointsKind]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestUsdExportProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestNimClient]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestNimInferenceProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestNimLive]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTorchCompile]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestNvtxUtils]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGeoTransolverThroughProcess]))
@@ -373,6 +402,7 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDominoLora]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDominoLoraOnRealCheckpoint]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDitDenoiser]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestUnet3dDenoiser]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestParticleBridge]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestParticleTrajectoryDataset]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestParticleInferenceProcess]))
@@ -422,11 +452,19 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSurfaceFromLevelSet]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestFillBoundaryLoop]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestFillSurfaceWithTetrahedra]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTetgenFill]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTetgenMissingPackage]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestNurbsSampling]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestNurbsSamplingWithIgaModeler]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestNurbsMeshBuild]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestPopulateModelPart]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestFieldTransferToGeneratedMesh]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGeneratedMeshFeedsMmg]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestShallowWaterReference]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGraphCastShallowWater]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestLennardJonesReference]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestPeriodicParticleGraph]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestLennardJonesMeshGraphNet]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCorrDiffTwoStage]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestRegressionSettingsThroughProcess]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestFwiInversionRecipe]))

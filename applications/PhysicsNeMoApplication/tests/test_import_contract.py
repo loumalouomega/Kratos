@@ -12,7 +12,7 @@ _PROBE = r"""
 import sys
 
 class _Blocker:
-    BLOCKED = ("torch", "physicsnemo", "torch_geometric", "torch_scatter", "pyvista", "onnxruntime", "pyacvd", "tritonclient", "gpytorch", "physicsnemo_curator", "cupy")
+    BLOCKED = ("torch", "physicsnemo", "torch_geometric", "torch_scatter", "pyvista", "onnxruntime", "pyacvd", "tritonclient", "gpytorch", "physicsnemo_curator", "cupy", "pxr", "tetgen", "tensordict")
     def find_module(self, name, path=None):
         if name.split(".")[0] in self.BLOCKED:
             return self

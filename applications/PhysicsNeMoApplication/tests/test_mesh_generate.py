@@ -23,6 +23,15 @@ try:
 except ImportError:
     have_generate = False
 
+if have_generate:
+    try:
+        import tetgen  # noqa: F401
+        have_tetgen = True
+    except ImportError:
+        have_tetgen = False
+else:
+    have_tetgen = False
+
 have_meshing = kratos_utils.CheckIfApplicationsAvailable("MeshingApplication")
 have_mmg = False
 if have_meshing:
@@ -380,6 +389,21 @@ def _LPrismSurface():
     return points, numpy.array(triangles)
 
 
+def _SchoenhardtSurface(twist=numpy.pi / 6.0):
+    """Schoenhardt polyhedron: the twisted triangular antiprism that admits NO
+    tetrahedralization from its own six vertices - the classical solid whose
+    boundary recovery needs an interior Steiner point."""
+    angles = 2.0 * numpy.pi * numpy.arange(3) / 3.0
+    bottom = numpy.c_[numpy.cos(angles), numpy.sin(angles), numpy.zeros(3)]
+    top = numpy.c_[numpy.cos(angles + twist), numpy.sin(angles + twist), numpy.ones(3)]
+    points = numpy.ascontiguousarray(numpy.vstack([bottom, top]))
+    triangles = [[0, 2, 1], [3, 4, 5]]                     # caps, outward-wound
+    for k in range(3):
+        k1 = (k + 1) % 3
+        triangles += [[k, k1, 3 + k1], [k, 3 + k1, 3 + k]]  # the reflex side split
+    return points, numpy.array(triangles)
+
+
 def _AsMesh(points, cells):
     return physicsnemo.mesh.Mesh(points=torch.tensor(points), cells=torch.tensor(cells))
 
@@ -466,12 +490,20 @@ class TestFillSurfaceWithTetrahedra(KratosUnittest.TestCase):
         points, triangles = _CubeSurface()
         with self.assertRaisesRegex(ValueError, "method"):
             generate.FillSurfaceWithTetrahedra(
-                _AsMesh(points, triangles), Kratos.Parameters('{"method": "tetgen"}'))
+                _AsMesh(points, triangles), Kratos.Parameters('{"method": "netgen"}'))
         loop = physicsnemo.mesh.Mesh(
             points=torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]]),
             cells=torch.tensor([[0, 1], [1, 2], [2, 0]]))
         with self.assertRaisesRegex(ValueError, "TRIANGLES"):
             generate.FillSurfaceWithTetrahedra(loop)
+
+    def test_SchoenhardtSolidDefeatsTheDelaunayRoute(self):
+        # The documented limitation, pinned: a solid needing Steiner points
+        # for boundary recovery cannot be carved from its own points.
+        points, triangles = _SchoenhardtSurface()
+        with self.assertRaisesRegex(ValueError, "could not fill this surface"):
+            generate.FillSurfaceWithTetrahedra(
+                _AsMesh(points, triangles), Kratos.Parameters('{"method": "delaunay"}'))
 
     def test_FillModelPartWithTetrahedraIsSolvableKratos(self):
         points, triangles = _CubeSurface()
@@ -491,6 +523,82 @@ class TestFillSurfaceWithTetrahedra(KratosUnittest.TestCase):
         self.assertEqual(min(node.Id for node in volume.Nodes), 1)
         for element in volume.Elements:
             self.assertEqual(len(element.GetGeometry()), 4)
+
+
+@KratosUnittest.skipUnless(have_generate and have_tetgen,
+                           "Missing required python modules: torch, physicsnemo, tetgen.")
+class TestTetgenFill(KratosUnittest.TestCase):
+    """The opt-in "tetgen" method: exact boundary recovery - input facets kept
+    verbatim, Schoenhardt-class solids filled via interior Steiner points -
+    which the Delaunay route documents as its two limitations."""
+
+    def _Fill(self, points, cells, extra=""):
+        settings = Kratos.Parameters('{"method": "tetgen", "full_output": true%s}' % extra)
+        return generate.FillSurfaceWithTetrahedra(_AsMesh(points, cells), settings)
+
+    def test_CubeKeepsAllTwelveFacets(self):
+        # The Delaunay route's own docstring example: it keeps 8 of 12.
+        points, triangles = _CubeSurface()
+        mesh, diagnostics = self._Fill(points, triangles)
+        self.assertTrue(diagnostics["facets_preserved"])
+        self.assertAlmostEqual(_TetVolume(mesh), 1.0, places=9)
+        self.assertAlmostEqual(diagnostics["volume_ratio"], 1.0, places=9)
+        self.assertAlmostEqual(diagnostics["boundary_area_ratio"], 1.0, places=9)
+        self.assertTrue(diagnostics["boundary_manifold"])
+
+    def test_SchoenhardtSolidIsFilled(self):
+        points, triangles = _SchoenhardtSurface()
+        mesh, diagnostics = self._Fill(points, triangles)
+        enclosed = abs(_SignedVolume(_AsMesh(points, triangles)))
+        self.assertAlmostEqual(_TetVolume(mesh), enclosed, places=9)
+        self.assertTrue(diagnostics["facets_preserved"])
+        self.assertTrue(diagnostics["boundary_manifold"])
+        # the classical solid is untetrahedralizable from its own vertices,
+        # so at least one interior Steiner point is what made this possible
+        self.assertGreaterEqual(diagnostics["steiner_points"], 1)
+
+    def test_InputVerticesSurviveWithSteinerAppended(self):
+        points, triangles = _CubeSurface()
+        mesh, diagnostics = self._Fill(points, triangles)
+        self.assertTrue(torch.equal(
+            torch.as_tensor(mesh.points)[:len(points)].double(),
+            torch.tensor(points).double()))
+        self.assertEqual(
+            int(mesh.points.shape[0]), len(points) + diagnostics["steiner_points"])
+
+    def test_EveryTetrahedronIsPositivelyOriented(self):
+        for points, triangles in (_CubeSurface(), _SchoenhardtSurface()):
+            mesh, _ = self._Fill(points, triangles)
+            vertices = torch.as_tensor(mesh.points).double()
+            cells = torch.as_tensor(mesh.cells).long()
+            a, b, c, d = (vertices[cells[:, i]] for i in range(4))
+            signed = torch.einsum("ij,ij->i", b - a, torch.cross(c - a, d - a, dim=1))
+            self.assertGreater(float(signed.min()), 0.0)
+
+
+@KratosUnittest.skipUnless(have_generate, _MISSING)
+class TestTetgenMissingPackage(KratosUnittest.TestCase):
+    def test_MissingTetgenPackageIsActionable(self):
+        # Simulate the package's absence regardless of the environment, so the
+        # actionable error is pinned even where tetgen is installed.
+        import sys
+
+        class _Blocker:
+            def find_spec(self, name, path=None, target=None):
+                if name.split(".")[0] == "tetgen":
+                    raise ImportError(f"'{name}' is blocked for this test")
+
+        saved = {name: sys.modules.pop(name) for name in list(sys.modules)
+                 if name.split(".")[0] == "tetgen"}
+        sys.meta_path.insert(0, blocker := _Blocker())
+        try:
+            points, triangles = _CubeSurface()
+            with self.assertRaisesRegex(ImportError, "pip install tetgen"):
+                generate.FillSurfaceWithTetrahedra(
+                    _AsMesh(points, triangles), Kratos.Parameters('{"method": "tetgen"}'))
+        finally:
+            sys.meta_path.remove(blocker)
+            sys.modules.update(saved)
 
 
 if __name__ == '__main__':

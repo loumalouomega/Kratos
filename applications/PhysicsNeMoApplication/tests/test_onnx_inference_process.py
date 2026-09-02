@@ -172,6 +172,32 @@ class TestOnnxInferenceProcess(KratosUnittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "strict"):
             process.ExecuteFinalizeSolutionStep()
 
+    def test_OutputNormalizationFromTheCardIsApplied(self):
+        # this process keys its card off "onnx_file", not "checkpoint_file";
+        # the override that makes the lookup work had no test
+        mean, std = 30.0, 5.0
+        self._ExportAffineModel(card={
+            "output_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        process = self._CreateProcess()
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        for node in self.model_part.Nodes:
+            self.assertAlmostEqual(
+                node.GetSolutionStepValue(Kratos.TEMPERATURE),
+                std * (2.0 * (10.0 * node.X + node.Y) + 1.0) + mean, places=4)
+
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        in_mean, in_std = 5.0, 2.0
+        self._ExportAffineModel(card={
+            "input_normalization": {"type": "mean_std", "mean": [in_mean], "std": [in_std]}})
+        process = self._CreateProcess()
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        for node in self.model_part.Nodes:
+            self.assertAlmostEqual(
+                node.GetSolutionStepValue(Kratos.TEMPERATURE),
+                2.0 * ((10.0 * node.X + node.Y) - in_mean) / in_std + 1.0, places=4)
+
     def test_MultiOutputModelRaises(self):
         class TwoOutputs(torch.nn.Module):
             def forward(self, x):

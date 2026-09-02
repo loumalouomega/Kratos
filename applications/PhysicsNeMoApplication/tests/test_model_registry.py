@@ -313,6 +313,124 @@ class TestOutputNormalization(KratosUnittest.TestCase):
             model_registry.ApplyOutputNormalization(numpy.ones((4, 2)), normalization)
 
 
+@KratosUnittest.skipUnless(have_torch, "Missing required python module: torch.")
+class TestOutputNormalizationTensorPath(KratosUnittest.TestCase):
+    """The torch branch: arithmetic in torch, on the prediction's own
+    device and dtype, with the autograd graph intact.
+
+    It used to bounce through numpy (float64, host) and back through
+    torch.as_tensor(values, dtype=...) - which returned a CUDA prediction
+    on the CPU and cut every gradient. The surrogate response function
+    de-normalizes inside its autograd objective, so the graph matters.
+    """
+
+    _NORMALIZATION = {"type": "mean_std", "mean": [1.0, 10.0], "std": [2.0, 4.0]}
+
+    def test_MatchesTheNumpyPath(self):
+        raw = numpy.array([[0.0, 1.0], [-1.0, 0.5], [2.0, -2.0]])
+        for scale_only in (False, True):
+            with self.subTest(scale_only=scale_only):
+                expected = model_registry.ApplyOutputNormalization(
+                    raw, self._NORMALIZATION, scale_only=scale_only)
+                result = model_registry.ApplyOutputNormalization(
+                    torch.from_numpy(raw), self._NORMALIZATION, scale_only=scale_only)
+                self.assertIsInstance(result, torch.Tensor)
+                numpy.testing.assert_allclose(result.numpy(), expected, rtol=1e-12)
+
+    def test_DtypeIsPreserved(self):
+        raw = torch.ones(3, 2, dtype=torch.float32)
+        result = model_registry.ApplyOutputNormalization(raw, self._NORMALIZATION)
+        self.assertEqual(result.dtype, torch.float32)
+        numpy.testing.assert_allclose(result.numpy(), numpy.tile([3.0, 14.0], (3, 1)), rtol=1e-6)
+
+    def test_GradientFlowsThroughWithTheScale(self):
+        raw = torch.zeros(3, 2, dtype=torch.float64, requires_grad=True)
+        model_registry.ApplyOutputNormalization(raw, self._NORMALIZATION).sum().backward()
+        numpy.testing.assert_allclose(raw.grad.numpy(), numpy.tile([2.0, 4.0], (3, 1)), rtol=1e-12)
+
+    @KratosUnittest.skipUnless(have_torch and torch.cuda.is_available(), "CUDA is not available.")
+    def test_DeviceIsPreserved(self):
+        raw = torch.zeros(3, 2, dtype=torch.float64, device="cuda")
+        result = model_registry.ApplyOutputNormalization(raw, self._NORMALIZATION)
+        self.assertEqual(result.device.type, "cuda")
+        numpy.testing.assert_allclose(result.cpu().numpy(), numpy.tile([1.0, 10.0], (3, 1)))
+
+    def test_ChannelAxisZeroForGrids(self):
+        # the grid writers' layout: (C, D, H, W), channels FIRST
+        grid = numpy.random.default_rng(0).standard_normal((2, 3, 4, 5))
+        result = model_registry.ApplyOutputNormalization(grid, self._NORMALIZATION, channel_axis=0)
+        for channel, (std, mean) in enumerate(((2.0, 1.0), (4.0, 10.0))):
+            numpy.testing.assert_allclose(result[channel], grid[channel] * std + mean, rtol=1e-12)
+        tensor_result = model_registry.ApplyOutputNormalization(
+            torch.from_numpy(grid), self._NORMALIZATION, channel_axis=0)
+        numpy.testing.assert_allclose(tensor_result.numpy(), result, rtol=1e-12)
+        # the default axis is the LAST one, which here is spatial (5 wide)
+        with self.assertRaisesRegex(ValueError, "does not belong to this model"):
+            model_registry.ApplyOutputNormalization(grid, self._NORMALIZATION)
+
+
+class TestInputNormalization(KratosUnittest.TestCase):
+    """The forward map: the exact inverse of ApplyOutputNormalization for
+    the same card entry. Pure numpy, runs in the torch-free CI."""
+
+    def test_MeanStdForwardMap(self):
+        normalization = {"type": "mean_std", "mean": [1.0, 10.0], "std": [2.0, 4.0]}
+        raw = numpy.array([[1.0, 14.0], [-1.0, 12.0]])
+        numpy.testing.assert_allclose(
+            model_registry.ApplyInputNormalization(raw, normalization),
+            [[0.0, 1.0], [-1.0, 0.5]], rtol=1e-12)
+
+    def test_MinMaxForwardMapOntoTheRange(self):
+        symmetric = {"type": "min_max", "min": [0.0], "max": [10.0], "range": [-1.0, 1.0]}
+        numpy.testing.assert_allclose(
+            model_registry.ApplyInputNormalization(
+                numpy.array([[0.0], [5.0], [10.0]]), symmetric).ravel(),
+            [-1.0, 0.0, 1.0], rtol=1e-12)
+
+    def test_RoundTripsWithTheOutputMapToTheIdentity(self):
+        rng = numpy.random.default_rng(1)
+        raw = rng.standard_normal((5, 3)) * 7.0 + 3.0
+        for normalization in (
+                {"type": "mean_std", "mean": [1.0, -2.0, 0.5], "std": [2.0, 4.0, 0.1]},
+                {"type": "min_max", "min": [-1.0], "max": [3.0], "range": [-1.0, 1.0]}):
+            with self.subTest(normalization=normalization["type"]):
+                normalized = model_registry.ApplyInputNormalization(raw, normalization)
+                numpy.testing.assert_allclose(
+                    model_registry.ApplyOutputNormalization(normalized, normalization), raw,
+                    rtol=1e-12)
+
+    def test_NoNormalizationIsTheIdentityObject(self):
+        raw = numpy.array([[1.0, 2.0]])
+        self.assertIs(model_registry.ApplyInputNormalization(raw, None), raw)
+
+    def test_DegenerateScaleIsRejectedAndNamed(self):
+        with self.assertRaisesRegex(ValueError, "input_normalization.*zero scale"):
+            model_registry.ApplyInputNormalization(
+                numpy.ones((2, 1)), {"type": "mean_std", "mean": [0.0], "std": [0.0]})
+
+    def test_ChannelAxisZeroForGrids(self):
+        grid = numpy.random.default_rng(2).standard_normal((2, 3, 4))
+        normalization = {"type": "mean_std", "mean": [1.0, 10.0], "std": [2.0, 4.0]}
+        result = model_registry.ApplyInputNormalization(grid, normalization, channel_axis=0)
+        numpy.testing.assert_allclose(result[0], (grid[0] - 1.0) / 2.0, rtol=1e-12)
+        numpy.testing.assert_allclose(result[1], (grid[1] - 10.0) / 4.0, rtol=1e-12)
+
+    def test_MakeMeanStdNormalization(self):
+        entry = model_registry.MakeMeanStdNormalization(numpy.array([1.0, 2.0]), [3.0, 4.0])
+        self.assertEqual(entry, {"type": "mean_std", "mean": [1.0, 2.0], "std": [3.0, 4.0]})
+        with self.assertRaisesRegex(ValueError, "same channels"):
+            model_registry.MakeMeanStdNormalization([1.0], [1.0, 2.0])
+
+    @KratosUnittest.skipUnless(have_torch, "Missing required python module: torch.")
+    def test_TensorPathPreservesTypeAndGraph(self):
+        normalization = {"type": "mean_std", "mean": [1.0, 10.0], "std": [2.0, 4.0]}
+        raw = torch.ones(3, 2, dtype=torch.float32, requires_grad=True)
+        result = model_registry.ApplyInputNormalization(raw, normalization)
+        self.assertEqual(result.dtype, torch.float32)
+        result.sum().backward()
+        numpy.testing.assert_allclose(raw.grad.numpy(), numpy.tile([0.5, 0.25], (3, 1)), rtol=1e-6)
+
+
 class TestLoadOutputNormalization(KratosUnittest.TestCase):
     def setUp(self):
         self.checkpoint = Path("test_normalization_card.pt")
@@ -341,6 +459,18 @@ class TestLoadOutputNormalization(KratosUnittest.TestCase):
         normalization = model_registry.LoadOutputNormalization(self.settings)
         self.assertIsNotNone(normalization)
         self.assertEqual(normalization["type"], "mean_std")
+
+    def test_InputAndOutputKeysAreReadSeparately(self):
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": [3.0], "std": [4.0]}})
+        self.assertIsNone(model_registry.LoadOutputNormalization(self.settings))
+        loaded = model_registry.LoadInputNormalization(self.settings)
+        self.assertEqual(loaded["std"], [4.0])
+        # a malformed INPUT entry is named as such
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "std": [1.0]}})
+        with self.assertRaisesRegex(ValueError, "input_normalization.*mean"):
+            model_registry.LoadInputNormalization(self.settings)
 
     def test_MalformedEntriesAreRejected(self):
         model_registry.SaveModelCard(self.checkpoint, {

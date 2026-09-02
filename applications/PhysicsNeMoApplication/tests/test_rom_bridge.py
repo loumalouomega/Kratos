@@ -152,12 +152,50 @@ class TestRomBridge(KratosUnittest.TestCase):
         numpy.testing.assert_allclose(
             rom_bridge.GatherUnknownsVector(model_part, basis), [1.0, 2.0, 3.0, 4.0])
 
+    def test_PrecomputedPermutationIsHonoured(self):
+        model_part = self._CreateNodes([Kratos.TEMPERATURE])
+        _WriteNumpyBasis(self.folder, _OrthonormalBasis(4, 2), [3, 1, 4, 2], ["TEMPERATURE"])
+        basis = rom_bridge.LoadRomBasis(self.folder)
+        permutation = rom_bridge.NodePermutation(model_part, basis)
+        numpy.testing.assert_array_equal(permutation, [2, 0, 3, 1])
+        rom_bridge.ScatterUnknownsVector(model_part, basis, numpy.array([1.0, 2.0, 3.0, 4.0]),
+                                         permutation=permutation)
+        numpy.testing.assert_allclose(
+            rom_bridge.GatherUnknownsVector(model_part, basis, permutation=permutation),
+            [1.0, 2.0, 3.0, 4.0])
+        # a wrong permutation is honoured too - it is the caller's contract
+        rom_bridge.ScatterUnknownsVector(model_part, basis, numpy.array([1.0, 2.0, 3.0, 4.0]),
+                                         permutation=numpy.array([0, 1, 2, 3]))
+        self.assertAlmostEqual(model_part.GetNode(1).GetSolutionStepValue(Kratos.TEMPERATURE), 1.0)
+
     def test_MissingNodeIdRaises(self):
         model_part = self._CreateNodes([Kratos.TEMPERATURE], node_ids=(1, 2, 3))
         _WriteNumpyBasis(self.folder, _OrthonormalBasis(4, 2), [1, 2, 3, 4], ["TEMPERATURE"])
         basis = rom_bridge.LoadRomBasis(self.folder)
         with self.assertRaisesRegex(RuntimeError, "different mesh"):
             rom_bridge.GatherUnknownsVector(model_part, basis)
+
+
+class TestRowsOfIds(KratosUnittest.TestCase):
+    """The shared id -> row lookup (graph scatter, ROM permutation, grid
+    sampling). Pure numpy."""
+
+    def test_UnsortedContainerAndShapePreserved(self):
+        from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import RowsOfIds
+        container = numpy.array([30, 10, 40, 20])
+        rows = RowsOfIds(container, [[20, 30], [10, 40]])
+        numpy.testing.assert_array_equal(rows, [[3, 0], [1, 2]])
+        numpy.testing.assert_array_equal(container[rows], [[20, 30], [10, 40]])
+        self.assertEqual(RowsOfIds(container, []).shape, (0,))
+        self.assertEqual(RowsOfIds([], []).shape, (0,))
+
+    def test_MissingIdIsNamed(self):
+        from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import RowsOfIds
+        with self.assertRaises(KeyError) as context:
+            RowsOfIds([1, 2, 3], [2, 7])
+        self.assertEqual(context.exception.args[0], 7)
+        with self.assertRaises(KeyError):
+            RowsOfIds([], [1])
 
 
 if __name__ == '__main__':

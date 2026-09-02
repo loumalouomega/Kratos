@@ -85,6 +85,46 @@ class TestTimeSeriesInferenceProcess(KratosUnittest.TestCase):
             self.assertAlmostEqual(
                 node.GetSolutionStepValue(Kratos.TEMPERATURE), (1.0 + node.X) * 4.0, places=12)
 
+    def test_OutputNormalizationFromTheCardIsApplied(self):
+        """A model trained on standardized next states predicts standardized
+        next states; the card's "output_normalization" makes them physical.
+        The extrapolator is affine in its window, so a missing shift or
+        scale cannot hide."""
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        mean, std = 7.0, 0.5
+        model_registry.SaveModelCard(self.checkpoint, {
+            "output_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+
+        process = self._CreateProcess()
+        for step, t in ((1, 1.0), (2, 2.0)):
+            self.model_part.ProcessInfo[Kratos.STEP] = step
+            self._SetLinearInTime(t)
+            process.ExecuteFinalizeSolutionStep()
+        for node in self.model_part.Nodes:
+            self.assertAlmostEqual(
+                node.GetSolutionStepValue(Kratos.TEMPERATURE),
+                std * (1.0 + node.X) * 3.0 + mean, places=12)
+
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        # the whole (N, K*W) window is standardized: next = 2 l' - p' with
+        # l' = (l - m)/s, p' = (p - m)/s, i.e. (2 l - p - m)/s
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        mean, std = 3.0, 2.0
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": [mean] * 2, "std": [std] * 2}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+
+        process = self._CreateProcess()
+        for step, t in ((1, 1.0), (2, 2.0)):
+            self.model_part.ProcessInfo[Kratos.STEP] = step
+            self._SetLinearInTime(t)
+            process.ExecuteFinalizeSolutionStep()
+        for node in self.model_part.Nodes:
+            self.assertAlmostEqual(
+                node.GetSolutionStepValue(Kratos.TEMPERATURE),
+                ((1.0 + node.X) * 3.0 - mean) / std, places=12)
+
     def test_IntervalGatingSkipsHistoryToo(self):
         process = self._CreateProcess()
         settings_interval = 2

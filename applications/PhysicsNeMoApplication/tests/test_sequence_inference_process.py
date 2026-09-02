@@ -128,6 +128,46 @@ class TestSequenceInferenceProcess(KratosUnittest.TestCase):
         self.assertAlmostEqual(temperature(), 6.0, places=10)
         self.assertEqual(process.predicted_steps_left, 0)
 
+    def test_OutputNormalizationFromTheCardIsApplied(self):
+        """Every buffered state is de-normalized on its way out - the card
+        belongs to the rollout, not just to the seeding step."""
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        self._SaveToyModel()
+        mean, std = 1.5, 10.0
+        model_registry.SaveModelCard(self.checkpoint, {
+            "output_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+        process = self._CreateProcess()
+
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()  # seeds: PRESSURE * (1, 2, 3) buffered
+        for step, raw in ((2, 2.0), (3, 4.0), (4, 6.0)):
+            self.model_part.ProcessInfo[Kratos.STEP] = step
+            process.ExecuteFinalizeSolutionStep()
+            self.assertAlmostEqual(
+                self.model_part.GetNode(1).GetSolutionStepValue(Kratos.TEMPERATURE),
+                std * raw + mean, places=10)
+
+    def test_InputNormalizationFromTheCardIsApplied(self):
+        # sampled grids are standardized before they seed the rollout:
+        # states = ((P - mean) / std) * (1, 2, 3)
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        self._SaveToyModel()
+        mean, std = 1.0, 4.0
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+        process = self._CreateProcess()
+
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        for step, factor in ((2, 1.0), (3, 2.0), (4, 3.0)):
+            self.model_part.ProcessInfo[Kratos.STEP] = step
+            process.ExecuteFinalizeSolutionStep()
+            self.assertAlmostEqual(
+                self.model_part.GetNode(1).GetSolutionStepValue(Kratos.TEMPERATURE),
+                (2.0 - mean) / std * factor, places=10)
+
     def test_WrongOutputRankRaises(self):
         class Flat(torch.nn.Module):
             def forward(self, x):

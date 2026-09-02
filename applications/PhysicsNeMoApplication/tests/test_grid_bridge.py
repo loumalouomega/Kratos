@@ -112,6 +112,34 @@ class TestGridBridge(KratosUnittest.TestCase):
         self.assertEqual(grid.shape[0], 2)
         self.assertTrue(numpy.allclose(grid[0], grid[1]))
 
+    def test_HexahedralFallbackIsExactOnUnsortedIds(self):
+        # the per-point locator path (non-simplex geometries) - untested
+        # before this - with node ids created out of order and a linear
+        # field reproduced exactly. Note what this CANNOT discriminate:
+        # Kratos keeps ModelPart.Nodes id-sorted whatever the creation
+        # order, so the lookup's argsort is the identity on every real
+        # part (a mutation dropping it survives here; TestRowsOfIds pins
+        # it on an unsorted array).
+        model = Kratos.Model()
+        part = model.CreateModelPart("Hexes")
+        part.AddNodalSolutionStepVariable(Kratos.PRESSURE)
+        properties = part.CreateNewProperties(1)
+        corners = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1),
+                   (2, 0, 0), (2, 1, 0), (2, 0, 1), (2, 1, 1)]
+        ids = [50, 10, 70, 20, 90, 30, 80, 40, 60, 100, 15, 25]  # deliberately unsorted
+        for node_id, (x, y, z) in zip(ids, corners):
+            node = part.CreateNewNode(node_id, float(x), float(y), float(z))
+            node.SetSolutionStepValue(Kratos.PRESSURE, 1.0 + 2.0 * x - 3.0 * y + 0.5 * z)
+        part.CreateNewElement("Element3D8N", 1, ids[:8], properties)
+        part.CreateNewElement("Element3D8N", 2, [ids[1], ids[8], ids[9], ids[2], ids[5], ids[10], ids[11], ids[6]],
+                              properties)
+        grid, box = grid_bridge.SampleFieldsOnGrid(
+            part, [("PRESSURE", "node_historical")], (5, 3, 3),
+            bounding_box=(numpy.array([0.1, 0.1, 0.1]), numpy.array([1.9, 0.9, 0.9])))
+        points = grid_bridge._GridPointCoordinates((5, 3, 3), box)
+        expected = 1.0 + 2.0 * points[:, 0] - 3.0 * points[:, 1] + 0.5 * points[:, 2]
+        numpy.testing.assert_allclose(grid.reshape(-1), expected, rtol=1e-10)
+
     def test_GaussPointLocationRejected(self):
         with self.assertRaisesRegex(ValueError, "nodal locations only"):
             grid_bridge.SampleFieldsOnGrid(

@@ -273,6 +273,45 @@ class TestTritonInferenceProcess(KratosUnittest.TestCase):
                    for node in self.model_part.Nodes]
         self.assertEqual(written, [float(i) for i in range(6)])
 
+    def test_OutputNormalizationFromTheCardIsApplied(self):
+        # this process keys its card off "card_file"; the override that
+        # makes the lookup work had no test. The stub echoes row indices,
+        # so the written field must be std * row + mean.
+        card_path = "test_triton_norm_card.pt"
+        Path(card_path).write_text("stand-in for the checkpoint the card describes")
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, card_path)
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, card_path + ".card.json")
+        mean, std = 30.0, 5.0
+        model_registry.SaveModelCard(card_path, {
+            "output_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+
+        process = self._CreateProcess(', "card_file": "%s"' % card_path)
+        process.SetClient(_StubTritonClient("PRESSURE"))
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        written = [node.GetSolutionStepValue(Kratos.TEMPERATURE)
+                   for node in self.model_part.Nodes]
+        numpy.testing.assert_allclose(written, [std * i + mean for i in range(6)], rtol=1e-6)
+
+    def test_InputNormalizationFromTheCardReachesThePayload(self):
+        # what leaves for the server is the standardized field
+        card_path = "test_triton_input_card.pt"
+        Path(card_path).write_text("stand-in for the checkpoint the card describes")
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, card_path)
+        self.addCleanup(KratosUtilities.DeleteFileIfExisting, card_path + ".card.json")
+        mean, std = 2.0, 4.0
+        model_registry.SaveModelCard(card_path, {
+            "input_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+
+        process = self._CreateProcess(', "card_file": "%s"' % card_path)
+        client = _StubTritonClient("PRESSURE")
+        process.SetClient(client)
+        self.model_part.ProcessInfo[Kratos.STEP] = 1
+        process.ExecuteFinalizeSolutionStep()
+        sent = numpy.frombuffer(client.calls[0]["inputs"][0]._get_binary_data(), dtype=numpy.float32)
+        numpy.testing.assert_allclose(
+            sent, [((float(i) + 0.5) - mean) / std for i in range(6)], rtol=1e-6)
+
     def test_ModelVersionAndTimeoutForwarded(self):
         process = self._CreateProcess(', "model_version": "3", "timeout": 2.5')
         client = _StubTritonClient("PRESSURE")

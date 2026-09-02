@@ -168,6 +168,68 @@ class TestSurrogateResponseFunction(KratosUnittest.TestCase):
                     self.assertAlmostEqual(value[axis],
                                            _COORDINATE_WEIGHTS[axis] / extent[axis], places=9)
 
+    def test_OutputNormalizationScalesValueAndGradient(self):
+        """A card's "output_normalization" reaches the written field AND
+        the autograd gradient: J is a function of the physical prediction,
+        so dJ/dX carries the training scale. A de-normalization applied
+        only on the write path would leave the gradient wrong by exactly
+        std, and the value reported after CalculateGradient inconsistent
+        with the field CalculateValue wrote."""
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        mean, std = 100.0, 3.0
+        model_registry.SaveModelCard(self.checkpoint, {
+            "output_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(kratos_utils.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+
+        response = self._Create()
+        response.RunCalculation(calculate_gradient=True)
+
+        n_nodes = self.model_part.NumberOfNodes()
+        self.assertAlmostEqual(response.GetValue(), std * self._ExactValue() + mean * n_nodes,
+                               places=8)
+        for node in self.model_part.Nodes:
+            raw = (_COORDINATE_WEIGHTS[0] * node.X + _COORDINATE_WEIGHTS[1] * node.Y
+                   + _COORDINATE_WEIGHTS[2] * node.Z
+                   + _FEATURE_WEIGHT * node.GetSolutionStepValue(Kratos.TEMPERATURE))
+            self.assertAlmostEqual(node.GetSolutionStepValue(Kratos.PRESSURE),
+                                   std * raw + mean, places=8)
+        gradient = response.GetNodalGradient(Kratos.SHAPE_SENSITIVITY)
+        for node_id, value in gradient.items():
+            for axis in range(3):
+                with self.subTest(node=node_id, axis=axis):
+                    self.assertAlmostEqual(value[axis], std * _COORDINATE_WEIGHTS[axis], places=9)
+
+    def test_InputNormalizationFromTheCardReachesValueAndGradient(self):
+        """The field feature is standardized, the coordinates are not: J
+        changes by the feature term, dJ/dX (the coordinate weights) does
+        not - and the gradient path reports the same value."""
+        from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
+        mean, std = 10.0, 2.0
+        model_registry.SaveModelCard(self.checkpoint, {
+            "input_normalization": {"type": "mean_std", "mean": [mean], "std": [std]}})
+        self.addCleanup(kratos_utils.DeleteFileIfExisting, str(self.checkpoint) + ".card.json")
+
+        def Expected(node):
+            return (_COORDINATE_WEIGHTS[0] * node.X + _COORDINATE_WEIGHTS[1] * node.Y
+                    + _COORDINATE_WEIGHTS[2] * node.Z
+                    + _FEATURE_WEIGHT * (node.GetSolutionStepValue(Kratos.TEMPERATURE) - mean) / std)
+
+        expected = sum(Expected(node) for node in self.model_part.Nodes)
+        response = self._Create()
+        # the VALUE path first, on its own: CalculateGradient recomputes the
+        # value through the autograd objective and would mask a value path
+        # that forgot the key (a mutation that survived the first draft)
+        response.CalculateValue()
+        self.assertAlmostEqual(response.GetValue(), expected, places=9)
+        for node in self.model_part.Nodes:
+            self.assertAlmostEqual(node.GetSolutionStepValue(Kratos.PRESSURE), Expected(node),
+                                   places=9)
+        response.CalculateGradient()
+        self.assertAlmostEqual(response.GetValue(), expected, places=9)
+        for value in response.GetNodalGradient(Kratos.SHAPE_SENSITIVITY).values():
+            for axis in range(3):
+                self.assertAlmostEqual(value[axis], _COORDINATE_WEIGHTS[axis], places=9)
+
     def test_FlatInterfaceIsRefusedForTheSurrogateGradient(self):
         with self.assertRaisesRegex(ValueError, "COORDINATES"):
             self._Create(model_interface="flat")
