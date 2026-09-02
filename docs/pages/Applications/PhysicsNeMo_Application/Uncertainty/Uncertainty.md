@@ -50,15 +50,7 @@ Upstream's `check()` only logs, so the check is captured and translated: `"advis
 
 ### Calibrated variance from a GP head
 
-`"method": "gp"` attaches a Gaussian-process head
-(`physicsnemo.experimental.uq.FieldVariationalGPHead`) to a trained
-surrogate. Unlike MC dropout or a checkpoint ensemble, which report the
-*spread of a stochastic predictor*, the GP head reports a posterior variance
-that separates what the model genuinely does not know (`epistemic_variance`,
-excluding the likelihood noise floor) from the noise it has learned to
-expect. That epistemic term is what rises where the surrogate is
-extrapolating — the shipped test pins it as larger away from the training
-features than inside them.
+`"method": "gp"` attaches a Gaussian-process head (`physicsnemo.experimental.uq.FieldVariationalGPHead`) to a trained surrogate. Unlike MC dropout or a checkpoint ensemble, which report the *spread of a stochastic predictor*, the GP head reports a posterior variance that separates what the model genuinely does not know (`epistemic_variance`, excluding the likelihood noise floor) from the noise it has learned to expect. That epistemic term is what rises where the surrogate is extrapolating — the shipped test pins it as larger away from the training features than inside them.
 
 ```json
 "uncertainty" : {
@@ -70,45 +62,24 @@ features than inside them.
 }
 ```
 
-Adding it to the shared `"uncertainty"` block means it works in every
-deployment process that inherits `InferenceProcess`, writing per-node
-standard deviation exactly like the other methods.
-`"gp_feature_fields"` names the backbone features the head consumes and
-defaults to the process' own input fields.
+Adding it to the shared `"uncertainty"` block means it works in every deployment process that inherits `InferenceProcess`, writing per-node standard deviation exactly like the other methods. `"gp_feature_fields"` names the backbone features the head consumes and defaults to the process' own input fields.
 
-Fitting is a separate, post-training step, because the head sits on a
-*trained* backbone's features:
+Fitting is a separate, post-training step, because the head sits on a *trained* backbone's features:
 
 ```python
 head, history = uncertainty_utils.FitGpHead(features, targets, settings)
 uncertainty_utils.SaveGpHead(head, "surrogate.pt.gp_head.pt", config={...})
 ```
 
-`FitGpHead` implements the training loop physicsnemo does not ship, and the
-recipe is not optional: upstream is explicit that skipping it collapses the
-variance rather than merely costing accuracy. It seeds inducing points from
-**real** features (the random default "sits nowhere near the backbone's
-feature distribution"), adds an auxiliary MSE on the posterior mean (the
-ELBO alone can buy likelihood by inflating variance), and ramps the KL term.
-Two contract details worth knowing: `n_train` normalizes the ELBO and counts
-**points**, not geometries; and features are cast to float32 because the
-head's feature MLP stays float32 even when its GP internals run in float64.
+`FitGpHead` implements the training loop physicsnemo does not ship, and the recipe is not optional: upstream is explicit that skipping it collapses the variance rather than merely costing accuracy. It seeds inducing points from **real** features (the random default "sits nowhere near the backbone's feature distribution"), adds an auxiliary MSE on the posterior mean (the ELBO alone can buy likelihood by inflating variance), and ramps the KL term. Two contract details worth knowing: `n_train` normalizes the ELBO and counts **points**, not geometries; and features are cast to float32 because the head's feature MLP stays float32 even when its GP internals run in float64.
 
-The head is saved as a sidecar next to the checkpoint rather than through
-`SaveTrainedModel`, since gpytorch modules are not TorchScript-scriptable.
+The head is saved as a sidecar next to the checkpoint rather than through `SaveTrainedModel`, since gpytorch modules are not TorchScript-scriptable.
 
-**Optional dependency**: gpytorch (`pip install gpytorch`, or
-`pip install nvidia-physicsnemo[uq-extras]`). It lives in
-`physicsnemo.experimental`, which carries no API-stability guarantee — pin a
-version if a deployment depends on it.
+**Optional dependency**: gpytorch (`pip install gpytorch`, or `pip install nvidia-physicsnemo[uq-extras]`). It lives in `physicsnemo.experimental`, which carries no API-stability guarantee — pin a version if a deployment depends on it.
 
 ### Is the uncertainty honest? Calibration metrics
 
-An error metric cannot tell you whether a model's error bars are
-trustworthy: a surrogate can have an excellent RMSE and still be badly
-calibrated, which makes its uncertainty useless for decisions.
-`ValidationMetricsProcess` gained an `"uncertainty_comparisons"` block that
-gathers a `(mean, std, reference)` triple and scores it:
+An error metric cannot tell you whether a model's error bars are trustworthy: a surrogate can have an excellent RMSE and still be badly calibrated, which makes its uncertainty useless for decisions. `ValidationMetricsProcess` gained an `"uncertainty_comparisons"` block that gathers a `(mean, std, reference)` triple and scores it:
 
 ```json
 "uncertainty_comparisons" : [ {
@@ -121,13 +92,7 @@ gathers a `(mean, std, reference)` triple and scores it:
 } ]
 ```
 
-`coverage` is the fraction of references inside `mean ± z·std` (~0.95 at
-z = 1.96 for a well-calibrated Gaussian); `calibration_error` is its
-absolute miss from that nominal; `nll` punishes over- and under-confidence
-continuously; `sharpness` is the mean predicted std and is only meaningful
-read next to coverage — a model can be arbitrarily sharp by being wrong, or
-trivially well-covered by being vague. The metrics are pinned against their
-closed forms on synthetic Gaussian data.
+`coverage` is the fraction of references inside `mean ± z·std` (~0.95 at z = 1.96 for a well-calibrated Gaussian); `calibration_error` is its absolute miss from that nominal; `nll` punishes over- and under-confidence continuously; `sharpness` is the mean predicted std and is only meaningful read next to coverage — a model can be arbitrarily sharp by being wrong, or trivially well-covered by being vague. The metrics are pinned against their closed forms on synthetic Gaussian data.
 
 ## Probabilistic metrics and rollout UQ
 
@@ -137,9 +102,7 @@ closed forms on synthetic Gaussian data.
 
 ### Scoring a whole ensemble (CRPS)
 
-Coverage and NLL score a *(mean, std)* pair, but a proper scoring rule needs
-every member: CRPS cannot be recovered from a reduction. The
-`"ensemble_comparisons"` block therefore names the members explicitly:
+Coverage and NLL score a *(mean, std)* pair, but a proper scoring rule needs every member: CRPS cannot be recovered from a reduction. The `"ensemble_comparisons"` block therefore names the members explicitly:
 
 ```json
 "ensemble_comparisons" : [ {
@@ -150,14 +113,6 @@ every member: CRPS cannot be recovered from a reduction. The
 } ]
 ```
 
-At least two members are required — an ensemble metric is undefined for one,
-and upstream's unbiased estimator returns all-NaN there. Note `crps()`
-upstream ignores its own `biased` argument; use `kcrps` when you want the fair
-estimator. A perfect ensemble scores ~0 and can land marginally negative on
-float64 round-off, so treat tiny negatives as zero.
+At least two members are required — an ensemble metric is undefined for one, and upstream's unbiased estimator returns all-NaN there. Note `crps()` upstream ignores its own `biased` argument; use `kcrps` when you want the fair estimator. A perfect ensemble scores ~0 and can land marginally negative on float64 round-off, so treat tiny negatives as zero.
 
-Where do the members come from? An inference process using
-`"method": "ensemble"` already builds the `(M, ...)` stack and then reduces it
-to mean and std one line later. Setting `"retain_ensemble": true` in the
-`"uncertainty"` block keeps it as a public `last_ensemble` attribute instead of
-discarding it, so the members are available to whatever wants to score them.
+Where do the members come from? An inference process using `"method": "ensemble"` already builds the `(M, ...)` stack and then reduces it to mean and std one line later. Setting `"retain_ensemble": true` in the `"uncertainty"` block keeps it as a public `last_ensemble` attribute instead of discarding it, so the members are available to whatever wants to score them.

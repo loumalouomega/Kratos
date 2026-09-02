@@ -8,14 +8,11 @@ summary: Every module in the application, by folder, with a one-line purpose - a
 
 # Where things live
 
-The application is a hundred-odd Python modules. This page is the map: what each
-folder is for, what is in it, and how to get from "I want to do X" to the module
-that does X.
+The application is a hundred-odd Python modules. This page is the map: what each folder is for, what is in it, and how to get from "I want to do X" to the module that does X.
 
 ## The folders
 
-`python_scripts/` is a tree of packages, and the folder a module is in tells you
-what kind of thing it is.
+`python_scripts/` is a tree of packages, and the folder a module is in tells you what kind of thing it is.
 
 | Folder | Contains | Import as |
 |---|---|---|
@@ -30,13 +27,9 @@ what kind of thing it is.
 | `active_learning/` | Kratos as the labeling oracle | `...PhysicsNeMoApplication.active_learning` |
 | `utilities/` | small shared helpers | `...PhysicsNeMoApplication.utilities` |
 
-**The rule that keeps it navigable:** everything under `processes/` has a
-`Factory`, so it can be attached from `ProjectParameters.json`. Nothing outside
-`processes/` does. If you are looking for something to put in a process list,
-you only have to look in one place.
+**The rule that keeps it navigable:** everything under `processes/` has a `Factory`, so it can be attached from `ProjectParameters.json`. Nothing outside `processes/` does. If you are looking for something to put in a process list, you only have to look in one place.
 
-Each package's `__init__.py` carries a docstring saying what belongs in it —
-read that before adding a module.
+Each package's `__init__.py` carries a docstring saying what belongs in it — read that before adding a module.
 
 ## Attaching a process
 
@@ -48,9 +41,7 @@ read that before adding a module.
 }
 ```
 
-`kratos_module` names the **package**, `python_module` the module inside it.
-Getting the package wrong fails at run time, so the suite resolves every
-documented pair against the real tree.
+`kratos_module` names the **package**, `python_module` the module inside it. Getting the package wrong fails at run time, so the suite resolves every documented pair against the real tree.
 
 ## I want to...
 
@@ -63,6 +54,7 @@ documented pair against the real tree.
 | External-aero cases for DoMINO/Transolver | `processes.export.cae_dataset_export_process` |
 | A `.pmsh` mesh series | `processes.export.mesh_export_process` |
 | AI-ready Zarr or VTU | `processes.export.curator_export_process` |
+| A scrubbable digital twin (OpenUSD) | `processes.export.usd_export_process` + `deployment.usd_export` |
 | Train while the solve is still running | `processes.export.streaming_dataset_export_process` + `training.streaming_dataset` |
 | Raw tensors, no process | `bridges.torch_bridge` |
 
@@ -96,6 +88,7 @@ documented pair against the real tree.
 | Run it as a CoSimulation solver | `deployment.cosim_surrogate_solver_wrapper` |
 | Ship it without physicsnemo | `training.training_utils.ExportOnnxModel` + `processes.inference.onnx_inference_process` |
 | Ship it to a server | `deployment.triton_export` + `processes.inference.triton_inference_process` |
+| Call NVIDIA's packaged models (NIM) | `deployment.nim_client` + `processes.inference.nim_inference_process` |
 
 ### Trust it
 
@@ -115,6 +108,7 @@ documented pair against the real tree.
 | Tessellate a Kratos mesh | `bridges.mesh_bridge.tessellation` |
 | Map predictions back to the original entities | `bridges.mesh_bridge.provenance` |
 | Generate a mesh from an SDF | `bridges.mesh_bridge.generate` |
+| Sample exact NURBS (IGA) geometry | `bridges.mesh_bridge.nurbs_sampling` |
 | Signed distances as node features | `bridges.mesh_bridge.spatial` |
 | Deform a shape differentiably | `bridges.mesh_bridge.deformation` |
 | Refine where the surrogate is wrong | `bridges.mesh_bridge.adaptive_remeshing` + `processes.adaptive_remesh_process` |
@@ -131,13 +125,8 @@ documented pair against the real tree.
 
 ## Tests and examples
 
-- `tests/` mirrors the sources by name: `test_<module>.py`. Subdirectories
-  (`tests/bridges/mesh_bridge/`, `tests/active_learning/`) are discovered
-  automatically by the suite runner.
-- `examples/notebooks/` — eighteen notebooks, executed by `tests/test_notebooks.py`
-  so a changed signature breaks a test rather than rotting.
-- The [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application)
-  holds eighteen fully documented use cases against real solves.
+- `tests/` mirrors the sources by name: `test_<module>.py`. Subdirectories (`tests/bridges/mesh_bridge/`, `tests/active_learning/`) are discovered automatically by the suite runner.
+- `examples/notebooks/` — eighteen notebooks, executed by `tests/test_notebooks.py` so a changed signature breaks a test rather than rotting.
+- The [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application) holds eighteen fully documented use cases against real solves.
 
-New here? [From scratch](From_Scratch.html) walks one path end to end. New to
-PhysicsNeMo itself? [PhysicsNeMo Basics](../PhysicsNeMo_Basics/Overview.html).
+New here? [From scratch](From_Scratch.html) walks one path end to end. New to PhysicsNeMo itself? [PhysicsNeMo Basics](../PhysicsNeMo_Basics/Overview.html).

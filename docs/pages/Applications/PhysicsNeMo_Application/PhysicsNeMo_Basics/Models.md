@@ -8,9 +8,7 @@ summary: The 25 architecture families under physicsnemo.models, and which ones t
 
 # Models
 
-`physicsnemo.models` holds 25 architecture families. You do not need to know
-them all; you need to know **which shape of data you have**, because that is
-what picks the family.
+`physicsnemo.models` holds 25 architecture families. You do not need to know them all; you need to know **which shape of data you have**, because that is what picks the family.
 
 ## Pick by data shape
 
@@ -66,31 +64,22 @@ what picks the family.
 | `dit` | `DiT` | Diffusion transformer — the denoiser this application wraps for non-image data |
 | `topodiff` | `TopoDiff` | Diffusion for topology optimization |
 
-A **volumetric** 3-D denoiser exists too, but under
-`physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D` — see
-[Companion packages](Companion_Packages.html).
+A **volumetric** 3-D denoiser exists too, under `physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D` — this application deploys it through `denoiser_interface: "unet3d"` (see the [Diffusion](../Diffusion/Diffusion.html) page and [Companion packages](Companion_Packages.html)).
 
 ### Sequences and weather
 
-`rnn` (`One2ManyRNN`, `Seq2SeqRNN`), `dlwp` (`DLWP`), `dlwp_healpix`
-(`HEALPixUNet`, `HEALPixRecUNet`), `pangu` (`Pangu`), `fengwu` (`Fengwu`),
-`swinvrnn` (`SwinRNN`).
+`rnn` (`One2ManyRNN`, `Seq2SeqRNN`), `dlwp` (`DLWP`), `dlwp_healpix` (`HEALPixUNet`, `HEALPixRecUNet`), `pangu` (`Pangu`), `fengwu` (`Fengwu`), `swinvrnn` (`SwinRNN`).
 
 ### The plain one
 
-`mlp` (`FullyConnected`) — a multilayer perceptron. It is the right first model
-far more often than it looks: if your input is a handful of case parameters and
-your output is a field, you want this, not a neural operator.
+`mlp` (`FullyConnected`) — a multilayer perceptron. It is the right first model far more often than it looks: if your input is a handful of case parameters and your output is a field, you want this, not a neural operator.
 
 ## Building blocks
 
-`physicsnemo.nn` holds the layers the models are made of — around 150 of them.
-Two are worth knowing by name because this application uses them directly:
+`physicsnemo.nn` holds the layers the models are made of — around 150 of them. Two are worth knowing by name because this application uses them directly:
 
-- `ConcreteDropout` — dropout with a *learned* rate, which makes MC-dropout
-  uncertainty estimates meaningfully calibrated instead of arbitrary;
-- `physicsnemo.nn.functional.derivatives` — differential operators used by the
-  physics-informed path.
+- `ConcreteDropout` — dropout with a *learned* rate, which makes MC-dropout uncertainty estimates meaningfully calibrated instead of arbitrary;
+- `physicsnemo.nn.functional.derivatives` — differential operators used by the physics-informed path.
 
 ## What this application uses it for
 
@@ -108,7 +97,6 @@ Two are worth knowing by name because this application uses them directly:
 | `GraphCastNet` | `processes.inference.grid_inference_process` | documented, needs `torch_sparse` or `dgl` |
 | `FullyConnected` | anything | the default in most examples |
 
-2-D UNets and DLWP go through the grid process mechanically, by the same
-thin-axis squeeze idiom, but are not covered by a test.
+User-supplied 2-D UNets go through the grid process mechanically, by the same thin-axis squeeze idiom (physicsnemo's own `UNet` is 3-D and takes the volumetric path); `DLWP` is test-pinned on the volumetric path with its six cubed-sphere faces as the depth axis.
 
 Next: [Data and datapipes](Data_And_Datapipes.html) — feeding them.

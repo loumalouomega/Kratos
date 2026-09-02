@@ -102,14 +102,9 @@ Consistency requirements (validated the hard way): the **model's** `interp_res` 
 
 ### Driving a *pretrained* checkpoint
 
-The public `nvidia/domino_drivaerml` checkpoints are ungated and load through
-`model_registry` with `"checkpoint_type": "physicsnemo"` — they are exactly the
-`.mdlus` form this process takes. Two things must be right, and only one of
-them fails loudly.
+The public `nvidia/domino_drivaerml` checkpoints are ungated and load through `model_registry` with `"checkpoint_type": "physicsnemo"` — they are exactly the `.mdlus` form this process takes. Two things must be right, and only one of them fails loudly.
 
-**Match the datapipe to the checkpoint.** The shipped `DoMINODataConfig`
-defaults do not match a pretrained model; the settings below do, and are all
-expressible today:
+**Match the datapipe to the checkpoint.** The shipped `DoMINODataConfig` defaults do not match a pretrained model; the settings below do, and are all expressible today:
 
 ```json
 "datapipe_overrides" : { "grid_resolution"       : [128, 64, 64],
@@ -121,18 +116,9 @@ expressible today:
 "global_params_order"  : ["stream_velocity", "air_density"]
 ```
 
-A wrong `grid_resolution` used to surface as an opaque reshape failure deep
-inside the geometry encoder; it is now checked against the checkpoint's own
-`grid_resolution` at load and named. A wrong `normalize_coordinates` or a
-defaulted `bounding_box_surface` produce **no error at all** — only wrong
-numbers — so both are warned about. Note `num_surface_neighbors: 7` yields
-`surface_mesh_neighbors` with K = 6: the kNN includes the point itself and the
-pipe drops it, exactly as upstream does.
+A wrong `grid_resolution` used to surface as an opaque reshape failure deep inside the geometry encoder; it is now checked against the checkpoint's own `grid_resolution` at load and named. A wrong `normalize_coordinates` or a defaulted `bounding_box_surface` produce **no error at all** — only wrong numbers — so both are warned about. Note `num_surface_neighbors: 7` yields `surface_mesh_neighbors` with K = 6: the kNN includes the point itself and the pipe drops it, exactly as upstream does.
 
-**De-normalize the output.** This is the one that silently corrupts results.
-A pretrained DoMINO predicts **dimensionless, normalized** fields; the raw
-tensor is not a pressure. Upstream applies the inverse of the training
-normalization and then redimensionalizes by `U²ρ`:
+**De-normalize the output.** This is the one that silently corrupts results. A pretrained DoMINO predicts **dimensionless, normalized** fields; the raw tensor is not a pressure. Upstream applies the inverse of the training normalization and then redimensionalizes by `U²ρ`:
 
 ```json
 "scaling_factors_file" : ".../domino_drivaerml_surface_checkpoint/scaling_factors.pkl",
@@ -140,15 +126,7 @@ normalization and then redimensionalizes by `U²ρ`:
 "redimensionalize"     : true
 ```
 
-For this checkpoint that turns a raw `0.1386` into **−609 Pa** — a Cp of about
-−1.1 against the 542 Pa dynamic pressure at 30 m/s. Without it the value
-written into Kratos is wrong by roughly three orders of magnitude *and*
-shifted. Both settings default to off, so configurations written against raw
-output are unaffected.
+For this checkpoint that turns a raw `0.1386` into **−609 Pa** — a Cp of about −1.1 against the 542 Pa dynamic pressure at 30 m/s. Without it the value written into Kratos is wrong by roughly three orders of magnitude *and* shifted. Both settings default to off, so configurations written against raw output are unaffected.
 
-`scaling_factors.pkl` is read through physicsnemo-cfd's restricted unpickler:
-the file references a `utils.ScalingFactors` class that is not an installed
-module, so a plain `pickle.load` raises `ModuleNotFoundError`, and the public
-`ScalingFactors.load` does exactly that. Note also that `global_stats.json`,
-shipped alongside, is **not** what de-normalization uses — it is informational.
+`scaling_factors.pkl` is read through physicsnemo-cfd's restricted unpickler: the file references a `utils.ScalingFactors` class that is not an installed module, so a plain `pickle.load` raises `ModuleNotFoundError`, and the public `ScalingFactors.load` does exactly that. Note also that `global_stats.json`, shipped alongside, is **not** what de-normalization uses — it is informational.
 

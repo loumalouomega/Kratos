@@ -45,6 +45,8 @@ training_utils.SaveTrainedModel(model, "rnn_surrogate.mdlus")
 
 `SequenceInferenceProcess` seeds the model **once** — at its first due execution it samples the current state and runs one forward pass — then each subsequent due execution pops the next predicted state from the buffer and scatters it onto the output fields. When the `T` predicted steps are exhausted it warns once and goes quiet.
 
+**Model cards.** A card's `"output_normalization"` is applied to every buffered state on its way out — the whole rollout, not only the seeding step — per channel along axis 0 (see the [Inference](../Inference/Inference.html) page).
+
 ## The thin-axis idiom for planar cases
 
 `grid_bridge` grids are 3D; planar 2D cases use a thin axis of size 2 with a bounding box slightly padded across the mesh plane (e.g. `grid_shape [32, 32, 2]`, box `z ∈ [-0.05, 0.05]`). `squeeze_axis` (dataset and process) collapses that axis by its mean before the forward pass — matching `dimension=2` models — and duplicates predictions across it on the way back.

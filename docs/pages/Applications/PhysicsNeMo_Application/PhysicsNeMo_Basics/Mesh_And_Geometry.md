@@ -8,28 +8,17 @@ summary: physicsnemo.mesh - the representation, the calculus on it, and generati
 
 # Mesh and geometry
 
-`physicsnemo.mesh` is the largest subpackage and the one this application leans
-on hardest. It is also the one where the impedance mismatch with Kratos is
-biggest, which is why [Mesh Bridge](../Mesh_Bridge/Mesh_Bridge.html) exists.
+`physicsnemo.mesh` is the largest subpackage and the one this application leans on hardest. It is also the one where the impedance mismatch with Kratos is biggest, which is why [Mesh Bridge](../Mesh_Bridge/Mesh_Bridge.html) exists.
 
 ## The representation, and the one thing to know about it
 
-`physicsnemo.mesh.Mesh` is **points plus simplices plus fields**. Simplices:
-line segments, triangles, tetrahedra. That is the whole vocabulary.
+`physicsnemo.mesh.Mesh` is **points plus simplices plus fields**. Simplices: line segments, triangles, tetrahedra. That is the whole vocabulary.
 
-Kratos meshes are not simplicial. Hexahedra, prisms, pyramids, quadrilaterals
-and every quadratic geometry have to be **tessellated** into simplices before
-PhysicsNeMo will look at them — and tessellating each element independently
-splits shared faces along contradictory diagonals, leaving gaps. The bridge uses
-the smallest-node-id diagonal rule so neighbours agree, and keeps a
-**provenance** map so a prediction on a tetrahedron can be written back onto the
-hexahedron it came from.
+Kratos meshes are not simplicial. Hexahedra, prisms, pyramids, quadrilaterals and every quadratic geometry have to be **tessellated** into simplices before PhysicsNeMo will look at them — and tessellating each element independently splits shared faces along contradictory diagonals, leaving gaps. The bridge uses the smallest-node-id diagonal rule so neighbours agree, and keeps a **provenance** map so a prediction on a tetrahedron can be written back onto the hexahedron it came from.
 
-`DomainMesh` adds named boundaries to a `Mesh` — the natural target for Kratos
-sub-model-parts.
+`DomainMesh` adds named boundaries to a `Mesh` — the natural target for Kratos sub-model-parts.
 
-Meshes save and load in a memory-mapped format (`.pmsh`), which is what
-`MeshDataset` reads.
+Meshes save and load in a memory-mapped format (`.pmsh`), which is what `MeshDataset` reads.
 
 ## What is in there
 
@@ -52,12 +41,8 @@ Meshes save and load in a memory-mapped format (`.pmsh`), which is what
 
 ## Two upstream behaviours worth knowing
 
-- **The mesh-calculus gradient layout flipped** between releases. This
-  application absorbs that behind its own stable contract, so
-  `bridges.calculus_bridge` returns the same thing across versions.
-- **Boundary surfaces come out inconsistently wound.** The signed-distance
-  feature path re-orients the extracted surface before using it; without that,
-  the sign of the distance field flips from patch to patch.
+- **The mesh-calculus gradient layout flipped** between releases. This application absorbs that behind its own stable contract, so `bridges.calculus_bridge` returns the same thing across versions.
+- **Boundary surfaces come out inconsistently wound.** The signed-distance feature path re-orients the extracted surface before using it; without that, the sign of the distance field flips from patch to patch.
 
 ## What this application uses it for
 
@@ -71,15 +56,8 @@ Meshes save and load in a memory-mapped format (`.pmsh`), which is what
 | `mesh.deformation` energies | `bridges.mesh_bridge.deformation` | FFD/RBF/morph/displace shape parameterizations that stay valid |
 | `datapipes.mesh_dataset` | `processes.export.mesh_export_process` | `.pmsh` series for training |
 
-**Curved geometry.** Quadratic elements can be subdivided through their real
-mid-side nodes, or sampled on a refinement lattice in an opt-in *isoparametric*
-mode with synthetic points — interpolated on gather, dropped on scatter-back,
-watertight across curved neighbours.
+**Curved geometry.** Quadratic elements can be subdivided through their real mid-side nodes, or sampled on a refinement lattice in an opt-in *isoparametric* mode with synthetic points — interpolated on gather, dropped on scatter-back, watertight across curved neighbours.
 
-**Tetrahedral filling** of watertight 3-D surfaces ships
-(`FillSurfaceWithTetrahedra`): winding-number-carved, so non-convex solids fill
-correctly, and self-validating against the input's own volume and boundary area.
-Exact boundary recovery is still gated on upstream — `fill_interior` raises
-`NotImplementedError` for `n = 3` in 2.2.
+**Tetrahedral filling** of watertight 3-D surfaces ships (`FillSurfaceWithTetrahedra`): winding-number-carved, so non-convex solids fill correctly, and self-validating against the input's own volume and boundary area. Exact boundary recovery is still gated on upstream — `fill_interior` raises `NotImplementedError` for `n = 3` in 2.2.
 
 Next: [Symbolic and physics](Symbolic_And_Physics.html).

@@ -97,9 +97,7 @@ Each boundary is tessellated from the sub-model-part's Conditions container (fal
 }
 ```
 
-`MeshExportProcess` is MPI-aware: on distributed model parts the topology and
-fields are gathered onto rank 0 (`distributed_utils.GatherModelPartToRank0`) and
-the file is written with the exact serial layout — see the Distributed page.
+`MeshExportProcess` is MPI-aware: on distributed model parts the topology and fields are gathered onto rank 0 (`distributed_utils.GatherModelPartToRank0`) and the file is written with the exact serial layout — see the Distributed page.
 
 Training then goes through physicsnemo's own mesh datapipe:
 
@@ -152,12 +150,45 @@ Three things are easy to get wrong here:
 
 **Installing curator.** It is Apache-2.0 and public but published on **no package index**, so it must be installed from a git checkout, and because its build backend is maturin a plain `pip install` downloads a large Rust toolchain rather than falling back to pure Python — an offline CI hard-fails instead of degrading. The mesh sinks additionally need curator's `mesh` extra (notably `pyarrow`); the source side needs only `physicsnemo_curator.core.base`, which is why the bridge imports the two separately and reports them with distinct errors. Both are optional: without curator installed the bridge still imports and only its entry points raise.
 
+## Digital-twin USD export
+
+`UsdExportProcess` (`processes.export`) writes a running solve — deployed-surrogate predictions and their uncertainty fields included, since they live in ordinary Kratos variables — as **one time-sampled OpenUSD stage** that usdview, Omniverse, Blender or any USD-aware tool scrubs directly. It needs only `pip install usd-core` (Pixar's self-contained USD build; no Omniverse install exists or is required on the writing side), imported lazily.
+
+```json
+{
+    "python_module" : "usd_export_process",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.export",
+    "Parameters"    : {
+        "model_part_name" : "Structure",
+        "list_of_fields"  : [ { "variable_name" : "DISPLACEMENT", "data_location" : "node_historical" } ],
+        "output_file"     : "twin.usda",
+        "time_source"     : "time",
+        "output_interval" : 5
+    }
+}
+```
+
+What it writes, and why it is shaped that way:
+
+- One `UsdGeomMesh` per stage: a volume part's tessellation is reduced to its **outward-oriented boundary surface** (`spatial.BoundarySurface` — see the SDF section for why the orientation must be rebuilt), while *all* points are kept so the vertex-interpolated field primvars stay aligned; a `Conditions` source is written as-is. `"kind": "points"` writes a `UsdGeomPoints` cloud instead (particle parts), gathering positions and fields with **no tessellation, no torch and no physicsnemo** — pinned by a test gated on usd-core alone.
+- `points` and every `primvars:<FIELD>` are time-sampled per exported step; **topology is time-sampled only on the steps it actually changes**, so an adaptive-remeshing series stays valid frame by frame while a fixed mesh carries a single topology sample. Scalars become `float[]`, 3-vectors `float3[]`, other widths `float[]` with `elementSize` — all `"vertex"` interpolation, which is what viewers color by.
+- Only **nodal** data locations are accepted (a vertex primvar has nothing to hold element data after boundary extraction); extrapolate to nodes first or use the vtu/curator exporters.
+- `"time_source"` picks the time code: `"step"` (integer frames) or `"time"` (solver seconds; `"time_codes_per_second"` then sets playback rate). The stage is saved in `ExecuteFinalize` — one file, many samples, unlike the per-step files of the vtu/curator exporters. MPI runs gather onto rank 0 through `GatherModelPartToRank0` exactly like the other exporters.
+
+The array-level core (`deployment.usd_export`: `CreateUsdStage`, `WriteMeshTimeSample`, `WritePointsTimeSample`, `SaveStage`) is torch-free and usable directly from scripts.
+
+## Exact NURBS sampling (IGA)
+
+`mesh_bridge.nurbs_sampling` is the isogeometric analogue of the curved (isoparametric) mode: where curved mode samples the exact *quadratic* geometry, this samples the exact **NURBS** geometry of `IgaApplication`-style model parts — and, it turned out, needs no compiled IgaApplication at all: core Kratos binds `NurbsSurfaceGeometry3D` / `NurbsVolumeGeometry`, their constructors, `GlobalCoordinates` and `CreateQuadraturePointGeometries` to Python.
+
+- `SampleNurbsGeometry(geometry, divisions)` evaluates the geometry on a structured parametric lattice — every point by the C++ geometry's own `GlobalCoordinates`, so a rational quarter-circle patch lands on the circle to machine precision (pinned) — and tessellates it into the bridge's simplicial contract: consistent-diagonal triangles for surfaces, the **Kuhn 6-tetrahedra split** for volumes, face-consistent across cells and therefore watertight by construction (also pinned, with positive Jacobians restored the same way the tetrahedral fill does). Kratos stores knot vectors without the first/last classical repetition; the lattice spans `[Knots[0], Knots[-1]]`.
+- **The isogeometric gather.** IGA fields live on *control points*, and a control point is generally not on the geometry — a pointwise nodal gather is meaningless. `EvaluateNodalFieldOnLattice` interpolates control-point values through the geometry's **own** NURBS basis, read from `CreateQuadraturePointGeometries` at the lattice's parametric coordinates (each quadrature-point geometry holds exactly the nonzero control points and their basis values) — the same the-C++-side-is-the-oracle policy as curved mode, pinned by affine fields reproduced exactly and constants surviving the rational basis exactly.
+- `BuildNurbsMesh` packages points, cells and gathered fields as a `physicsnemo.mesh.Mesh`; `SampleModelPartNurbsGeometries` walks `ModelPart.Geometries` (where `NurbsGeometryModeler`/`CadIoModeler` leave them) and samples every NURBS surface/volume found.
+- Sampled points are **synthetic** in the provenance sense: they interpolate on gather and have no scatter-back — recovering control-point values from sampled fields is a least-squares fitting problem, deliberately out of scope.
+
 ## Non-matching transfer via MappingApplication
 
-When an ML grid (or auxiliary ML mesh) matches no tessellation of the Kratos mesh —
-non-simplex geometries the point locator rejects, partial overlaps, distributed
-runs — `mapping_bridge` transfers fields through MappingApplication's mappers
-instead of FE interpolation:
+When an ML grid (or auxiliary ML mesh) matches no tessellation of the Kratos mesh — non-simplex geometries the point locator rejects, partial overlaps, distributed runs — `mapping_bridge` transfers fields through MappingApplication's mappers instead of FE interpolation:
 
 ```python
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import mapping_bridge
@@ -171,19 +202,11 @@ grid = mapping_bridge.GatherGridArray(grid_part, ["VELOCITY"], (32, 32, 32))  # 
 bridge.InverseMapFields([("VELOCITY", "VELOCITY")])                # grid -> solver
 ```
 
-`MappingBridge` picks `CreateMPIMapper` automatically for distributed parts, and the
-`mapper_type` setting exposes MappingApplication's catalogue (`nearest_neighbor`,
-`nearest_element`, `barycentric`, ...). Prefer `grid_bridge` when the FE
-interpolation applies — it is exact for fields the elements interpolate exactly;
-prefer the mapping bridge for robustness beyond its reach. MappingApplication is a
-compiled optional dependency: it is imported lazily with an actionable error, like
-the torch/physicsnemo policy.
+`MappingBridge` picks `CreateMPIMapper` automatically for distributed parts, and the `mapper_type` setting exposes MappingApplication's catalogue (`nearest_neighbor`, `nearest_element`, `barycentric`, ...). Prefer `grid_bridge` when the FE interpolation applies — it is exact for fields the elements interpolate exactly; prefer the mapping bridge for robustness beyond its reach. MappingApplication is a compiled optional dependency: it is imported lazily with an actionable error, like the torch/physicsnemo policy.
 
 ## Performance
 
-`benchmarks/benchmark_bridges.py` times every bridge hot path on structured meshes
-(`--divisions`, `--grid` knobs). Reference numbers on a 20-core desktop CPU at
-117k nodes / 663k tetrahedra / 110k hexahedra (64³ sampling lattice):
+`benchmarks/benchmark_bridges.py` times every bridge hot path on structured meshes (`--divisions`, `--grid` knobs). Reference numbers on a 20-core desktop CPU at 117k nodes / 663k tetrahedra / 110k hexahedra (64³ sampling lattice):
 
 | Path | Cost | Per entity |
 |---|---|---|
@@ -194,136 +217,41 @@ the torch/physicsnemo policy.
 | `SampleFieldsOnGrid` (vectorized locator) | 2.3 s | 8.6 µs/point |
 | ROM gather/scatter (`VariableUtils`-backed) | 0.1 s | 0.8 µs/node |
 
-Homogeneous simplex containers (linear triangles/tetrahedra, quadratic variants in
-`reduce` mode) take a fully vectorized fast path built on the C++
-`ConnectivityIdsTensorAdaptor` — bit-identical to the per-entity path (pinned by
-tests) and ~3.5× faster. Hexahedron/prism/pyramid tessellation stays per-entity
-(the diagonal-rule rotation logic) at ~36 µs/hex, and only runs once per export
-step. **Verdict of the profiling the roadmap called for: the recurring in-loop
-paths (gather/scatter, grid interpolation) are all sub-µs-per-entity C++/numpy
-already — custom C++ tensor adaptors are not warranted.** Re-run the benchmark
-before revisiting that conclusion.
+Homogeneous simplex containers (linear triangles/tetrahedra, quadratic variants in `reduce` mode) take a fully vectorized fast path built on the C++ `ConnectivityIdsTensorAdaptor` — bit-identical to the per-entity path (pinned by tests) and ~3.5× faster. Hexahedron/prism/pyramid tessellation stays per-entity (the diagonal-rule rotation logic) at ~36 µs/hex, and only runs once per export step. **Verdict of the profiling the roadmap called for: the recurring in-loop paths (gather/scatter, grid interpolation) are all sub-µs-per-entity C++/numpy already — custom C++ tensor adaptors are not warranted.** Re-run the benchmark before revisiting that conclusion.
 
 ## Discrete calculus on the tessellated mesh
 
-`calculus_bridge` evaluates solver-free differential operators directly on the
-simplex mesh `BuildMesh` produces — physics-consistent derivative features and
-conserved-quantity monitors without a builder-and-solver assembly (for the
-physics' own assembled residual use `solver_residuals`/`differentiable_residual`
-instead):
+`calculus_bridge` evaluates solver-free differential operators directly on the simplex mesh `BuildMesh` produces — physics-consistent derivative features and conserved-quantity monitors without a builder-and-solver assembly (for the physics' own assembled residual use `solver_residuals`/`differentiable_residual` instead):
 
-- `ComputeGradient(mesh, values)` / `ComputeDivergence` / `ComputeCurl` /
-  `ComputeLaplacian` / `IntegrateField` wrap `physicsnemo.mesh.calculus`, and
-  `ComputeNodalDerivatives(model_part, settings)` runs a settings-driven list of
-  operations and scatters the results back to nodal variables (exact nodal
-  bijection via the provenance map). `IntegrateNodalField` gives one-line
-  integrals. Everything is autograd-differentiable (even w.r.t. `mesh.points`).
-- **Backend validity, enforced by the bridge** (re-probed against physicsnemo
-  2.2.0): the LSQ operators are correct on surface and volume meshes alike; the
-  DEC gradient/divergence are *silently wrong* on volume (codimension-0) meshes
-  and are therefore refused there; the DEC Laplacian is valid on volumes but
-  **only at interior points**. None of the upstream operators treat boundaries —
-  `InteriorPointMask(mesh)` (pure-torch facet counting) masks them, and
-  `ComputeNodalDerivatives`'s `"zero_boundary": true` applies it for you.
-- Surface meshes automatically use the intrinsic (tangent-plane) LSQ gradient —
-  the extrinsic default carries an ill-conditioned normal component — with the
-  upstream multi-channel crash worked around by a channel loop; multi-channel
-  outputs are normalized to `(N, C, D)` regardless of backend. float32/float64
-  only.
-- **The 2.2 gradient-layout flip is absorbed here.** Upstream's multi-channel
-  LSQ gradients changed to derivative-first `(N, D, C)` in 2.2 while the bridge
-  keeps its own stable `(N, C, D)` contract. The flip was invisible to the
-  original canary field, whose Jacobian `diag(1, 2, 3)` is *symmetric* — every
-  test passed while the numbers were transposed. The canary is now an
-  asymmetric Jacobian.
+- `ComputeGradient(mesh, values)` / `ComputeDivergence` / `ComputeCurl` / `ComputeLaplacian` / `IntegrateField` wrap `physicsnemo.mesh.calculus`, and `ComputeNodalDerivatives(model_part, settings)` runs a settings-driven list of operations and scatters the results back to nodal variables (exact nodal bijection via the provenance map). `IntegrateNodalField` gives one-line integrals. Everything is autograd-differentiable (even w.r.t. `mesh.points`).
+- **Backend validity, enforced by the bridge** (re-probed against physicsnemo 2.2.0): the LSQ operators are correct on surface and volume meshes alike; the DEC gradient/divergence are *silently wrong* on volume (codimension-0) meshes and are therefore refused there; the DEC Laplacian is valid on volumes but **only at interior points**. None of the upstream operators treat boundaries — `InteriorPointMask(mesh)` (pure-torch facet counting) masks them, and `ComputeNodalDerivatives`'s `"zero_boundary": true` applies it for you.
+- Surface meshes automatically use the intrinsic (tangent-plane) LSQ gradient — the extrinsic default carries an ill-conditioned normal component — with the upstream multi-channel crash worked around by a channel loop; multi-channel outputs are normalized to `(N, C, D)` regardless of backend. float32/float64 only.
+- **The 2.2 gradient-layout flip is absorbed here.** Upstream's multi-channel LSQ gradients changed to derivative-first `(N, D, C)` in 2.2 while the bridge keeps its own stable `(N, C, D)` contract. The flip was invisible to the original canary field, whose Jacobian `diag(1, 2, 3)` is *symmetric* — every test passed while the numbers were transposed. The canary is now an asymmetric Jacobian.
 
-On linear fields the LSQ operators are exact to ~1e-8 (float64), pinned by
-`tests/test_calculus_bridge.py`. Grid-side counterparts (uniform / rectilinear /
-spectral stencils on `(C, *spatial)` grids) live in
-`grid_bridge.ComputeGridDerivatives` — note the upstream stencils are
-**periodic-only**, so non-periodic data needs the `"boundary": "trim"` mode
-(the boundary layer wraps around and is garbage otherwise).
+On linear fields the LSQ operators are exact to ~1e-8 (float64), pinned by `tests/test_calculus_bridge.py`. Grid-side counterparts (uniform / rectilinear / spectral stencils on `(C, *spatial)` grids) live in `grid_bridge.ComputeGridDerivatives` — note the upstream stencils are **periodic-only**, so non-periodic data needs the `"boundary": "trim"` mode (the boundary layer wraps around and is garbage otherwise).
 
 ## Adaptive remeshing driven by surrogate error
 
-`adaptive_remeshing` + `AdaptiveRemeshProcess` close the loop between the
-residual scoring and mesh adaptation:
+`adaptive_remeshing` + `AdaptiveRemeshProcess` close the loop between the residual scoring and mesh adaptation:
 
-- `ComputeTargetSizeField(model_part, nodal_error, settings)` turns a per-node
-  error (e.g. `ResidualEvaluator.ComputeNodalResiduals()`, collapsed by
-  `NodalErrorArray`) into a target edge length by equidistribution:
-  `h_target = clip(NODAL_H · (target_error/error)^exponent, h_min, h_max)`.
-- `RunMmgAdaptation(model_part, size_field, mmg_parameters)` remeshes with
-  MeshingApplication's MMG through the **scalar metric**: sizes go to
-  `METRIC_SCALAR` (target edge length), `NODAL_H` is refreshed, and
-  `MmgProcess2D/3D` (chosen from `DOMAIN_SIZE`) interpolates the nodal values
-  onto the new mesh. Two MMG facts the module encodes: the metric mode is
-  decided by whether the *first node* carries `METRIC_TENSOR_<dim>D` — so
-  `MetricFastInit` (which seeds zero tensors everywhere) must **not** run before
-  a scalar-driven remesh — and MMG requires `NODAL_H`
-  (`FindNodalHNonHistoricalProcess`). MeshingApplication with `INCLUDE_MMG` is
-  an optional, lazily-checked dependency.
-- `AdaptiveRemeshProcess` chains the two at a step interval: assemble the
-  residual of the current state (whatever a solver or deployed surrogate last
-  wrote) → size field → MMG. The DOF set is rebuilt each time (the mesh
-  changes).
-- Surface path (pure torch, always available):
-  `WeightedSurfacePartition(mesh, n_clusters, weights)` samples
-  `partition_cells` seeds with probability ∝ a per-cell error weight, so cluster
-  density follows the error. `RemeshSurface` wraps
-  `physicsnemo.mesh.remeshing.remesh` — isotropic ACVD clustering needing the
-  optional `pyacvd` package, CPU-only, and **dropping all point/cell data** by
-  upstream design (re-sample fields afterwards).
+- `ComputeTargetSizeField(model_part, nodal_error, settings)` turns a per-node error (e.g. `ResidualEvaluator.ComputeNodalResiduals()`, collapsed by `NodalErrorArray`) into a target edge length by equidistribution: `h_target = clip(NODAL_H · (target_error/error)^exponent, h_min, h_max)`.
+- `RunMmgAdaptation(model_part, size_field, mmg_parameters)` remeshes with MeshingApplication's MMG through the **scalar metric**: sizes go to `METRIC_SCALAR` (target edge length), `NODAL_H` is refreshed, and `MmgProcess2D/3D` (chosen from `DOMAIN_SIZE`) interpolates the nodal values onto the new mesh. Two MMG facts the module encodes: the metric mode is decided by whether the *first node* carries `METRIC_TENSOR_<dim>D` — so `MetricFastInit` (which seeds zero tensors everywhere) must **not** run before a scalar-driven remesh — and MMG requires `NODAL_H` (`FindNodalHNonHistoricalProcess`). MeshingApplication with `INCLUDE_MMG` is an optional, lazily-checked dependency.
+- `AdaptiveRemeshProcess` chains the two at a step interval: assemble the residual of the current state (whatever a solver or deployed surrogate last wrote) → size field → MMG. The DOF set is rebuilt each time (the mesh changes).
+- Surface path (pure torch, always available): `WeightedSurfacePartition(mesh, n_clusters, weights)` samples `partition_cells` seeds with probability ∝ a per-cell error weight, so cluster density follows the error. `RemeshSurface` wraps `physicsnemo.mesh.remeshing.remesh` — isotropic ACVD clustering needing the optional `pyacvd` package, CPU-only, and **dropping all point/cell data** by upstream design (re-sample fields afterwards).
 
 ## Shape deformation and design parameterization
 
-`mesh_bridge/deformation.py` is the design-parameterization layer that
-physicsnemo 2.2 unblocked: a handful of control parameters map
-*differentiably* to node coordinates, so a surrogate objective's gradient
-reaches the shape itself.
+`mesh_bridge/deformation.py` is the design-parameterization layer that physicsnemo 2.2 unblocked: a handful of control parameters map *differentiably* to node coordinates, so a surrogate objective's gradient reaches the shape itself.
 
 ```
 control displacements --DeformPoints--> deformed coordinates --WriteNodeCoordinates--> moved mesh
 ```
 
-- `DeformPoints(points, control_displacements, method, **options)` dispatches
-  `"ffd"` (a control lattice over a bounding box), `"rbf"` (thin-plate spline
-  through scattered control points), `"morph"` (compact-support radial
-  kernel) and `"displace"` (one displacement per point). **Control values are
-  displacements, not destination coordinates** — a zero control array is
-  exactly the identity, which the tests pin. A uniform FFD lattice reproduces
-  a rigid translation to machine precision, and RBF interpolates its control
-  displacements exactly at the control points (note its thin-plate system is
-  singular if the control points are degenerate, e.g. coplanar — use points in
-  general position).
-- `RegularizationEnergy(reference_mesh, points, energy)` exposes the upstream
-  energies as objective *terms*, not constraints: `"strain"` resists
-  distortion from the reference, `"inversion"` blows up as elements approach
-  zero or negative volume (the term that stops an optimizer tearing the mesh),
-  plus measure/bending/volume variants. Degenerate reference cells produce NaN
-  by upstream design — that means a broken reference mesh, not a numerical
-  hiccup.
-- `WriteNodeCoordinates(model_part, coordinates, update_displacement=False)`
-  is the only mutating call in the module, and the app's first use of
-  `NodePositionTensorAdaptor.StoreData()`. It moves the current configuration
-  while leaving `X0` (the reference) alone, and can also store `X − X0` into
-  `DISPLACEMENT`, which is what MeshMovingApplication and the structural
-  solvers read. When only a surface should move and the interior should follow
-  smoothly, drive MeshMovingApplication with that boundary displacement rather
-  than writing interior nodes directly.
-- `sensitivity_utils.ComputeShapeSensitivities(...)` closes the loop:
-  controls → deformation → surrogate → objective, differentiated in one
-  backward pass to give `dJ/d(control)` without finite-differencing the shape.
-  It is pinned against central finite differences.
-- `sensitivity_utils.ComputeControlSensitivities(...)` is its **FEM-exact**
-  counterpart: it takes the discretely exact nodal `dJ/dX` produced by
-  `ComputeShapeSensitivityField` and applies only the deformation's chain
-  rule, as a vector-Jacobian product through the same four deformers. Same
-  parameterization, but the accuracy of the FEM adjoint rather than of a
-  surrogate - validated against finite differences that deform the mesh and
-  re-solve the problem. See
-  [Physics Informed](../Physics_Informed/Physics_Informed.html), and
-  notebook 17 for the whole chain driving a shape optimization.
+- `DeformPoints(points, control_displacements, method, **options)` dispatches `"ffd"` (a control lattice over a bounding box), `"rbf"` (thin-plate spline through scattered control points), `"morph"` (compact-support radial kernel) and `"displace"` (one displacement per point). **Control values are displacements, not destination coordinates** — a zero control array is exactly the identity, which the tests pin. A uniform FFD lattice reproduces a rigid translation to machine precision, and RBF interpolates its control displacements exactly at the control points (note its thin-plate system is singular if the control points are degenerate, e.g. coplanar — use points in general position).
+- `RegularizationEnergy(reference_mesh, points, energy)` exposes the upstream energies as objective *terms*, not constraints: `"strain"` resists distortion from the reference, `"inversion"` blows up as elements approach zero or negative volume (the term that stops an optimizer tearing the mesh), plus measure/bending/volume variants. Degenerate reference cells produce NaN by upstream design — that means a broken reference mesh, not a numerical hiccup.
+- `WriteNodeCoordinates(model_part, coordinates, update_displacement=False)` is the only mutating call in the module, and the app's first use of `NodePositionTensorAdaptor.StoreData()`. It moves the current configuration while leaving `X0` (the reference) alone, and can also store `X − X0` into `DISPLACEMENT`, which is what MeshMovingApplication and the structural solvers read. When only a surface should move and the interior should follow smoothly, drive MeshMovingApplication with that boundary displacement rather than writing interior nodes directly.
+- `sensitivity_utils.ComputeShapeSensitivities(...)` closes the loop: controls → deformation → surrogate → objective, differentiated in one backward pass to give `dJ/d(control)` without finite-differencing the shape. It is pinned against central finite differences.
+- `sensitivity_utils.ComputeControlSensitivities(...)` is its **FEM-exact** counterpart: it takes the discretely exact nodal `dJ/dX` produced by `ComputeShapeSensitivityField` and applies only the deformation's chain rule, as a vector-Jacobian product through the same four deformers. Same parameterization, but the accuracy of the FEM adjoint rather than of a surrogate - validated against finite differences that deform the mesh and re-solve the problem. See [Physics Informed](../Physics_Informed/Physics_Informed.html), and notebook 17 for the whole chain driving a shape optimization.
 
 **How this relates to `ShapeOptimizationApplication` vertex morphing.** They are close relatives, not the same operator, and `tests/test_vertex_morphing_comparison.py` pins the difference against reference fields generated from the real `KSO.MapperVertexMorphing`:
 
@@ -339,50 +267,24 @@ So the two agree in the **dense-control limit** — a control point at every nod
 
 The reference fixture was produced in a **wheel-only** environment (`KratosMultiphysics` + `KratosShapeOptimizationApplication` from PyPI) by `tests/shape_optimization_cases/generate_reference.py`. That is deliberate: those wheels are GCC-built while a typical local core is Clang-built, and pybind11 keys its type registry on compiler identity, so the two cannot share a process. Generating once and committing the `.npz` keeps the comparison a permanent test without compiling ShapeOptimizationApplication locally.
 
-`MeshMovingApplication` is compiled in the reference environment;
-`ShapeOptimizationApplication` is not, so the roadmap's "validate against
-vertex morphing" comparison remains open and the validation here is
-finite-difference and self-consistency based.
+`MeshMovingApplication` is compiled in the reference environment; `ShapeOptimizationApplication` is not, so the roadmap's "validate against vertex morphing" comparison remains open and the validation here is finite-difference and self-consistency based.
 
 ## Signed distance fields as features
 
-`mesh_bridge/spatial.py` turns geometry itself into a feature: every point
-carries its signed distance to the boundary, which is what lets a surrogate
-generalize across shapes instead of memorizing one mesh.
+`mesh_bridge/spatial.py` turns geometry itself into a feature: every point carries its signed distance to the boundary, which is what lets a surrogate generalize across shapes instead of memorizing one mesh.
 
-The integration point is deliberately boring. `WriteSignedDistanceField`
-stores the result in an ordinary nodal (non-historical) Kratos variable, and
-because every gather in this application keys off
-`(variable_name, data_location)`, the SDF then flows into grids, graphs and
-point clouds through their existing `input_fields` settings — no signature
-changes anywhere. `SampleSignedDistanceOnGrid` covers the one case that
-cannot work that way, since lattice points are not nodes.
+The integration point is deliberately boring. `WriteSignedDistanceField` stores the result in an ordinary nodal (non-historical) Kratos variable, and because every gather in this application keys off `(variable_name, data_location)`, the SDF then flows into grids, graphs and point clouds through their existing `input_fields` settings — no signature changes anywhere. `SampleSignedDistanceOnGrid` covers the one case that cannot work that way, since lattice points are not nodes.
 
 Two things this module fixes rather than passes through:
 
-- **Orientation.** The SDF needs a 3D triangle surface, so a tetrahedral
-  model part must be reduced to its boundary — but `Mesh.get_boundary_mesh()`
-  winds those triangles *inconsistently*: the closed surface's signed volume
-  comes out 0 instead of the enclosed volume, and both sign methods then
-  report interior points as outside. `BoundarySurface` therefore rebuilds the
-  boundary with an exact outward orientation, taking each single-use facet and
-  fixing its winding so the normal points away from its parent cell's opposite
-  vertex. The tests assert signed-volume == enclosed volume, and that interior
-  nodes come out negative with the deepest at exactly the inradius.
-- **Sign convention**: negative inside, positive outside, zero on the surface.
-  `max_dist` restricts the search to a narrow band, and queries beyond it
-  return NaN by design rather than a distance.
+- **Orientation.** The SDF needs a 3D triangle surface, so a tetrahedral model part must be reduced to its boundary — but `Mesh.get_boundary_mesh()` winds those triangles *inconsistently*: the closed surface's signed volume comes out 0 instead of the enclosed volume, and both sign methods then report interior points as outside. `BoundarySurface` therefore rebuilds the boundary with an exact outward orientation, taking each single-use facet and fixing its winding so the normal points away from its parent cell's opposite vertex. The tests assert signed-volume == enclosed volume, and that interior nodes come out negative with the deepest at exactly the inradius.
+- **Sign convention**: negative inside, positive outside, zero on the surface. `max_dist` restricts the search to a narrow band, and queries beyond it return NaN by design rather than a distance.
 
-Distances are computed in float32 internally (Warp-backed, CPU and CUDA) and
-returned as float64 to match the rest of the application.
+Distances are computed in float32 internally (Warp-backed, CPU and CUDA) and returned as float64 to match the rest of the application.
 
 ## Mesh generation and repair from implicit geometry
 
-`mesh_bridge/generate.py` adds the direction the bridge never had. Until now
-a Kratos `ModelPart` became a physicsnemo `Mesh` and predictions were
-scattered back onto entities that already existed; now meshes can be
-*generated* from geometry and *materialized as real Kratos entities*, so a
-shape defined by a signed distance function can actually be solved on.
+`mesh_bridge/generate.py` adds the direction the bridge never had. Until now a Kratos `ModelPart` became a physicsnemo `Mesh` and predictions were scattered back onto entities that already existed; now meshes can be *generated* from geometry and *materialized as real Kratos entities*, so a shape defined by a signed distance function can actually be solved on.
 
 ```
 ModelPart --SampleSignedDistanceOnGrid--> level set --SurfaceFromLevelSet--> surface
@@ -391,106 +293,24 @@ phi       --GenerateImplicitDomain------> tets      --PopulateModelPartFromMesh-
 old part  --MappingBridge---------------> fields on the new mesh
 ```
 
-- `GenerateImplicitDomain(phi, bounds, h, settings)` meshes the region where
-  `phi` is negative. `SdfPrimitives()` returns the building blocks
-  (`sphere`, `box`, `polygon_2d`, and the `union`/`intersection`/`difference`
-  combinators) — plain differentiable closures, so geometry composes.
-  `"full_output": true` returns the upstream diagnostics; assert on
-  `q_median`, `all_volumes_positive` and `boundary_closed_manifold` rather
-  than `q_min`, which is **not monotone in `h`**.
-- **It runs under an explicit `torch.enable_grad()`, and that is load-bearing.**
-  Upstream differentiates `phi` to project boundary vertices, so inside a
-  plain `torch.no_grad()` the coverage guard trips — or, with the guard
-  disabled, it *silently* returns a worse mesh. Any deployment process may
-  have wrapped the world in `no_grad`, so the wrapper re-enables it and a
-  regression test pins both halves of that behaviour.
-- `SurfaceFromLevelSet(field, bounding_box, threshold)` extracts the zero
-  level set. Its triangles are **consistently outward-wound** (the closed
-  surface's signed volume equals the enclosed volume), which is exactly what
-  `Mesh.get_boundary_mesh()` fails to give — the same inconsistency the SDF
-  section above documents. So for a surface you want to query distances
-  against, prefer marching cubes. Output is always CPU float32 and detached,
-  whatever you feed it.
-- `FillBoundaryLoop(boundary, settings)` fills closed **2D** loops with
-  triangles meeting a minimum-angle guarantee (upstream caps the request at
-  33°; `max_cell_size` is an *area*). Nesting and holes are resolved
-  automatically and the input loop's vertices survive as the leading rows.
-  A 3D triangle surface is redirected to `FillSurfaceWithTetrahedra` below.
-- `FillSurfaceWithTetrahedra(surface, settings)` fills a watertight **3D**
-  triangle surface with tetrahedra. Upstream's `fill_interior` is 2D-only in
-  physicsnemo 2.2 (`n = 3` raises `NotImplementedError` — "exact 3D boundary
-  recovery is planned"), so this tries upstream first, and inherits it the day
-  it lands, then falls back to a Delaunay tetrahedralization carved by the
-  **winding-number sign** — which is what makes it correct on *non-convex*
-  solids, where a plain convex-hull tetrahedralization is not.
-  It guarantees that every input vertex survives bit-identically in the
-  leading rows, and it **checks its own work**: filled volume against the
-  surface's enclosed volume, carved boundary area against the input area, and
-  boundary edge-manifoldness. By default a mismatch raises; `"strict": false`
-  warns and returns anyway, and `"full_output": true` hands back the ratios.
-  Two things it does *not* promise, unlike upstream's planned `n = 3`.
-  Individual facets are not preserved — Delaunay retriangulates planar faces
-  with its own diagonals, so the boundary covers the same surface while its
-  triangles may differ (a cube keeps 8 of its 12 facets), and on a curved
-  surface that retriangulation moves the enclosed volume by ~1e-5, which is
-  why the tolerances are relative and default to 1e-3 rather than to zero.
-  And solids needing Steiner points for boundary recovery — the Schönhardt
-  class — cannot be filled this way at all; they fail the validation instead
-  of returning something wrong. Coplanar input (a prismatic skin) can leave
-  flat slivers, which are **kept** because they seal the boundary while
-  carrying no volume, but are counted and warned about: they are
-  zero-Jacobian elements, so run `RunMmgAdaptation` before solving. No
-  Steiner points are inserted, so cell size follows the input's vertex
-  density — refine afterwards rather than expecting a size knob.
-  `FillModelPartWithTetrahedra(model, name, surface_part)` is the Kratos-facing
-  composition: a skin model part in, a solvable volume model part out.
-- `RefitToImplicit(mesh, phi, ...)` is the **differentiable** counterpart:
-  topology fixed, boundary vertices snapped onto `phi = 0`, gradients flowing
-  back to `phi`'s parameters — which is what composes with the shape
-  deformation layer. The generator itself is not differentiable.
-- `PopulateModelPartFromMesh(model, name, mesh, settings)` materializes the
-  result. It handles what Kratos requires and physicsnemo does not provide:
-  **node ids are 1-based** so the 0-based connectivity is shifted, a
-  `Properties` object is mandatory, `DOMAIN_SIZE` comes from the point width,
-  the element name follows the cell shape, and every numpy scalar is cast
-  (numpy types do not bind to the pybind overloads). Historical variables are
-  declared before the buffer is sized, in that order. `GenerateModelPart` is
-  the one-call composition.
+- `GenerateImplicitDomain(phi, bounds, h, settings)` meshes the region where `phi` is negative. `SdfPrimitives()` returns the building blocks (`sphere`, `box`, `polygon_2d`, and the `union`/`intersection`/`difference` combinators) — plain differentiable closures, so geometry composes. `"full_output": true` returns the upstream diagnostics; assert on `q_median`, `all_volumes_positive` and `boundary_closed_manifold` rather than `q_min`, which is **not monotone in `h`**.
+- **It runs under an explicit `torch.enable_grad()`, and that is load-bearing.** Upstream differentiates `phi` to project boundary vertices, so inside a plain `torch.no_grad()` the coverage guard trips — or, with the guard disabled, it *silently* returns a worse mesh. Any deployment process may have wrapped the world in `no_grad`, so the wrapper re-enables it and a regression test pins both halves of that behaviour.
+- `SurfaceFromLevelSet(field, bounding_box, threshold)` extracts the zero level set. Its triangles are **consistently outward-wound** (the closed surface's signed volume equals the enclosed volume), which is exactly what `Mesh.get_boundary_mesh()` fails to give — the same inconsistency the SDF section above documents. So for a surface you want to query distances against, prefer marching cubes. Output is always CPU float32 and detached, whatever you feed it.
+- `FillBoundaryLoop(boundary, settings)` fills closed **2D** loops with triangles meeting a minimum-angle guarantee (upstream caps the request at 33°; `max_cell_size` is an *area*). Nesting and holes are resolved automatically and the input loop's vertices survive as the leading rows. A 3D triangle surface is redirected to `FillSurfaceWithTetrahedra` below.
+- `FillSurfaceWithTetrahedra(surface, settings)` fills a watertight **3D** triangle surface with tetrahedra. Upstream's `fill_interior` is 2D-only in physicsnemo 2.2 (`n = 3` raises `NotImplementedError` — "exact 3D boundary recovery is planned"), so this tries upstream first, and inherits it the day it lands, then falls back to a Delaunay tetrahedralization carved by the **winding-number sign** — which is what makes it correct on *non-convex* solids, where a plain convex-hull tetrahedralization is not. It guarantees that every input vertex survives bit-identically in the leading rows, and it **checks its own work**: filled volume against the surface's enclosed volume, carved boundary area against the input area, and boundary edge-manifoldness. By default a mismatch raises; `"strict": false` warns and returns anyway, and `"full_output": true` hands back the ratios. Two things the Delaunay route does *not* promise, unlike upstream's planned `n = 3`. Individual facets are not preserved — Delaunay retriangulates planar faces with its own diagonals, so the boundary covers the same surface while its triangles may differ (a cube keeps 8 of its 12 facets), and on a curved surface that retriangulation moves the enclosed volume by ~1e-5, which is why the tolerances are relative and default to 1e-3 rather than to zero. And solids needing Steiner points for boundary recovery — the Schönhardt class — cannot be filled this way at all; they fail the validation instead of returning something wrong (pinned by a real Schönhardt fixture). **`"method": "tetgen"` closes both gaps**: a constrained tetrahedralization through the optional `tetgen` package (`pip install tetgen` — note TetGen itself is AGPL-licensed) with **exact boundary recovery**. With `"preserve_boundary"` (the default) the input facets survive *verbatim* — Steiner points go only in the interior, which is all a Schönhardt solid needs (one suffices; the fixture pins it filling at exact volume) — and the `facets_preserved` diagnostic asserts it; the cube keeps all 12. Input vertices stay bit-identical in the leading rows, TetGen's Steiner points append after them (`steiner_points` in the diagnostics), and its quality pass (`"quality"`, on by default) is the size/quality knob the Delaunay route lacks. It is an **explicit opt-in**, never chosen by `"auto"` — both because an installed optional dependency must not silently change results (the CuPy policy) and because of the license. Coplanar input (a prismatic skin) can leave flat slivers on the Delaunay route, which are **kept** because they seal the boundary while carrying no volume, but are counted and warned about: they are zero-Jacobian elements, so run `RunMmgAdaptation` before solving. The Delaunay route inserts no Steiner points, so cell size follows the input's vertex density — refine afterwards rather than expecting a size knob, or use `"tetgen"`. `FillModelPartWithTetrahedra(model, name, surface_part)` is the Kratos-facing composition: a skin model part in, a solvable volume model part out.
+- `RefitToImplicit(mesh, phi, ...)` is the **differentiable** counterpart: topology fixed, boundary vertices snapped onto `phi = 0`, gradients flowing back to `phi`'s parameters — which is what composes with the shape deformation layer. The generator itself is not differentiable.
+- `PopulateModelPartFromMesh(model, name, mesh, settings)` materializes the result. It handles what Kratos requires and physicsnemo does not provide: **node ids are 1-based** so the 0-based connectivity is shifted, a `Properties` object is mandatory, `DOMAIN_SIZE` comes from the point width, the element name follows the cell shape, and every numpy scalar is cast (numpy types do not bind to the pybind overloads). Historical variables are declared before the buffer is sized, in that order. `GenerateModelPart` is the one-call composition.
 
-Generation is deterministic on the CPU and is pinned there: CUDA generation
-is non-reproducible (atomics) and was slower at these sizes.
+Generation is deterministic on the CPU and is pinned there: CUDA generation is non-reproducible (atomics) and was slower at these sizes.
 
-To carry a solution onto a generated mesh, use the mapping bridge —
-`MappingBridge(old_part, new_part, {"mapper_type": "nearest_element"})` +
-`MapFields`, which is exact for linear fields and handles non-matching
-topology. It maps *historical nodal* variables. When the new mesh comes from
-MMG instead of from generation, MMG's own `interpolate_nodal_values` has
-already done the transfer.
+To carry a solution onto a generated mesh, use the mapping bridge — `MappingBridge(old_part, new_part, {"mapper_type": "nearest_element"})` + `MapFields`, which is exact for linear fields and handles non-matching topology. It maps *historical nodal* variables. When the new mesh comes from MMG instead of from generation, MMG's own `interpolate_nodal_values` has already done the transfer.
 
 ## Grid divergence, curl and Laplacian
 
-`grid_bridge.ComputeGridVectorOperator` completes the grid-operator set that
-`ComputeGridDerivatives` started, sharing its `operator`/`boundary`
-conventions. Three details are worth knowing, all of them upstream contracts
-this wrapper makes explicit:
+`grid_bridge.ComputeGridVectorOperator` completes the grid-operator set that `ComputeGridDerivatives` started, sharing its `operator`/`boundary` conventions. Three details are worth knowing, all of them upstream contracts this wrapper makes explicit:
 
-- The two upstream families **disagree on layout**: the gradients take a bare
-  *scalar* field and prepend a derivative axis, while divergence and curl take
-  a **channel-first vector** field whose channel count must equal the number
-  of spatial axes. Passing a 3-channel field on a 2-D grid is the classic
-  mistake and is rejected with that explanation.
-- Shapes: divergence → `(*spatial)`; curl → scalar vorticity in 2D and
-  `(3, *spatial)` in 3D; Laplacian → the input's shape. For a Laplacian,
-  `(C, *spatial)` and `(*spatial)` cannot be told apart from the shape alone,
-  so the channel axis is **declared** (`"has_channel_axis"`) rather than
-  guessed.
-- The stencils are still periodic-only, so `"boundary": "trim"` crops the
-  wrapped layer exactly as it does for the gradients. There is no spectral
-  variant upstream.
+- The two upstream families **disagree on layout**: the gradients take a bare *scalar* field and prepend a derivative axis, while divergence and curl take a **channel-first vector** field whose channel count must equal the number of spatial axes. Passing a 3-channel field on a 2-D grid is the classic mistake and is rejected with that explanation.
+- Shapes: divergence → `(*spatial)`; curl → scalar vorticity in 2D and `(3, *spatial)` in 3D; Laplacian → the input's shape. For a Laplacian, `(C, *spatial)` and `(*spatial)` cannot be told apart from the shape alone, so the channel axis is **declared** (`"has_channel_axis"`) rather than guessed.
+- The stencils are still periodic-only, so `"boundary": "trim"` crops the wrapped layer exactly as it does for the gradients. There is no spectral variant upstream.
 
-One performance-versus-accuracy trap is handled for you: the Warp backend
-computes in float32 and is selected automatically whenever a CUDA device
-exists, silently costing about seven digits on float64 input. The wrapper
-therefore keeps the torch backend for float64 grids (`"implementation":
-"auto"`, the default) and leaves float32 on the fast path; pass
-`"implementation": "default"` to restore upstream's own choice.
+One performance-versus-accuracy trap is handled for you: the Warp backend computes in float32 and is selected automatically whenever a CUDA device exists, silently costing about seven digits on float64 input. The wrapper therefore keeps the torch backend for float64 grids (`"implementation": "auto"`, the default) and leaves float32 on the fast path; pass `"implementation": "default"` to restore upstream's own choice.

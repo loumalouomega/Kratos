@@ -195,6 +195,7 @@ The mirror of the co-simulation solver wrapper: that one puts a model where a *s
 
 - **`"flat"` cannot give a surrogate gradient** and is refused at construction: that interface feeds the model field values only, so the node coordinates it would have to differentiate against never enter the forward pass. Use a point-cloud interface.
 - **`normalize_coordinates` needs a chain rule**, and it is applied here: autograd returns dJ/dx_norm, and the physical gradient is that divided by the bounding-box extent. What the chain rule neglects is that the box is itself recomputed from the design every call — exact for a design that does not move the bounding box (an interior design surface, the usual case), approximate for one that does. It is therefore **off by default** in this class and on by default in the deployment processes.
+- **A model card's `"output_normalization"` reaches the gradient too.** J is a function of the *physical* prediction, so the de-normalization is applied inside the autograd objective (in torch, graph intact) as well as on the written field; test-pinned as `dJ/dX = std × (raw gradient)`. Applying it only where the field is written would leave the gradient wrong by exactly the training scale.
 - **`GetElementalGradient` always refuses.** A surrogate response differentiates with respect to the node coordinates only; elemental sensitivities (thickness, Young's modulus) need Kratos's own adjoint elements, reached through `adjoint_bridge.CreateResponseFunction`.
 
 ## Where the pieces live

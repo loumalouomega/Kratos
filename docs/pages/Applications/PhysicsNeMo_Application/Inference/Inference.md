@@ -10,12 +10,7 @@ summary:
 
 ## Checkpoints and model cards
 
-When a model card sidecar (`<checkpoint>.card.json`, see
-[Training](../Training/Training.html)) exists next to the checkpoint, every
-deployment process validates its configured `input_fields`/`output_fields` against
-it at model-load time. The `"model_card_policy"` key of `model_settings` decides
-what a mismatch does: `"advisory"` (default) warns and continues, `"strict"`
-raises, `"ignore"` skips the check.
+When a model card sidecar (`<checkpoint>.card.json`, see [Training](../Training/Training.html)) exists next to the checkpoint, every deployment process validates its configured `input_fields`/`output_fields` against it at model-load time. The `"model_card_policy"` key of `model_settings` decides what a mismatch does: `"advisory"` (default) warns and continues, `"strict"` raises, `"ignore"` skips the check.
 
 ### De-normalizing a model trained on normalized targets
 
@@ -35,7 +30,25 @@ Three things worth knowing:
 - **A spread is scaled, never shifted.** `"uncertainty"` fields carry a standard deviation, and shifting one by the training mean is meaningless. `InferenceProcess` passes `scale_only` for those; anything calling `WriteOutputFields` directly with a spread must do the same.
 - **A degenerate scale or a wrong channel count raises** rather than producing silent NaNs or a misaligned field — a wrong-length array is exactly how a `scaling_factors` file from a *different* checkpoint announces itself.
 
-**Covered**: `InferenceProcess` and everything inheriting its write path — hybrid initialization, point clouds, ONNX, Triton, the co-simulation surrogate wrapper, and DoMINO's volume branch. **Not covered, deliberately**: the grid writers (`ScatterGridToNodes` puts channels on axis 0, not −1), `RomSurrogateProcess` (its model emits modal coefficients, not a field, so a per-channel vector is meaningless), and `PinnSolveProcess` (trained in-session, no checkpoint and no card). DoMINO's surface branch keeps its own `scaling_factors.pkl` path, which is keyed per field group rather than by concatenated column.
+**Covered** — every process that loads a checkpoint with a card: `InferenceProcess` and everything inheriting its write path (hybrid initialization, point clouds, ONNX, Triton), `ParticleInferenceProcess`, `GraphInferenceProcess`, `TimeSeriesInferenceProcess`, the grid writers (`SuperResolutionProcess`/`GridInferenceProcess`, `SequenceInferenceProcess`, `DiffusionInferenceProcess` — per channel along axis 0, the grid layout, and the diffusion spread scaled only), the co-simulation surrogate wrapper, `SurrogateResponseFunction` (on the written field *and* inside its autograd objective, so `dJ/dX` carries the training scale) and DoMINO's volume branch. An earlier version of this list named the co-simulation wrapper as covered while it passed no normalization at all — the case is now test-pinned, as is every other process named here, each by a mutation that removes the call. **Not covered, deliberately**: `RomSurrogateProcess` (its model emits modal coefficients, not a field, so a per-channel vector is meaningless), `PinnSolveProcess` (trained in-session, no checkpoint and no card), and `NimInferenceProcess` (the microservice returns physical fields; there is no checkpoint on this side). DoMINO's surface branch keeps its own `scaling_factors.pkl` path, which is keyed per field group rather than by concatenated column.
+
+`model_registry.ApplyOutputNormalization` is type-preserving and, for a torch tensor, runs the arithmetic in torch on the tensor's own device and dtype with the autograd graph intact — a CUDA prediction stays on the GPU, and a gradient taken through it is scaled correctly. Grid callers pass `channel_axis=0`.
+
+### Normalizing inputs the way training did
+
+The symmetric half. A model trained on standardized *features* expects standardized features, and feeding it the raw Kratos fields is wrong by the same silent factor — measured as an 18% position drift on the particle path, where `CreateParticleTrajectoryDataset(normalize=True)` standardizes the velocity history the deployment process then fed raw. The card's `"input_normalization"` key carries that scaling, with the same schema and broadcast rule as `"output_normalization"` (length 1 or one entry per channel of the concatenated `input_fields`); `model_registry.ApplyInputNormalization` applies the forward map, the exact inverse of the output map for the same entry:
+
+```json
+"input_normalization"  : { "type" : "mean_std", "mean" : [...], "std" : [...] }
+```
+
+Three rules, followed by every process that reads a card:
+
+- **Both keys, one rule.** Every process named as *covered* above applies `"input_normalization"` to what it feeds the model — the concatenated input fields, a particle process's `K×3` velocity history (before the node-type one-hot is appended), a time-series process's whole `(N, K×W)` window, or a grid's channels along axis 0.
+- **Before the OOD guard.** Inputs are normalized *before* `ood_guard` checks them, because the guard was calibrated on what the model saw in training. A GP head fitted on the model's own inputs sees them normalized too; one fitted on explicit `gp_feature_fields` does not.
+- **Fields, not coordinates.** Point-cloud coordinates keep their own convention (`normalize_coordinates`); the key scales only the gathered fields, so `SurrogateResponseFunction`'s coordinate chain rule is untouched by it.
+
+`torch_dataset.MakeNormalizationCardEntries` builds both entries from a `normalize=True` particle dataset's statistics; `model_registry.MakeMeanStdNormalization` builds one from any per-channel mean and standard deviation.
 
 ## Checkpoints
 
@@ -124,10 +137,7 @@ Warm-starts a solve: one forward pass in `ExecuteBeforeSolutionLoop`, writing th
 
 ## Grid-to-grid models (FNO, UNet)
 
-`GridInferenceProcess` deploys same-resolution grid models — the pattern of
-PhysicsNeMo's Darcy-FNO and datacenter-thermal-UNet examples: input fields are
-sampled onto a regular grid over the model part, the model maps grid to grid, and the
-output fields are scattered back onto the same model part:
+`GridInferenceProcess` deploys same-resolution grid models — the pattern of PhysicsNeMo's Darcy-FNO and datacenter-thermal-UNet examples: input fields are sampled onto a regular grid over the model part, the model maps grid to grid, and the output fields are scattered back onto the same model part:
 
 ```json
 {
@@ -143,8 +153,7 @@ output fields are scattered back onto the same model part:
 }
 ```
 
-It shares all machinery with `SuperResolutionProcess` (which is the two-model-part,
-upscaling variant of the same idea — see [Super Resolution](../Super_Resolution/Super_Resolution.html)).
+It shares all machinery with `SuperResolutionProcess` (which is the two-model-part, upscaling variant of the same idea — see [Super Resolution](../Super_Resolution/Super_Resolution.html)).
 
 ![An FNO surrogate trained on real Kratos ConvectionDiffusion solves, deployed with GridInferenceProcess, against the Kratos solve it approximates](images/fno_thermal_comparison.png)
 
@@ -152,12 +161,7 @@ Each field above is a genuine mesh-aware render — real element connectivity vi
 
 ## Transient surrogates
 
-`TimeSeriesInferenceProcess` runs an autoregressive next-state surrogate inside a
-transient analysis: it keeps a rolling history of the last `history_size` gathered
-input states (appended each sampled step, **before** predicting) and, once the
-history is full, feeds the model the window `(N, K·W_in)` — history concatenated
-along channels, oldest first — expecting the next state `(N, W_out)` back. During the
-first `K−1` sampled steps it only warms up (logged, nothing written).
+`TimeSeriesInferenceProcess` runs an autoregressive next-state surrogate inside a transient analysis: it keeps a rolling history of the last `history_size` gathered input states (appended each sampled step, **before** predicting) and, once the history is full, feeds the model the window `(N, K·W_in)` — history concatenated along channels, oldest first — expecting the next state `(N, W_out)` back. During the first `K−1` sampled steps it only warms up (logged, nothing written).
 
 ```json
 {
@@ -241,44 +245,46 @@ When both flowfields live on the same mesh the blend is computed locally with up
 
 ## Serving through Triton Inference Server
 
-`triton_export.ExportTritonModelRepository(model, sample_inputs, settings)`
-turns a trained surrogate into inference-as-a-service. Triton loads a directory
-tree, so the exporter writes exactly that:
+`triton_export.ExportTritonModelRepository(model, sample_inputs, settings)` turns a trained surrogate into inference-as-a-service. Triton loads a directory tree, so the exporter writes exactly that:
 
 ```
 <repository>/<model_name>/config.pbtxt
 <repository>/<model_name>/<version>/model.onnx     # or model.pt
 ```
 
-and `TritonInferenceProcess` then calls the running server from inside the
-solution loop — same gather/split contract as every other deployment process,
-but the forward pass is an RPC, so the solver host needs neither model weights
-nor a GPU. `tritonclient` is an optional, lazily imported dependency (note that
-a `tritonclient` installed *without* its protocol extra raises `RuntimeError`,
-not `ImportError` — the bridge translates that into the usual actionable
-message), and `SetClient()` injects a pre-built or stub client.
+and `TritonInferenceProcess` then calls the running server from inside the solution loop — same gather/split contract as every other deployment process, but the forward pass is an RPC, so the solver host needs neither model weights nor a GPU. `tritonclient` is an optional, lazily imported dependency (note that a `tritonclient` installed *without* its protocol extra raises `RuntimeError`, not `ImportError` — the bridge translates that into the usual actionable message), and `SetClient()` injects a pre-built or stub client.
 
 Two choices in the generated config are worth understanding:
 
-- **`max_batch_size: 0`.** Triton's batch axis assumes the leading dimension is
-  a sample index it may freely stack; here it is the *entity* count of one
-  Kratos case. Declaring 0 disables batching, which makes the declared `dims`
-  the full tensor shape — with `-1` on the entity axis so any mesh size is
-  served. `dynamic_batching` is refused in that mode (there is no batch axis to
-  fill), and only becomes meaningful if you deliberately export a batched model.
-- **ONNX goes through `torch.onnx.export`, not physicsnemo's
-  `export_to_onnx_stream`.** The upstream helper exposes no `dynamic_axes`,
-  `input_names` or `output_names`, so it would freeze the entity count into the
-  served graph (and it runs the model twice per call);
-  `training_utils.ExportOnnxModel` remains the right tool for the fixed-size
-  local artifact `OnnxInferenceProcess` consumes.
+- **`max_batch_size: 0`.** Triton's batch axis assumes the leading dimension is a sample index it may freely stack; here it is the *entity* count of one Kratos case. Declaring 0 disables batching, which makes the declared `dims` the full tensor shape — with `-1` on the entity axis so any mesh size is served. `dynamic_batching` is refused in that mode (there is no batch axis to fill), and only becomes meaningful if you deliberately export a batched model.
+- **ONNX goes through `torch.onnx.export`, not physicsnemo's `export_to_onnx_stream`.** The upstream helper exposes no `dynamic_axes`, `input_names` or `output_names`, so it would freeze the entity count into the served graph (and it runs the model twice per call); `training_utils.ExportOnnxModel` remains the right tool for the fixed-size local artifact `OnnxInferenceProcess` consumes.
 
-Tensor names come from the model card, so the served names match the fields the
-Kratos side gathers, and the card is copied next to the served artifact.
+Tensor names come from the model card, so the served names match the fields the Kratos side gathers, and the card is copied next to the served artifact.
 
-The server itself is external and not part of the test environment, so the
-shipped tests validate the parts that can be validated honestly: the repository
-layout and a parsed-back `config.pbtxt`, the exported ONNX reproducing the torch
-model through ONNX Runtime **at a different mesh size** (which is what proves the
-dynamic axis took), and the client's request payload plus write-back pinned
-against an injected stub.
+The server itself is external and not part of the test environment, so the shipped tests validate the parts that can be validated honestly: the repository layout and a parsed-back `config.pbtxt`, the exported ONNX reproducing the torch model through ONNX Runtime **at a different mesh size** (which is what proves the dynamic axis took), and the client's request payload plus write-back pinned against an injected stub.
+
+## Calling a PhysicsNeMo NIM microservice
+
+Where Triton serves *your* trained checkpoint, a **NIM** is NVIDIA's packaged model-as-a-container (e.g. `nvcr.io/nim/nvidia/domino-automotive-aero`). `NimInferenceProcess` calls a running one from inside the solution loop — the solver host needs neither weights, nor a GPU, nor torch: the client (`deployment.nim_client`) is stdlib `urllib` + numpy.
+
+```json
+{
+    "python_module" : "nim_inference_process",
+    "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference",
+    "Parameters"    : {
+        "model_part_name"       : "Skin",
+        "base_url"              : "http://localhost:8000",
+        "stream_velocity"       : 30.0,
+        "surface_output_fields" : [
+            { "nim_key" : "pressure_surface",  "variable_name" : "PRESSURE" },
+            { "nim_key" : "wall_shear_stress", "variable_name" : "REACTION" }
+        ]
+    }
+}
+```
+
+The documented physics-NIM contract, implemented verbatim: `POST /v1/infer` (also `/v1/infer/surface`, `/v1/infer/volume`) as multipart/form-data with the geometry as an STL file field named `design_stl` (built from the model part's triangle skin by `nim_client.MakeBinaryStlBytes`) plus string form fields (`stream_velocity`, `stencil_size`, `point_cloud_size`, and free-form `extra_form_fields`); the response is a numpy `.npz`. Because the NIM samples **its own** point cloud, its points are not the mesh nodes and no exact provenance scatter exists on this path — surface outputs are mapped onto the sent surface's nodes and volume outputs onto all nodes by **nearest neighbour** (scipy `cKDTree`), and one-element outputs (`drag_force`, `lift_force`, ...) are collected into `last_scalars` and logged.
+
+Auth is worth being precise about: the NGC API key gates **pulling the container** (`docker login nvcr.io`), not calling a locally running NIM — the HTTP endpoint of a local container needs no header. A *hosted* deployment behind an authenticating gateway is served by `"api_key"` (or `"api_key_env"`), which becomes a bearer header.
+
+Honesty note: this environment has neither an NGC key nor docker, so the contract is implemented from NVIDIA's published NIM documentation and pinned against a stub transport (`SetClient`, like Triton) — the multipart payload, the auth header, the endpoints and the `.npz` decode are all asserted; the one thing no test here has seen is a live NIM. `TestNimLive` runs the moment `PHYSICSNEMO_NIM_URL` points at one, and `NimClient.IsReady()` is the first call to make against a real deployment.

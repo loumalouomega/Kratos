@@ -51,7 +51,9 @@ Settings additionally expose the EDM noise schedule (`P_mean`, `P_std`, `sigma_d
 }
 ```
 
-SongUNet-based denoisers are 2D: planar Kratos cases use the thin-axis idiom (`squeeze_axis`, see the Sequence Models page).
+SongUNet-based denoisers are 2D: planar Kratos cases use the thin-axis idiom (`squeeze_axis`, see the Sequence Models page). Genuinely volumetric grids run through `"denoiser_interface": "unet3d"` instead — see below.
+
+**Model cards.** The denoiser's card (`model_settings`) carries the `"output_normalization"` of what the ensemble emits — in the two-stage recipe, regression mean included. The ensemble mean is scaled and shifted, the spread written to the `uncertainty_fields` is **scaled only**, both per channel along axis 0 (see the [Inference](../Inference/Inference.html) page).
 
 ## Variations
 
@@ -69,7 +71,17 @@ The ensemble-mean + per-node uncertainty pattern this process introduced is now 
 
 `physicsnemo.models.dit.DiT` (diffusion transformer) plugs into the same bridge through `"denoiser_interface": "dit"` on `DiffusionInferenceProcess` (or `diffusion_utils.WrapDenoiser(dit, "dit")` in training scripts): the wrapper maps the EDM contract `net(x, img_lr, sigma)` onto `dit(x, t)` by concatenating the conditioning grid into the input channels — construct the DiT with `in_channels = C_out + C_cond` and `out_channels = C_out` — broadcasting `sigma` to the per-sample timestep tensor and casting at the float64-sampler/float32-weights boundary. RoPE, invalid-region masking and attention backends are DiT **construction** choices (`block_kwargs`/`attn_kwargs`/`attention_backend`); the wrapper only standardizes the forward call, and the raw DiT acts as the denoiser directly (no EDM pre/post-scaling), so train it through the same wrapper.
 
-Note on upstream naming: `physicsnemo.models.diffusion` was renamed to `physicsnemo.models.diffusion_unets` (`SongUNet`, `UNet`, `DhariwalUNet`, ...). There is **no** compatibility shim: `import physicsnemo.models.diffusion` raises `ModuleNotFoundError` on 2.2.0, so the old path must be updated rather than relied on. True 3D volumetric diffusion U-Nets are not in physicsnemo 2.2 — 3D grids run through non-U-Net denoisers, and the 3D U-Net path is pending upstream.
+Note on upstream naming: `physicsnemo.models.diffusion` was renamed to `physicsnemo.models.diffusion_unets` (`SongUNet`, `UNet`, `DhariwalUNet`, ...). There is **no** compatibility shim: `import physicsnemo.models.diffusion` raises `ModuleNotFoundError` on 2.2.0, so the old path must be updated rather than relied on.
+
+## Volumetric (3D) U-Net denoisers
+
+`physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D` — a genuine volumetric diffusion U-Net, under `experimental` in 2.2 — plugs in through `"denoiser_interface": "unet3d"` (or `diffusion_utils.WrapDenoiser(unet, "unet3d")` in training scripts). Three things differ from `"dit"`:
+
+- **Conditioning is native, not concatenated**: the wrapper passes the conditioning grid as the model's `TensorDict` `condition["volume"]` — construct the model with `x_channels = C_out` (its output width equals its latent width) and `vol_cond_channels = C_cond`. `sigma` broadcasts to the per-sample timestep tensor exactly as for DiT.
+- **The grid stays 5-D**: the condition is the full `(C, D, H, W)` sample — `squeeze_axis` is rejected in this mode, and each spatial extent must be a power of 2 or a multiple of `2**(num_levels - 1)` (the model validates this itself).
+- **Training selects a rank-generalized EDM loss automatically**: upstream's legacy `EDMLossSR` hard-codes the 4-D image rank (`randn([B, 1, 1, 1])`), so volumetric samples cannot broadcast against it; `TrainDiffusionModel` detects `(C, D, H, W)` samples and uses a faithful clone whose noise-level draw follows the batch rank. The 2D-only CorrDiff losses (`"regression"`/`"residual"`) reject volumetric input with a clear error.
+
+`GenerateEnsemble`, the deterministic sampler and the ensemble-mean/uncertainty scatter are rank-agnostic and work unchanged.
 
 ## CorrDiff two-stage recipe (regression + residual diffusion)
 

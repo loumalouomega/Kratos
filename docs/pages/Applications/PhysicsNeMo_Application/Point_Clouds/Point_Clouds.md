@@ -46,7 +46,8 @@ Beyond in-loop deployment, the optional `nvidia-physicsnemo-cfd` package ships c
 `physicsnemo-cfd`'s evaluation wrappers for Transolver, FLARE and GeoTransolver normalize their inputs **and** call `unscale_model_targets` on the way out. `PointCloudInferenceProcess` does neither on its own, so a pretrained checkpoint dropped into the in-loop path is mismatched at both ends and still returns finite, plausible-looking numbers.
 
 - **Outputs**: express the checkpoint's target scaling in the model card's `"output_normalization"` key — see [Inference](../Inference/Inference.html). The process then de-normalizes before writing.
-- **Inputs**: check the convention. `GatherPointCloudCoordinates` min-max normalizes per model part into `[0, 1]`, while those upstream datapipes centre on the STL centre of mass and divide by a fixed reference scale. `normalize_coordinates: false` plus a pre-scaled feed is the way to match a checkpoint that expects the latter.
+- **Inputs, fields**: express the checkpoint's feature scaling in the card's `"input_normalization"` key; the process standardizes the gathered fields before the forward pass.
+- **Inputs, coordinates**: check the convention. `GatherPointCloudCoordinates` min-max normalizes per model part into `[0, 1]`, while those upstream datapipes centre on the STL centre of mass and divide by a fixed reference scale. `normalize_coordinates: false` plus a pre-scaled feed is the way to match a checkpoint that expects the latter — the card key scales fields, never coordinates.
 
 ## DoMINO / FIGConvNet
 

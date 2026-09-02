@@ -8,31 +8,19 @@ summary:
 
 # Graph neural networks on the mesh
 
-Unstructured meshes are the native representation of a finite element model, and graph
-neural networks (`physicsnemo.models.meshgraphnet.MeshGraphNet`) operate on them
-directly — no voxelization loss, unlike the grid/superresolution path.
+Unstructured meshes are the native representation of a finite element model, and graph neural networks (`physicsnemo.models.meshgraphnet.MeshGraphNet`) operate on them directly — no voxelization loss, unlike the grid/superresolution path.
 
 ## Graph extraction (`graph_bridge.py`)
 
-`BuildGraph(model_part, field_specs=(), source_container="Elements")` returns
-`(node_features, edge_index, edge_features, node_ids)`:
+`BuildGraph(model_part, field_specs=(), source_container="Elements")` returns `(node_features, edge_index, edge_features, node_ids)`:
 
-- **Edges** are the true geometric element edges (corner-node pairs along each
-  geometry's edges — tetrahedra contribute 6, hexahedra 12, prisms 9, pyramids 8,
-  no cell diagonals), deduplicated across elements and included in **both
-  directions** (the MeshGraphNet convention). `edge_index` is `(2, E)` int64.
-- **Edge features** `(E, 4)`: relative position `x_j − x_i` plus Euclidean distance —
-  the standard MeshGraphNet edge encoding.
-- **Node features** `(N, F)`: the requested nodal fields, flattened and concatenated
-  per node (the application-wide channel convention).
+- **Edges** are the true geometric element edges (corner-node pairs along each geometry's edges — tetrahedra contribute 6, hexahedra 12, prisms 9, pyramids 8, no cell diagonals), deduplicated across elements and included in **both directions** (the MeshGraphNet convention). `edge_index` is `(2, E)` int64.
+- **Edge features** `(E, 4)`: relative position `x_j − x_i` plus Euclidean distance — the standard MeshGraphNet edge encoding.
+- **Node features** `(N, F)`: the requested nodal fields, flattened and concatenated per node (the application-wide channel convention).
 
-`ScatterNodeFeatures` writes per-node predictions back (exact, same-mesh bijection).
-`ToPyGGraph(edge_index, num_nodes)` produces the `torch_geometric.data.Data` object
-MeshGraphNet's forward expects.
+`ScatterNodeFeatures` writes per-node predictions back (exact, same-mesh bijection). `ToPyGGraph(edge_index, num_nodes)` produces the `torch_geometric.data.Data` object MeshGraphNet's forward expects.
 
-**Extra optional dependency**: running MeshGraphNet requires PyTorch Geometric and
-torch_scatter (`pip install torch_geometric torch_scatter`) on top of
-torch/physicsnemo. Graph extraction itself needs neither.
+**Extra optional dependency**: running MeshGraphNet requires PyTorch Geometric and torch_scatter (`pip install torch_geometric torch_scatter`) on top of torch/physicsnemo. Graph extraction itself needs neither.
 
 ![MeshGraphNet training loss on a real element-edge mesh graph](images/training_loss.png)
 
@@ -57,9 +45,9 @@ torch/physicsnemo. Graph extraction itself needs neither.
 }
 ```
 
-The graph topology is extracted once in `ExecuteInitialize`; node features are
-re-gathered per execution. Set `"update_edge_features": true` for moving meshes
-(ALE/Lagrangian) so relative positions/distances track the deforming geometry.
+The graph topology is extracted once in `ExecuteInitialize`; node features are re-gathered per execution. Set `"update_edge_features": true` for moving meshes (ALE/Lagrangian) so relative positions/distances track the deforming geometry.
+
+**Model cards.** A card's `"output_normalization"` is applied to the `(N, C_out)` prediction before `ScatterNodeFeatures` writes it, in the concatenated `output_fields` order (see the [Inference](../Inference/Inference.html) page).
 
 ## GraphCast grid surrogates
 
@@ -72,9 +60,7 @@ re-gathered per execution. Set `"update_edge_features": true` for moving meshes
 
 ## Scalable GNN variants (external-aero family)
 
-`GraphInferenceProcess` gained a `"model_interface"` setting selecting how the
-loaded model is called, so the scalable MeshGraphNet family deploys through the
-same bridge:
+`GraphInferenceProcess` gained a `"model_interface"` setting selecting how the loaded model is called, so the scalable MeshGraphNet family deploys through the same bridge:
 
 | interface | call | needs |
 |---|---|---|
@@ -83,39 +69,8 @@ same bridge:
 | `"bistride"` | `(..., graph, ms_edges, ms_ids)` | `graph.pos` + the multiscale tables |
 | `"hybrid"` | `(node_features, mesh_edge_features, world_edge_features, graph)` | proximity edges |
 
-- **Bistride multiscale** (`BiStrideMeshGraphNet`) runs a U-Net over coarsened
-  copies of the mesh graph — the scalability mechanism of the bistride/XAeroNet
-  line. `graph_bridge.BuildBistrideHierarchy(edge_index, num_nodes, positions, num_levels)`
-  builds the tables: each level two-colours every connected component by
-  breadth-first distance from a geometric-centre seed, keeps one parity class,
-  and connects the survivors through the squared adjacency. Two contract details
-  the model does not check for you: `ms_edges` has **one more entry than
-  `ms_ids`** (level 0 is the full graph), each level's edges are renumbered into
-  **that level's own node space**, and `graph.pos` is mandatory with no fallback
-  (`ToPyGGraph` now takes an optional `positions` argument; the process also
-  casts `pos` to the model dtype, since it feeds the bistride edge MLPs).
-  physicsnemo ships the same algorithm in `physicsnemo.datapipes.gnn.bsms`, but
-  that path squares the adjacency through `sparse_dot_mkl` and raises without it
-  (and without a working MKL runtime), so the bridge implements it on scipy —
-  a hard Kratos core dependency, no new optional package. It also sets the
-  adjacency diagonal before squaring: upstream's message passing derives its
-  node count from `max(edge index)`, so a level whose highest-numbered node
-  sources no edge would otherwise break, and isolated nodes would divide by a
-  zero degree.
-- **Hybrid mesh + world edges** (`HybridMeshGraphNet`) adds the MeshGraphNet
-  paper's proximity edges — nodes merely *close in space* (contact, free
-  surfaces, self-approach) rather than connected by an element.
-  `graph_bridge.BuildWorldEdges(model_part, connectivity)` builds them through
-  the shipped particle-bridge neighbour search (same `(2, E)` / `(E, 4)`
-  convention as the mesh graph, so the two compose), and `ConcatenateEdgeSets`
-  enforces the ordering the model depends on: **both edge sets live in one graph
-  object, mesh edges first**, and the model splits the concatenated set
-  positionally by row count. Getting that order backwards runs silently and
-  trains nonsense — which is why the helper exists.
-- `RunGraphForward(model, device, model_interface, ...)` is the free function
-  holding the dispatch, for callers that already have a graph in hand.
+- **Bistride multiscale** (`BiStrideMeshGraphNet`) runs a U-Net over coarsened copies of the mesh graph — the scalability mechanism of the bistride/XAeroNet line. `graph_bridge.BuildBistrideHierarchy(edge_index, num_nodes, positions, num_levels)` builds the tables: each level two-colours every connected component by breadth-first distance from a geometric-centre seed, keeps one parity class, and connects the survivors through the squared adjacency. Two contract details the model does not check for you: `ms_edges` has **one more entry than `ms_ids`** (level 0 is the full graph), each level's edges are renumbered into **that level's own node space**, and `graph.pos` is mandatory with no fallback (`ToPyGGraph` now takes an optional `positions` argument; the process also casts `pos` to the model dtype, since it feeds the bistride edge MLPs). physicsnemo ships the same algorithm in `physicsnemo.datapipes.gnn.bsms`, but that path squares the adjacency through `sparse_dot_mkl` and raises without it (and without a working MKL runtime), so the bridge implements it on scipy — a hard Kratos core dependency, no new optional package. It also sets the adjacency diagonal before squaring: upstream's message passing derives its node count from `max(edge index)`, so a level whose highest-numbered node sources no edge would otherwise break, and isolated nodes would divide by a zero degree.
+- **Hybrid mesh + world edges** (`HybridMeshGraphNet`) adds the MeshGraphNet paper's proximity edges — nodes merely *close in space* (contact, free surfaces, self-approach) rather than connected by an element. `graph_bridge.BuildWorldEdges(model_part, connectivity)` builds them through the shipped particle-bridge neighbour search (same `(2, E)` / `(E, 4)` convention as the mesh graph, so the two compose), and `ConcatenateEdgeSets` enforces the ordering the model depends on: **both edge sets live in one graph object, mesh edges first**, and the model splits the concatenated set positionally by row count. Getting that order backwards runs silently and trains nonsense — which is why the helper exists.
+- `RunGraphForward(model, device, model_interface, ...)` is the free function holding the dispatch, for callers that already have a graph in hand.
 
-The pairing is exercised on a **real FluidDynamics solve**: a lid-driven cavity
-built entirely in memory (`tests/kratos_solver_cases/fluid_case.py`, monolithic
-VMS) whose solved velocity field trains a two-level bistride surrogate for the
-pressure, which then deploys through the process unchanged.
+The pairing is exercised on a **real FluidDynamics solve**: a lid-driven cavity built entirely in memory (`tests/kratos_solver_cases/fluid_case.py`, monolithic VMS) whose solved velocity field trains a two-level bistride surrogate for the pressure, which then deploys through the process unchanged.

@@ -35,9 +35,7 @@ Serving (ONNX export and Triton) is covered in [Inference](../Inference/Inferenc
 
 ## Working with other Kratos applications
 
-Some tests and examples run **real Kratos solves** (e.g. a stationary heat-conduction
-case through `ConvectionDiffusionApplication`). They are conditioned on the compiled
-applications following the standard pattern (as used by CoSimulationApplication):
+Some tests and examples run **real Kratos solves** (e.g. a stationary heat-conduction case through `ConvectionDiffusionApplication`). They are conditioned on the compiled applications following the standard pattern (as used by CoSimulationApplication):
 
 ```python
 import KratosMultiphysics.kratos_utilities as kratos_utils
@@ -48,11 +46,7 @@ have_convection_diffusion = kratos_utils.CheckIfApplicationsAvailable(
 class TestRealSolver(...): ...
 ```
 
-Tests are always registered and skip cleanly (with an explanatory message) on builds
-that lack the required applications. The reusable in-memory thermal case powering
-these tests lives in `tests/kratos_solver_cases/thermal_case.py` (meshed with the
-core `StructuredMeshGeneratorProcess`, no `.mdpa` fixtures, solver fed through
-`"input_type": "use_input_model_part"`).
+Tests are always registered and skip cleanly (with an explanatory message) on builds that lack the required applications. The reusable in-memory thermal case powering these tests lives in `tests/kratos_solver_cases/thermal_case.py` (meshed with the core `StructuredMeshGeneratorProcess`, no `.mdpa` fixtures, solver fed through `"input_type": "use_input_model_part"`).
 
 ## Examples
 

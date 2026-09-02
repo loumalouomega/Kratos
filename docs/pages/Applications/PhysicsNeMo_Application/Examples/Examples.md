@@ -8,9 +8,7 @@ summary:
 
 # Example notebooks
 
-Runnable, CPU-only notebooks under
-`applications/PhysicsNeMoApplication/examples/notebooks/`, ordered as a learning
-path. Each states its prerequisites up front; outputs go to a local `./output/`.
+Runnable, CPU-only notebooks under `applications/PhysicsNeMoApplication/examples/notebooks/`, ordered as a learning path. Each states its prerequisites up front; outputs go to a local `./output/`.
 
 | Notebook | What it shows |
 |---|---|

@@ -90,34 +90,14 @@ The plain `ResidualEvaluator` remains the cheap non-differentiable score for cal
 
 ## Transient exact residuals
 
-The exact-residual wrapper covers one step of a transient problem at fixed
-step history, in both flavours Kratos uses:
+The exact-residual wrapper covers one step of a transient problem at fixed step history, in both flavours Kratos uses:
 
-- **Element-integrated time stepping** (ConvectionDiffusion's transient solver):
-  nothing changes. That solver installs the *static* scheme as a deliberate
-  "fake" scheme because its elements integrate in time themselves, reading
-  `DELTA_TIME`/`THETA` from `ProcessInfo` and the previous state from the
-  solution-step buffer — so `TangentAssembler(model_part)` assembles the
-  dynamic residual and its consistent tangent unchanged.
-- **Displacement schemes** (Bossak/Newmark/BDF, i.e. structural dynamics):
-  construct with `TangentAssembler(model_part, scheme=Kratos.ResidualBasedBossakDisplacementScheme(-0.3))`
-  and call `assembler.InitializeSolutionStep()` **once per time step**. That
-  call is not optional bookkeeping: the schemes compute their integration
-  coefficients (`c0 = 1/(β Δt²)`, `c1 = γ/(β Δt)`, …) there, so assembling
-  without it uses stale ones. The assembler then refreshes the scheme's derived
-  `VELOCITY`/`ACCELERATION` from the written DOFs before every assembly
-  (`scheme.Update` with a zero increment) — otherwise a freshly written `u`
-  would be mixed with the previous step's derivatives.
+- **Element-integrated time stepping** (ConvectionDiffusion's transient solver): nothing changes. That solver installs the *static* scheme as a deliberate "fake" scheme because its elements integrate in time themselves, reading `DELTA_TIME`/`THETA` from `ProcessInfo` and the previous state from the solution-step buffer — so `TangentAssembler(model_part)` assembles the dynamic residual and its consistent tangent unchanged.
+- **Displacement schemes** (Bossak/Newmark/BDF, i.e. structural dynamics): construct with `TangentAssembler(model_part, scheme=Kratos.ResidualBasedBossakDisplacementScheme(-0.3))` and call `assembler.InitializeSolutionStep()` **once per time step**. That call is not optional bookkeeping: the schemes compute their integration coefficients (`c0 = 1/(β Δt²)`, `c1 = γ/(β Δt)`, …) there, so assembling without it uses stale ones. The assembler then refreshes the scheme's derived `VELOCITY`/`ACCELERATION` from the written DOFs before every assembly (`scheme.Update` with a zero increment) — otherwise a freshly written `u` would be mixed with the previous step's derivatives.
 
-The builder assembles `K_eff = K + M(1−α)c₀ + D c₁` and `BuildRHS` the dynamic
-residual, so the sign convention is unchanged: `∂b/∂u = −(masked K_eff)` at
-fixed history, because velocity and acceleration are affine in the current
-displacement. Both statements are pinned by tests on real transient solves
-(`tests/test_differentiable_residual.py`), including a gradcheck through
-Bossak's effective tangent.
+The builder assembles `K_eff = K + M(1−α)c₀ + D c₁` and `BuildRHS` the dynamic residual, so the sign convention is unchanged: `∂b/∂u = −(masked K_eff)` at fixed history, because velocity and acceleration are affine in the current displacement. Both statements are pinned by tests on real transient solves (`tests/test_differentiable_residual.py`), including a gradcheck through Bossak's effective tangent.
 
-`solver_residuals.BuildResidualEvaluator(model_part, scheme=...)` takes the same
-optional scheme for non-differentiable scoring.
+`solver_residuals.BuildResidualEvaluator(model_part, scheme=...)` takes the same optional scheme for non-differentiable scoring.
 
 ## Cross-validation against Kratos's own adjoint
 

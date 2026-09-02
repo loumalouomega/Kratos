@@ -8,18 +8,11 @@ summary: One surrogate, end to end - export from a real solve, train, save with 
 
 # From scratch
 
-This walks the whole path once, naming the exact module at every step. It is
-deliberately the *simplest* version of each: a plain MLP, nodal fields, no
-uncertainty, no distribution. Everything else in this documentation is a
-variation on these five steps.
+This walks the whole path once, naming the exact module at every step. It is deliberately the *simplest* version of each: a plain MLP, nodal fields, no uncertainty, no distribution. Everything else in this documentation is a variation on these five steps.
 
-If PhysicsNeMo itself is new to you, read
-[PhysicsNeMo Basics](../PhysicsNeMo_Basics/Overview.html) first. If you want to
-know where a module lives, [Where things live](Module_Map.html).
+If PhysicsNeMo itself is new to you, read [PhysicsNeMo Basics](../PhysicsNeMo_Basics/Overview.html) first. If you want to know where a module lives, [Where things live](Module_Map.html).
 
-**Prerequisites:** a Kratos build with this application and a solver
-application (the examples below use `ConvectionDiffusionApplication`), plus
-`pip install torch nvidia-physicsnemo`.
+**Prerequisites:** a Kratos build with this application and a solver application (the examples below use `ConvectionDiffusionApplication`), plus `pip install torch nvidia-physicsnemo`.
 
 ## The shape of it
 
@@ -33,9 +26,7 @@ application (the examples below use `ConvectionDiffusionApplication`), plus
 
 ## 1. Export training data from a real solve
 
-Attach `dataset_export_process` to a solve you already have. It writes one
-`.npz` per step with the fields you name, and imports no torch — you can run
-this step on a machine with no ML stack at all.
+Attach `dataset_export_process` to a solve you already have. It writes one `.npz` per step with the fields you name, and imports no torch — you can run this step on a machine with no ML stack at all.
 
 ```json
 {
@@ -53,16 +44,11 @@ this step on a machine with no ML stack at all.
 }
 ```
 
-Run the solve — ideally several, sweeping whatever you want the surrogate to
-generalize over (a boundary condition, a material parameter, a load). One solve
-gives you one sample; a surrogate needs a family.
+Run the solve — ideally several, sweeping whatever you want the surrogate to generalize over (a boundary condition, a material parameter, a load). One solve gives you one sample; a surrogate needs a family.
 
-The field keys in the resulting files are `"<VARIABLE>__<location>"`, e.g.
-`"TEMPERATURE__node_historical"`. You will need them in the next step.
+The field keys in the resulting files are `"<VARIABLE>__<location>"`, e.g. `"TEMPERATURE__node_historical"`. You will need them in the next step.
 
-*Variations:* `grid_dataset_export_process` resamples onto a voxel grid;
-`mesh_export_process` writes a `.pmsh` series; `streaming_dataset_export_process`
-skips the files entirely and trains out of the running solve.
+*Variations:* `grid_dataset_export_process` resamples onto a voxel grid; `mesh_export_process` writes a `.pmsh` series; `streaming_dataset_export_process` skips the files entirely and trains out of the running solve.
 
 ## 2. Train
 
@@ -89,19 +75,11 @@ history = training_utils.TrainModel(model, dataset, Kratos.Parameters("""{
 }"""))
 ```
 
-`CreateNpzDataset` yields `(inputs, targets)` as `(n_entities, width)` float32
-tensors — **the same layout `inference_process` will feed the model at
-deployment**. That correspondence is the whole reason the pieces fit together;
-if you build a dataset by hand, match it.
+`CreateNpzDataset` yields `(inputs, targets)` as `(n_entities, width)` float32 tensors — **the same layout `inference_process` will feed the model at deployment**. That correspondence is the whole reason the pieces fit together; if you build a dataset by hand, match it.
 
-A `torch.nn.Module` is fine here. Use a `physicsnemo.Module` (see
-[Models](../PhysicsNeMo_Basics/Models.html)) when you want the architecture to
-travel in the checkpoint.
+A `torch.nn.Module` is fine here. Use a `physicsnemo.Module` (see [Models](../PhysicsNeMo_Basics/Models.html)) when you want the architecture to travel in the checkpoint.
 
-*Variations:* `extra_loss_terms=` adds a physics residual to the objective
-([Symbolic and physics](../PhysicsNeMo_Basics/Symbolic_And_Physics.html));
-`epoch_callbacks=` lets you score the surrogate against the real PDE residual
-while it trains.
+*Variations:* `extra_loss_terms=` adds a physics residual to the objective ([Symbolic and physics](../PhysicsNeMo_Basics/Symbolic_And_Physics.html)); `epoch_callbacks=` lets you score the surrogate against the real PDE residual while it trains.
 
 ## 3. Save it — with a card
 
@@ -114,19 +92,11 @@ card = {
 checkpoint_type = training_utils.SaveTrainedModel(model, "surrogate.pt", card=card)
 ```
 
-**Do not skip the card.** It writes `surrogate.pt.card.json` next to the
-checkpoint, recording what the channels mean, and every deployment process
-validates its configuration against it. If you trained on normalized targets,
-add `"output_normalization"` to the card — the deployment path then inverts the
-scaling for you, instead of writing normalized numbers onto a physical variable
-where they look plausible and are wrong by the training scaling.
+**Do not skip the card.** It writes `surrogate.pt.card.json` next to the checkpoint, recording what the channels mean, and every deployment process validates its configuration against it. If you trained on normalized targets, add `"output_normalization"` to the card — the deployment path then inverts the scaling for you, instead of writing normalized numbers onto a physical variable where they look plausible and are wrong by the training scaling. If you standardized the inputs too, add `"input_normalization"` the same way (`model_registry.MakeMeanStdNormalization(mean, std)` builds either entry) and the deployment path standardizes what it feeds the model.
 
 ## 4. Deploy it inside a solve
 
-Attach `inference_process` to the analysis you want to accelerate. It gathers
-the input fields, runs a no-grad forward pass, and writes the output back onto
-real Kratos variables — after which nothing downstream can tell a predicted
-value from a solved one.
+Attach `inference_process` to the analysis you want to accelerate. It gathers the input fields, runs a no-grad forward pass, and writes the output back onto real Kratos variables — after which nothing downstream can tell a predicted value from a solved one.
 
 ```json
 {
@@ -142,11 +112,7 @@ value from a solved one.
 }
 ```
 
-*Variations:* `hybrid_initialization_process` warm-starts the solver from the
-prediction instead of replacing it — often the better trade, since you keep the
-solver's convergence guarantee and only spend fewer iterations getting there.
-For meshes, grids, point clouds or time series, swap in the matching process
-from [Where things live](Module_Map.html).
+*Variations:* `hybrid_initialization_process` warm-starts the solver from the prediction instead of replacing it — often the better trade, since you keep the solver's convergence guarantee and only spend fewer iterations getting there. For meshes, grids, point clouds or time series, swap in the matching process from [Where things live](Module_Map.html).
 
 ## 5. Decide whether to believe it
 
@@ -172,11 +138,8 @@ A surrogate that runs is not a surrogate that works.
 
 Then, when the answer matters:
 
-- **error bars** — the `"uncertainty"` block on any deployment process
-  (MC dropout, a checkpoint ensemble, or a GP head);
-- **a guard** — `"ood_guard"`, calibrated on the training inputs by `TrainModel`
-  and checked per inference, so an input far outside the training distribution
-  is flagged rather than silently extrapolated;
+- **error bars** — the `"uncertainty"` block on any deployment process (MC dropout, a checkpoint ensemble, or a GP head);
+- **a guard** — `"ood_guard"`, calibrated on the training inputs by `TrainModel` and checked per inference, so an input far outside the training distribution is flagged rather than silently extrapolated;
 - **calibration metrics** — whether those error bars are honest at all.
 
 See [Uncertainty](../Uncertainty/Uncertainty.html).
