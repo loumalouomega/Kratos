@@ -72,6 +72,12 @@ fields.value                          # J
 fields.nodal["SHAPE_SENSITIVITY"]     # (n_nodes, 3) dJ/dX
 ```
 
+
+<p align="center">
+    <img src="images/adjoint_designs.png" alt="The thermal case on its initial mesh and on an FFD-deformed design, coloured by temperature"/>
+</p>
+<p align="center">Figure 2: Notebook 19 - the design being differentiated: the initial mesh and an FFD-deformed one, each with its solved temperature (J is its sum).</p>
+
 ## The row-order contract
 
 Kratos hands out `{entity_id: value}` **dicts**. A dict carries no order, and its iteration order is the *adjoint* model part's, which need not be the primal's. `EvaluateResponse` converts by id:

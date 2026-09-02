@@ -31,6 +31,12 @@ torch_bridge.TorchToKratosTensor(tensor, ta)     # StoreData() writes back to th
 
 The `GetTensorAdaptor` factory (`utilities/tensor_adaptor_dataset_utils.py`) builds the right adaptor from a data-location string: `node_historical`, `node_non_historical`, `element`, `condition`, `element_gauss_point`, `condition_gauss_point`. Gauss-point locations are read-only (a Kratos core restriction).
 
+
+<p align="center">
+    <img src="images/nodes_render.png" alt="The ten nodes of notebook 01 rendered with pyvista, coloured by the VELOCITY_X written back through the adaptor and by the PRESSURE of the last exported sample"/>
+</p>
+<p align="center">Figure 2: What the bridge moved in notebook 01, rendered on the nodes themselves (pyvista through the core bridge).</p>
+
 ## Exporting training datasets
 
 `DatasetExportProcess` writes one `.npz` file per sampled step, with one array per requested field (keys `<VARIABLE>__<location>`) plus `TIME`/`STEP`:

@@ -60,6 +60,12 @@ SongUNet-based denoisers are 2D: planar Kratos cases use the thin-axis idiom (`s
 
 **Model cards.** The denoiser's card (`model_settings`) carries the `"output_normalization"` of what the ensemble emits — in the two-stage recipe, regression mean included. The ensemble mean is scaled and shifted, the spread written to the `uncertainty_fields` is **scaled only**, both per channel along axis 0 (see the [Inference](../Inference/Inference.html) page).
 
+
+<p align="center">
+    <img src="images/diffusion_mesh.png" alt="Blurred condition, diffusion ensemble mean, sharp truth and ensemble std on the mesh"/>
+</p>
+<p align="center">Figure 2: Notebook 09 - what DiffusionInferenceProcess read and wrote, on the mesh: condition, ensemble mean, truth and the per-node standard deviation.</p>
+
 ## Variations
 
 The process is agnostic to what the condition channels mean:
@@ -98,6 +104,12 @@ CorrDiff/StormCast-style downscaling splits the prediction: a deterministic **re
 - **Inference**: `DiffusionInferenceProcess` gains an optional `"regression_settings"` block (`model_settings`-shaped, loaded through the model registry with card checks); when present, `RunRegressionMean`'s prediction is added to the generated ensemble **before** the mean/std are taken — the mean shifts by the regression stage, the ensemble spread stays the denoiser's, exactly CorrDiff inference. Pinned by a test asserting the with-regression run differs from the plain run (same sampler seed) by exactly the scattered regression mean.
 
 Static/invariant conditioning — topography-like fields for `WindEngineeringApplication`/`DamApplication` cases — is just an extra `input_fields` entry (a nodal field that never changes).
+
+
+<p align="center">
+    <img src="images/corrdiff_mesh.png" alt="Blurred condition, CorrDiff two-stage mean, sharp truth and residual ensemble std on the mesh"/>
+</p>
+<p align="center">Figure 3: Notebook 15 - the two-stage recipe on the same case: the regression mean plus the residual ensemble sharpens the condition; the residual spread is the uncertainty.</p>
 
 ## Subsurface inversion (FWI-style)
 

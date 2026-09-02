@@ -57,6 +57,12 @@ Per execution: coarse fields → coarse grid → model → fine grid → fine-me
 
 **Model cards.** A card's `"output_normalization"` (see the [Inference](../Inference/Inference.html) page) is applied to the predicted grid before it is scattered, per channel along axis 0 — the grid layout puts channels first, where the row-ordered writers put them last. `GridInferenceProcess` inherits the same path.
 
+
+<p align="center">
+    <img src="images/sr_meshes.png" alt="The coarse tetrahedral mesh with its input field, the fine mesh with the SRResNet output, and the fine mesh with the exact field"/>
+</p>
+<p align="center">Figure 3: Notebook 05 - both meshes rendered through the core pyvista bridge: the coarse input, the superresolved field on the fine mesh, and the exact field.</p>
+
 ## Accuracy notes
 
 - Mesh→grid sampling and grid→mesh scatter are both **exact for linear fields**; the test suite asserts a full coarse-mesh → grid → trilinear-upsample → fine-mesh chain reproduces a linear field to ~1e-8.

@@ -54,6 +54,12 @@ The graph topology is extracted once in `ExecuteInitialize`; node features are r
 
 **Model cards.** A card's `"output_normalization"` is applied to the `(N, C_out)` prediction before `ScatterNodeFeatures` writes it, in the concatenated `output_fields` order (see the [Inference](../Inference/Inference.html) page).
 
+
+<p align="center">
+    <img src="images/mgn_mesh.png" alt="The target field and the MeshGraphNet prediction on the tetrahedral mesh whose edges formed the graph"/>
+</p>
+<p align="center">Figure 2: Notebook 06 - the target and the GraphInferenceProcess output on the mesh whose element edges were the graph.</p>
+
 ## GraphCast grid surrogates
 
 `physicsnemo.models.graphcast.GraphCastNet` is a grid-to-grid model with an internal icosahedral mesh: `forward((1, C, H, W)) → (1, C_out, H, W)`, a physicsnemo Module (`.mdlus` checkpoints work). It slots straight into the shipped grid machinery — **no new process code**:

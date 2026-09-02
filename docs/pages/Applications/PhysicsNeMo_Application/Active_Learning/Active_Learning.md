@@ -44,6 +44,12 @@ flowchart LR
 
 `SubprocessBackend` fans a labeling batch out over concurrent subprocesses with the `"max_parallel_jobs"` setting (default 1 = serial). Every sample already runs in its own isolated case directory, so parallel runs cannot collide; results come back in submission order, and failures are reported per sample without aborting the batch (the `RunCases` contract on the backend base class). The label strategy drains the whole queue into one batch before calling the backend, so a `max_parallel_jobs` of N labels N cases at a time — with an `srun` prefix in `run_command`, that is N simultaneous HPC jobs.
 
+
+<p align="center">
+    <img src="images/labels.png" alt="Three rows of nodes, one per labelled case, coloured by the PRESSURE field each Kratos run produced"/>
+</p>
+<p align="center">Figure 2: The labels Kratos produced in notebook 04 - one row of nodes per queried case.</p>
+
 ## Wiring it into a Driver
 
 ```python

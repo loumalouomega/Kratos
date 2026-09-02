@@ -54,6 +54,8 @@ Common requirements: `nvidia-physicsnemo`, `torch`, `matplotlib`; the Kratos app
 
 ## Notebooks
 
+Every notebook is committed with its outputs executed, and every one renders what it solves - the model part, the field a process wrote, the error - with pyvista through the core `KratosMultiphysics.pyvista_utilities` bridge, so the mesh and the fields are visible before any number is read. The renders are the notebook-derived figures on the topic pages.
+
 Runnable, CPU-capable, ordered as a learning path; each states its prerequisites up front and writes to a local `./output/`. They are **executed** by `tests/test_notebooks.py` on the validation suite, one test per notebook in a throwaway copy of the tree, so a changed signature breaks a test rather than rotting silently. The notebooks marked "asserts" check a reproducible numeric claim; the unseeded ones deliberately assert nothing beyond running.
 
 | Notebook | What it shows |

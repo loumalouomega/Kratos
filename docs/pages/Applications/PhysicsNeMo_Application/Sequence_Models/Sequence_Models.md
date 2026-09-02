@@ -52,6 +52,12 @@ training_utils.SaveTrainedModel(model, "rnn_surrogate.mdlus")
 
 **Model cards.** A card's `"output_normalization"` is applied to every buffered state on its way out — the whole rollout, not only the seeding step — per channel along axis 0 (see the [Inference](../Inference/Inference.html) page).
 
+
+<p align="center">
+    <img src="images/rnn_mesh.png" alt="The seed state, the RNN state after four rolled-out steps and its error on the deployment mesh"/>
+</p>
+<p align="center">Figure 2: Notebook 08 - seed state, the state the RNN rolled forward to, and the error, rendered on the deployment mesh (top view).</p>
+
 ## The thin-axis idiom for planar cases
 
 `grid_bridge` grids are 3D; planar 2D cases use a thin axis of size 2 with a bounding box slightly padded across the mesh plane (e.g. `grid_shape [32, 32, 2]`, box `z ∈ [-0.05, 0.05]`). `squeeze_axis` (dataset and process) collapses that axis by its mean before the forward pass — matching `dimension=2` models — and duplicates predictions across it on the way back.

@@ -141,6 +141,12 @@ When the predicted field is a displacement, the core `KratosMultiphysics.pyvista
 
 ![A cantilever mesh warped ×50 by the exact Kratos solve, next to the same mesh warped by an InferenceProcess-deployed surrogate's predicted MESH_DISPLACEMENT](images/deformation_comparison.png)
 
+
+<p align="center">
+    <img src="images/prediction_nodes.png" alt="The exact PRESSURE and the field InferenceProcess wrote onto the nodes at an unseen parameter, notebook 03"/>
+</p>
+<p align="center">Figure 3: Notebook 03 - the exact field and what InferenceProcess wrote onto the model part's nodes at an unseen parameter.</p>
+
 ## HybridInitializationProcess
 
 Warm-starts a solve: one forward pass in `ExecuteBeforeSolutionLoop`, writing the prediction (typically into historical solution-step variables) so the first nonlinear solve starts from the ML prediction instead of a cold state. Same settings as `InferenceProcess` minus `execution_point`/`output_interval` (it always runs exactly once). For blending an ML prediction with a second flow state (potential flow, previous solve) through `physicsnemo-cfd`'s recipes, see the delegation section below.

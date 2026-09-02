@@ -40,6 +40,12 @@ Each due step the graph is rebuilt from the **current** positions, the K-velocit
 
 ![Mean position error over a 30-step autoregressive rollout of a damped-fall particle surrogate](images/rollout_error.png)
 
+
+<p align="center">
+    <img src="images/particle_cloud.png" alt="Reference particles and the surrogate-advanced particles after thirty steps, with the surrogate trajectories"/>
+</p>
+<p align="center">Figure 2: Notebook 13 - the particle cloud after thirty autoregressive steps of ParticleInferenceProcess against the integrated reference.</p>
+
 ## Training data
 
 `torch_dataset.CreateParticleTrajectoryDataset(trajectories, history_size, delta_time)` windows `(T, N, 3)` position trajectories into `(features, acceleration)` pairs — finite-difference velocities oldest-first (exactly `BuildKinematicFeatures`'s layout) and central-difference acceleration targets — exposing per-sample positions (`dataset.positions[i]`, for graph building in the training collate) and the normalization statistics (`feature_mean/std`, `target_mean/std`). With `normalize=True` **both** are baked into the tensors, so record both in the model card — `MakeNormalizationCardEntries(dataset)` returns the `"input_normalization"`/`"output_normalization"` pair — together with `connectivity_radius` and `history_size`, so deployment matches training.

@@ -64,6 +64,12 @@ PINN convergence is stochastic — seed the training block and treat tolerances 
 
 Measured on a box stretched 4× in one axis with a harmonic solution and a field scale of 32, normalizing the residual's coordinates gave a maximum interior error of **4.29** against **0.20** when only the network's input is normalized — with a final loss two orders of magnitude higher. The solver converges either way; it simply converges to the wrong equation. `tests/test_pinn_solve_process.py::TestPinnOnANonUnitDomain` is the regression guard, and it was confirmed to fail on the pre-fix code.
 
+
+<p align="center">
+    <img src="images/pinn_nodes.png" alt="The PINN temperature on the collocation nodes of a cube and its error against the harmonic solution"/>
+</p>
+<p align="center">Figure 2: Notebook 14 - PinnSolveProcess's solution on the nodes (no elements, a mesh-free solve) and its error.</p>
+
 ## Exact residuals as loss terms (`differentiable_residual`)
 
 The roadmap long marked this "blocked: needs a documented zero-copy A/b accessor" — that gate has moved: the classic `Kratos.CompressedMatrix` exposes the CSR triple (`value_data()/index2_data()/index1_data()`, zero-copy value view) consumed by core `KratosMultiphysics.scipy_conversion_tools.to_csr`, and `ResidualBasedBlockBuilderAndSolver.Build/BuildRHS/ResizeAndInitializeVectors` are pybound (the native `CsrMatrix` with `SpMV/TransposeSpMV` is the forward-looking path). On these, `differentiable_residual` provides:
@@ -92,6 +98,12 @@ The plain `ResidualEvaluator` remains the cheap non-differentiable score for cal
 **One deliberate difference from Kratos.** `AdjointFiniteDifferencingBaseElement::CalculateSensitivityMatrix` takes a *forward* difference; this takes a central one — twice the local assemblies for about four orders of magnitude more accuracy, and still far cheaper than the global path. Measured against the per-coordinate path the field agrees to ~5e-10 on every coordinate, supports and loaded nodes included; against Kratos's own `SHAPE_SENSITIVITY` field it agrees to the forward difference's own truncation error.
 
 **Where it pays off.** The local pass is a Python loop and is not free: below a few hundred elements it can lose outright. Past that it wins, and the margin grows with the mesh — measured ~15x at 3200 2-D triangles and ~100x at 24k 3-D tetrahedra, independent of how many design parameters are involved. Notebook 17 walks the whole chain, ending in a gradient descent that lands on its target.
+
+
+<p align="center">
+    <img src="images/shape_designs.png" alt="The initial and the FFD-optimized thermal design with their solved temperature fields"/>
+</p>
+<p align="center">Figure 3: Notebook 17 - the initial and the optimized design, coloured by the solved temperature whose sum the descent drove to its target.</p>
 
 ## Transient exact residuals
 

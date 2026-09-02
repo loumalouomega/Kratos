@@ -88,3 +88,8 @@ The merged file is a plain checkpoint — `model_registry` loads it and `DominoI
 Accuracy claims for either recipe belong to NVIDIA, who describe their own fine-tuning results as preliminary and report them on 18 training samples. Nothing here reproduces or endorses a number.
 
 A worked example is in [`examples/notebooks/18_domino_finetuning.ipynb`](https://github.com/KratosMultiphysics/Kratos/blob/master/applications/PhysicsNeMoApplication/examples/notebooks/18_domino_finetuning.ipynb).
+
+<p align="center">
+    <img src="images/finetune_strip.png" alt="The surface strip of notebook 18 with the ground truth and with the fine-tuned prediction written back to PRESSURE"/>
+</p>
+<p align="center">Figure 2: Notebook 18 - the stand-in surface strip with the ground truth and the fine-tuned field written back onto PRESSURE.</p>

@@ -111,6 +111,12 @@ Rolling a one-step-trained model forward accumulates error quickly; continuing w
 
 Trajectories come from the in-memory transient cases: `tests/kratos_solver_cases/transient_harness.RunTransientAnalysis(analysis, collect=...)` runs `AnalysisStage`'s own solution loop opened up so a state is collected per converged step, with `CreateTransientThermalAnalysis` and `CreateTransientStructuralAnalysis` (implicit dynamic, Bossak) as the two cases.
 
+
+<p align="center">
+    <img src="images/cantilever_deformed.png" alt="The transient cantilever's final state warped by its displacement, undeformed shape ghosted"/>
+</p>
+<p align="center">Figure 3: Notebook 16 - the last state of the transient solve the temporal schemes train on, warped by its displacement through the core pyvista bridge.</p>
+
 ## Training from a running solve (streaming)
 
 Training data normally takes a detour through disk: `DatasetExportProcess` writes one `.npz` per step and `CreateNpzDataset` reads them back. That is the right default — samples are reusable, shuffleable and inspectable — but it forces the solve to finish before training starts and leaves files nobody keeps. `streaming_dataset` removes the detour:
