@@ -76,12 +76,12 @@ text{font-family:Helvetica,Arial,sans-serif;fill:#1f2937}
 <text x="1196" y="188" class="t">common sub-expression elimination</text>
 <text x="1196" y="208" class="t">(sympy cse) → clhsN / crhsN temporaries</text>
 <text x="1196" y="236" class="t">emits C++ assignments</text>
-<text x="1196" y="256" class="c">rLocalLHS(i,j) = …;  rLocalRHS[i] = …;</text>
+<text x="1196" y="256" class="c">rLocalLHS(i,j) += …;  rLocalRHS[i] += …;</text>
 <text x="1196" y="284" class="t">one block per (dim, nodes, normal</text>
 <text x="1196" y="304" class="t">variation, active/inactive case)</text>
-<text x="1196" y="332" class="t">case dispatch written by the script:</text>
-<text x="1196" y="352" class="c">if (rActiveInactive == N) … (frictionless)</text>
-<text x="1196" y="372" class="c">per-node ACTIVE / SLIP branches (frictional)</text>
+<text x="1196" y="332" class="t">case dispatch, per node, every family:</text>
+<text x="1196" y="352" class="c">IsNot(ACTIVE) / Is(SLIP) (+ is_objetive)</text>
+<text x="1196" y="372" class="c">RHS: false body, true forwards to it</text>
 <text x="1196" y="396" class="s">only the non-zero entries are emitted (+=)</text>
 
 <!-- arrows row A -->
@@ -104,9 +104,9 @@ text{font-family:Helvetica,Arial,sans-serif;fill:#1f2937}
 <text x="56" y="626" class="c">// replace_lhs      // replace_rhs</text>
 <text x="56" y="652" class="t">placed between the banners</text>
 <text x="56" y="672" class="c">BEGIN AD REPLACEMENT … END AD REPLACEMENT</text>
-<text x="56" y="700" class="t">first pass reads the template, later passes</text>
-<text x="56" y="720" class="t">re-read the previous generated output</text>
-<text x="56" y="744" class="s">result is copied by hand into custom_conditions/</text>
+<text x="56" y="700" class="t">all specialisations are assembled in memory</text>
+<text x="56" y="720" class="t">and the file is written once (no re-reads)</text>
+<text x="56" y="744" class="s">Generate() writes the file into custom_conditions/ directly</text>
 
 <!-- Box 6 -->
 <rect x="480" y="500" width="600" height="260" rx="8" class="box teal"/>
@@ -116,18 +116,18 @@ text{font-family:Helvetica,Arial,sans-serif;fill:#1f2937}
 <text x="1060" y="556" class="s" text-anchor="end">lines</text>
 <line x1="496" y1="562" x2="1064" y2="562" stroke="#cbd5e1"/>
 <text x="496" y="584" class="c">ALM_frictionless_mortar_contact_condition.cpp</text>
-<text x="1060" y="584" class="t" text-anchor="end">28 904</text>
+<text x="1060" y="584" class="t" text-anchor="end">22 570</text>
 <text x="496" y="608" class="c">ALM_frictionless_components_mortar_contact_condition.cpp</text>
-<text x="1060" y="608" class="t" text-anchor="end">29 155</text>
+<text x="1060" y="608" class="t" text-anchor="end">23 365</text>
 <text x="496" y="632" class="c">ALM_frictional_mortar_contact_condition.cpp</text>
-<text x="1060" y="632" class="t" text-anchor="end" style="font-weight:700;fill:#dc2626">170 787</text>
+<text x="1060" y="632" class="t" text-anchor="end" style="font-weight:700;fill:#dc2626">119 478</text>
 <text x="496" y="656" class="c">penalty_frictionless_mortar_contact_condition.cpp</text>
-<text x="1060" y="656" class="t" text-anchor="end">27 480</text>
+<text x="1060" y="656" class="t" text-anchor="end">19 972</text>
 <text x="496" y="680" class="c">penalty_frictional_mortar_contact_condition.cpp</text>
-<text x="1060" y="680" class="t" text-anchor="end">93 764</text>
+<text x="1060" y="680" class="t" text-anchor="end">70 804</text>
 <line x1="496" y1="692" x2="1064" y2="692" stroke="#cbd5e1"/>
-<text x="496" y="716" class="t">each file = template body + explicit CalculateLocalLHS/RHS</text>
-<text x="496" y="736" class="t">specialisations for every (dim, nodes, normal variation) combination</text>
+<text x="496" y="716" class="t">10 CalculateLocalLHS + 10 StaticCalculateLocalRHS specialisations</text>
+<text x="496" y="736" class="t">(5 RHS bodies for false + 5 one-line forwarders for true)</text>
 
 <!-- Box 7 -->
 <rect x="1120" y="500" width="440" height="260" rx="8" class="box amber"/>
