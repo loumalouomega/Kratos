@@ -18,7 +18,8 @@ About 15 tests require the `ConstitutiveLawsApplication` (detected at run time, 
 
 | Entry | Content |
 |---|---|
-| `test_ContactStructuralMechanicsApplication.py` | Assembles the suites (39 small, +46 nightly, +37 validation active tests; 5 validation tests commented out: Hertz sphere axisymmetric ×2, ironing ×2, multi-layer). |
+| `test_ContactStructuralMechanicsApplication.py` | Assembles the suites (40 small, +46 nightly, +37 validation active tests; 5 validation tests commented out: Hertz sphere axisymmetric ×2, ironing ×2, multi-layer). |
+| `test_symbolic_generation.py` | Guard of the sympy code generation: regenerates the `2D2N` ALM frictionless condition with `automatic_differentiation/mortar_condition_generator.py` and checks structure and numerical equivalence with the committed file (skipped when sympy is not installed). |
 | `contact_structural_mechanics_test_factory.py` | `ContactStructuralMechanicsTestFactory`: each test class names a `file_name`; the factory reads `<file_name>_parameters.json`, runs a `StructuralMechanicsAnalysis` and checks the results with `from_json_check_result_process` against `<file_name>_results.json`. `frictionless_by_components = True` switches the case to the vector-multiplier formulation (`Components*` classes). |
 | `SmallTests.py`, `NightlyTests.py`, `ValidationTests.py` | 32 / 55 / 25 factory classes. |
 | `test_check_normals_process.py`, `test_double_curvature_integration.py`, `test_dynamic_search.py`, `test_process_factory.py` | Stand-alone unit tests (normal check, exact double-curvature integration, dynamic search, process factory). |
