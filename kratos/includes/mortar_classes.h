@@ -933,7 +933,7 @@ public:
     /// The ALM parameters
     double TangentFactor = 0.0;
 
-    /// Displacements and velocities
+    /// Offset from the coordinates X1/X2 (see DerivativeData::Initialize) to the coordinates of the previous step, so that X1 + u1old is the previous position of the slave nodes (X2 + u2old the master ones). Used by the non-objective slip of the frictional conditions
     GeometryDoFMatrixSlaveType u1old;
     GeometryDoFMatrixMasterType u2old;
 
@@ -959,7 +959,9 @@ public:
 
         TangentFactor = rCurrentProcessInfo[TANGENT_FACTOR];
 
-        noalias(u1old) = MortarUtilities::GetVariableMatrix<TDim,TNumNodes>(SlaveGeometry, DISPLACEMENT, 1) - MortarUtilities::GetVariableMatrix<TDim,TNumNodes>(SlaveGeometry, DISPLACEMENT, 2);
+        // The previous position minus X1 (X1 is the initial position at the first step and the previous position afterwards, see the base class), so that X1 + u1old is always the previous position and x1 - x1old the displacement increment of the step, consistently with the explicit computation of WEIGHTED_SLIP
+        const IndexType step = (rCurrentProcessInfo[STEP] == 1) ? 0 : 1;
+        noalias(u1old) = MortarUtilities::GetCoordinates<TDim,TNumNodes>(SlaveGeometry, false, 1) - MortarUtilities::GetCoordinates<TDim,TNumNodes>(SlaveGeometry, false, step);
     }
 
     /**
@@ -974,7 +976,9 @@ public:
     {
         BaseClassType::UpdateMasterPair(MasterGeometry, rCurrentProcessInfo);
 
-        noalias(u2old) = MortarUtilities::GetVariableMatrix<TDim,TNumNodesMaster>(MasterGeometry, DISPLACEMENT, 1) - MortarUtilities::GetVariableMatrix<TDim,TNumNodesMaster>(MasterGeometry, DISPLACEMENT, 2);
+        // The previous position minus X2 (see Initialize)
+        const IndexType step = (rCurrentProcessInfo[STEP] == 1) ? 0 : 1;
+        noalias(u2old) = MortarUtilities::GetCoordinates<TDim,TNumNodesMaster>(MasterGeometry, false, 1) - MortarUtilities::GetCoordinates<TDim,TNumNodesMaster>(MasterGeometry, false, step);
     }
 
     ///@}
