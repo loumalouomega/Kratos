@@ -54,7 +54,7 @@ The Python layer of the application: the contact solvers (thin extensions of the
 | `contact_remesh_mmg_process.py` | `ContactRemeshMmgProcess` | – | MMG remeshing adapted to contact (metric on stress / contact pressure / strain energy; needs `MeshingApplication`). |
 | `basic_mapping_process.py` | `BasicMappingProcess` | – | Thin wrapper over `SimpleMortarMapperProcess` with interval support. |
 | `replace_properties_process.py` | `ReplacePropertiesProcess` | – | Reloads materials from a JSON at a given interval. Note: its default-settings string contains `"reinitialize_entities" : false.` (period instead of comma), which fails to parse when the defaults are used. |
-| `custom_sympy_fe_utilities.py` | functions | – | Symbolic helpers for the code generators of `../automatic_differentiation/` (sympy 1.2). |
+| `custom_sympy_fe_utilities.py` | functions | – | Symbolic helpers for the code generators of `../automatic_differentiation/` (DoF-dependency injection, replacement of the derivative nodes by symbols, C++ output with collected factors), on top of the core `sympy_fe_utilities.py`. Any modern sympy. |
 
 ## Full documentation
 
