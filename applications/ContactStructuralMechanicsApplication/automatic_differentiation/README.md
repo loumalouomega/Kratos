@@ -1,63 +1,61 @@
 # Automatic differentiation of the mortar contact conditions
 
-The `CalculateLocalLHS` / `CalculateLocalRHS` methods of the ALM and penalty mortar contact conditions are **generated** by the sympy scripts of this folder: each generator writes the Galerkin functional of one contact state, differentiates it symbolically with respect to the test functions and the degrees of freedom, and prints C++ code into a template. The derivatives of the mortar operators, dual shape functions and normals are *not* differentiated symbolically — they are declared as functions of the DoFs ("AD exceptions") and replaced by the arrays that `DerivativesUtilities` fills at run time (thesis Appendix C).
+The `CalculateLocalLHS` / `StaticCalculateLocalRHS` methods of the ALM and penalty mortar contact conditions are **generated** with sympy from the Galerkin functional of each contact state: the functional is differentiated symbolically with respect to the test functions (RHS) and the degrees of freedom (LHS) and printed as C++ into a template. The derivatives of the mortar operators, dual shape functions and normals are *not* differentiated symbolically — they are declared as functions of the DoFs ("AD exceptions") and replaced by the arrays that `DerivativesUtilities` fills at run time (thesis Appendix C).
 
 ![Automatic differentiation pipeline](../../../docs/pages/Applications/Contact_Structural_Mechanics_Application/Theory/images/csma_ad_pipeline.svg)
 
-## Folders
+## Layout
 
-| Folder | Generator | Template | Generated file (in `../custom_conditions/`) | Notes |
-|---|---|---|---|---|
-| `ALM_frictionless_mortar_condition/` | `generate_frictionless_mortar_condition.py`, `generate_frictionless_mortar_condition_non_zero.py` | `ALM_frictionless_mortar_contact_condition_template.cpp` | `ALM_frictionless_mortar_contact_condition.cpp` | scalar multiplier; theory note `alm_frictionless_mortar_contact_condition.tex` |
-| `ALM_frictionless_components_mortar_condition/` | `generate_frictionless_components_mortar_condition.py`, `..._non_zero.py` | `ALM_frictionless_components_mortar_contact_condition_template.cpp` | `ALM_frictionless_components_mortar_contact_condition.cpp` | vector multiplier, tangential part penalised |
-| `ALM_frictional_mortar_condition/` | `generate_frictional_mortar_condition.py` | `ALM_frictional_mortar_contact_condition_template.cpp` | `ALM_frictional_mortar_contact_condition.cpp` (~170 k lines) | five branches per node (inactive / slip / stick × objective / non-objective) |
-| `penalty_frictionless_mortar_condition/` | `generate_penalty_frictionless_mortar_condition.py`, `..._non_zero.py` | `penalty_frictionless_mortar_contact_condition_template.cpp` | `penalty_frictionless_mortar_contact_condition.cpp` | no multiplier DoFs |
-| `penalty_frictional_mortar_condition/` | `generate_penalty_frictional_mortar_condition.py` | `penalty_frictional_mortar_contact_condition_template.cpp` | `penalty_frictional_mortar_contact_condition.cpp` | three branches per node |
-| `mesh_tying_mortar_condition/` | `generate_mesh_tying_mortar_condition.py` | – | – | **legacy**: mesh tying is hand-written now; the theory note `mesh_tying_mortar_condition.tex` is still valid |
+| File / folder | Role |
+|---|---|
+| `mortar_condition_generator.py` | **Shared generator module**: symbols and kinematics (`SymbolSet`), family descriptions (`FamilySpec`: C++ preambles, active-set branch layout), differentiation, printing, assembly of the file (`Generate`) and the command line of the scripts (`Main`). |
+| `../python_scripts/custom_sympy_fe_utilities.py` | Symbolic helpers on top of the core `kratos/python_scripts/sympy_fe_utilities.py`: DoF-dependency injection, replacement of the derivative nodes by plain symbols, C++ output with collected factors. Runs on any modern sympy. |
+| `<family>/generate_<family>.py` | Thin command-line generator of one family: the **functional** of each branch (the physics) and the call to `Generate`. |
+| `<family>/<family>.ipynb` | The **documented** version of the same generator: markdown cells with the formulation (thesis equations, sign conventions, symbol table) and the same code cells as the script. Rendered by GitHub / Jupyter. |
+| `<family>/*_template.cpp` | C++ template with the `// replace_lhs` / `// replace_rhs` markers (hand-maintained, together with the headers in `../custom_conditions/`). |
+| `run_notebook.py` | Executes a notebook headlessly (standard library only; uses `nbclient` when installed). |
+| `compare_generated_conditions.py` | Numerical comparison of two generated files (evaluates every specialisation / node / branch on random inputs). Use it to verify a regeneration. |
 
-The `_non_zero` variants emit only the non-zero entries (and zero the local matrices first). The shared helpers are in `../python_scripts/custom_sympy_fe_utilities.py`, on top of the core `KratosMultiphysics.sympy_fe_utilities`.
+| Folder | Class | Generated file (in `../custom_conditions/`) | Branches per slave node |
+|---|---|---|---|
+| `ALM_frictionless_mortar_condition/` | `AugmentedLagrangianMethodFrictionlessMortarContactCondition` (scalar multiplier) | `ALM_frictionless_mortar_contact_condition.cpp` | inactive / active |
+| `ALM_frictionless_components_mortar_condition/` | `AugmentedLagrangianMethodFrictionlessComponentsMortarContactCondition` (vector multiplier, tangential part penalised) | `ALM_frictionless_components_mortar_contact_condition.cpp` | inactive / active |
+| `ALM_frictional_mortar_condition/` | `AugmentedLagrangianMethodFrictionalMortarContactCondition` | `ALM_frictional_mortar_contact_condition.cpp` (~119 k lines) | inactive / slip / stick × objective / non-objective |
+| `penalty_frictionless_mortar_condition/` | `PenaltyMethodFrictionlessMortarContactCondition` | `penalty_frictionless_mortar_contact_condition.cpp` | inactive / active |
+| `penalty_frictional_mortar_condition/` | `PenaltyMethodFrictionalMortarContactCondition` | `penalty_frictional_mortar_contact_condition.cpp` | inactive / slip / stick |
+| `mesh_tying_mortar_condition/` | – | – | **legacy**: mesh tying is hand-written now; only the old generator and the theory note `mesh_tying_mortar_condition.tex` are kept |
 
 ## How the generation works
 
-1. For every geometry pair (`2D2N`, `3D3N`, `3D4N`, `3D3N4N`, `3D4N3N`), every normal-variation mode (`TNormalVariation` false/true) and every active/inactive (frictional: active/stick/slip) pattern of the slave nodes, the script defines the symbols `u1, u2, X1, X2` (displacements and reference coordinates), the test functions `w1, w2, wLM…`, the multipliers, `NormalSlave`, `DOperator`, `MOperator` (+ `DOperatorold`, `MOperatorold` for friction) and the parameters `DynamicFactor`, `PenaltyParameter`, `ScaleFactor`, `TangentFactor`, `mu`.
-2. `DefineDofDependencyMatrix` makes `DOperator`, `MOperator` (and `NormalSlave` when the normal variation is on) depend on the DoFs, so that their derivatives appear as symbols.
-3. The functional of the state is assembled (e.g. active node: `DynamicFactor·(ScaleFactor·λn + ε·gn)·n·(D w1 − M w2) + ScaleFactor·gn·wλ`; inactive: `−ScaleFactor²/ε·λn·wλ`) and `Compute_RHS_and_LHS` differentiates it.
-4. `OutputMatrix_CollectingFactors` / `OutputVector_CollectingFactors` print C++ with common-sub-expression elimination; `DefineVariableLists` and `SubstituteIndex` rename the derivative symbols to `DeltaDOperator[i]`, `DeltaMOperator[i]`, `DeltaNormalSlave[i]`.
-5. The code is inserted at the markers `// replace_lhs` / `// replace_rhs` (between the `BEGIN AD REPLACEMENT` / `END AD REPLACEMENT` banners) of the template; each further combination re-reads the produced file, so the result holds one explicit specialisation per combination, dispatched at run time by `rActiveInactive` (`2^i` encoding of the `ACTIVE` flags, `3^i` for the frictional active/stick/slip states).
+1. For every geometry pair (`2D2N`, `3D3N`, `3D4N`, `3D3N4N`, `3D4N3N`) and every value of `TNormalVariation`, `SymbolSet` defines the symbols `u1, u2, X1, X2` (displacements and coordinates), the test functions `w1, w2, wLM`, the multipliers, `NormalSlave`, `TangentSlave`, `DOperator`, `MOperator` (+ `u1old, u2old, DOperatorold, MOperatorold` for friction), the parameters `DynamicFactor`, `PenaltyParameter`, `ScaleFactor`, `TangentFactor`, `mu`, and the derived quantities (weighted gap, multiplier components, objective / non-objective slips).
+2. `DefineDofDependencyMatrix` makes `DOperator`, `MOperator` (and `NormalSlave` when the normal variation is on) undefined functions of the DoFs, so that their derivatives appear as `Derivative` nodes.
+3. For every slave node and every active-set branch the family functional is evaluated and `Compute_RHS_and_LHS` differentiates it (`r = ∂R/∂w`, `K = −∂r/∂d`, DoFs ordered `[master displacements, slave displacements, multipliers]`).
+4. `BuildDependencyReplacement` / `ReplaceDependenciesBySymbols` map `F_i_j(dofs)` to `F_i_j` and `Derivative(F_i_j(dofs), dof_k)` to `DeltaF_k_i_j`; `Output*_CollectingFactorsNonZero` runs `sympy.cse`, prints C++ (`std::pow`, `+=` on the non-zero entries only) and rewrites the indices as `F(i,j)`, `DeltaF[k](i,j)`, `v[i]`.
+5. The bodies are wrapped in the per-node dispatch (`if (r_geometry[i].IsNot(ACTIVE)) {…} else …`), the template parameters are substituted and everything is inserted at the markers of the template in one go. The RHS does not depend on the derivatives of the normal: `StaticCalculateLocalRHS` is generated for `TNormalVariation = false` only and the `true` specialisation is a one-line forwarder to it.
 
 ## Regenerating a condition
 
-Define dependencies into symbols, is not longer available since Sympy 1.3:
-
-https://github.com/sympy/sympy/wiki/Release-Notes-for-1.3
-
-> Symbols no longer automatically convert to functions when called, e.g., if f = Symbol('f'), f(t) is now a TypeError. To create a function, use f = Function('f') or f = symbols('f', cls=Function).
-
-To solve that temporally you can install the 1.2 version of Sympy: (in order to run the AD scripts contained on this folder)
+Requirements: Python 3 and sympy (any modern version; tested with 1.14). A compiled Kratos is not needed (the core `sympy_fe_utilities.py` is imported from the source tree when `KratosMultiphysics` is not importable).
 
 ~~~sh
-pip install sympy==1.2
+cd applications/ContactStructuralMechanicsApplication/automatic_differentiation
+# command line (any cwd works; --help lists the options)
+python3 ALM_frictional_mortar_condition/generate_frictional_mortar_condition.py
+# or the notebook, headless
+python3 run_notebook.py ALM_frictional_mortar_condition/ALM_frictional_mortar_condition.ipynb
+# quick partial run for a test
+python3 ALM_frictional_mortar_condition/generate_frictional_mortar_condition.py --combinations 2,2,2 --normal-variation false --output-dir /tmp/check
 ~~~
 
-or
+The generated file is written directly into `../custom_conditions/`. The whole ALM frictional family takes roughly one to two hours single-threaded; the frictionless families a few minutes. The five families are independent and can run in parallel. Then:
 
-~~~sh
-python3 -m pip install sympy==1.2
-~~~
+1. Compare with the previous file if the change was not meant to alter the numerics: `python3 compare_generated_conditions.py <old>.cpp ../custom_conditions/<new>.cpp` (use `--common-only` for a partial regeneration).
+2. Rebuild the application and run the C++ suite and `tests/test_ContactStructuralMechanicsApplication.py -l small` (the small suite includes `test_symbolic_generation.py`, which regenerates the ALM frictionless `2D2N` case and compares it with the committed file); the nightly and validation suites contain the multi-step frictional cases.
 
-Then, with a Kratos installation on the `PYTHONPATH` (the scripts import the application's `custom_sympy_fe_utilities`):
-
-~~~sh
-cd <family>/
-python3 generate_<family>_mortar_condition.py
-cp <family>_mortar_contact_condition.cpp ../../custom_conditions/
-~~~
-
-and rebuild the application. The headers in `custom_conditions/` are not generated and must stay consistent with the DoF ordering `[master displacements, slave displacements, multipliers]` and the symbol names used by the scripts. Run the small test suite afterwards: a wrong tangent shows up as a loss of the quadratic convergence in the convergence table.
-
-Note: the `README.md` inside `penalty_frictionless_mortar_condition/` still names the frictionless-ALM script and output; the correct files are the ones in the table above.
+The headers in `custom_conditions/` and the templates are hand-written: they must stay consistent with the DoF ordering and with the symbol names used by the module (`FamilySpec.preamble_*`).
 
 ## Full documentation
 
 - [Automatic differentiation](https://kratosmultiphysics.github.io/Kratos/pages/Applications/Contact_Structural_Mechanics_Application/Theory/Automatic_Differentiation.html) · [source](../../../docs/pages/Applications/Contact_Structural_Mechanics_Application/Theory/Automatic_Differentiation.md)
+- [Frictionless contact](../../../docs/pages/Applications/Contact_Structural_Mechanics_Application/Theory/Frictionless_Contact.md) · [Frictional contact](../../../docs/pages/Applications/Contact_Structural_Mechanics_Application/Theory/Frictional_Contact.md) (the formulations behind the functionals)
 - [Linearisation and derivatives](../../../docs/pages/Applications/Contact_Structural_Mechanics_Application/Theory/Linearisation_And_Derivatives.md) (the externally computed derivatives) · [Conditions](../../../docs/pages/Applications/Contact_Structural_Mechanics_Application/Implementation/Conditions.md)
