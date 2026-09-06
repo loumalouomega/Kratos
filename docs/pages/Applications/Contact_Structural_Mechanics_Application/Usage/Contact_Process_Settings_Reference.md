@@ -258,7 +258,7 @@ Documented with its full default block in [Mesh tying](../Theory/Mesh_Tying.html
 |---|---|
 | General frictionless contact, moderate sliding | `alm_contact_process` with `Frictionless` (scalar multiplier, smallest system, block builder). |
 | Frictionless contact with many active nodes and iterative solvers | `FrictionlessComponents` + the default `use_mixed_ulm_solver` (multipliers condensed away). |
-| Friction | `alm_contact_process` with `Frictional` (or `FrictionalPureSlip` when stick states are irrelevant); expect the buffer size to become 3. |
+| Friction | `alm_contact_process` with `Frictional` (or `FrictionalPureSlip` when stick states are irrelevant); the default buffer size of 2 is enough. |
 | Explicit dynamics, impacts | `explicit_penalty_contact_process`. |
 | Displacement-only system required, moderate accuracy on non-matching meshes | `mpc_contact_process`. |
 | Gluing non-matching meshes | `mesh_tying_process`. |

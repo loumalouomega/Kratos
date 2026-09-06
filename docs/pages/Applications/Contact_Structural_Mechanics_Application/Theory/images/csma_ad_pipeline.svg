@@ -82,7 +82,7 @@ text{font-family:Helvetica,Arial,sans-serif;fill:#1f2937}
 <text x="1196" y="332" class="t">case dispatch written by the script:</text>
 <text x="1196" y="352" class="c">if (rActiveInactive == N) … (frictionless)</text>
 <text x="1196" y="372" class="c">per-node ACTIVE / SLIP branches (frictional)</text>
-<text x="1196" y="396" class="s">_non_zero variants emit only non-zero entries</text>
+<text x="1196" y="396" class="s">only the non-zero entries are emitted (+=)</text>
 
 <!-- arrows row A -->
 <path d="M380,275 L418,275" class="ar"/>
@@ -150,9 +150,9 @@ text{font-family:Helvetica,Arial,sans-serif;fill:#1f2937}
 <!-- Notes -->
 <rect x="40" y="790" width="1520" height="110" rx="8" class="box red"/>
 <text x="56" y="816" class="hd" style="fill:#dc2626">Notes</text>
-<text x="56" y="842" class="t">• Requires sympy 1.2: the symbol-as-function auto-conversion used by the scripts was removed in sympy 1.3 (automatic_differentiation/README.md).</text>
+<text x="56" y="842" class="t">• Any modern sympy: D, M, n are sympy Functions of the DoFs; their Derivative nodes are replaced by symbols before cse (automatic_differentiation/README.md).</text>
 <text x="56" y="864" class="t">• mesh_tying_mortar_condition/ is legacy: AD was removed from mesh tying and MeshTyingMortarCondition is now hand-written (no template file).</text>
-<text x="56" y="886" class="t">• Generators: ALM_frictionless(+ _non_zero), ALM_frictionless_components(+ _non_zero), ALM_frictional, penalty_frictionless(+ _non_zero), penalty_frictional.</text>
+<text x="56" y="886" class="t">• Generators (script + notebook per family, shared mortar_condition_generator.py): ALM_frictionless, ALM_frictionless_components, ALM_frictional, penalty_frictionless, penalty_frictional.</text>
 
 <text x="40" y="940" class="foot">ContactStructuralMechanicsApplication · Kratos Multiphysics</text>
 </svg>

@@ -116,7 +116,7 @@ Defaults returned by `AuxiliaryContactSettings()` and merged into the structural
 ### Forced settings and side effects
 
 - `clear_storage` and `reform_dofs_at_each_step` are forced to `true` (`AuxiliaryValidateSettings`): the DoF set changes with the active set.
-- `buffer_size` is raised to at least 3 for frictional formulations (`AuxiliarySetSettings`), because the slip increment needs the previous configurations.
+- `buffer_size`: the default (2) is enough for every formulation, the frictional slip increment being built from the previous converged configuration (buffer position 1). Older versions raised it to 3 because the previous increment was also read; `AuxiliarySetSettings` no longer changes it.
 - `AddVariables` adds `NORMAL`, `NODAL_H`, `WEIGHTED_GAP` (and `WEIGHTED_SLIP` for frictional types) plus the multiplier variable of the formulation; `AddDofs` adds the multiplier DoFs with their reactions (`WEIGHTED_SCALAR_RESIDUAL`, `WEIGHTED_VECTOR_RESIDUAL_X/Y/Z`). See the [variables reference](../Implementation/Variables_And_Flags_Reference.html).
 - The computing model part receives the `INTERACTION` flag according to `simplified_semi_smooth_newton`.
 - `analysis_type: "linear"` with a contact `mortar_type` creates the base linear strategy (no active-set iterations); use `"non_linear"`.

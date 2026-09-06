@@ -153,7 +153,7 @@ for all slave nodes j:
 |---|---|---|
 | `WeightedGap1` | Plane vs. cylinder, 8 divisions, radius 6, angle $$\pi/6$$ (`CreateNewProblem3D`) | $$\tilde{g}_n / A_j = g_n$$ (`NORMAL_GAP` from the mapper) on every slave node with non-zero weighted gap |
 | `WeightedGap2` | Same, `STEP = 1` | Same as 1 and `WEIGHTED_SLIP = 0` |
-| `WeightedGap3`, `WeightedGap3b` | Two parallel planes, master shifted by $$\Delta x = 0.1$$ (`SimplestCreateNewProblem3D`, `SimpleCreateNewProblem3DGapGap`) | Objective slip: `WEIGHTED_SLIP` $$/ A_j$$ equals $$-\Delta x$$ in the shift direction |
+| `WeightedGap3`, `WeightedGap3b` | Two parallel planes, the slave shifted by $$\Delta x = 0.1$$ (`SimplestCreateNewProblem3D`, `SimpleCreateNewProblem3DGapGap`) | Objective slip: `WEIGHTED_SLIP` $$/ A_j$$ equals $$-\Delta x$$ in the shift direction (the slip measures the motion of the master relative to the slave, like the gap) |
 | `WeightedGap4`, `WeightedGap4b` | Same, conditions flagged `MODIFIED` | Non-objective slip gives the same $$-\Delta x$$ |
 | `WeightedGap5` | Plane vs. cylinder with master shift | Objective slip vector equals the imposed shift |
 | `WeightedGap6`, `WeightedGap7` | Plane vs. cylinder with master shift | Non-objective slip on the nodes whose gap matches the reference |

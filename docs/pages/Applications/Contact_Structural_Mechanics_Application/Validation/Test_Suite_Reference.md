@@ -37,9 +37,9 @@ Requirements: the compiled `StructuralMechanicsApplication` and `ContactStructur
 
 | Level | Added tests | Content | Typical duration |
 |---|---|---|---|
-| `small` | 39 | patch tests of every formulation, normals check, process factory | seconds |
+| `small` | 40 | patch tests of every formulation, normals check, process factory, symbolic generation guard (`test_symbolic_generation.py`, needs sympy) | seconds |
 | `nightly` | +46 (85 total) | complex geometries, non-matching and mixed meshes, Taylor and Hertz sphere, beams, integration, mapping, remeshing | minutes |
-| `validation` | +37 (122 total) | large problems: Hertz complete, large displacements, mesh moving, self-contact, multi-layer, frictional block, explicit dynamics, dynamic search | tens of minutes |
+| `validation` | +37 (123 total) | large problems: Hertz complete, large displacements, mesh moving, self-contact, multi-layer, frictional block, explicit dynamics, dynamic search | tens of minutes |
 | `all` | = nightly | alias used by the runner (`validation` also adds `all`) | |
 
 Five validation tests are registered but commented out: `TALMHertzSphereTestContact` and `TComponentsALMHertzSphereTestContact` (`# FIXME: requires axisymmetric to work (memory error)`), `TALMIroningTestContact`, `TALMIroningDieTestContact` and `TMultiLayerContactTest`. `TComponentsALMHyperSimplePatchTestWithEliminationContact` is skipped on Windows (random failure noted in the source).
