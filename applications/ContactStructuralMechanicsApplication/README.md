@@ -126,7 +126,7 @@ The theory is developed in Chapter 4 of the *PhD thesis* authored by [Vicente Ma
 | `custom_master_slave_constraints/` | `ContactMasterSlaveConstraint` (MPC route) |
 | `custom_python/` | pybind11 bindings and `ProcessFactoryUtility` |
 | `python_scripts/` | Contact solvers (static, implicit, explicit, MPC, adaptive remeshing), contact processes (ALM, penalty, explicit penalty, MPC, mesh tying), criteria factory, sympy helpers |
-| `automatic_differentiation/` | sympy generators, C++ templates and theory notes of the generated conditions (sympy 1.2) |
+| `automatic_differentiation/` | sympy generators (scripts and documented Jupyter notebooks), shared generator module, C++ templates and theory notes of the generated conditions |
 | `tests/` | Python test suites (small / nightly / validation) and C++ gtests |
 | `documents/` | Doxygen configuration |
 
