@@ -40,11 +40,11 @@ with `<geometry>` one of `2D2N` (line–line), `3D3N` (triangle–triangle), `3D
 2. computation of the dual shape-function coefficients $\mathbf{A}_e = \mathbf{D}_e \mathbf{M}_e^{-1}$ (and $\Delta\mathbf{A}_e$);
 3. Gauss integration of the mortar operators $\mathbf{D}$, $\mathbf{M}$ and, for the implicit tangent, of their derivatives $\Delta\mathbf{D}$, $\Delta\mathbf{M}$ (`DerivativesUtilities`);
 4. evaluation of the nodal state (`GetActiveInactiveValue`: $\sum_i a_i 2^i$ for frictionless/penalty, $\sum_i s_i 3^i$ with active/stick/slip for frictional);
-5. dispatch to the generated `CalculateLocalLHS` / `CalculateLocalRHS` of the family, which assemble the contribution of the augmented Lagrangian (or penalty) functional for that state.
+5. dispatch to the generated `CalculateLocalLHS` / `CalculateLocalRHS` of the family, which assemble the contribution of the augmented Lagrangian (or penalty) functional for that state. `CalculateLocalRHS` is a one-line forwarder to the public static `StaticCalculateLocalRHS`, generated only for `TNormalVariation = false` (the residual does not depend on the derivatives of the normal); the `TNormalVariation = true` specialisation forwards to the `false` one.
 
 The frictional conditions additionally keep the mortar operators of the previous converged step (`mPreviousMortarOperators`) to build the slip increment, and switch between the objective and non-objective slip measures through `OPERATOR_THRESHOLD` (flag `MODIFIED`). The residual-only path used by the search and by the explicit solver is `AddExplicitContributionOfMortarCondition` in `custom_utilities/mortar_explicit_contribution_utilities.h`.
 
-The `CalculateLocalLHS` / `CalculateLocalRHS` bodies of the ALM and penalty families are **generated** by the sympy scripts in [`../automatic_differentiation/`](../automatic_differentiation/README.md): do not edit them by hand, regenerate them.
+The `CalculateLocalLHS` / `StaticCalculateLocalRHS` bodies of the ALM and penalty families are **generated** by the sympy scripts / notebooks in [`../automatic_differentiation/`](../automatic_differentiation/README.md) (any modern sympy, no compiled Kratos needed): do not edit them by hand, regenerate them, and verify the regeneration with `automatic_differentiation/compare_generated_conditions.py`.
 
 ## Notes
 
