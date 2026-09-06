@@ -565,6 +565,54 @@ void  AddVectorToPython(pybind11::module& m)
     py::implicitly_convertible<py::list, DenseVector<bool>>();
 
     //***********************************************************************************
+#ifdef KRATOS_USE_EIGEN_BACKEND
+    // Under the Eigen backend the Vector alias is EigenVector<double>, so the
+    // (always uBLAS) DenseVector<double> is a distinct type that would otherwise
+    // not be registered. It is the storage the system vectors keep, and what they
+    // hand out through SystemVector::Data(), DistributedSystemVector::GetLocalData()
+    // and DistributedVectorImporter::ImportData(). The buffer protocol below lets it
+    // be passed wherever a Vector is expected, through the py::buffer conversion
+    // registered for Vector. Under the uBLAS backend this type IS Vector and is
+    // already registered under that name, so registering it again would be an error.
+    auto double_dense_vector_binder = CreateVectorInterface<DenseVector<double>>(m, "DenseVectorDouble");
+    double_dense_vector_binder.def(py::init<typename DenseVector<double>::size_type>());
+    double_dense_vector_binder.def(py::init<typename DenseVector<double>::size_type, double>());
+    double_dense_vector_binder.def(py::init<DenseVector<double>>());
+    double_dense_vector_binder.def(py::init( [](const py::list& input)
+    {
+        DenseVector<double> tmp(input.size());
+        for(unsigned int i=0; i<tmp.size(); ++i)
+            tmp[i] = py::cast<double>(input[i]);
+        return tmp;
+    }));
+    double_dense_vector_binder.def(py::init( [](py::buffer b)
+    {
+        py::buffer_info info = b.request();
+        KRATOS_ERROR_IF( info.format != py::format_descriptor<typename DenseVector<double>::value_type >::value ) << "Expected a double array\n";
+        KRATOS_ERROR_IF( info.ndim != 1 ) << "Buffer dimension of 1 is required, got: " << info.ndim << std::endl;
+        DenseVector<double> vec(info.shape[0]);
+
+        for( int i=0; i<info.shape[0]; ++i )
+        {
+            vec[i]= static_cast<typename DenseVector<double>::value_type *>(info.ptr)[i];
+        }
+
+        return vec;
+    }));
+    double_dense_vector_binder.def_buffer( [](DenseVector<double>& self)-> py::buffer_info
+    {
+        return py::buffer_info(
+            GetContiguousDataPointer(self), // raw storage pointer for both backends, valid (nullptr) for an empty container
+            sizeof(typename DenseVector<double>::value_type),
+            py::format_descriptor<typename DenseVector<double>::value_type>::format(),
+            1,
+        {self.size()},
+        {sizeof(typename DenseVector<double>::value_type)}
+        );
+    });
+    py::implicitly_convertible<py::list, DenseVector<double>>();
+#endif
+
     auto int_vector_binder = CreateVectorInterface<DenseVector<int>>(m, "DenseVectorInt");
     int_vector_binder.def(py::init<typename DenseVector<int>::size_type>());
     int_vector_binder.def(py::init<typename DenseVector<int>::size_type, int>());
