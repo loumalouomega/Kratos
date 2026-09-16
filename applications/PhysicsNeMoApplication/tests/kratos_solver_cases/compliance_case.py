@@ -213,13 +213,20 @@ def ConstraintChannels(divisions: int, volume_fraction: float):
     """The conditioning a generative design model is given: where the
     structure is held, where it is loaded, and how much material it may use.
 
+    The layout is DensityGrid's: the FIRST index runs along x and the second
+    along y, so the clamped edge (x = 0, see ApplyCaseData) is a row of the
+    first index and the loaded cell sits at the far x with y at mid-height.
+    Writing them the other way round transposes the conditioning against the
+    design image without changing either channel's sum, which is exactly the
+    kind of mistake a sum-only test cannot see.
+
     Returns:
         (3, divisions, divisions) float array - support mask, load mask and
         a constant volume-fraction plane.
     """
     supports = numpy.zeros((divisions, divisions))
-    supports[:, 0] = 1.0                       # the clamped edge
+    supports[0, :] = 1.0                       # the clamped edge, x = 0
     loads = numpy.zeros((divisions, divisions))
-    loads[divisions // 2, -1] = 1.0            # the loaded cell
+    loads[-1, divisions // 2] = 1.0            # the loaded cell, far x at mid-height
     fraction = numpy.full((divisions, divisions), float(volume_fraction))
     return numpy.stack([supports, loads, fraction])

@@ -150,6 +150,6 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 
 - `tests/` mirrors the sources by name: `test_<module>.py`. Subdirectories (`tests/bridges/mesh_bridge/`, `tests/active_learning/`) are discovered automatically by the suite runner.
 - `examples/notebooks/` — twenty notebooks, executed by `tests/test_notebooks.py` so a changed signature breaks a test rather than rotting.
-- The [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application) holds twenty-one fully documented use cases against real solves; both are indexed on [Examples](../Examples/Examples.html).
+- The [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application) holds twenty-six fully documented use cases against real solves; both are indexed on [Examples](../Examples/Examples.html).
 
 New here? [From scratch](From_Scratch.html) walks one path end to end. New to PhysicsNeMo itself? [PhysicsNeMo Basics](../PhysicsNeMo_Basics/Overview.html).

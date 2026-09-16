@@ -332,6 +332,47 @@ class TestGlobeOnAKratosModelPart(KratosUnittest.TestCase):
         # the inlet sits at x = 0, where the field is 0
         self.assertLess(float(mesh.cell_data["TEMPERATURE"].abs().max()), 1e-6)
 
+    def test_AKratosBuiltBoundaryForwardsThroughGlobe(self):
+        """The whole path: Kratos model part -> boundary mesh -> GLOBE.
+
+        Everything else here checks the two halves separately - the bridge
+        builds a boundary, and the forward tests run GLOBE on a hand-built
+        float32 mesh. Nothing joined them, which is exactly how a dtype
+        mismatch survived: the mesh bridge carries a boundary's POINTS as
+        Kratos doubles while its cell data is already float32, and GLOBE's
+        kernels are float32, so a Kratos-built boundary used to fail with
+        "mat1 and mat2 must have the same dtype" from deep inside a Linear,
+        naming nothing that would lead you back to the mesh.
+        """
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges import globe_bridge
+
+        meshes = globe_bridge.BuildGlobeBoundaryMeshes(
+            self.model_part, ["Inlet"], [("TEMPERATURE", "node_historical")])
+        self.assertEqual(meshes["Inlet"].points.dtype, torch.float64,
+                         "the bridge is expected to hand back Kratos doubles here; "
+                         "if that changes, this regression no longer covers anything")
+
+        torch.manual_seed(0)
+        model = GLOBE(
+            n_spatial_dims=3, output_field_ranks={"u": 0},
+            boundary_source_data_ranks={"Inlet": {"TEMPERATURE": 0}},
+            reference_length_names=["L"], reference_area=1.0,
+            n_communication_hyperlayers=1, n_latent_scalars=2, n_latent_vectors=1,
+            hidden_layer_sizes=[8], tree_build_device="cpu",
+            use_gradient_checkpointing=False)
+
+        points = numpy.array([[node.X, node.Y, node.Z]
+                              for node in self.model_part.Nodes], dtype=float)
+        prediction = globe_bridge.RunGlobeForward(
+            model, points, meshes, {"L": 1.0}, ["u"])
+
+        self.assertEqual(tuple(prediction.shape), (points.shape[0], 1))
+        self.assertTrue(bool(torch.isfinite(prediction).all()))
+        # the caller's mesh must survive untouched: the inference process
+        # caches these per node count and would otherwise be handed a mesh
+        # silently converted underneath it
+        self.assertEqual(meshes["Inlet"].points.dtype, torch.float64)
+
     def test_AnUnknownBoundaryIsReported(self):
         from KratosMultiphysics.PhysicsNeMoApplication.bridges import globe_bridge
 

@@ -161,6 +161,20 @@ def RunGlobeForward(model, coordinates, boundary_meshes, reference_lengths,
                else torch.tensor(float(value), dtype=dtype))
         for name, value in reference_lengths.items()
     }
+    # The boundary meshes need the same normalization as the query points,
+    # and a Kratos-built one arrives MIXED: the mesh bridge carries its
+    # points as Kratos doubles while _PointDataToCellData has already cast
+    # the cell data to float32. GLOBE's kernels are float32, so the points
+    # alone are enough to fail deep inside a Linear with "mat1 and mat2 must
+    # have the same dtype" - far from anything naming the mesh. Promoting
+    # the model to float64 instead does not help: its tree scatter is hard
+    # float32 and raises from index_add_. Mesh.to returns a NEW mesh, so the
+    # caller's meshes (and the inference process's per-node-count cache) are
+    # left untouched.
+    boundary_meshes = {
+        name: (mesh.to(dtype) if hasattr(mesh, "to") else mesh)
+        for name, mesh in boundary_meshes.items()
+    }
 
     context = torch.enable_grad() if enable_grad else torch.no_grad()
     with context:

@@ -92,8 +92,13 @@ class TestComplianceCase(KratosUnittest.TestCase):
 
         channels = compliance_case.ConstraintChannels(8, 0.4)
         self.assertEqual(channels.shape, (3, 8, 8))
-        self.assertEqual(channels[0][:, 0].sum(), 8.0)      # the clamped edge
+        # the channels must line up with DensityGrid's layout (first index x,
+        # second y), not merely carry the right number of ones: the clamp is
+        # the x = 0 row and the load sits at the far x, mid-height
+        self.assertEqual(channels[0][0, :].sum(), 8.0)      # the clamped edge
+        self.assertEqual(channels[0].sum(), 8.0)            # and nothing else
         self.assertEqual(channels[1].sum(), 1.0)            # one loaded cell
+        self.assertEqual(channels[1][-1, 4], 1.0)           # far x, mid-height
         numpy.testing.assert_allclose(channels[2], 0.4)     # the volume fraction
 
     def test_TheDensityGridMatchesTheElementField(self):
