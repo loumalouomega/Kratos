@@ -30,6 +30,7 @@ for node-only parts), so the mesh and the fields are visible before any number i
 | [17 — Exact shape gradients and shape optimization](17_exact_shape_gradients.ipynb) | The discretely exact `dJ/dX` of a real FEM solve from one element-local pass (`ComputeShapeSensitivityField`), the measured crossover against the per-parameter global path, `ComputeControlSensitivities` chaining it onto an FFD lattice, and a gradient descent driving the shape onto a target — validated against re-solve finite differences to ten digits |
 | [18 — Fine-tuning a pretrained DoMINO](18_domino_finetuning.ipynb) | The public `nvidia/domino_drivaerml` checkpoint loaded through `model_registry`, the de-normalization a pretrained DoMINO needs, and both adaptation recipes of `domino_finetune`: the predictor-corrector decomposition with the frozen predictor's output cached, and LoRA adapters merged back into an ordinary `.mdlus` |
 | [19 — Adjoint integration](19_adjoint_integration.ipynb) | Kratos's own adjoint stack read through `adjoint_bridge` (row order by id, never by iteration), `AdjointSensitivityProcess` putting dJ/dX on the model part so every exporter carries it, Sobolev training on the exact gradients, and `SurrogateResponseFunction` deploying the model where a Kratos response goes |
+| [20 — Molecular dynamics with a MeshGraphNet](20_lennard_jones_molecular_dynamics.ipynb) | The Lennard-Jones recipe: a velocity-Verlet reference trajectory whose central-difference targets equal its forces to round-off, `particle_bridge`'s minimum-image radius graph in a **periodic box** (`"box_size"`), `MeshGraphNet` heads for per-atom force and potential energy, and `ParticleInferenceProcess` deployment asserting the model beats the mean-force predictor |
 
 ## Environment
 
@@ -38,5 +39,5 @@ export PYTHONPATH=/path/to/Kratos/bin/Release
 export LD_LIBRARY_PATH=/path/to/Kratos/bin/Release/libs:$LD_LIBRARY_PATH
 pip install torch nvidia-physicsnemo   # optional runtime dependencies
 pip install jupyterlab matplotlib      # to run the notebooks
-pip install pyvista                    # for the mesh renders in 02, 07, 10, 11 (KratosMultiphysics.pyvista_utilities)
+pip install pyvista                    # for the renders in 02, 07, 10, 11 (KratosMultiphysics.pyvista_utilities) and the point clouds of 13 and 20
 ```
