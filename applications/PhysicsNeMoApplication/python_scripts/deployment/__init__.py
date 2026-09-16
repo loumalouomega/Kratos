@@ -25,6 +25,10 @@ Module                             Provides
                                    - calibrated error bars on any prediction
 ``ood_guard_utils``                out-of-distribution guardrails, calibrated at
                                    training time and checked per inference
+``geometry_guard_utils``           the same question asked of the *shape*: a
+                                   density model over surface descriptors,
+                                   flagging geometries outside the training
+                                   family before a prediction is trusted
 ================================== ============================================
 
 The processes that *run* these artifacts are in ``processes.inference``.
