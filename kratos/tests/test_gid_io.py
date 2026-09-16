@@ -6,6 +6,8 @@ from KratosMultiphysics.gid_output_process import GiDOutputProcess
 from KratosMultiphysics import compare_two_files_check_process
 
 import os
+import sys
+import subprocess
 
 def GetFilePath(fileName):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), fileName)
@@ -162,6 +164,108 @@ class TestGidIO(KratosUnittest.TestCase):
         self.__WriteOutput(model_part,"results_out")
 
         self.__Check("results_out.post.res","auxiliar_files_for_python_unittest/reference_files/results_out_ref.ref")
+
+    def test_gid_io_real_number_format(self):
+        """Custom real_number_format must actually reach gidpost's ASCII output.
+
+        gidpost caches each result type's number format the first time it is written in the
+        process and never re-reads it afterwards (see the caveat documented on GidIO's constructor
+        in kratos/includes/gid_io.h), so this can only be observed reliably as the very first GiD
+        write of a process -- other tests in this same file already write ASCII output with the
+        default "%g" format, which would otherwise make this test's own outcome depend on test
+        execution order. The write therefore runs in its own subprocess via an auxiliary script.
+        """
+        script = GetFilePath("auxiliar_files_for_python_unittest/gid_io/write_gid_io_with_custom_number_format.py")
+        output_file = "custom_number_format_out"
+
+        # 1/3 differs under "%g" (6 significant digits, the default) vs "%.15g"
+        subprocess.run([sys.executable, script, output_file, "%.15g"], check=True)
+
+        with open(output_file + ".post.res") as f:
+            content = f.read()
+
+        self.assertIn("0.333333333333333", content)
+
+        kratos_utils.DeleteFileIfExisting(output_file + ".post.msh")
+        kratos_utils.DeleteFileIfExisting(output_file + ".post.res")
+
+    def test_gid_io_invalid_number_format(self):
+        """GidIO must reject number formats that would overflow gidpost's fixed-size buffers or
+        that carry no printf conversion specifier, rather than passing them through."""
+        gid_mode = KratosMultiphysics.GiDPostMode.GiD_PostAscii
+        multifile = KratosMultiphysics.MultiFileFlag.SingleFile
+        deformed_mesh_flag = KratosMultiphysics.WriteDeformedMeshFlag.WriteUndeformed
+        write_conditions = KratosMultiphysics.WriteConditionsFlag.WriteConditions
+
+        with self.assertRaisesRegex(RuntimeError, "must contain a printf conversion specifier"):
+            KratosMultiphysics.GidIO("invalid_format_out", gid_mode, multifile,
+                deformed_mesh_flag, write_conditions, True, "no_percent_sign", "%.16g")
+
+        with self.assertRaisesRegex(RuntimeError, "must be non-empty"):
+            KratosMultiphysics.GidIO("invalid_format_out", gid_mode, multifile,
+                deformed_mesh_flag, write_conditions, True, "%g", "")
+
+        with self.assertRaisesRegex(RuntimeError, "shorter than 32 characters"):
+            KratosMultiphysics.GidIO("invalid_format_out", gid_mode, multifile,
+                deformed_mesh_flag, write_conditions, True, "%" + "0"*40 + "g", "%.16g")
+
+        kratos_utils.DeleteFileIfExisting("invalid_format_out.post.msh")
+
+    @KratosUnittest.skipUnless(
+        KratosMultiphysics.Registry.HasItem("libraries.gidpost_hdf5"),
+        "This test requires Kratos to be built with -DKRATOS_GIDPOST_WITH_HDF5=ON")
+    def test_gid_io_hdf5(self):
+        """GiD_PostHDF5 must actually produce an HDF5 file when Kratos is built with HDF5 support."""
+        current_model = KratosMultiphysics.Model()
+
+        model_part = self.__InitialRead(current_model)
+
+        gid_output = GiDOutputProcess(model_part,
+                                    "hdf5_out",
+                                    KratosMultiphysics.Parameters("""
+                                        {
+                                            "result_file_configuration": {
+                                                "gidpost_flags": {
+                                                    "GiDPostMode": "GiD_PostHDF5",
+                                                    "WriteDeformedMeshFlag": "WriteUndeformed",
+                                                    "WriteConditionsFlag": "WriteConditions",
+                                                    "MultiFileFlag": "SingleFile"
+                                                },
+                                                "file_label": "time",
+                                                "output_control_type": "step",
+                                                "output_interval": 1.0,
+                                                "body_output": true,
+                                                "node_output": false,
+                                                "skin_output": false,
+                                                "plane_output": [],
+                                                "nodal_results": ["DISPLACEMENT"],
+                                                "gauss_point_results": [],
+                                                "additional_list_files": []
+                                            }
+                                        }
+                                        """)
+                                    )
+
+        gid_output.ExecuteInitialize()
+        gid_output.ExecuteBeforeSolutionLoop()
+        gid_output.ExecuteInitializeSolutionStep()
+        gid_output.PrintOutput()
+        gid_output.ExecuteFinalizeSolutionStep()
+        gid_output.ExecuteFinalize()
+
+        # GidIO names GiD_PostHDF5 output the same way as GiD_PostBinary (".post.bin"); gidpost
+        # writes actual HDF5 content into it regardless of the extension.
+        hdf5_file = "hdf5_out.post.bin"
+        self.assertTrue(os.path.isfile(hdf5_file))
+
+        # HDF5's signature: https://docs.hdfgroup.org/hdf5/develop/_f_m_t3.html
+        hdf5_signature = b"\x89HDF\r\n\x1a\n"
+        with open(hdf5_file, "rb") as f:
+            self.assertEqual(f.read(len(hdf5_signature)), hdf5_signature)
+
+        kratos_utils.DeleteFileIfExisting(hdf5_file)
+        kratos_utils.DeleteFileIfExisting("python_scripts.post.lst")
+        kratos_utils.DeleteFileIfExisting("tests.post.lst")
 
     def test_DoubleFreeError(self):
         current_model = KratosMultiphysics.Model()
