@@ -55,6 +55,7 @@ class CuratorExportProcess(Kratos.Process):
             "higher_order_mode"        : "reduce",
             "curved_refinement_levels" : 2,
             "sink"              : "zarr",
+            "zarr_backend"      : "physicsnemo",
             "output_path"       : "physics_nemo_curated",
             "file_prefix"       : "mesh",
             "output_interval"   : 1,
@@ -80,6 +81,12 @@ class CuratorExportProcess(Kratos.Process):
                 f"\"curved_refinement_levels\" must be >= 1 "
                 f"[ curved_refinement_levels = {self.curved_refinement_levels} ].")
         self.sink_type = settings["sink"].GetString()
+        self.zarr_backend = settings["zarr_backend"].GetString()
+        if self.zarr_backend not in ("physicsnemo", "curator"):
+            raise ValueError(
+                f"Unsupported zarr_backend \"{self.zarr_backend}\". Use "
+                "\"physicsnemo\" (mesh.io.to_zarr, no curator install needed) or "
+                "\"curator\" (physicsnemo-curator's ETL sink).")
         if self.sink_type not in _SUPPORTED_SINKS:
             raise ValueError(
                 f"Unsupported \"sink\" \"{self.sink_type}\". "
@@ -109,6 +116,22 @@ class CuratorExportProcess(Kratos.Process):
                 self._sink = curator_bridge.CreateVtuSink(
                     self.output_path, naming_template=naming_template)
         return self._sink
+
+    def _WriteZarrDirectly(self, mesh, step: int) -> str:
+        """physicsnemo's own Zarr writer, no curator involved.
+
+        physicsnemo-curator is a git-only package that builds an 890 MB Rust
+        toolchain at install time, and its sinks are Mesh-typed so a
+        DomainMesh fails in them. Since 2.2 the mesh module writes Zarr
+        itself, which is what this path uses - and the default, since
+        nothing here needs the ETL machinery around it.
+        """
+        from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import (
+            domain_mesh_builder)
+
+        store = self.output_path / (self.file_prefix + f"_{step:04d}.zarr")
+        return domain_mesh_builder.SaveMeshZarr(
+            mesh, store, zstd_level=self.compression_level)
 
     def ExecuteInitialize(self) -> None:
         self.output_path.mkdir(parents=True, exist_ok=True)
@@ -142,4 +165,7 @@ class CuratorExportProcess(Kratos.Process):
             provenance=cached)
         # The sink names its output from the index, so passing the step
         # keeps one store/file per exported step instead of overwriting.
-        curator_bridge.WriteMeshToCuratorSink(self._GetSink(), mesh, step)
+        if self.sink_type == "zarr" and self.zarr_backend == "physicsnemo":
+            self._WriteZarrDirectly(mesh, step)
+        else:
+            curator_bridge.WriteMeshToCuratorSink(self._GetSink(), mesh, step)
