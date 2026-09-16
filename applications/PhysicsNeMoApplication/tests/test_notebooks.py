@@ -1,6 +1,6 @@
 """Executes the shipped example notebooks.
 
-`examples/notebooks` is the application's worked documentation: nineteen
+`examples/notebooks` is the application's worked documentation: twenty
 notebooks calling the same public helpers the processes call. Nothing
 executed them until this file existed, so a renamed argument or a changed
 return type broke them silently - a static import check is not enough,
@@ -14,7 +14,7 @@ run; and notebooks 07, 16, 17 and 19 load their cases from
 `tests/kratos_solver_cases` - 19 also from `tests/adjoint_cases` - so the
 copy has to preserve the relative layout, not just the notebook file.
 
-The notebooks are slow by test standards (~5 minutes for all nineteen) and
+The notebooks are slow by test standards (~5 minutes for all twenty) and
 are registered on the validation suite only.
 """
 

@@ -223,6 +223,56 @@ from test_suite_registration import TestDocumentedIdentifiersExist
 from test_suite_registration import TestDocumentedImportPathsResolve
 from test_suite_registration import TestCrossModuleAttributesExist
 from test_suite_registration import TestBenchmarkStillRuns
+from test_diffusion_protocol import TestWrapDiffusionModel
+from test_diffusion_protocol import TestTrainDiffusionModelProtocol
+from test_diffusion_protocol import TestGenerateEnsembleProtocol
+from test_diffusion_protocol import TestDpsGuidance
+from test_diffusion_protocol import TestMultiDiffusionPatching
+from test_diffusion_protocol import TestKratosResidualGuidance
+from test_diffusion_protocol import TestDiffusionInferenceProcessGuidance
+from test_diffusion_protocol import TestResidualGuidanceThroughTheProcess
+from test_grid_bridge import TestFlatBoundingBoxInterpolation
+from test_grid_bridge import TestTorchInterpolation
+from test_point_subsampling import TestSelectPointSubset
+from test_point_subsampling import TestExpandToAllPoints
+from test_point_subsampling import TestSubsamplingThroughTheProcess
+from test_geometry_guard import TestGeometryGuardUtils
+from test_geometry_guard import TestGeometryGuardCheck
+from test_operator_interfaces import TestDeepONetContract
+from test_operator_interfaces import TestDeepONetThroughTheProcess
+from test_operator_interfaces import TestGlobeBridge
+from test_operator_interfaces import TestGlobeOnAKratosModelPart
+from test_mesh_operations import TestMeshOperations
+from test_mesh_operations import TestCurvatureOnAModelPart
+from test_mesh_operations import TestExtrusion
+from test_mesh_operations import TestMeshDeformers
+from test_mesh_operations import TestBvhSampling
+from test_mesh_io_paths import TestZarrMeshIo
+from test_mesh_io_paths import TestCuratorExportProcessZarrBackend
+from test_mesh_io_paths import TestVtkBridge
+from test_validation_distribution_metrics import TestDistributionMetrics
+from test_validation_distribution_metrics import TestSpectralMetrics
+from test_validation_distribution_metrics import TestSpectralComparisonsThroughTheProcess
+from test_training_performance import TestTrainingPerformanceLayer
+from test_training_performance import TestTrainingSchedulers
+from test_operator_model_recipes import TestDpotInterface
+from test_operator_model_recipes import TestTopoDiffDenoiser
+from test_generative_design import TestComplianceCase
+from test_generative_design import TestTopoDiffOnComplianceData
+from test_aerojepa_pretraining import TestAeroJepaPretraining
+from test_pinn_cavity import TestPinnCavity
+from test_vortex_shedding import TestCylinderCase
+from test_vortex_shedding import TestVortexSheddingSurrogate
+from test_contact_surrogate import TestContactCase
+from test_contact_surrogate import TestContactFieldsThroughTheBridge
+from test_airfoil_surrogate import TestAirfoilCase
+from test_airfoil_surrogate import TestAirfoilSurrogate
+from test_airfoil_surrogate import TestAirfoilAdjointDispatch
+from test_geomechanics_surrogate import TestConsolidationCase
+from test_geomechanics_surrogate import TestConsolidationSurrogate
+from test_iga_gather import TestIgaAnalysisGather
+from test_rans_closure import TestRansCase
+from test_rans_closure import TestLearnedClosure
 from test_docs_links import TestDocumentationLinks
 from test_docs_figures import TestDocsFigures
 from test_notebooks import TestNotebooks
@@ -501,6 +551,56 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocumentedImportPathsResolve]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCrossModuleAttributesExist]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestBenchmarkStillRuns]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestWrapDiffusionModel]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTrainDiffusionModelProtocol]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGenerateEnsembleProtocol]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDpsGuidance]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMultiDiffusionPatching]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestKratosResidualGuidance]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDiffusionInferenceProcessGuidance]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestResidualGuidanceThroughTheProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestFlatBoundingBoxInterpolation]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTorchInterpolation]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSelectPointSubset]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestExpandToAllPoints]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSubsamplingThroughTheProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGeometryGuardUtils]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGeometryGuardCheck]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDeepONetContract]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDeepONetThroughTheProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGlobeBridge]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestGlobeOnAKratosModelPart]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMeshOperations]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCurvatureOnAModelPart]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestExtrusion]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMeshDeformers]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestBvhSampling]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestZarrMeshIo]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCuratorExportProcessZarrBackend]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestVtkBridge]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDistributionMetrics]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSpectralMetrics]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestSpectralComparisonsThroughTheProcess]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTrainingPerformanceLayer]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTrainingSchedulers]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDpotInterface]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTopoDiffDenoiser]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestComplianceCase]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTopoDiffOnComplianceData]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAeroJepaPretraining]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestPinnCavity]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestCylinderCase]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestVortexSheddingSurrogate]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestContactCase]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestContactFieldsThroughTheBridge]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAirfoilCase]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAirfoilSurrogate]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestAirfoilAdjointDispatch]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestConsolidationCase]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestConsolidationSurrogate]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestIgaAnalysisGather]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestRansCase]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestLearnedClosure]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocumentationLinks]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestDocsFigures]))
 

@@ -18,6 +18,7 @@ from test_mpi_mesh_export import TestMpiCaeDatasetExport
 from test_mpi_distributed_groups import TestMpiProcessGroups
 from test_mpi_graph_partition import TestMpiHaloSubgraph
 from test_mpi_graph_partition import TestMpiDataParallelTraining
+from test_mpi_graph_partition import TestMpiDifferentiableHaloExchange
 from test_mpi_cosim_surrogate import TestMpiDistributedSurrogateWrapper
 from test_mpi_cosim_surrogate import TestMpiDistributedSurrogateCoupledLoop
 from test_mpi_fsdp_checkpoint import TestMpiFsdpCheckpoint
@@ -47,6 +48,7 @@ def AssembleTestSuites():
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiProcessGroups]))
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiHaloSubgraph]))
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiDataParallelTraining]))
+    smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiDifferentiableHaloExchange]))
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiDistributedSurrogateWrapper]))
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiDistributedSurrogateCoupledLoop]))
     smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestMpiFsdpCheckpoint]))

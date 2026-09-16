@@ -238,5 +238,77 @@ class TestMpiDataParallelTraining(KratosUnittest.TestCase):
                 distributed.destroy_process_group()
 
 
+@KratosUnittest.skipUnless(have_torch, "Missing required python module: torch.")
+class TestMpiDifferentiableHaloExchange(KratosUnittest.TestCase):
+    """The halo exchange through torch autograd: the same values the eager
+    exchange copies in, plus a gradient path back to the owning rank."""
+
+    def setUp(self):
+        self.model = Kratos.Model()
+        self.model_part, self.data_communicator = _CreateDistributedModelPart(self.model)
+        graph_partition_utils.InitializeTorchProcessGroup(self.data_communicator)
+        (self.node_features, _, _, self.node_ids,
+         self.owned_mask) = graph_partition_utils.BuildHaloSubgraph(
+            self.model_part, 1, field_specs=[("PRESSURE", "node_historical")])
+        self.plan = graph_partition_utils.HaloExchangePlan(
+            self.node_ids, self.owned_mask, self.data_communicator)
+
+    def test_ExchangedFeaturesMatchTheEagerHalo(self):
+        owned = torch.tensor(self.node_features[self.owned_mask], dtype=torch.float64)
+        full = graph_partition_utils.ExchangeHaloFeatures(owned, self.plan)
+        numpy.testing.assert_array_equal(full.detach().numpy(), self.node_features)
+
+    def test_TheGradientOfEveryCopyReturnsToTheOwner(self):
+        """Weight rank r's whole subgraph by r + 1 and sum over ranks. An
+        owned row's gradient is then its own weight plus the weight of every
+        rank holding a halo copy of it - the sum the collective's backward
+        must deliver to the owner."""
+        rank = self.data_communicator.Rank()
+        owned = torch.tensor(
+            self.node_features[self.owned_mask], dtype=torch.float64, requires_grad=True)
+        full = graph_partition_utils.ExchangeHaloFeatures(owned, self.plan)
+        (full * float(rank + 1)).sum().backward()
+
+        halo_ids = [int(i) for i in self.node_ids[~self.owned_mask]]
+        gathered_halos = self.data_communicator.AllGathervInts(halo_ids)
+        owned_ids = numpy.sort(self.node_ids[self.owned_mask])
+        expected = numpy.full(len(owned_ids), float(rank + 1))
+        for other, ids in enumerate(gathered_halos):
+            copies = set(int(i) for i in ids)
+            for row, node_id in enumerate(owned_ids):
+                if int(node_id) in copies:
+                    expected[row] += float(other + 1)
+        numpy.testing.assert_allclose(owned.grad.numpy().ravel(), expected, rtol=0, atol=1e-12)
+
+        # somewhere an owned node really is someone else's halo - summed
+        # over ALL ranks, so no rank skips the collective
+        interface_rows = int((expected > rank + 1).sum())
+        if self.data_communicator.Size() > 1:
+            self.assertGreater(self.data_communicator.SumAll(interface_rows), 0)
+
+    def test_TheExchangeIsRaggedAndIsPaddedForGloo(self):
+        """The reason the plan pads at all: a halo exchange is ragged by
+        nature - a rank sends rows to the neighbour it shares an interface
+        with and none to itself - and gloo's all-to-all rejects blocks of
+        differing shape. Every block is padded to one size and sliced back."""
+        rank = self.data_communicator.Rank()
+        if self.data_communicator.Size() > 1:
+            counts = self.plan.true_sizes[rank]
+            self.assertGreater(max(counts), 0)
+            self.assertEqual(counts[rank], 0)      # a rank needs nothing of its own
+            self.assertNotEqual(min(counts), max(counts))   # genuinely ragged
+        self.assertTrue(all(size == self.plan.block_size
+                            for row in self.plan.sizes for size in row))
+        self.assertTrue(all(rows.numel() == self.plan.block_size
+                            for rows in self.plan.send_rows))
+
+    def test_AWrongOwnedRowCountIsRefused(self):
+        """Refused before any collective, identically on every rank, so the
+        error cannot leave a peer waiting."""
+        wrong = torch.zeros(self.plan.n_owned + 1, 1, dtype=torch.float64)
+        with self.assertRaisesRegex(ValueError, "owned"):
+            graph_partition_utils.ExchangeHaloFeatures(wrong, self.plan)
+
+
 if __name__ == '__main__':
     KratosUnittest.main()

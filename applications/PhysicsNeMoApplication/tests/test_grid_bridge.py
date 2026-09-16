@@ -153,6 +153,12 @@ class TestGridBridge(KratosUnittest.TestCase):
 
 try:
     import torch
+    have_torch = True
+except ImportError:
+    have_torch = False
+
+try:
+    import torch
     from physicsnemo.nn.functional import derivatives as _pn_derivatives  # noqa: F401
     have_grid_derivatives = True
 except ImportError:
@@ -243,6 +249,56 @@ class TestGridDerivatives(KratosUnittest.TestCase):
         result.square().sum().backward()
         self.assertIsNotNone(grid.grad)
         self.assertGreater(float(grid.grad.abs().sum()), 0.0)
+
+
+class TestFlatBoundingBoxInterpolation(KratosUnittest.TestCase):
+    """A planar Kratos case has every node at the same Z, so its bounding
+    box is FLAT in that axis. Dividing by a zero extent gives NaN, and NaN
+    cast to an index is INT_MIN - which used to crash the interpolation
+    with an out-of-bounds index instead of returning the field."""
+
+    def setUp(self):
+        self.bounding_box = (numpy.array([0.0, 0.0, 0.0]), numpy.array([1.0, 1.0, 0.0]))
+        # the two Z slices of a flat box are sampled at the same place, so
+        # they carry identical values
+        plane = numpy.array([[1.0, 2.0], [3.0, 4.0]])
+        self.grid = numpy.stack([plane, plane], axis=-1)[None]  # (1, 2, 2, 2)
+
+    def test_NumpyPathInterpolatesOnAFlatAxis(self):
+        values = grid_bridge.InterpolateGridAtPoints(
+            self.grid, self.bounding_box,
+            numpy.array([[0.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.5, 0.0, 0.0]]))
+        numpy.testing.assert_allclose(values.ravel(), [1.0, 4.0, 2.0], atol=1e-12)
+
+    def test_PointsOffTheFlatPlaneStillLand(self):
+        """Nothing constrains a query to sit exactly on the plane; it must
+        clamp onto it rather than produce NaN."""
+        values = grid_bridge.InterpolateGridAtPoints(
+            self.grid, self.bounding_box, numpy.array([[0.0, 0.0, 0.7]]))
+        numpy.testing.assert_allclose(values.ravel(), [1.0], atol=1e-12)
+
+
+@KratosUnittest.skipUnless(have_torch, "Missing required python module: torch.")
+class TestTorchInterpolation(KratosUnittest.TestCase):
+    def test_MatchesTheNumpyPathAndFlatAxesToo(self):
+        rng = numpy.random.default_rng(0)
+        grid = rng.standard_normal((2, 4, 5, 6))
+        for bounding_box in ((numpy.array([0.0, 0.0, 0.0]), numpy.array([1.0, 2.0, 3.0])),
+                             (numpy.array([0.0, 0.0, 0.0]), numpy.array([1.0, 2.0, 0.0]))):
+            points = rng.uniform(0.0, 1.0, size=(20, 3)) * numpy.maximum(
+                bounding_box[1] - bounding_box[0], 1e-9)
+            reference = grid_bridge.InterpolateGridAtPoints(grid, bounding_box, points)
+            values = grid_bridge.InterpolateGridAtPointsTorch(
+                torch.tensor(grid), bounding_box, points)
+            numpy.testing.assert_allclose(values.numpy(), reference, atol=1e-12)
+
+    def test_GradientsReachTheGrid(self):
+        grid = torch.arange(24.0, dtype=torch.float64).reshape(1, 2, 3, 4).requires_grad_(True)
+        bounding_box = (numpy.array([0.0, 0.0, 0.0]), numpy.array([1.0, 1.0, 1.0]))
+        points = numpy.array([[0.3, 0.4, 0.5], [0.9, 0.1, 0.2]])
+        grid_bridge.InterpolateGridAtPointsTorch(grid, bounding_box, points).sum().backward()
+        # trilinear weights sum to one per query point
+        self.assertAlmostEqual(float(grid.grad.sum()), float(len(points)), places=10)
 
 
 if __name__ == '__main__':

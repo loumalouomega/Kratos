@@ -69,6 +69,7 @@ from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import domino
 from KratosMultiphysics.PhysicsNeMoApplication.physics import physics_informed
 from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import pinn_solve_process
 from KratosMultiphysics.PhysicsNeMoApplication.physics import differentiable_residual
+from KratosMultiphysics.PhysicsNeMoApplication.physics import diffusion_residual_operator
 from KratosMultiphysics.PhysicsNeMoApplication.physics import sensitivity_utils
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import calculus_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import adaptive_remeshing
@@ -82,8 +83,14 @@ from KratosMultiphysics.PhysicsNeMoApplication.deployment import triton_export
 from KratosMultiphysics.PhysicsNeMoApplication.processes.inference import triton_inference_process
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import tensor_adaptor_dataset_utils
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import nvtx_utils
+from KratosMultiphysics.PhysicsNeMoApplication.utilities import point_subsampling
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import geometry_guard_utils
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import globe_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.training import globe_training
+from KratosMultiphysics.PhysicsNeMoApplication.training import aerojepa_pretraining
 from KratosMultiphysics.PhysicsNeMoApplication.utilities import shallow_water_reference
-from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import tessellation, curved_tessellation, provenance, domain_mesh_builder, deformation, spatial, generate
+from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import tessellation, curved_tessellation, provenance, domain_mesh_builder, deformation, spatial, generate, operations, sampling
+from KratosMultiphysics.PhysicsNeMoApplication.bridges import vtk_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.active_learning import (
     sample_io, kratos_label_strategy, query_strategies, metrology)
 from KratosMultiphysics.PhysicsNeMoApplication.active_learning.execution_backends import (
@@ -99,11 +106,23 @@ for fn, expected in (
         (lambda: distributed_utils._TryImportDistributedManager(), "pip install nvidia-physicsnemo"),
         (lambda: graph_bridge._TryImportPyG(), "pip install torch_geometric"),
         (lambda: training_utils._TryImportTorch(), "pip install torch"),
+        (lambda: training_utils._TryImportStaticCapture(), "pip install -U nvidia-physicsnemo"),
+        (lambda: training_utils._TryImportCheckpointing(), "pip install -U nvidia-physicsnemo"),
+        (lambda: training_utils._TryImportMuon(), "pip install -U nvidia-physicsnemo"),
+        (lambda: training_utils._TryImportLaunchLogger(), "pip install -U nvidia-physicsnemo"),
+        (lambda: validation_metrics_process._TryImportDistributionMetrics(), "pip install nvidia-physicsnemo"),
+        (lambda: validation_metrics_process._TryImportPowerSpectrum(), "pip install nvidia-physicsnemo"),
+        (lambda: graph_partition_utils._TryImportAutogradCollectives(), "pip install -U nvidia-physicsnemo"),
         (lambda: rollout_utils._TryImportTorch(), "pip install torch"),
         (lambda: query_strategies._TryImportPhysicsNemo(), "pip install nvidia-physicsnemo"),
         (lambda: metrology._TryImportPhysicsNemo(), "pip install nvidia-physicsnemo"),
         (lambda: diffusion_utils._TryImportTorch(), "pip install torch"),
         (lambda: diffusion_utils._TryImportPhysicsNemoDiffusion(), "pip install nvidia-physicsnemo"),
+        (lambda: diffusion_utils._TryImportPhysicsNemoDiffusionProtocol(), "pip install -U nvidia-physicsnemo"),
+        (lambda: diffusion_utils._TryImportPhysicsNemoMultiDiffusion(), "pip install -U nvidia-physicsnemo"),
+        (lambda: diffusion_utils._TryImportTensorDict(), "pip install nvidia-physicsnemo"),
+        (lambda: diffusion_residual_operator._TryImportTorch(), "pip install torch"),
+        (lambda: grid_bridge._TryImportTorch(), "pip install torch"),
         (lambda: rom_temporal._TryImportTorch(), "pip install torch"),
         (lambda: rom_temporal._TryImportSequenceModel(), "pip install nvidia-physicsnemo"),
         (lambda: cfd_bridge._TryImportPhysicsNemoCfd(), "github.com/NVIDIA/physicsnemo-cfd"),
@@ -117,6 +136,15 @@ for fn, expected in (
         (lambda: onnx_utils._TryImportOnnxRuntime(), "pip install onnxruntime"),
         (lambda: ood_guard_utils._TryImportOODGuard(), "pip install nvidia-physicsnemo"),
         (lambda: ood_guard_utils._TryImportTorch(), "pip install torch"),
+        (lambda: geometry_guard_utils._TryImportTorch(), "pip install torch"),
+        (lambda: geometry_guard_utils._TryImportGeometryGuardrail(), "pip install -U nvidia-physicsnemo"),
+        (lambda: point_subsampling._TryImportTorch(), "pip install torch"),
+        (lambda: point_subsampling._TryImportFarthestPointSampling(), "pip install -U nvidia-physicsnemo"),
+        (lambda: globe_bridge._TryImportTorch(), "pip install torch"),
+        (lambda: globe_bridge._TryImportGlobe(), "pip install -U nvidia-physicsnemo"),
+        (lambda: globe_training._TryImportTorch(), "pip install torch"),
+        (lambda: aerojepa_pretraining._TryImportTorch(), "pip install torch"),
+        (lambda: aerojepa_pretraining._TryImportAeroJepa(), "pip install -U nvidia-physicsnemo"),
         (lambda: uncertainty_utils._TryImportTorch(), "pip install torch"),
         (lambda: uncertainty_utils._TryImportConcreteDropout(), "pip install nvidia-physicsnemo"),
         (lambda: uncertainty_utils._TryImportGpytorch(), "pip install gpytorch"),
@@ -131,6 +159,16 @@ for fn, expected in (
         (lambda: deformation._TryImportTorch(), "pip install torch"),
         (lambda: deformation._TryImportDeformers(), "pip install -U nvidia-physicsnemo"),
         (lambda: deformation._TryImportEnergies(), "pip install -U nvidia-physicsnemo"),
+        (lambda: deformation._TryImportMeshDeformers(), "pip install -U nvidia-physicsnemo"),
+        (lambda: operations._TryImportTorch(), "pip install torch"),
+        (lambda: operations._TryImportMeshOperations(), "pip install -U nvidia-physicsnemo"),
+        (lambda: sampling._TryImportTorch(), "pip install torch"),
+        (lambda: sampling._TryImportSampling(), "pip install -U nvidia-physicsnemo"),
+        (lambda: domain_mesh_builder._TryImportZarrIo(), "pip install -U nvidia-physicsnemo"),
+        (lambda: vtk_bridge._TryImportPyVista(), "pip install pyvista"),
+        (lambda: vtk_bridge._TryImportVtkReader(), "pip install -U nvidia-physicsnemo"),
+        (lambda: vtk_bridge._TryImportFromPyVista(), "pip install -U nvidia-physicsnemo"),
+        (lambda: vtk_bridge._TryImportTorch(), "pip install torch"),
         (lambda: spatial._TryImportTorch(), "pip install torch"),
         (lambda: spatial._TryImportSignedDistanceField(), "pip install -U nvidia-physicsnemo"),
         (lambda: generate._TryImportTorch(), "pip install torch"),
