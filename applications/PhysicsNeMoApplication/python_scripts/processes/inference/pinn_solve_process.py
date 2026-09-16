@@ -182,22 +182,71 @@ class PinnSolveProcess(Kratos.Process):
     # --- assembly helpers ----------------------------------------------------
 
     def _GatherFieldMatrix(self, specs):
-        """(N, total width) float64 numpy over the model part's nodes."""
+        """(N, total width) float64 numpy over the model part's nodes.
+
+        Blocks are cut to the PDE FIELD widths, not the Kratos variable
+        widths: a 2-D velocity is a 3-component Kratos array but only two
+        PDE functions, and the network predicts two. Gathering all three
+        would leave the targets a column wider than the prediction.
+        """
         from KratosMultiphysics.PhysicsNeMoApplication.processes.inference.inference_process import GatherInputFields
         blocks, _ = GatherInputFields(self.model_part, specs)
         import torch
+        widths = self._FieldWidths(len(blocks))
+        blocks = [block[:, :width] for block, width in zip(blocks, widths)]
         return torch.cat(blocks, dim=-1).numpy()
 
+    def _ExpandToKratosWidths(self, solution):
+        """The network's PDE-width output padded back to Kratos widths.
+
+        The mirror of the cut _GatherFieldMatrix makes on the way in: a 2-D
+        velocity is two PDE functions but a three-component Kratos array, so
+        the missing out-of-plane column is written as zero rather than left
+        for the writer to trip over.
+        """
+        torch = torch_bridge._TryImportTorch()
+
+        widths = self._FieldWidths(len(self.output_specs))
+        blocks = []
+        offset = 0
+        for (variable_name, _), width in zip(self.output_specs, widths):
+            block = solution[:, offset:offset + width]
+            offset += width
+            variable = Kratos.KratosGlobals.GetVariable(variable_name)
+            kratos_width = 1 if isinstance(variable, Kratos.DoubleVariable) else 3
+            if block.shape[1] < kratos_width:
+                padding = torch.zeros(
+                    (block.shape[0], kratos_width - block.shape[1]), dtype=block.dtype)
+                block = torch.cat([block, padding], dim=1)
+            blocks.append(block)
+        return torch.cat(blocks, dim=1)
+
+    def _FieldWidths(self, count: int):
+        """The PDE width of each solution field, in order."""
+        if len(self.field_specs) != count:
+            raise ValueError(
+                f"\"fields\" declares {len(self.field_specs)} field(s) but "
+                f"{count} solution field(s) were given; they are paired in order, "
+                "so a 2-D velocity needs {\"name\": \"velocity\", \"width\": 2} "
+                "against the VELOCITY variable.")
+        return [width for _, width, _ in self.field_specs]
+
     def _DirichletMask(self):
-        """(N, total width) bool: which solution DOFs are fixed."""
+        """(N, total width) bool: which solution DOFs are fixed.
+
+        Cut to the PDE field widths for the same reason _GatherFieldMatrix
+        is: a 2-D case fixes VELOCITY_X and VELOCITY_Y, and a third column
+        would not line up with anything the network predicts.
+        """
         columns = []
-        for variable_name, _ in self.solution_specs:
+        widths = self._FieldWidths(len(self.solution_specs))
+        for (variable_name, _), width in zip(self.solution_specs, widths):
             variable = Kratos.KratosGlobals.GetVariable(variable_name)
             if isinstance(variable, Kratos.DoubleVariable):
                 components = [variable]
-            else:  # array variable: component-wise fixity
+            else:  # array variable: component-wise fixity, to the PDE's width
                 components = [Kratos.KratosGlobals.GetVariable(f"{variable_name}_{axis}")
-                              for axis in "XYZ"]
+                              for axis in "XYZ"[:width]]
             block = numpy.zeros((self.model_part.NumberOfNodes(), len(components)), dtype=bool)
             for row, node in enumerate(self.model_part.Nodes):
                 for column, component in enumerate(components):
@@ -332,4 +381,5 @@ class PinnSolveProcess(Kratos.Process):
 
         with torch.no_grad():
             solution = network(points[:n_nodes]).cpu().to(torch.float64)
-        WriteOutputFields(self.model_part, self.output_specs, solution, n_nodes)
+        WriteOutputFields(self.model_part, self.output_specs,
+                          self._ExpandToKratosWidths(solution), n_nodes)

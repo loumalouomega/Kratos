@@ -23,6 +23,15 @@ the whole (1, C, K, *spatial) block; the returned (C, T, *spatial) block is
 buffered as usual. FNO(dimension=4) returns T == K - the predicted NEXT
 block of K states, the standard FNO time-block surrogate.
 
+"model_interface" : "dpot" deploys physicsnemo.models.dpot.DPOTNet, the
+AFNO-mixing PDE foundation model. It is an ordinary grid series surrogate
+here - it reads a window of states and returns the next ones - but its
+tensor layout is its own, (B, H, W, T, C) rather than the (B, C, T, H, W)
+every other grid model in this application uses, so the interface is a pair
+of permutations. Pretrained DPOT weights are not verified from here; the
+architecture and the fine-tuning path (domino_finetune's LoRA helpers apply
+unchanged, with a pattern matching DPOT's blocks) are.
+
 torch is imported lazily on first execution.
 """
 
@@ -33,6 +42,7 @@ from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
 _EXECUTION_POINTS = ("initialize_solution_step", "finalize_solution_step")
+_MODEL_INTERFACES = ("grid", "dpot")
 
 
 def Factory(settings: Kratos.Parameters, model: Kratos.Model) -> "SequenceInferenceProcess":
@@ -65,6 +75,7 @@ class SequenceInferenceProcess(Kratos.Process):
             "grid_shape"          : [8, 8, 8],
             "bounding_box"        : [],
             "squeeze_axis"        : -1,
+            "model_interface"     : "grid",
             "window_as_time_axis" : false,
             "window_size"         : 2,
             "execution_point"     : "finalize_solution_step",
@@ -99,6 +110,11 @@ class SequenceInferenceProcess(Kratos.Process):
         else:
             raise ValueError(f"\"squeeze_axis\" must be -1 (off), 0, 1 or 2, got {squeeze_axis}.")
 
+        self.model_interface = settings["model_interface"].GetString()
+        if self.model_interface not in _MODEL_INTERFACES:
+            raise ValueError(
+                f"Unsupported model interface \"{self.model_interface}\". Supported: "
+                f"{', '.join(_MODEL_INTERFACES)}.")
         self.window_as_time_axis = settings["window_as_time_axis"].GetBool()
         self.window_size = settings["window_size"].GetInt()
         if self.window_as_time_axis and self.window_size < 2:
@@ -195,7 +211,27 @@ class SequenceInferenceProcess(Kratos.Process):
             parameter = next(self._model.parameters(), None)
             if parameter is not None:
                 batch = batch.to(parameter.dtype)
-            prediction = self._model(batch).cpu().numpy()[0]  # (C, T, *spatial)
+            if self.model_interface == "dpot":
+                # DPOT reads (B, H, W, T, C) - the time axis LAST but one and
+                # the channels last - where every other grid model here reads
+                # (B, C, T, H, W). The permutation is the whole adapter.
+                if batch.ndim != 5:
+                    raise ValueError(
+                        "The \"dpot\" interface consumes a 2-D grid series shaped "
+                        f"(1, C, T, H, W); got {tuple(batch.shape)}. Planar cases reach "
+                        "that through \"squeeze_axis\", and \"window_as_time_axis\" "
+                        "supplies the time axis.")
+                expected = getattr(self._model, "in_timesteps", None)
+                if expected is not None and int(expected) != int(batch.shape[2]):
+                    raise ValueError(
+                        f"The model was built for in_timesteps = {int(expected)} but the "
+                        f"window supplies {int(batch.shape[2])}; set \"window_size\" to "
+                        "match.")
+                prediction = self._model(
+                    batch.permute(0, 3, 4, 2, 1)).permute(0, 4, 3, 1, 2)
+                prediction = prediction.cpu().numpy()[0]  # (C_out, T_out, H, W)
+            else:
+                prediction = self._model(batch).cpu().numpy()[0]  # (C, T, *spatial)
 
         if prediction.ndim != grid.ndim + 1:
             raise ValueError(

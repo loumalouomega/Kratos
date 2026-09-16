@@ -31,6 +31,7 @@ from KratosMultiphysics.PhysicsNeMoApplication.bridges import grid_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import ood_guard_utils
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
+from KratosMultiphysics.PhysicsNeMoApplication.physics import diffusion_residual_operator
 _EXECUTION_POINTS = ("initialize_solution_step", "finalize_solution_step")
 
 
@@ -60,6 +61,44 @@ class DiffusionInferenceProcess(Kratos.Process):
         if settings.Has("regression_settings"):
             self.regression_settings = settings["regression_settings"].Clone()
             settings.RemoveValue("regression_settings")
+
+        # optional DPS guidance: the keys naming Kratos data are read here
+        # and stripped, so what reaches GenerateEnsemble is the plain
+        # guidance block (type/std_y/gamma/norm) it validates
+        self._guidance_type = "none"
+        self._observation_specs = []
+        self._mask_spec = None
+        self._guidance_operator = "kratos_residual"
+        self._residual_settings = None
+        self._residual_model_part_name = ""
+        self._residual_operator = None
+        if settings.Has("sampler_settings") and settings["sampler_settings"].Has("guidance"):
+            guidance = settings["sampler_settings"]["guidance"]
+            self._guidance_type = (guidance["type"].GetString()
+                                   if guidance.Has("type") else "none")
+            if guidance.Has("observation_fields"):
+                self._observation_specs = self._ReadFieldSpecs(guidance["observation_fields"])
+                guidance.RemoveValue("observation_fields")
+            if guidance.Has("mask_field"):
+                mask = guidance["mask_field"]
+                if mask.Has("variable_name"):
+                    self._mask_spec = (
+                        mask["variable_name"].GetString(),
+                        mask["data_location"].GetString()
+                        if mask.Has("data_location") else "node_historical")
+                guidance.RemoveValue("mask_field")
+            if guidance.Has("operator"):
+                self._guidance_operator = guidance["operator"].GetString()
+                guidance.RemoveValue("operator")
+            residual_settings = Kratos.Parameters("{}")
+            for key in ("residual_fields", "use_stored_fixed_values"):
+                if guidance.Has(key):
+                    residual_settings.AddValue(key, guidance[key])
+                    guidance.RemoveValue(key)
+            if guidance.Has("residual_model_part_name"):
+                self._residual_model_part_name = guidance["residual_model_part_name"].GetString()
+                guidance.RemoveValue("residual_model_part_name")
+            self._residual_settings = residual_settings
 
         default_settings = Kratos.Parameters("""{
             "model_part_name"        : "PLEASE_SPECIFY_MODEL_PART_NAME",
@@ -91,13 +130,14 @@ class DiffusionInferenceProcess(Kratos.Process):
             for i in range(settings[key].size()):
                 settings[key][i].ValidateAndAssignDefaults(default_settings["input_fields"][0])
 
+        self._kratos_model = model
         self.model_part = model[settings["model_part_name"].GetString()]
         output_part_name = settings["output_model_part_name"].GetString()
         self.output_model_part = model[output_part_name] if output_part_name else self.model_part
         self.model_settings = settings["model_settings"].Clone()
         self.sampler_settings = settings["sampler_settings"].Clone()
         self.denoiser_interface = settings["denoiser_interface"].GetString()
-        if self.denoiser_interface not in ("edm", "dit", "unet3d"):
+        if self.denoiser_interface not in ("edm", "dit", "unet3d", "topodiff"):
             raise ValueError(
                 f"Unsupported denoiser interface \"{self.denoiser_interface}\". "
                 "Use \"edm\" (net(x, img_lr, sigma) denoisers), \"dit\" "
@@ -174,11 +214,69 @@ class DiffusionInferenceProcess(Kratos.Process):
         return numpy.repeat(
             numpy.expand_dims(grid, 1 + self.squeeze_axis), thin_size, axis=1 + self.squeeze_axis)
 
+    def _SampleGuidanceGrid(self, specs):
+        """Samples field specs on the process's own grid, squeezed alike."""
+        grid, _ = grid_bridge.SampleFieldsOnGrid(
+            self.model_part, specs, self.grid_shape, self.bounding_box)
+        if self.squeeze_axis is not None:
+            grid = grid.mean(axis=1 + self.squeeze_axis)
+        return grid
+
+    def _BuildGuidanceInputs(self):
+        """(observation, mask, operator) for the configured guidance.
+
+        Observations are read from the model part in PHYSICAL units and
+        mapped into the model's own normalized output space, because that
+        is the space the sampler works in - the de-normalization happens
+        afterwards, on the finished ensemble. ApplyInputNormalization is
+        the exact inverse of ApplyOutputNormalization for the same card
+        entry, which is why the OUTPUT entry is what it is given here.
+        """
+        if self._guidance_type == "none":
+            return None, None, None
+
+        if self._guidance_type == "data_consistency":
+            if not self._observation_specs or self._mask_spec is None:
+                raise ValueError(
+                    "Guidance \"data_consistency\" needs \"observation_fields\" and a "
+                    "\"mask_field\" in the guidance block: they name the measurements "
+                    "and which entries were actually measured.")
+            observation = model_registry.ApplyInputNormalization(
+                self._SampleGuidanceGrid(self._observation_specs),
+                self._normalization, channel_axis=0)
+            mask = self._SampleGuidanceGrid([self._mask_spec])
+            # sampling interpolates, so a 0/1 field arrives fractional
+            return observation, (mask > 0.5).astype(float), None
+
+        if self._guidance_type != "model_consistency":
+            raise ValueError(
+                f"Unsupported guidance type \"{self._guidance_type}\". Supported: "
+                "none, data_consistency, model_consistency.")
+        if self._guidance_operator != "kratos_residual":
+            raise ValueError(
+                f"Unsupported guidance operator \"{self._guidance_operator}\". This "
+                "process ships \"kratos_residual\" (the exact discrete FEM residual); "
+                "any other operator is a direct diffusion_utils.GenerateEnsemble call.")
+        if self._residual_operator is None:
+            residual_settings = self._residual_settings.Clone()
+            residual_settings.AddEmptyValue("grid_shape").SetVector(
+                Kratos.Vector([float(n) for n in self.grid_shape]))
+            residual_settings.AddEmptyValue("squeeze_axis").SetInt(
+                -1 if self.squeeze_axis is None else self.squeeze_axis)
+            residual_part = (self._kratos_model[self._residual_model_part_name]
+                             if self._residual_model_part_name else self.model_part)
+            self._residual_operator = (
+                diffusion_residual_operator.MakeKratosResidualObservationOperator(
+                    residual_part, residual_settings,
+                    output_normalization=self._normalization))
+        operator = self._residual_operator
+        return operator.observation, None, operator
+
     def RunDiffusion(self) -> None:
         if self._model is None:
             self._model, self._device = model_registry.LoadModelWithCardCheck(
                 self.model_settings, self.input_specs, self.output_specs, type(self).__name__)
-            if self.denoiser_interface in ("dit", "unet3d"):
+            if self.denoiser_interface in ("dit", "unet3d", "topodiff"):
                 self._model = diffusion_utils.WrapDenoiser(self._model, self.denoiser_interface)
             # the denoiser's card carries the scaling of what the ensemble
             # emits (regression mean included, in the two-stage recipe)
@@ -206,8 +304,16 @@ class DiffusionInferenceProcess(Kratos.Process):
                 torch.from_numpy(condition.reshape(condition.shape[0], -1).T),
                 type(self).__name__)
 
-        ensemble = diffusion_utils.GenerateEnsemble(
-            self._model, condition, self.sampler_settings.Clone())  # (S, C_out, *spatial)
+        observation, mask, operator = self._BuildGuidanceInputs()
+        try:
+            ensemble = diffusion_utils.GenerateEnsemble(
+                self._model, condition, self.sampler_settings.Clone(),
+                observation=observation, mask=mask,
+                observation_operator=operator)  # (S, C_out, *spatial)
+        finally:
+            if operator is not None:
+                # assembling wrote trial fields into the model part's DOFs
+                operator.Restore()
         if self.regression_settings is not None:
             # CorrDiff inference: regression mean + residual ensemble - the
             # mean shifts, the ensemble spread stays the denoiser's

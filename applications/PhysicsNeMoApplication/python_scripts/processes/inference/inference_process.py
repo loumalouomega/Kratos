@@ -15,6 +15,7 @@ import numpy
 import KratosMultiphysics as Kratos
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import model_registry
 from KratosMultiphysics.PhysicsNeMoApplication.deployment import ood_guard_utils
+from KratosMultiphysics.PhysicsNeMoApplication.deployment import geometry_guard_utils
 from KratosMultiphysics.PhysicsNeMoApplication.bridges import torch_bridge
 from KratosMultiphysics.PhysicsNeMoApplication.utilities.tensor_adaptor_dataset_utils import GetTensorAdaptor
 from KratosMultiphysics.PhysicsNeMoApplication.utilities.nvtx_utils import NvtxRange
@@ -148,6 +149,7 @@ class InferenceProcess(Kratos.Process):
             "execution_point" : "finalize_solution_step",
             "output_interval" : 1,
             "ood_guard"       : {},
+            "geometry_guard"  : {},
             "uncertainty"     : {}
         }""")
         settings.ValidateAndAssignDefaults(default_settings)
@@ -157,6 +159,9 @@ class InferenceProcess(Kratos.Process):
 
         # optional OOD guard on the gathered inputs (see ood_guard_utils)
         self._ood_guard = ood_guard_utils.GuardCheck(settings["ood_guard"])
+        # and on the SHAPE, which the field guard cannot see at all
+        self._geometry_guard = geometry_guard_utils.GeometryGuardCheck(
+            settings["geometry_guard"])
 
         # optional predictive uncertainty (MC dropout or checkpoint ensemble)
         uncertainty_defaults = Kratos.Parameters("""{
@@ -315,6 +320,11 @@ class InferenceProcess(Kratos.Process):
 
     def _CheckOOD(self, features) -> None:
         self._ood_guard.Check(features, type(self).__name__)
+        self._CheckGeometry()
+
+    def _CheckGeometry(self) -> None:
+        """The shape guardrail, re-evaluated only when the mesh changes."""
+        self._geometry_guard.Check(self.model_part, type(self).__name__)
 
     def _PredictWithUncertainty(self, forward_fn):
         """Runs forward_fn per the configured uncertainty method.
