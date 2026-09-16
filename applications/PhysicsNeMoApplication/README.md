@@ -35,7 +35,10 @@ pages that make it navigable:
 
 ### Layout
 
-`python_scripts/` is a tree of packages, and the folder a module sits in says what kind of thing it is:
+`python_scripts/` is a tree of packages, and the folder a module sits in says what kind of thing it is. Each package's `__init__.py` says what belongs in it; a process is attached the usual way, with `kratos_module` naming the package.
+
+<details>
+<summary>Package tree and the process-attachment snippet</summary>
 
 ```
 python_scripts/
@@ -52,14 +55,14 @@ python_scripts/
 └── utilities/          small shared helpers
 ```
 
-Each package's `__init__.py` says what belongs in it. A process is attached the usual way, with `kratos_module` naming the package:
-
 ```json
 {
     "python_module" : "inference_process",
     "kratos_module" : "KratosMultiphysics.PhysicsNeMoApplication.processes.inference"
 }
 ```
+
+</details>
 
 ## 😎 Features:
 
@@ -164,7 +167,12 @@ Each package's `__init__.py` says what belongs in it. A process is attached the 
 
 ## 🗺️ Roadmap:
 
-Pending work, and nothing else. Every entry is verified live against **physicsnemo 2.2.0** — 2.2.1 is a fix-only release and the upstream 2.3.0 changelog is still empty, so 2.2 *is* the current surface — and against the reference build, rather than assumed. Each names its gate: **hardware** (one GPU on the reference machine, no GPU CI runner), **upstream** (the API does not exist yet, raises `NotImplementedError`, or does not import), **external access** (a credential, service or download this environment lacks), **build** (a Kratos application the reference build does not compile), or **open** (nothing blocks it — it needs data, or someone's time). Items marked *experimental* live under `physicsnemo.experimental`, whose API may change between releases without notice. What has shipped is described under Features above and in the documentation; how items left this list, and what each round learned doing so, is kept on the [Retrospectives](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Retrospectives.html) page.
+Pending work, and nothing else — fifteen items across four categories, each gated on **hardware** (one GPU on the reference machine, no GPU CI runner), **upstream** (the API does not exist yet, raises `NotImplementedError`, or does not import), **external access** (a credential, service or download this environment lacks), **build** (a Kratos application the reference build does not compile), or **open** (nothing blocks it — it needs data, or someone's time). What has shipped is described under Features above and in the documentation; how items left this list, and what each round learned doing so, is kept on the [Retrospectives](https://kratosmultiphysics.github.io/Kratos/pages/Applications/PhysicsNeMo_Application/General/Retrospectives.html) page. Contributions and prioritization requests are welcome — please open an issue on the Kratos repository mentioning `PhysicsNeMoApplication`.
+
+<details>
+<summary>Full roadmap, by category</summary>
+
+Every entry is verified live against **physicsnemo 2.2.0** — 2.2.1 is a fix-only release and the upstream 2.3.0 changelog is still empty, so 2.2 *is* the current surface — and against the reference build, rather than assumed. Items marked *experimental* live under `physicsnemo.experimental`, whose API may change between releases without notice.
 
 ### Verification gates on shipped machinery
 
@@ -205,7 +213,7 @@ What is missing here is on the Kratos side - a cross-validation, a driver loop, 
 | 14 | A closed-loop shape optimizer with cross-validation | build | `ComputeControlSensitivities` + `MeshMovingApplication` smoothing are shipped; a driver loop cross-validated against `ShapeOptimizationApplication`/`OptimizationApplication` needs those two compiled (the committed vertex-morphing fixture stands in for now) |
 | 15 | Particle applications behind `ParticleInferenceProcess` | build | the process reads any particle node cloud; `MPMApplication`, `SPHApplication`, `DEMApplication` and `PfemFluidDynamicsApplication` are not compiled here, so the tests drive synthetic clouds |
 
-Contributions and prioritization requests are welcome — please open an issue on the Kratos repository mentioning `PhysicsNeMoApplication`.
+</details>
 
 ## ⚠️ Dependency policy — read before contributing:
 
@@ -230,9 +238,14 @@ pip install usd-core         # optional: the digital-twin USD export (UsdExportP
 pip install tetgen           # optional: exact boundary recovery in the tetrahedral fill ("method": "tetgen"; note TetGen itself is AGPL-licensed)
 ```
 
-> **Before adding applications to an existing build — a trap worth knowing.** Kratos reads `KRATOS_APPLICATIONS` from the *environment* and never writes it to the CMake cache, and `make install` never prunes the install tree. An install directory therefore accumulates every application ever built, while the build graph covers only the ones in the current configure script — and those two sets drift apart silently. Applications outside the graph are not rebuilt, so the next `libKratosCore.so` relink leaves them ABI-stale: they keep *existing*, and `CheckIfApplicationsAvailable` keeps reporting them as present, but importing them fails with an undefined symbol or segfaults. Because several Kratos applications import their optional companions on a *presence* check rather than a working one, one stale library can take down an application that was never touched.
->
-> So: reconfiguring to add an application is not a local operation. Restore the **full** historical application list in the same run, and treat the install tree as unreproducible from the cache alone — nothing records what produced it.
+<details>
+<summary>Before adding applications to an existing build — a trap worth knowing</summary>
+
+Kratos reads `KRATOS_APPLICATIONS` from the *environment* and never writes it to the CMake cache, and `make install` never prunes the install tree. An install directory therefore accumulates every application ever built, while the build graph covers only the ones in the current configure script — and those two sets drift apart silently. Applications outside the graph are not rebuilt, so the next `libKratosCore.so` relink leaves them ABI-stale: they keep *existing*, and `CheckIfApplicationsAvailable` keeps reporting them as present, but importing them fails with an undefined symbol or segfaults. Because several Kratos applications import their optional companions on a *presence* check rather than a working one, one stale library can take down an application that was never touched.
+
+So: reconfiguring to add an application is not a local operation. Restore the **full** historical application list in the same run, and treat the install tree as unreproducible from the cache alone — nothing records what produced it.
+
+</details>
 
 ## ⚙️ Examples:
 
@@ -247,6 +260,9 @@ Executing them proves no exception was raised, which is weaker than proving the 
 ### Worked examples
 
 Twenty-six fully documented use cases live in the [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application): self-contained scripts against real Kratos solves, with every figure regenerated by the code — the five newest being [Lennard-Jones molecular dynamics](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/lennard_jones_md) (a learned force field on periodic radius graphs, rolled out by `ParticleInferenceProcess`, with a log-axis plot of exactly where the self-driven rollout stops working rather than a claim that it does not), [Generative topology design](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/generative_topology_design) (Kratos in the loop twice — an optimality-criteria loop computes the training optima, and every design TopoDiff proposes is re-solved to score it), [Residual-guided diffusion](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/residual_guided_diffusion) (one trained denoiser steered at sampling time toward ten sparse sensors and toward the exact discrete FEM residual, with no retraining, and the `std_y` sweep that shows where guidance is silently off), [Geometry guardrail](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/geometry_guardrail) (a slab that normalizes to look exactly like the training cubes, so the field guard stays silent while the geometry guard rejects it at percentile 100) and [Boundary-to-interior operators](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/boundary_to_interior_operators) (GLOBE reading the actual boundary mesh and xDeepONet reading the case parameters, both beating the input-ignoring predictor on every held-out case, with no POD basis anywhere). Highlights (each image links to its case):
+
+<details>
+<summary>All highlights (thirteen cases, one image each)</summary>
 
 **[Generative topology design](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/generative_topology_design)** — the solver computes the training set by running real topology optimization, and scores every proposed design by re-solving it; the sampled designs beat volume-matched random controls by 2.6x to 5.0x and stay clearly worse than the optimizer, which the case reports rather than hides:
 
@@ -359,6 +375,8 @@ Twenty-six fully documented use cases live in the [Examples repository](https://
 <p align="center">
   <a href="https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application/use_cases/rom_temporal_surrogate"><img src="https://raw.githubusercontent.com/KratosMultiphysics/Examples/master/physics_nemo_application/use_cases/rom_temporal_surrogate/data/coefficient_rollout.png" alt="Reduced coordinates, truth vs rollout at an unseen conductivity." width="700"/></a>
 </p>
+
+</details>
 
 ## 🗎 Documentation:
 
