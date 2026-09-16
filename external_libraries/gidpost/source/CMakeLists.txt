@@ -6,7 +6,7 @@ set (gidpost_source
   gidpost.c gidpost_cluster.c gidpostFILES.c gidpostInt.c
   gidpostHash.c hashtab.c recycle.c lookupa.c)
 
-file(GLOB SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/source/*.c")
+file(GLOB SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
 
 foreach(file ${SOURCE_FILES})
     set_source_files_properties(${file} PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
@@ -30,6 +30,14 @@ endif (ENABLE_SHARED_LIBS)
 
 add_library (gidpost ${LIB_TYPE} ${gidpost_source} ${hdf5_source})
 
+# Internal to gidpost's own compilation: tells gidpost.h to pull in the
+# generated gidpost_config.h (which only carries #cmakedefine ENABLE_HDF5,
+# see ../gidpost_config.h.in). PRIVATE on purpose -- this is a generic,
+# un-namespaced macro name and must not leak into every consumer translation
+# unit (KratosCore links this target PUBLIC).
+target_compile_definitions(gidpost PRIVATE HAVE_GIDPOST_CONFIG_H)
+target_include_directories(gidpost PRIVATE ${PROJECT_BINARY_DIR})
+
 if (ENABLE_SHARED_LIBS)
   add_definitions (-DGIDPOST_EXPORTS)
 endif (ENABLE_SHARED_LIBS)
@@ -51,26 +59,34 @@ if ( ( CMAKE_CXX_COMPILER_ID STREQUAL "GNU") OR ( CMAKE_CXX_COMPILER_ID STREQUAL
 endif()
 
 if (ENABLE_HDF5)
-  include_directories(${HDF5_INCLUDE_DIRS})
-  target_link_libraries(gidpost ${HDF5_LIBRARIES})
+  # gidpost's own sources see ENABLE_HDF5 through the generated gidpost_config.h
+  # (HAVE_GIDPOST_CONFIG_H, set above) -- not redefined here, which would just
+  # warn on every translation unit. KRATOS_GIDPOST_HAS_HDF5 is the namespaced,
+  # PUBLIC macro that actually needs to reach consumers -- it is what lets
+  # kratos/includes/gid_io.h detect at compile time whether GiD_PostHDF5 is
+  # usable, which is otherwise impossible: gidpost_config.h is not on a
+  # consumer's include path.
+  target_compile_definitions(gidpost PUBLIC KRATOS_GIDPOST_HAS_HDF5)
+  target_include_directories(gidpost PRIVATE ${HDF5_INCLUDE_DIRS})
+  target_link_libraries(gidpost PRIVATE ${HDF5_LIBRARIES} ${HDF5_HL_LIBRARIES})
 endif (ENABLE_HDF5)
 
 # find  package already done in  ../CmakeLists.txt
 # find_package(ZLIB REQUIRED)
 if (ZLIB_FOUND)
-  include_directories(${ZLIB_INCLUDE_DIRS})
-  target_link_libraries(gidpost ${ZLIB_LIBRARIES})
+  target_include_directories(gidpost PRIVATE ${ZLIB_INCLUDE_DIRS})
+  target_link_libraries(gidpost PRIVATE ${ZLIB_LIBRARIES})
 else ( ZLIB_FOUND )
   message ( SEND_ERROR "ZLIB_LIBRARY NOTFOUND, set ZLIB_INCLUDE_DIRS and ZLIB_LIBRARIES variables")
 endif(ZLIB_FOUND)
 
 find_package( Threads )
 if ( Threads_FOUND )
-  target_link_libraries(gidpost ${CMAKE_THREAD_LIBS_INIT})
+  target_link_libraries(gidpost PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 endif (Threads_FOUND)
 
 if (UNIX)
-  target_link_libraries(gidpost m)
+  target_link_libraries(gidpost PRIVATE m)
 endif (UNIX)
 
 # install rules

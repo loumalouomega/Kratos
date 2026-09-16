@@ -2596,7 +2596,9 @@ int GiD_fWriteNurbsSurfaceVector( GiD_FILE fd, int id, int n, int num_comp, doub
 
 /* User defined properties/atributes */
 /* User defined properties defined inside Mesh or Result blocks
-   hdf5: stored as properties/attributes (Name, value) of the current Mesh/N or Result/N folder
+   ENABLE_HDF5: stored as properties/attributes (Name, value) of:
+     * the current 'Mesh/N' or 'Result/N' folder if called after GiD_fBegin*
+     * the 'Mesh' or 'Result' folder if called before GiD_fBegin*
    ASCII / raw binary: stored as comments
      # Name: value
    Define the macro COMPASSIS_USER_ATTRIBUTES_FORMAT

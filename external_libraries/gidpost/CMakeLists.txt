@@ -127,36 +127,13 @@ if (ENABLE_SHARED_LIBS)
   add_definitions (-DGIDPOST_SHARED)
 endif (ENABLE_SHARED_LIBS)
 
-# fortran examples and compiler selection
+# examples are not built by Kratos (see ../README_UPDATE.md); the Fortran
+# binding and its compiler-detection block were dropped when re-vendoring
+# gidpost 2.14 -- nothing in this tree references it (verified: absent from
+# ../source/CMakeLists.txt's gidpost_source list).
 if( NOT DEFINED ENABLE_EXAMPLES)
     option (ENABLE_EXAMPLES "Build examples, it is needed a C++ compiler" ON )
 endif( NOT DEFINED ENABLE_EXAMPLES)
-
-if( NOT DEFINED ENABLE_FORTRAN_EXAMPLES)
-    option (ENABLE_FORTRAN_EXAMPLES "Build fortran examples, it is needed a fortran compiler" OFF )
-endif( NOT DEFINED ENABLE_FORTRAN_EXAMPLES)
-
-if (ENABLE_FORTRAN_EXAMPLES)
-  enable_language ( Fortran )
-  # add_definitions(-DgFortran)
-  # message(STATUS "*** defining -DgFortran")
-  message( STATUS "-- Fortran toolset : ${CMAKE_VS_PLATFORM_TOOLSET_FORTRAN}")
-  message( STATUS "-- Detected Fortran : ${CMAKE_Fortran_COMPILER_ID}")
-  message( STATUS "-- Fortran executable : ${CMAKE_Fortran_COMPILER}")
-  add_definitions (-DgFortran)
-  if ( CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-    option (HAS_GFORTRAN "Use GNU Gfortran" ON)
-    message( STATUS "-- Using GNU GFortran : ${CMAKE_Fortran_COMPILER_ID}")
-  elseif ( CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-    option (HAS_INTEL_FORTRAN "Use Intel Fortran" ON)
-    message( STATUS "-- Using Intel Fortran : ${CMAKE_Fortran_COMPILER_ID}")
-  elseif ( CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
-    option (HAS_NVIDIA_FORTRAN "Use nVidia fortran" ON)
-    message( STATUS "-- Using nVidia nvfortran : ${CMAKE_Fortran_COMPILER_ID}")
-  else ( CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-    message( WARNING "Fortran compiler not supported: ${CMAKE_Fortran_COMPILER_ID}")
-  endif ( CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-endif (ENABLE_FORTRAN_EXAMPLES)
 
 # used in examples/MultiplePartition
 if ( NOT DEFINED ENABLE_PARALLEL_EXAMPLE)
@@ -187,20 +164,17 @@ if (CMAKE_COMPILER_IS_GNUCXX)
 endif (CMAKE_COMPILER_IS_GNUCXX)
 
 # configure a header file to pass some of the CMake settings
-# to the source code
+# to the source code. HAVE_GIDPOST_CONFIG_H and the include path to the
+# generated header are target-scoped on the gidpost target itself (see
+# source/CMakeLists.txt), not directory-scoped here, so the definitions
+# gidpost needs internally never leak into consumers -- only the namespaced,
+# PUBLIC KRATOS_GIDPOST_HAS_HDF5 macro does.
 configure_file (
   "${PROJECT_SOURCE_DIR}/gidpost_config.h.in"
   "${PROJECT_BINARY_DIR}/gidpost_config.h"
 )
 
-# so that gidpost library uses the above gidpost_config.h file
-add_definitions (-DHAVE_GIDPOST_CONFIG_H)
-
 install( FILES "${PROJECT_BINARY_DIR}/gidpost_config.h" DESTINATION "include" )
-
-# add the binary tree to the search path for include files
-# so that we will find TutorialConfig.h
-include_directories("${PROJECT_BINARY_DIR}")
 
 include_directories ("${PROJECT_SOURCE_DIR}")
 include_directories ("${PROJECT_SOURCE_DIR}/source")
@@ -211,7 +185,7 @@ add_subdirectory (source)
 # built.
 link_directories (${PROJECT_BINARY_DIR}/source  ${ZLIB_LIBRARY_DIRS} ${HDF5_C_LIBRARY_DIRS} ${HDF5_HL_LIBRARY_DIRS})
 
-# if (ENABLE_EXAMPLES OR ENABLE_FORTRAN_EXAMPLES)
+# if (ENABLE_EXAMPLES)
 #   add_subdirectory( examples )
 #   add_subdirectory( examples/MultiplePartition )
-# endif (ENABLE_EXAMPLES OR ENABLE_FORTRAN_EXAMPLES)
+# endif (ENABLE_EXAMPLES)

@@ -102,14 +102,21 @@ typedef struct _CurrentHdf5WriteData {
   MeshGroupData *mesh_group_data;
 } CurrentHdf5WriteData;
 
-CurrentHdf5WriteData *new_CurrentHdf5WriteData( void ) {
-  static int G_num_HDF5_files = 0;
+/* meshio++ fix (1 of 2): file scope, not a function-local static, so that
+   delete_CurrentHdf5WriteData() below can decrement it. See the note in
+   ../README.meshioplusplus.md. */
+static int G_num_HDF5_files = 0;
 
+CurrentHdf5WriteData *new_CurrentHdf5WriteData( void ) {
   /* if we are opening more than one HDF5 file, check for thread safety */
   _LOCK_;
   if ( G_num_HDF5_files == 1 ) {
     if ( GiD_IsThreadSafe_HDF5() <= 0 ) {
       fprintf( stderr, "GiDPost: HDF5 library is not thread safe. Using %s\n", GiD_GetHDF5Version() );
+      /* meshio++ fix (2 of 2): the original returned here WITHOUT unlocking,
+         leaving the process-global gidpost mutex held forever -- every later
+         gidpost call then deadlocked. */
+      _UNLOCK_;
       return NULL;
     }
   }
@@ -127,6 +134,14 @@ CurrentHdf5WriteData *new_CurrentHdf5WriteData( void ) {
 void delete_CurrentHdf5WriteData( CurrentHdf5WriteData *obj ) {
   delete_MeshGroupData( obj->mesh_group_data );
   free( obj );
+  /* meshio++ fix (1 of 2, cont.): the counter must track CURRENTLY-OPEN files,
+     not files ever opened. Upstream only ever incremented it, so the second
+     HDF5 file opened in a process -- even strictly after the first was closed
+     -- tripped the thread-safety check above and was refused. */
+  _LOCK_;
+  if ( G_num_HDF5_files > 0 )
+    G_num_HDF5_files--;
+  _UNLOCK_;
 }
 
 /* private functions */
@@ -265,43 +280,42 @@ int GiD_ClosePostMeshFile_HDF5( CurrentHdf5WriteData *obj ) {
   return 0;
 }
 
-int GiD_BeginMesh_HDF5( CurrentHdf5WriteData *obj, GP_CONST char * MeshName,GiD_Dimension Dim, GiD_ElementType EType,int NNode) {
-  char meshN[1024],buf[1024];
-  const char* enames[]={"NoElement","Point","Linear","Triangle","Quadrilateral","Tetrahedra","Hexahedra","Prism","Pyramid","Sphere","Circle"};
+int GiD_BeginMesh_HDF5( CurrentHdf5WriteData *obj, GP_CONST char *MeshName, GiD_Dimension Dim, GiD_ElementType EType, int NNode ) {
+  char meshN[ 1024 ], buf[ 1024 ];
+  const char *enames[] = { "NoElement","Point","Linear","Triangle","Quadrilateral","Tetrahedra","Hexahedra","Prism","Pyramid","Sphere","Circle" };
   char dst_mesh_path[ 1024 ];
   const char *mesh_path = getCurrentMeshPath( obj, dst_mesh_path, 1024 );
-  hdf5c_f_create_group( obj->post_h5_file, mesh_path);
+  hdf5c_f_create_group( obj->post_h5_file, mesh_path );
   obj->current_mesh_num++;
-  snprintf(meshN, 1024, "%s/%d", mesh_path, obj->current_mesh_num);
-  hdf5c_f_create_group( obj->post_h5_file, meshN);
-  if(MeshName) 
-    hdf5c_f_set_attribute( obj->post_h5_file, meshN,"Name",MeshName);
+  snprintf( meshN, 1024, "%s/%d", mesh_path, obj->current_mesh_num );
+  hdf5c_f_create_group( obj->post_h5_file, meshN );
+  if ( MeshName )
+    hdf5c_f_set_attribute( obj->post_h5_file, meshN, "Name", MeshName );
 
-  switch(Dim){
-    case GiD_2D: strcpy(buf,"2"); break;
-    case GiD_3D: strcpy(buf,"3"); break;
+  switch ( Dim ) {
+    case GiD_2D: strcpy( buf, "2" ); break;
+    case GiD_3D: strcpy( buf, "3" ); break;
   }
-  hdf5c_f_set_attribute( obj->post_h5_file, meshN,"Dimension",buf);
-  
-  hdf5c_f_set_attribute( obj->post_h5_file, meshN,"ElemType",enames[EType]);
-  snprintf(buf, 1024, "%d",NNode);
-  hdf5c_f_set_attribute( obj->post_h5_file, meshN,"Nnode",buf);
-  obj->current_mesh_nnode=NNode;
-  obj->current_mesh_etype=EType;
+  hdf5c_f_set_attribute( obj->post_h5_file, meshN, "Dimension", buf );
+
+  hdf5c_f_set_attribute( obj->post_h5_file, meshN, "ElemType", enames[ EType ] );
+  snprintf( buf, 1024, "%d", NNode );
+  hdf5c_f_set_attribute( obj->post_h5_file, meshN, "Nnode", buf );
+  obj->current_mesh_nnode = NNode;
+  obj->current_mesh_etype = EType;
   return 0;
 }
 
-int GiD_BeginMeshColor_HDF5( CurrentHdf5WriteData *obj, GP_CONST char * MeshName,GiD_Dimension Dim, GiD_ElementType EType,
-  int NNode,double Red, double Green, double Blue)
-{
+int GiD_BeginMeshColor_HDF5( CurrentHdf5WriteData *obj, GP_CONST char *MeshName, GiD_Dimension Dim, GiD_ElementType EType,
+                             int NNode, double Red, double Green, double Blue ) {
   int ret;
-  char meshN[1024],buf[1024];
-  ret=GiD_BeginMesh_HDF5( obj, MeshName,Dim,EType,NNode);
+  char meshN[ 1024 ], buf[ 1024 ];
+  ret = GiD_BeginMesh_HDF5( obj, MeshName, Dim, EType, NNode );
   char dst_mesh_path[ 1024 ];
   const char *mesh_path = getCurrentMeshPath( obj, dst_mesh_path, 1024 );
-  snprintf(meshN,1024, "%s/%d", mesh_path, obj->current_mesh_num);
-  snprintf(buf,1024, "%f %f %f",Red,Green,Blue);
-  hdf5c_f_set_attribute( obj->post_h5_file, meshN,"Color",buf);
+  snprintf( meshN, 1024, "%s/%d", mesh_path, obj->current_mesh_num );
+  snprintf( buf, 1024, "%f %f %f", Red, Green, Blue );
+  hdf5c_f_set_attribute( obj->post_h5_file, meshN, "Color", buf );
   return ret;
 }
 
@@ -786,85 +800,83 @@ typedef enum {
   RH_add
 } ResultHeaderMode;
 
-int _GiD_BeginResultHeader_HDF5_init( CurrentHdf5WriteData *obj, GP_CONST char * Result, GP_CONST char * Analysis, double step,
-  GiD_ResultType Type, GiD_ResultLocation Where,
-  GP_CONST char * GaussPointsName,ResultHeaderMode RHmode)
-{  
-  char resN[2048],buf[2048];
-  char* rtnames[]={"Scalar","Vector","Matrix","PlainDeformationMatrix","MainMatrix","LocalAxes", 
-		   "ComplexScalar", "ComplexVector"};
-  
-  if(RHmode==RH_start){
-    obj->num_results_group=1;
+int _GiD_BeginResultHeader_HDF5_init( CurrentHdf5WriteData *obj, GP_CONST char *Result, GP_CONST char *Analysis, double step,
+                                      GiD_ResultType Type, GiD_ResultLocation Where,
+                                      GP_CONST char *GaussPointsName, ResultHeaderMode RHmode ) {
+  char resN[ 2048 ], buf[ 2048 ];
+  char *rtnames[] = { "Scalar","Vector","Matrix","PlainDeformationMatrix","MainMatrix","LocalAxes",
+                   "ComplexScalar", "ComplexVector" };
+
+  if ( RHmode == RH_start ) {
+    obj->num_results_group = 1;
   } else {
     obj->num_results_group++;
   }
-  obj->curr_result_group=0;
+  obj->curr_result_group = 0;
 
-  obj->myresults[obj->num_results_group-1].num=++obj->num_results_total;
-  obj->myresults[obj->num_results_group-1].dataset_id=-1;
-  
+  obj->myresults[ obj->num_results_group - 1 ].num = ++obj->num_results_total;
+  obj->myresults[ obj->num_results_group - 1 ].dataset_id = -1;
+
   char dst_results_path[ 1024 ];
   const char *results_path = getCurrentResultPath( obj, dst_results_path, 1024 );
-  snprintf(resN, 2048, "%s/%d", results_path, obj->num_results_total);
-  strcpy(obj->myresults[obj->num_results_group-1].name,resN);
+  snprintf( resN, 2048, "%s/%d", results_path, obj->num_results_total );
+  strcpy( obj->myresults[ obj->num_results_group - 1 ].name, resN );
 
-  hdf5c_f_create_group( obj->post_h5_file, results_path);
-  hdf5c_f_create_group( obj->post_h5_file, resN);
+  hdf5c_f_create_group( obj->post_h5_file, results_path );
+  hdf5c_f_create_group( obj->post_h5_file, resN );
 
-  hdf5c_f_set_attribute( obj->post_h5_file, resN,"Name",Result);
-  hdf5c_f_set_attribute( obj->post_h5_file, resN,"Analysis",Analysis);
+  hdf5c_f_set_attribute( obj->post_h5_file, resN, "Name", Result );
+  hdf5c_f_set_attribute( obj->post_h5_file, resN, "Analysis", Analysis );
 
-  snprintf(buf, 2048, GiD_PostGetFormatStep(),step);
-  hdf5c_f_set_attribute( obj->post_h5_file, resN,"Step",buf);
-  
-  hdf5c_f_set_attribute( obj->post_h5_file, resN,"ResultType",rtnames[Type]);
-  switch(Where){
-    case GiD_OnNodes: 
-      hdf5c_f_set_attribute( obj->post_h5_file, resN,"ResultLocation","OnNodes"); 
+  snprintf( buf, 2048, GiD_PostGetFormatStep(), step );
+  hdf5c_f_set_attribute( obj->post_h5_file, resN, "Step", buf );
+
+  hdf5c_f_set_attribute( obj->post_h5_file, resN, "ResultType", rtnames[ Type ] );
+  switch ( Where ) {
+    case GiD_OnNodes:
+      hdf5c_f_set_attribute( obj->post_h5_file, resN, "ResultLocation", "OnNodes" );
       break;
-    case GiD_OnGaussPoints: 
-      hdf5c_f_set_attribute( obj->post_h5_file, resN,"ResultLocation","OnGaussPoints"); 
+    case GiD_OnGaussPoints:
+      hdf5c_f_set_attribute( obj->post_h5_file, resN, "ResultLocation", "OnGaussPoints" );
       break;
-    case GiD_OnNurbsLine: 
-      hdf5c_f_set_attribute( obj->post_h5_file, resN,"ResultLocation","OnNurbsLine"); 
+    case GiD_OnNurbsLine:
+      hdf5c_f_set_attribute( obj->post_h5_file, resN, "ResultLocation", "OnNurbsLine" );
       break;
-    case GiD_OnNurbsSurface: 
-      hdf5c_f_set_attribute( obj->post_h5_file, resN,"ResultLocation","OnNurbsSurface"); 
+    case GiD_OnNurbsSurface:
+      hdf5c_f_set_attribute( obj->post_h5_file, resN, "ResultLocation", "OnNurbsSurface" );
       break;
-    case GiD_OnNurbsVolume: 
-      hdf5c_f_set_attribute( obj->post_h5_file, resN,"ResultLocation","OnNurbsVolume"); 
+    case GiD_OnNurbsVolume:
+      hdf5c_f_set_attribute( obj->post_h5_file, resN, "ResultLocation", "OnNurbsVolume" );
       break;
   }
-  if(GaussPointsName && GaussPointsName[ 0]) {
-    hdf5c_f_set_attribute( obj->post_h5_file, resN,"GaussPointsName",GaussPointsName);
+  if ( GaussPointsName && GaussPointsName[ 0 ] ) {
+    hdf5c_f_set_attribute( obj->post_h5_file, resN, "GaussPointsName", GaussPointsName );
   }
   return 0;
 }
 
-int GiD_BeginResult_HDF5( CurrentHdf5WriteData *obj, GP_CONST char * Result, GP_CONST char * Analysis,double step,
-  GiD_ResultType Type, GiD_ResultLocation Where,
-  GP_CONST char * GaussPointsName,
-  GP_CONST char * RangeTable, 
-  int compc, GP_CONST char * compv[])
-{
-  int fail,i;
-  char* resN,buf[2048];
-  
-  fail=_GiD_BeginResultHeader_HDF5_init (obj, Result,Analysis,step,Type,Where,GaussPointsName,RH_start);
-  if(fail<0) return 1;
-  resN=obj->myresults[obj->num_results_group-1].name;
+int GiD_BeginResult_HDF5( CurrentHdf5WriteData *obj, GP_CONST char *Result, GP_CONST char *Analysis, double step,
+                          GiD_ResultType Type, GiD_ResultLocation Where,
+                          GP_CONST char *GaussPointsName,
+                          GP_CONST char *RangeTable,
+                          int compc, GP_CONST char *compv[] ) {
+  int fail, i;
+  char *resN, buf[ 2048 ];
 
-  if ( RangeTable && *RangeTable) {
-    hdf5c_f_set_attribute( obj->post_h5_file, resN,"RangeTable",RangeTable);
+  fail = _GiD_BeginResultHeader_HDF5_init( obj, Result, Analysis, step, Type, Where, GaussPointsName, RH_start );
+  if ( fail < 0 ) return 1;
+  resN = obj->myresults[ obj->num_results_group - 1 ].name;
+
+  if ( RangeTable && *RangeTable ) {
+    hdf5c_f_set_attribute( obj->post_h5_file, resN, "RangeTable", RangeTable );
   }
-  if(compc){
-    snprintf(buf, 2048, "%d",compc);
-    hdf5c_f_set_attribute( obj->post_h5_file, resN,"NumComponents",buf);
+  if ( compc ) {
+    snprintf( buf, 2048, "%d", compc );
+    hdf5c_f_set_attribute( obj->post_h5_file, resN, "NumComponents", buf );
   }
-  for(i=0;i<compc;i++){
-    snprintf(buf, 2048, "Component %d",i+1);
-    hdf5c_f_set_attribute( obj->post_h5_file, resN,buf,compv[i]);
+  for ( i = 0; i < compc; i++ ) {
+    snprintf( buf, 2048, "Component %d", i + 1 );
+    hdf5c_f_set_attribute( obj->post_h5_file, resN, buf, compv[ i ] );
   }
   return 0;
 }
@@ -1365,7 +1377,9 @@ int GiD_EndOnMeshGroup_HDF5( CurrentHdf5WriteData *obj ) {
 }
 
 /* User defined properties defined inside Mesh or Result blocks
-   HDF5: stored as properties/attributes of the Mesh/Result folder (Name, value)
+   ENABLE_HDF5: stored as properties/attributes (Name, value) of:
+     * the current 'Mesh/N' or 'Result/N' folder if called after GiD_fBegin*
+     * the 'Mesh' or 'Result' folder if called before GiD_fBegin*
    ASCII / raw binary: stored as comments
      # Name: value
    Define the macro COMPASSIS_USER_ATTRIBUTES_FORMAT
@@ -1379,18 +1393,31 @@ int GiD_WriteMeshUserAttribute_HDF5( CurrentHdf5WriteData *obj, GP_CONST char *N
     char dest_path[ 1024 ];
     snprintf( meshN, 1024, "%s/%d", getCurrentMeshPath( obj, dest_path, 1024 ), obj->current_mesh_num );
     hdf5c_f_set_attribute( obj->post_h5_file, meshN, Name, Value );
-    return 0;
+  } else {
+    char meshN[ 1024 ];
+    char dest_path[ 1024 ];
+    // snprintf( meshN, 1024, "%s/%d", getCurrentMeshPath( obj, dest_path, 1024 ), obj->current_mesh_num );
+    snprintf( meshN, 1024, "%s", getCurrentMeshPath( obj, dest_path, 1024 ));
+    // if group does not exist it will be created
+    hdf5c_f_create_group( obj->post_h5_file, meshN );
+    hdf5c_f_set_attribute( obj->post_h5_file, meshN, Name, Value );
   }
-  return -1;
+  return 0;
 }
 
 int GiD_WriteResultUserAttribute_HDF5( CurrentHdf5WriteData *obj,  GP_CONST char *Name, GP_CONST char *Value ) {
   if ( obj->num_results_group > 0 ) {
     const char *resN = obj->myresults[ obj->num_results_group - 1 ].name;
     hdf5c_f_set_attribute( obj->post_h5_file, resN, Name, Value );
-    return 0;
+  } else {
+    char resN[ 1024 ];
+    char dest_path[ 1024 ];
+    snprintf( resN, 1024, "%s", getCurrentResultPath( obj, dest_path, 1024 ) );
+    // if group does not exist it will be created
+    hdf5c_f_create_group( obj->post_h5_file, resN );
+    hdf5c_f_set_attribute( obj->post_h5_file, resN, Name, Value );
   }
-  return -1;
+  return 0;
 }
 
 

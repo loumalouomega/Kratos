@@ -2,7 +2,6 @@
 #define __GIDPOST_FUNCTIONS__
 
 #include "gidpost_types.h"
-
 #include "gidpost_cluster_functions.h"
 
 /*
@@ -16,6 +15,7 @@ GIDPOST_API int GiD_PostIsThreadSafe( GiD_PostMode Mode ); // returns -1 on erro
   
 GIDPOST_API int GiD_PostSetFormatReal(GP_CONST char * format_real);
 GIDPOST_API GP_CONST char *GiD_PostGetFormatReal( void );
+GIDPOST_API int GiD_PostSetFormatStep(GP_CONST char* format_real); // format used to print the time step as string
 GIDPOST_API GP_CONST char *GiD_PostGetFormatStep( void );
 
 /* ---------------------------------------------------------------------------
@@ -545,8 +545,10 @@ int GiD_fWriteNurbsSurface( GiD_FILE fd, int id, int n, double* v );
 GIDPOST_API
 int GiD_fWriteNurbsSurfaceVector( GiD_FILE fd, int id, int n, int num_comp, double* v );
 
-/* User defined properties defined inside Mesh or Result blocks
-   ENABLE_HDF5: stored as properties/attributes (Name, value) of the current Mesh/N or Result/N folder
+/* User defined properties defined inside/outside Mesh or Result blocks
+   ENABLE_HDF5: stored as properties/attributes (Name, value) of:
+     * the current 'Mesh/N' or 'Result/N' folder if called after GiD_fBegin*
+     * the 'Mesh' or 'Result' folder if called before GiD_fBegin*
    ASCII / raw binary: stored as comments
      # Name: value
    Define the macro COMPASSIS_USER_ATTRIBUTES_FORMAT

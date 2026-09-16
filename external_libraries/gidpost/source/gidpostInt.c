@@ -21,7 +21,14 @@ static int ByteOrderCheck=0x91d;  /* Magic number */
 /* format to print reals to string, customizable only once at the begin*/
 static char G_format_real[100]={"%.9g"};
 
+/* Kratos fix: bounds-checked setter -- the original unchecked strcpy() could
+   overflow G_format_real for a caller-supplied format string of 100 or more
+   characters. Truncation is reported rather than silently accepted. */
 GIDPOST_API int GiD_PostSetFormatReal(GP_CONST char* f){
+  if ( f == NULL )
+    return GP_ERROR_NULLSTRING;
+  if ( strlen( f ) >= sizeof( G_format_real ) )
+    return GP_ERROR_WRITESTRING;
   strcpy(G_format_real,f);
   return 0;
 }
@@ -31,9 +38,24 @@ GIDPOST_API GP_CONST char *GiD_PostGetFormatReal() {
 }
 
 /* special format to not truncate time steps converted to string, not customizable but centralize its use*/
-GIDPOST_API GP_CONST char *GiD_PostGetFormatStep(){
-  static const char format_step[] ={ "%.16g"};
+/* Kratos fix: upstream 2.14 sized this buffer to fit only its own default
+   value ("%.16g", 6 bytes) although GiD_PostSetFormatStep() below now copies
+   an arbitrary caller-supplied string into it with an unchecked strcpy() --
+   sized to match G_format_real above so the same setter can be trusted with
+   the same bound. */
+static char format_step[100]={ "%.16g" };
+GIDPOST_API GP_CONST char *GiD_PostGetFormatStep(){  
   return format_step;
+}
+
+/* customizable only once at the begin, but be careful to not set a too short format to represent your time step values*/
+GIDPOST_API int GiD_PostSetFormatStep(GP_CONST char* f) {
+  if ( f == NULL )
+    return GP_ERROR_NULLSTRING;
+  if ( strlen( f ) >= sizeof( format_step ) )
+    return GP_ERROR_WRITESTRING;
+  strcpy(format_step,f);
+  return 0;
 }
 
 struct _CBufferValues
