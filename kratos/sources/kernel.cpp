@@ -96,6 +96,16 @@ void Kernel::Initialize() {
             Registry::AddItem<std::string>("libraries.concurrentqueue");
             Registry::AddItem<std::string>("libraries.ghc");
             Registry::AddItem<std::string>("libraries.gidpost");
+
+            // gidpost's HDF5 post-process backend (GiD_PostHDF5) is opt-in, see
+            // KRATOS_GIDPOST_WITH_HDF5 in the root CMakeLists.txt. A flat sibling key, not a child
+            // of "libraries.gidpost": that entry is a leaf value item (see the pattern above), and
+            // Registry::AddItem() refuses to add children under an item that already carries a
+            // value ("Item gidpost has value and cannot be iterated").
+        #ifdef KRATOS_GIDPOST_HAS_HDF5
+            Registry::AddItem<std::string>("libraries.gidpost_hdf5");
+        #endif
+
             Registry::AddItem<std::string>("libraries.intrusive_ptr");
             Registry::AddItem<std::string>("libraries.json");
             Registry::AddItem<std::string>("libraries.pybind11");
