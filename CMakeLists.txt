@@ -694,14 +694,31 @@ endif()
 # Compile Kratos Core
 if(${EXCLUDE_KRATOS_CORE} MATCHES OFF)
   # Add the definitions if required for gidpost
-  set(HDF5_FOUND FALSE)
   set(ENABLE_PARALLEL_EXAMPLE OFF)
-  set(ENABLE_HDF5 OFF)
   set(ZLIB_FOUND TRUE)
 
-  # (for gidpost )Disable examples and fortran examples.
+  # (for gidpost) Disable examples.
   set(ENABLE_EXAMPLES OFF)
-  set(ENABLE_FORTRAN_EXAMPLES OFF)
+
+  # gidpost's HDF5 post-process backend (GiD_PostHDF5) is opt-in and OFF by
+  # default. KratosCore has no HDF5 dependency today; the core configures
+  # before any application, so a root-level find_package(HDF5) here would
+  # populate the CMake cache first and could be silently reused by
+  # applications/HDF5Application (see the warning in its own CMakeLists.txt
+  # about a serial HDF5 found elsewhere being reused instead of a parallel
+  # one in MPI builds). HDF5_PREFER_PARALLEL is set to match that same
+  # convention whenever this option is turned on with USE_MPI=ON.
+  option(KRATOS_GIDPOST_WITH_HDF5 "Enable gidpost's HDF5 post-process backend (GiD_PostHDF5)" OFF)
+  if(KRATOS_GIDPOST_WITH_HDF5)
+    if(${USE_MPI} MATCHES ON)
+      set(HDF5_PREFER_PARALLEL ON)
+    endif()
+    find_package(HDF5 REQUIRED COMPONENTS C HL)
+    set(ENABLE_HDF5 ON)
+  else()
+    set(HDF5_FOUND FALSE)
+    set(ENABLE_HDF5 OFF)
+  endif()
 
   add_subdirectory(external_libraries/gidpost)
   add_subdirectory(kratos)
