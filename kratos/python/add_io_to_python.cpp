@@ -102,6 +102,19 @@ void  AddIOToPython(pybind11::module& m)
     py::class_<GidIO<>, GidIO<>::Pointer, IO>(m, "GidIO")
     .def(py::init<std::string const&, const GiD_PostMode, const MultiFileFlag, const WriteDeformedMeshFlag, const WriteConditionsFlag>())
     .def(py::init<std::string const&, const GiD_PostMode, const MultiFileFlag, const WriteDeformedMeshFlag, const WriteConditionsFlag, const bool>())
+    .def(py::init<std::string const&, const GiD_PostMode, const MultiFileFlag, const WriteDeformedMeshFlag, const WriteConditionsFlag, const bool, const std::string&, const std::string&>(),
+         py::arg("file_name"),
+         py::arg("post_mode"),
+         py::arg("multi_file_flag"),
+         py::arg("write_deformed_mesh_flag"),
+         py::arg("write_conditions_flag"),
+         py::arg("initialize_gauss_point_containers"),
+         py::arg("real_number_format") = "%g",
+         py::arg("time_step_number_format") = "%.16g",
+         "Creates a GiD IO writer. real_number_format and time_step_number_format are printf "
+         "conversion specifiers applied to gidpost's process-global output formatting. gidpost "
+         "only reads each one once, the first time that kind of ASCII output is written in the "
+         "process, and ignores later changes -- set them on the first GidIO constructed in a run.")
     //.def(py::init<std::string const&>())
     .def("WriteMesh",[](GidIO<>& dummy, GidIO<>::MeshType& rThisMesh){dummy.WriteMesh( rThisMesh );})
     .def("WriteNodeMesh",[](GidIO<>& dummy, GidIO<>::MeshType& rThisMesh){dummy.WriteNodeMesh( rThisMesh );})
