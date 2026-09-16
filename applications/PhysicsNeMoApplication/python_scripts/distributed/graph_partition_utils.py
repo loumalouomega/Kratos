@@ -249,6 +249,159 @@ def _AllGatherNodeData(model_part: Kratos.ModelPart, field_specs, data_communica
     return global_coordinates, global_features
 
 
+def _TryImportAutogradCollectives():
+    try:
+        from physicsnemo.distributed.autograd import indexed_all_to_all_v
+        return indexed_all_to_all_v
+    except ImportError as e:
+        raise ImportError(
+            "The differentiable halo exchange requires physicsnemo, which could not be "
+            "imported. Install it with e.g. 'pip install -U nvidia-physicsnemo'.") from e
+
+
+class HaloExchangePlan:
+    """Who sends which OWNED rows to whom, so halo features can travel
+    through torch autograd instead of being copied in up front.
+
+    BuildHaloSubgraph exchanges node features eagerly over the Kratos
+    DataCommunicator: correct for a forward pass, but a copy with no
+    gradient path. A model whose INPUT features are themselves being
+    learned - an encoder upstream of the graph, or features that are
+    optimization variables - needs the gradient a halo copy receives to flow
+    back to the rank that owns the original. This plan drives
+    physicsnemo.distributed.autograd.indexed_all_to_all_v, whose backward
+    does exactly that: it SUMS the gradient of every copy onto the owner.
+
+    The topology half stays eager (connectivity carries no gradient); only
+    the features move through torch.
+
+    PADDING, and why it is not optional. A halo exchange is ragged by
+    nature: a rank sends many rows to the neighbour it shares an interface
+    with and none to a rank on the far side of the mesh. Gloo's all-to-all
+    requires every block in the list to have the SAME shape and rejects
+    ragged ones outright ("invalid tensor size at index 1"), so every block
+    is padded to one common size and sliced back on receipt. The padding
+    rows are repeats of an existing index, and since the received copies of
+    them are discarded, their gradient is exactly zero - the property the
+    exchange exists for is untouched. A NCCL transport would not need this,
+    but NCCL needs one GPU per rank, which is why the padded path is the
+    one that is actually tested here.
+
+    Attributes:
+        send_rows: per destination rank, a LongTensor of rows into this
+            rank's owned features, in ascending node-id order, padded to
+            block_size.
+        true_sizes: true_sizes[i][j] = how many rows rank i really sends to
+            rank j, before padding.
+        block_size: the padded block size every pair exchanges.
+        owned_rows / halo_rows: where owned and received rows land in the
+            subgraph's node_ids order.
+    """
+
+    def __init__(self, node_ids, owned_mask, data_communicator) -> None:
+        torch = _TryImportTorch()
+        node_ids = numpy.asarray(node_ids, dtype=numpy.int64)
+        owned_mask = numpy.asarray(owned_mask, dtype=bool)
+        self.size = data_communicator.Size()
+        self.rank = data_communicator.Rank()
+        self.n_nodes = len(node_ids)
+        self.n_owned = int(owned_mask.sum())
+
+        owned_ids = numpy.sort(node_ids[owned_mask])
+        needed_ids = numpy.sort(node_ids[~owned_mask])
+        gathered_owned = [numpy.asarray(list(ids), dtype=numpy.int64) for ids in
+                          data_communicator.AllGathervInts([int(i) for i in owned_ids])]
+        gathered_needed = [numpy.asarray(list(ids), dtype=numpy.int64) for ids in
+                           data_communicator.AllGathervInts([int(i) for i in needed_ids])]
+
+        # true_sizes[i][j]: what rank i owns that rank j's halo needs
+        self.true_sizes = [
+            [int(numpy.intersect1d(gathered_owned[i], gathered_needed[j]).size)
+             for j in range(self.size)]
+            for i in range(self.size)]
+        self.block_size = max(
+            (count for row in self.true_sizes for count in row), default=0)
+        # what upstream is told: one uniform block per pair (see PADDING)
+        self.sizes = [[self.block_size] * self.size for _ in range(self.size)]
+
+        if self.block_size and self.n_owned == 0:
+            raise ValueError(
+                "This rank owns no node but the exchange needs padding rows taken from "
+                "its own features. A partition that leaves a rank empty cannot use the "
+                "differentiable halo exchange.")
+
+        self.send_rows = []
+        for destination in range(self.size):
+            shared = numpy.intersect1d(owned_ids, gathered_needed[destination])
+            rows = numpy.searchsorted(owned_ids, shared).astype(numpy.int64)
+            if self.block_size:
+                # pad with an existing row: its received copies are dropped,
+                # so it contributes exactly zero gradient
+                padding = numpy.zeros(self.block_size - rows.size, dtype=numpy.int64)
+                rows = numpy.concatenate([rows, padding])
+            self.send_rows.append(torch.from_numpy(rows))
+
+        # what arrives here is one padded block per source, each holding its
+        # true rows first, in ascending id order - the order the sender used
+        received_ids = (numpy.concatenate(
+            [numpy.intersect1d(gathered_owned[source], needed_ids)
+             for source in range(self.size)]) if self.size
+            else numpy.zeros(0, numpy.int64))
+        if not numpy.array_equal(numpy.sort(received_ids), needed_ids):
+            raise ValueError(
+                "The halo exchange plan does not cover this rank's halo: some halo node "
+                "is owned by no rank. The owned sets must partition the global nodes.")
+        row_of = {int(node_id): row for row, node_id in enumerate(node_ids)}
+        self.owned_rows = torch.tensor([row_of[int(i)] for i in owned_ids], dtype=torch.int64)
+        self.halo_rows = torch.tensor([row_of[int(i)] for i in received_ids], dtype=torch.int64)
+
+    def UnpadReceived(self, received):
+        """The true rows of each source's padded block, concatenated."""
+        torch = _TryImportTorch()
+        if not self.block_size:
+            return received
+        keep = []
+        for source in range(self.size):
+            start = source * self.block_size
+            keep.extend(range(start, start + self.true_sizes[source][self.rank]))
+        return received[torch.tensor(keep, dtype=torch.int64, device=received.device)]
+
+
+def ExchangeHaloFeatures(owned_features, plan: HaloExchangePlan, group=None):
+    """The subgraph's full (N, C) feature tensor, differentiably.
+
+    Args:
+        owned_features: (n_owned, C) torch tensor, rows in ascending
+            owned-node-id order - requires_grad is honoured.
+        plan: A HaloExchangePlan for this rank.
+        group: The torch process group (default: the world group).
+
+    Returns:
+        (N, C) tensor in the subgraph's node_ids order. Gradients reaching
+        a halo row are summed back onto the owning rank's row by the
+        collective's backward, so a loss over every rank's subgraph gives
+        each owned row the total gradient of all its copies.
+    """
+    torch = _TryImportTorch()
+    indexed_all_to_all_v = _TryImportAutogradCollectives()
+
+    if owned_features.shape[0] != plan.n_owned:
+        raise ValueError(
+            f"owned_features has {owned_features.shape[0]} rows but this rank owns "
+            f"{plan.n_owned} nodes; pass the owned rows in ascending id order.")
+    full = owned_features.new_zeros((plan.n_nodes,) + tuple(owned_features.shape[1:]))
+    full = full.index_copy(0, plan.owned_rows.to(full.device), owned_features)
+    if not plan.halo_rows.numel() and not plan.block_size:
+        return full
+
+    padded = indexed_all_to_all_v(
+        owned_features, plan.send_rows, plan.sizes, use_fp32=False, dim=0, group=group)
+    received = plan.UnpadReceived(padded)
+    if plan.halo_rows.numel():
+        full = full.index_copy(0, plan.halo_rows.to(full.device), received)
+    return full
+
+
 def GatherOwnedPredictionsToRank0(model_part: Kratos.ModelPart, node_ids,
                                   owned_mask, values, data_communicator=None):
     """Assembles per-rank owned predictions into the serial layout on rank 0.
