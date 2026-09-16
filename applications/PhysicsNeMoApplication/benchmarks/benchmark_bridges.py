@@ -9,6 +9,7 @@ per-entity path a training/inference step exercises:
 - nodal gather/scatter round trip through the provenance map,
 - element-field scatter-back (ScatterFieldBack, mean reduction),
 - grid sampling + grid scatter (SampleFieldsOnGrid / ScatterGridToNodes),
+  with --sampling both comparing the Kratos locator against physicsnemo's BVH,
 - ROM unknowns gather/scatter (rom_bridge, VariableUtils-backed),
 - the serial path of distributed_utils.GatherFieldToRank0.
 
@@ -94,6 +95,11 @@ def main():
                         help="lattice points per axis for the grid-sampling case (default 64)")
     parser.add_argument("--repeat", type=int, default=3,
                         help="repetitions per case; the median is reported (default 3)")
+    parser.add_argument("--sampling", choices=("kratos", "physicsnemo", "both"),
+                        default="kratos",
+                        help="which grid-sampling backend to time: the Kratos point "
+                             "locator, physicsnemo's mesh BVH, or \"both\" with the "
+                             "speedup (default kratos)")
     parser.add_argument("--backend", choices=("numpy", "cupy", "both"), default="numpy",
                         help="array backend for the paths that accept one; \"both\" times "
                              "each backend and reports the speedup (default numpy)")
@@ -210,6 +216,26 @@ def main():
                 tet_part, [("PRESSURE", "node_historical")], grid_shape),
             arguments.repeat)
         record(f"SampleFieldsOnGrid {arguments.grid}^3", int(numpy.prod(grid_shape)), seconds)
+
+        if arguments.sampling in ("physicsnemo", "both"):
+            # The question item 20 asks: is the mesh's own BVH faster than
+            # the point locator? Measure it, do not assume it - the default
+            # backend stays "kratos" until a number says otherwise.
+            try:
+                bvh_seconds, _ = _Time(
+                    lambda: grid_bridge.SampleFieldsOnGrid(
+                        tet_part, [("PRESSURE", "node_historical")], grid_shape,
+                        bounding_box=bounding_box, backend="physicsnemo"),
+                    arguments.repeat)
+                record(f"SampleFieldsOnGrid {arguments.grid}^3 (BVH)",
+                       int(numpy.prod(grid_shape)), bvh_seconds)
+                ratio = seconds / bvh_seconds if bvh_seconds > 0 else float("inf")
+                verdict = "the BVH wins" if ratio > 1.0 else "the locator wins"
+                print(f"  grid sampling: locator {seconds * 1e3:.1f} ms vs BVH "
+                      f"{bvh_seconds * 1e3:.1f} ms -> {verdict} "
+                      f"({ratio:.2f}x)\n", flush=True)
+            except ImportError as error:
+                print(f"  skipping the BVH sampling comparison: {error}\n", flush=True)
     except TypeError as error:
         # The vectorized locator is a compiled-core entry point, and its
         # signature has drifted across core builds. Skipping the case keeps
