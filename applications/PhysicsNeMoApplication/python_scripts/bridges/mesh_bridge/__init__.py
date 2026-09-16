@@ -28,7 +28,14 @@
 ``deformation``
     Differentiable shape parameterizations (FFD, RBF, morph, displace) with
     mesh-quality energies, writing coordinates back through the position
-    tensor adaptor.
+    tensor adaptor - plus ``DeformMesh``, the mesh-level shrinkwrap and
+    Sobolev displacement filter.
+``operations``
+    Curvature as a nodal feature, repair, subdivision, smoothing, moments,
+    and ``ExtrudeModelPart`` - a planar case swept into a 3-D one.
+``sampling``
+    Fields sampled at arbitrary points over the mesh's own BVH: slower than
+    the Kratos locator here, but differentiable, which the locator is not.
 ``adaptive_remeshing``
     Surrogate-error-driven remeshing: residual score -> equidistributed size
     field -> MeshingApplication MMG. Driven in the loop by

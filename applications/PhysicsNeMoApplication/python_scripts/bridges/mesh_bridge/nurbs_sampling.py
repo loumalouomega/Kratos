@@ -45,12 +45,40 @@ def _TryImportPhysicsNemoMesh():
             "them with e.g. 'pip install torch nvidia-physicsnemo'.") from e
 
 
+def _HasNurbsInterface(geometry, local_dimension: int) -> bool:
+    """Duck-typed: does this geometry offer everything sampling needs?
+
+    An IGA ANALYSIS does not hand back raw NurbsSurfaceGeometry3D objects.
+    Its modelers build Brep geometries that WRAP the NURBS surface, and the
+    Brep's background part comes back through the Python binding as a plain
+    Geometry. Both nonetheless expose the parametric span, the polynomial
+    degrees, the control-point counts, exact GlobalCoordinates evaluation
+    and CreateQuadraturePointGeometries - which is everything the lattice
+    and the isogeometric gather actually use. Insisting on the concrete
+    type would mean this bridge could sample geometries built by hand but
+    not the ones a solve produces.
+    """
+    required = ("KnotsU", "PolynomialDegree", "PointsNumberInDirection",
+                "GlobalCoordinates", "CreateQuadraturePointGeometries",
+                "LocalSpaceDimension")
+    if not all(hasattr(geometry, name) for name in required):
+        return False
+    if local_dimension == 2 and not hasattr(geometry, "KnotsV"):
+        return False
+    if local_dimension == 3 and not hasattr(geometry, "KnotsW"):
+        return False
+    try:
+        return int(geometry.LocalSpaceDimension()) == local_dimension
+    except Exception:
+        return False
+
+
 def _IsNurbsSurface(geometry) -> bool:
-    return isinstance(geometry, Kratos.NurbsSurfaceGeometry3D)
+    return _HasNurbsInterface(geometry, 2)
 
 
 def _IsNurbsVolume(geometry) -> bool:
-    return isinstance(geometry, Kratos.NurbsVolumeGeometry)
+    return _HasNurbsInterface(geometry, 3)
 
 
 def _Span(knots):

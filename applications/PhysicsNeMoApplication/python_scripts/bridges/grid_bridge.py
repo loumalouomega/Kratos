@@ -56,12 +56,9 @@ def SampleFieldsOnGrid(model_part: Kratos.ModelPart,
                        field_specs,
                        grid_shape,
                        bounding_box=None,
-                       fill_value: float = 0.0):
+                       fill_value: float = 0.0,
+                       backend: str = "kratos"):
     """Samples nodal fields of a model part onto a regular voxel grid.
-
-    Uses BinBasedFastPointLocator3D: the vectorized path for all-simplex
-    (tetrahedral) meshes, a per-point fallback for general geometries.
-    Grid points outside the mesh receive fill_value.
 
     Args:
         model_part: The source model part (3D).
@@ -71,6 +68,14 @@ def SampleFieldsOnGrid(model_part: Kratos.ModelPart,
         bounding_box: Optional (low, high) arrays; defaults to the model
             part's node bounding box.
         fill_value: Value assigned outside the mesh.
+        backend: "kratos" (default) uses BinBasedFastPointLocator3D - the
+            vectorized path for all-simplex meshes, a per-point fallback
+            for general geometries, fill_value outside the mesh.
+            "physicsnemo" tessellates and samples over the mesh's own BVH
+            (mesh_bridge.sampling), which is GPU-resident and
+            autograd-friendly. The default stays "kratos" because the
+            benchmark, not an assumption, decides which is faster - see
+            benchmarks/benchmark_bridges.py --sampling both.
 
     Returns:
         (grid, bounding_box): grid has shape (C, D, H, W) float64, where C is
@@ -78,6 +83,13 @@ def SampleFieldsOnGrid(model_part: Kratos.ModelPart,
         channel convention InferenceProcess uses).
     """
     grid_shape = tuple(int(n) for n in grid_shape)
+    if backend not in ("kratos", "physicsnemo"):
+        raise ValueError(
+            f"Unsupported sampling backend \"{backend}\". Use \"kratos\" (the point "
+            "locator) or \"physicsnemo\" (the mesh's own BVH).")
+    if backend == "physicsnemo":
+        return _SampleFieldsOnGridWithBvh(
+            model_part, field_specs, grid_shape, bounding_box, fill_value)
     if len(grid_shape) != 3 or any(n < 2 for n in grid_shape):
         raise ValueError(f"grid_shape must be three axis sizes >= 2, got {grid_shape}.")
     if bounding_box is None:
@@ -154,8 +166,13 @@ def InterpolateGridAtPoints(grid, bounding_box, points, backend="numpy"):
     low, high = (xp.asarray(numpy.asarray(b, dtype=float)) for b in bounding_box)
     shape = xp.asarray(numpy.array(grid.shape[1:]))
 
-    # Fractional lattice coordinates, clamped inside the grid.
-    fractional = (xp.asarray(numpy.asarray(points, dtype=float)) - low) / (high - low) * (shape - 1)
+    # Fractional lattice coordinates, clamped inside the grid. A FLAT axis
+    # (every node at the same Z, i.e. any planar Kratos case) has a zero
+    # extent: dividing by it gives NaN, and NaN cast to an index is INT_MIN,
+    # which used to crash here. Such an axis carries identical slices, so
+    # the whole weight belongs on index 0.
+    extent = xp.where(high - low == 0.0, 1.0, high - low)
+    fractional = (xp.asarray(numpy.asarray(points, dtype=float)) - low) / extent * (shape - 1)
     fractional = xp.clip(fractional, 0.0, shape - 1)
     base = xp.minimum(fractional.astype(int), shape - 2)
     t = fractional - base  # (n, 3) in [0, 1]
@@ -170,6 +187,83 @@ def InterpolateGridAtPoints(grid, bounding_box, points, backend="numpy"):
                 corner = grid[:, base[:, 0] + dx, base[:, 1] + dy, base[:, 2] + dz]  # (C, n)
                 result += weight[:, None] * corner.T
     return array_backend_utils.ToHost(result)
+
+
+def _SampleFieldsOnGridWithBvh(model_part, field_specs, grid_shape, bounding_box,
+                               fill_value):
+    """SampleFieldsOnGrid's physicsnemo backend: tessellate, then sample.
+
+    Same (C, D, H, W) contract as the locator path. Points outside the mesh
+    come back NaN from upstream rather than as a sentinel, so they are
+    replaced with fill_value here to keep the two backends interchangeable.
+    """
+    from KratosMultiphysics.PhysicsNeMoApplication.bridges.mesh_bridge import sampling
+
+    if bounding_box is None:
+        bounding_box = ComputeBoundingBox(model_part)
+    points = _GridPointCoordinates(grid_shape, bounding_box)
+    values, _ = sampling.SampleModelPartAtPoints(model_part, field_specs, points)
+    values = numpy.asarray(values.detach().cpu().numpy(), dtype=numpy.float64)
+    values = numpy.nan_to_num(values, nan=fill_value)
+    grid = values.T.reshape((values.shape[1],) + tuple(grid_shape))
+    return grid, bounding_box
+
+
+def _TryImportTorch():
+    try:
+        import torch
+        return torch
+    except ImportError as e:
+        raise ImportError(
+            "PhysicsNeMoApplication.grid_bridge's differentiable interpolation requires "
+            "torch, which could not be imported. Install it with e.g. "
+            "'pip install torch'.") from e
+
+
+def InterpolateGridAtPointsTorch(grid, bounding_box, points):
+    """Differentiable trilinear interpolation of a (C, D, H, W) grid.
+
+    The numpy/cupy InterpolateGridAtPoints is the fast read-out path and
+    breaks the autograd graph. This one is the same arithmetic in torch, so
+    a gradient reaches the GRID - which is what a diffusion sample graded
+    by a Kratos residual needs (see physics.diffusion_residual_operator).
+    Pinned against the numpy version value for value.
+
+    Args:
+        grid: (C, D, H, W) torch tensor (any dtype/device; gradients flow).
+        bounding_box: (low, high) triples of the grid's physical extent.
+        points: (n_points, 3) array-like query coordinates.
+
+    Returns:
+        (n_points, C) torch tensor on the grid's device and dtype.
+    """
+    torch = _TryImportTorch()
+    low, high = (torch.as_tensor(numpy.asarray(bound, dtype=float),
+                                 device=grid.device, dtype=grid.dtype)
+                 for bound in bounding_box)
+    shape = torch.as_tensor(numpy.array(grid.shape[1:], dtype=float),
+                            device=grid.device, dtype=grid.dtype)
+
+    query = torch.as_tensor(numpy.asarray(points, dtype=float),
+                            device=grid.device, dtype=grid.dtype)
+    # a flat axis (a planar case) has zero extent - see InterpolateGridAtPoints
+    extent = torch.where(high - low == 0.0, torch.ones_like(high), high - low)
+    fractional = (query - low) / extent * (shape - 1.0)
+    fractional = torch.clamp(fractional, torch.zeros_like(shape), shape - 1.0)
+    base = torch.minimum(fractional.to(torch.int64), (shape - 2.0).to(torch.int64))
+    t = fractional - base.to(grid.dtype)  # (n, 3) in [0, 1]
+
+    result = torch.zeros((query.shape[0], grid.shape[0]),
+                         device=grid.device, dtype=grid.dtype)
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                weight = ((t[:, 0] if dx else 1.0 - t[:, 0]) *
+                          (t[:, 1] if dy else 1.0 - t[:, 1]) *
+                          (t[:, 2] if dz else 1.0 - t[:, 2]))
+                corner = grid[:, base[:, 0] + dx, base[:, 1] + dy, base[:, 2] + dz]  # (C, n)
+                result = result + weight[:, None] * corner.T
+    return result
 
 
 def ScatterGridToNodes(grid, bounding_box, model_part: Kratos.ModelPart, output_field_specs,

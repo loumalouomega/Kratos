@@ -126,6 +126,71 @@ def DeformPoints(points, control_displacements, method: str = "ffd", **options):
     return deformers[method](points, control_displacements, **options)
 
 
+# The 2.2 deformers that take a MESH rather than a point cloud: they need
+# connectivity (a target surface to project onto, a stiffness matrix to
+# filter through), so they cannot join DeformPoints' dispatch.
+_MESH_METHODS = ("shrinkwrap", "sobolev")
+
+
+def _TryImportMeshDeformers():
+    try:
+        from physicsnemo.mesh.transformations.deform.shrinkwrap import shrinkwrap
+        from physicsnemo.mesh.transformations.deform.sobolev import sobolev_deform
+        return {"shrinkwrap": shrinkwrap, "sobolev": sobolev_deform}
+    except ImportError as e:
+        raise ImportError(
+            "The mesh deformers require physicsnemo >= 2.2, which could not be "
+            "imported. Install it with e.g. 'pip install -U nvidia-physicsnemo'. "
+            "(They live in physicsnemo.mesh.transformations.deform, NOT in "
+            "physicsnemo.nn.functional with the point deformers.)") from e
+
+
+def DeformMesh(mesh, method: str, **options):
+    """A mesh-level deformation: shrinkwrap or a Sobolev displacement filter.
+
+    - "shrinkwrap" projects every vertex onto the nearest point of a
+      ``target`` surface, optionally with an ``offset`` along the target's
+      normal. The classic use is fitting a coarse control surface onto a
+      detailed one.
+    - "sobolev" solves (M + l^2 K) u = M d, filtering a raw per-vertex
+      ``displacement`` through the mesh's own stiffness so the deformation
+      spreads smoothly instead of denting single nodes. ``fixed_points``
+      pins vertices. This is what MeshMovingApplication does for the
+      shape-optimization loop, in torch and differentiable.
+
+    Args:
+        mesh: The physicsnemo Mesh to deform (it is not modified).
+        method: "shrinkwrap" or "sobolev".
+        options: The method's own arguments - ``target`` (and optionally
+          ``offset``, ``max_distance``, ``point_weights``) for shrinkwrap;
+          ``displacement`` and ``length_scale`` (and optionally
+          ``fixed_points``, ``max_iterations``, ``tolerance``) for sobolev.
+
+    Returns:
+        A new physicsnemo Mesh with the deformed points.
+    """
+    if method not in _MESH_METHODS:
+        raise ValueError(
+            f"Unsupported mesh deformation \"{method}\". Supported: "
+            f"{', '.join(_MESH_METHODS)}. The point-cloud deformations "
+            f"({', '.join(_METHODS)}) go through DeformPoints.")
+    deformers = _TryImportMeshDeformers()
+    if method == "shrinkwrap":
+        if "target" not in options:
+            raise ValueError(
+                "\"shrinkwrap\" needs a \"target\" surface to project onto.")
+        target = options.pop("target")
+        return deformers["shrinkwrap"](mesh, target, **options)
+
+    for required in ("displacement", "length_scale"):
+        if required not in options:
+            raise ValueError(
+                f"\"sobolev\" needs \"{required}\"; the filter is "
+                "(M + length_scale^2 K) u = M displacement.")
+    displacement = options.pop("displacement")
+    return deformers["sobolev"](mesh, displacement, **options)
+
+
 def RegularizationEnergy(reference_mesh, points, energy: str = "strain", **options):
     """Mesh-quality energy of a deformed configuration, as an objective term.
 

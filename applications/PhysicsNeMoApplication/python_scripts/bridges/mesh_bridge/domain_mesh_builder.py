@@ -394,12 +394,56 @@ def SaveMesh(mesh, prefix: str):
     return mesh.save(prefix=str(prefix))
 
 
-def LoadMesh(prefix: str, device=None):
-    """Loads a Mesh saved by SaveMesh (physicsnemo's native format)."""
+def LoadMesh(prefix: str, device=None, domain: bool = False):
+    """Loads a mesh saved by SaveMesh (physicsnemo's native format).
+
+    Args:
+        prefix: The prefix SaveMesh was given.
+        device: Where to place the loaded tensors.
+        domain: Load a DomainMesh (interior plus named boundaries) rather
+            than a plain Mesh. The two formats are distinct and each
+            loader rejects the other's files.
+    """
     physicsnemo = _TryImportPhysicsNemo()
+    mesh_class = physicsnemo.mesh.DomainMesh if domain else physicsnemo.mesh.Mesh
     if device is None:
-        return physicsnemo.mesh.Mesh.load(str(prefix))
-    return physicsnemo.mesh.Mesh.load(str(prefix), device=device)
+        return mesh_class.load(str(prefix))
+    return mesh_class.load(str(prefix), device=device)
+
+
+def _TryImportZarrIo():
+    try:
+        from physicsnemo.mesh.io import from_zarr, to_zarr
+        return to_zarr, from_zarr
+    except ImportError as e:
+        raise ImportError(
+            "Zarr mesh IO requires physicsnemo >= 2.2, which could not be imported. "
+            "Install it with e.g. 'pip install -U nvidia-physicsnemo'.") from e
+
+
+def SaveMeshZarr(mesh, store, chunk_rows: int = 200000, zstd_level: int = 3) -> str:
+    """Writes a Mesh or DomainMesh as an AI-ready Zarr store.
+
+    physicsnemo 2.2 gained this, which matters because the alternative -
+    physicsnemo-curator's Zarr sink - is a git-only package that downloads
+    a Rust toolchain at build time and whose sinks are Mesh-typed, so a
+    DomainMesh fails in them. This needs neither.
+    """
+    to_zarr, _ = _TryImportZarrIo()
+    to_zarr(mesh, str(store), chunk_rows=chunk_rows, zstd_level=zstd_level)
+    return str(store)
+
+
+def LoadMeshZarr(store, device=None):
+    """Reads a Zarr store written by SaveMeshZarr.
+
+    The store records which of the two it holds, so a DomainMesh comes back
+    as a DomainMesh without being asked.
+    """
+    _, from_zarr = _TryImportZarrIo()
+    if device is None:
+        return from_zarr(str(store))
+    return from_zarr(str(store), device=device)
 
 
 def ScatterFieldBack(provenance: MeshProvenanceMap,
