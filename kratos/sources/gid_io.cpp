@@ -40,6 +40,14 @@ namespace Kratos
         this -> data = data;
     }
 
+    bool GidIOBase::HasAnyInstanceEverExisted() {
+        return mAnyInstanceEverExisted;
+    }
+
+    void GidIOBase::SetAnyInstanceEverExisted() {
+        mAnyInstanceEverExisted = true;
+    }
+
     GidIOBase* GidIOBase::mpInstance = nullptr;
 
     // GidIO default instantiation

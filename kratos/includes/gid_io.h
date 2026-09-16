@@ -78,6 +78,18 @@ protected:
      */
     int data;
 
+    /**
+     * True once any GidIO instance has ever been constructed in this process, and never reset
+     * back to false (unlike data/GetData(), which tracks currently-*live* instances). gidpost
+     * caches the number formats set via GiD_PostSetFormatReal()/GiD_PostSetFormatStep() the first
+     * time each ASCII write function is used, and never re-reads them afterwards for the rest of
+     * the process -- so a later GidIO requesting a different format cannot make it take effect,
+     * even if every earlier GidIO has since been destructed. This flag lets the constructor warn
+     * about that, which GetData() alone (live count) cannot: a `GetData() == 0` instance may still
+     * be the process's second-or-later GidIO.
+     */
+    bool mAnyInstanceEverExisted = false;
+
     // Private constructor so that no objects can be created.
     GidIOBase() {
         data = 0;
@@ -88,6 +100,9 @@ public:
 
     int GetData();
     void SetData(int data);
+
+    bool HasAnyInstanceEverExisted();
+    void SetAnyInstanceEverExisted();
 
 private:
     static void Create();
@@ -140,6 +155,15 @@ public:
 
     /**
      * @brief Constructor. Single stream IO constructor
+     * @param rRealNumberFormat printf conversion specifier gidpost uses to print real (floating
+     * point) values inside the result file, e.g. nodal/gauss point result components. This is
+     * process-global gidpost state, and gidpost only ever reads it once per ASCII result type --
+     * the first time that type is written in the process -- caching the result forever after. Set
+     * it on the very first GidIO constructed in a run; a later GidIO requesting a different format
+     * may silently have no effect once any GiD output has already happened in this process.
+     * @param rTimeStepNumberFormat printf conversion specifier gidpost uses to print the solution
+     * step ("time") value associated with each result block. Same process-global, set-once caveat
+     * as rRealNumberFormat. Available since gidpost 2.14 (GiD_PostSetFormatStep).
      */
     GidIO(
         const std::string& rDatafilename,
@@ -147,7 +171,9 @@ public:
         const MultiFileFlag UseMultipleFilesFlag,
         const WriteDeformedMeshFlag WriteDeformedFlag,
         const WriteConditionsFlag WriteConditions,
-        const bool InitializeGaussPointContainers=true
+        const bool InitializeGaussPointContainers=true,
+        const std::string& rRealNumberFormat = "%g",
+        const std::string& rTimeStepNumberFormat = "%.16g"
          ) : mResultFileName(rDatafilename),
         mMeshFileName(rDatafilename),
         mWriteDeformed(WriteDeformedFlag),
@@ -155,6 +181,20 @@ public:
         mUseMultiFile(UseMultipleFilesFlag),
         mMode(Mode)
     {
+        KRATOS_TRY
+
+#ifndef KRATOS_GIDPOST_HAS_HDF5
+        KRATOS_ERROR_IF(Mode == GiD_PostHDF5)
+            << "GiD_PostHDF5 output was requested, but Kratos was built without gidpost HDF5 "
+            << "support. Reconfigure with -DKRATOS_GIDPOST_WITH_HDF5=ON." << std::endl;
+#endif
+
+        // Validated up front, strictly before any gidpost call below: a throw here must leave
+        // gidpost's process-global state (GiD_PostInit / the format setters) untouched, otherwise
+        // GidIOBase's refcount and gidpost's own initialization state would go out of sync.
+        ValidateNumberFormat(rRealNumberFormat, "real_number_format");
+        ValidateNumberFormat(rTimeStepNumberFormat, "time_step_number_format");
+
         mResultFileOpen = false;
         mMeshFileOpen = false;
 
@@ -165,12 +205,19 @@ public:
         }
 
         GidIOBase& r_gid_io_base = GidIOBase::GetInstance();
+        const bool other_instances_alive = (r_gid_io_base.GetData() > 0);
+        const bool any_instance_ever_existed = r_gid_io_base.HasAnyInstanceEverExisted();
 
-        if (r_gid_io_base.GetData() == 0){
+        if (!other_instances_alive) {
             GiD_PostInit();
         }
-        GiD_PostSetFormatReal("%g");
+
+        ApplyNumberFormats(rRealNumberFormat, rTimeStepNumberFormat, any_instance_ever_existed);
+
+        r_gid_io_base.SetAnyInstanceEverExisted();
         r_gid_io_base.SetData(r_gid_io_base.GetData() + 1);
+
+        KRATOS_CATCH("")
     }
 
     ///Destructor.
@@ -1528,6 +1575,90 @@ protected:
     bool mResultFileOpen;
 
 private:
+    ///@name Private Operations
+    ///@{
+
+    /**
+     * @brief Applies gidpost's process-global number formats. Assumes both strings already passed
+     * ValidateNumberFormat().
+     * @details GiD_PostSetFormatReal() / GiD_PostSetFormatStep() set process-global state in
+     * gidpost, and -- unlike most such settings -- gidpost does not just apply "whichever was set
+     * most recently": internally, each ASCII write function (nodal scalar/vector/matrix/...) reads
+     * the current format the *first* time it is ever called in the process and caches the printf
+     * template it builds from it forever after, never re-reading it. In practice this means the
+     * format is only reliably honoured if it is set before *any* GiD ASCII output -- of any kind,
+     * from any GidIO instance -- has happened in this process; once that has occurred, a later
+     * GidIO requesting a different format can silently have no effect, even after every earlier
+     * GidIO has been destructed. A warning is emitted for exactly that situation.
+     * @param rRealNumberFormat printf conversion specifier for real (floating point) values.
+     * @param rTimeStepNumberFormat printf conversion specifier for the solution step value.
+     * @param WarnIfNotFirstInstance whether an earlier GidIO has already existed in this process
+     * (regardless of whether it is still alive), so gidpost's per-write-function format caches may
+     * already be locked to a different value than what is being requested here.
+     */
+    void ApplyNumberFormats(
+        const std::string& rRealNumberFormat,
+        const std::string& rTimeStepNumberFormat,
+        const bool WarnIfNotFirstInstance
+        )
+    {
+        KRATOS_TRY
+
+        if (WarnIfNotFirstInstance) {
+            const std::string current_real_format = GiD_PostGetFormatReal();
+            const std::string current_step_format = GiD_PostGetFormatStep();
+            KRATOS_WARNING_IF("GidIO", current_real_format != rRealNumberFormat)
+                << "Requested real_number_format '" << rRealNumberFormat
+                << "', but an earlier GidIO already existed in this process with format '"
+                << current_real_format << "'. gidpost locks each ASCII result type to whichever "
+                << "real_number_format was in effect the first time it was written, and ignores "
+                << "later changes -- this setting may silently have no effect." << std::endl;
+            KRATOS_WARNING_IF("GidIO", current_step_format != rTimeStepNumberFormat)
+                << "Requested time_step_number_format '" << rTimeStepNumberFormat
+                << "', but an earlier GidIO already existed in this process with format '"
+                << current_step_format << "'. gidpost locks the time step format the first time "
+                << "any result is written, and ignores later changes -- this setting may silently "
+                << "have no effect." << std::endl;
+        }
+
+        KRATOS_ERROR_IF_NOT(GiD_PostSetFormatReal(rRealNumberFormat.c_str()) == 0)
+            << "Failed to set the gidpost real number format to '" << rRealNumberFormat << "'."
+            << std::endl;
+        KRATOS_ERROR_IF_NOT(GiD_PostSetFormatStep(rTimeStepNumberFormat.c_str()) == 0)
+            << "Failed to set the gidpost time step number format to '" << rTimeStepNumberFormat
+            << "'." << std::endl;
+
+        KRATOS_CATCH("")
+    }
+
+    /**
+     * @brief Checks that a printf-style number format string is safe to pass to gidpost.
+     * @details gidpost copies this string into a fixed-size internal buffer; both bounds (an
+     * arbitrary generous limit here, well under gidpost's own 100-character buffers) and the
+     * presence of a conversion specifier are checked so a malformed setting fails clearly at
+     * construction time instead of producing garbled or truncated output file text.
+     */
+    void ValidateNumberFormat(
+        const std::string& rFormat,
+        const std::string& rSettingName
+        ) const
+    {
+        KRATOS_TRY
+
+        KRATOS_ERROR_IF(rFormat.empty() || rFormat.size() >= 32)
+            << "Invalid " << rSettingName << " '" << rFormat
+            << "': must be non-empty and shorter than 32 characters." << std::endl;
+        KRATOS_ERROR_IF(rFormat.find('%') == std::string::npos)
+            << "Invalid " << rSettingName << " '" << rFormat
+            << "': must contain a printf conversion specifier." << std::endl;
+
+        KRATOS_CATCH("")
+    }
+
+    ///@}
+    ///@name Private Life Cycle
+    ///@{
+
     /**
      * assignment operator
      */
@@ -1537,6 +1668,8 @@ private:
      * Copy constructor
      */
     GidIO(GidIO const& rOther);
+
+    ///@}
 }; // Class GidIO
 
 KRATOS_API_EXTERN template class KRATOS_API(KRATOS_CORE) GidIO<GidGaussPointsContainer,GidMeshContainer>;
