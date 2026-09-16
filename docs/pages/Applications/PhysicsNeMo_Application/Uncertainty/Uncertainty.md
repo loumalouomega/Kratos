@@ -40,6 +40,30 @@ Three layers complement the advisory [model cards](../Training/Training.html): o
 
 Upstream's `check()` only logs, so the check is captured and translated: `"advisory"` emits one Kratos warning per flagged inference (and sets the guard's `last_flagged`), `"strict"` raises, `"ignore"` disables the check. GeoTransolver models can instead carry the guard **embedded** (its `guard_config` constructor argument — collect in train mode, check in eval mode); leave the process-level guard off then.
 
+### The shape, not the fields
+
+The guard above looks at a model's INPUTS: the values it is about to consume. It cannot see that a surrogate trained on one family of geometries has been handed a different one — the fields on a new shape can look perfectly ordinary.
+
+`deployment/geometry_guard_utils.py` bridges `physicsnemo.experimental.guardrails.geometry`, which fits a density model to descriptors of a triangular SURFACE. The surface is the one `mesh_bridge.spatial.BoundarySurface` already builds, so a geometry the guardrail accepts is the geometry the signed-distance features describe.
+
+```python
+guard = geometry_guard_utils.CreateGeometryGuard(Kratos.Parameters("{}"))
+geometry_guard_utils.FitGeometryGuard(guard, [part_a, part_b, ...])
+geometry_guard_utils.SaveGeometryGuard(guard, "surrogate.geometry_guard.npz")
+```
+
+```json
+"geometry_guard" : { "guard_file" : "surrogate.geometry_guard.npz", "policy" : "advisory" }
+```
+
+The block sits on `InferenceProcess`, so it reaches every deployment process at once, with the field guard's policies (`advisory`, `strict`, `ignore`). The verdict is recomputed only when the node count changes, since rebuilding the surface every step would cost more than the inference.
+
+Three things this bridge encodes, all of them ways to get a confident wrong answer:
+
+- **The sidecar must be named `.npz`.** Upstream saves with `numpy.savez`, which appends the extension to a path lacking it, and loads with `numpy.load`, which does not — so a guard saved as `guard.pt` lands in `guard.pt.npz`, reports success, and can never be loaded under the name it was given. The bridge refuses the name instead.
+- **A family smaller than the descriptor count is under-determined.** The descriptor vector is 22-wide; fitted on fewer geometries, the verdicts stop meaning anything, and nothing upstream complains. `CheckFamilySize` says so, and `FitGeometryGuard` warns.
+- **It measures descriptor distance, not plausibility.** A family of randomly perturbed boxes rejects the *perfect* cube, whose exactly equal side lengths no training member has. Being more regular than the training family is still being out of it.
+
 ## Predictive uncertainty on any deployed model
 
 `InferenceProcess` and `PointCloudInferenceProcess` accept an `"uncertainty"` block generalizing the diffusion bridge's ensemble-mean + per-node uncertainty outputs:

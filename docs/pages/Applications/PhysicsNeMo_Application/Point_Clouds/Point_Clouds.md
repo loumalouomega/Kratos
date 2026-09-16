@@ -39,7 +39,72 @@ Point-cloud transformers consume per-point features plus coordinates as `(1, N, 
 | `"geotransolver"` | `model(local_embedding, local_positions=..., geometry=...)` with `local_embedding = (1, N, C_in)` and both position arguments `(1, N, 3)`; set `"pass_geometry": false` to forward `geometry=None` for models built with `geometry_dim=None` | `physicsnemo.experimental.models.geotransolver.GeoTransolver` (construct with `geometry_dim=3` when passing geometry; `use_te=False` without TransformerEngine; experimental namespace) |
 | `"figconvnet"` | `model(vertices, features)` with `vertices = (1, N, 3)`, `features = (1, N, C_in)`; returns a **tuple** (point features, drag-style scalar) — the scalar is stashed as `process.last_scalar_prediction` and logged | `physicsnemo.models.figconvnet.FIGConvUNet` (construct with `has_input_features=True` and `in_channels` = total gathered width; warp backend is float32-only; default aabb (0,0,0)–(1,1,1) matches `normalize_coordinates`) |
 
+| `"deeponet"` | `model(x_branch, x_trunk)` with `x_branch = (1, D)` case parameters and `x_trunk = (N, d)` query coordinates | `physicsnemo.experimental.models.xdeeponet.DeepONet` in core mode (`auto_pad=False`) with an MLP branch |
+| `"globe"` | `model(prediction_points, boundary_meshes, reference_lengths)` with `boundary_meshes` a dict of named surfaces | `physicsnemo.experimental.models.globe.GLOBE` |
+
 `"normalize_coordinates"` (default `true`) min–max normalizes the coordinates to `[0, 1]` per axis (degenerate axes left at 0) — matching how such models are usually trained.
+
+**Two of these are not pointwise.** Every other interface maps a node's own features to that node's output. `"deeponet"` and `"globe"` are OPERATORS: they map something about the whole case to a field, and the per-node input fields play no part.
+
+## Token budgets
+
+A transformer's cost grows with the number of tokens, and a refined Kratos mesh routinely has more nodes than the model was trained to attend over. The DoMINO datapipe subsamples; this process used to feed every node. A `"subsampling"` block gives it a budget:
+
+```json
+"subsampling" : {
+    "method"           : "farthest_point",
+    "num_points"       : 20000,
+    "bounding_box_min" : [],
+    "bounding_box_max" : [],
+    "seed"             : 0
+}
+```
+
+The bounding box is a filter and is applied first, in the model part's **own** coordinates (not the normalized ones); `method` then reduces whatever survived to `num_points`. Prefer `"farthest_point"` (`physicsnemo.nn.functional.farthest_point_sampling`) over `"uniform"`: a uniform draw of a mesh refined in one corner spends its whole budget there, while farthest-point sampling spreads over the geometry. The tests measure exactly that, as the minimum pairwise distance of the chosen points.
+
+Every node still gets a value: an unselected node takes its nearest selected node's prediction, so the field a solver reads afterwards is complete and a downstream process cannot tell a budget was used. Uncertainty fields are expanded the same way.
+
+## Operators: parameters in, a field out
+
+`"deeponet"` learns a map from a **case** to a field evaluated at arbitrary points — what `RomSurrogateProcess` does through a POD basis, without the basis. The branch takes the case parameters and the trunk the query coordinates, so a `"branch_input"` block names where the parameters live rather than listing per-node fields:
+
+```json
+"model_interface" : "deeponet",
+"trunk_dimension" : 0,
+"branch_input"    : {
+    "process_info_variables" : [ "TIME" ],
+    "properties_variables"   : [ "CONDUCTIVITY" ],
+    "constants"              : [ 1.5 ]
+}
+```
+
+Values are concatenated in that order. `"trunk_dimension"` cuts the coordinates to the trunk's own width; `0` follows `DOMAIN_SIZE`. Build the branch as `(D_in) -> (width)` and the trunk as `(d) -> (width)` with the same `width`.
+
+**Checkpointing it needs tracing.** An xDeepONet cannot be saved as `.mdlus` — `physicsnemo.Module.save` refuses plain torch submodules, and wrapping them with `Module.from_torch` instead makes the constructor metadata unserializable — and it cannot be scripted, because its forward takes `*args`. `torch.jit.trace` works, and the trace stays valid at any number of query points, which is what a changing mesh needs:
+
+```python
+traced = torch.jit.trace(model.eval(), (branch_example, trunk_example))
+torch.jit.save(traced, "operator.pt")   # "checkpoint_type" : "torchscript"
+```
+
+## GLOBE: the boundaries drive the interior
+
+`"globe"` is the other non-pointwise interface, and a different idea again: an elliptic problem is determined by its boundary conditions, and GLOBE predicts fields at arbitrary points from boundary data through Green's-function-like kernels on a dual-tree cluster hierarchy. The `"globe"` block names the sub-model-parts that carry that data:
+
+```json
+"model_interface" : "globe",
+"globe" : {
+    "boundary_sub_model_parts" : [ "Inlet", "Wall" ],
+    "boundary_fields"          : [ { "variable_name" : "TEMPERATURE", "data_location" : "node_historical", "rank" : 0 } ],
+    "reference_lengths"        : { "L" : 1.0 },
+    "output_names"             : [ "u" ],
+    "source_container"         : "Elements"
+}
+```
+
+`bridges/globe_bridge.py` does the translation: `BuildGlobeBoundaryMeshes` turns the named sub-model-parts into the `{name: Mesh}` dict the forward takes, and `RunGlobeForward` flattens the returned mesh's `point_data` back into the `(N, C_out)` layout every writer here uses. Training goes through `training/globe_training.TrainGlobe`, which exists because `TrainModel`'s DataLoader batches tensors and a collate function cannot stack meshes.
+
+Three things to know. GLOBE runs on **CPU** — its cluster tree, forward and backward all do, with `tree_build_device="cpu"`; this is not a GPU-only capability. A rank-0 boundary field must be shaped `(n_cells,)` and **not** `(n_cells, 1)`, which upstream rejects. And a boundary sub-model-part needs conditions (or elements): one carrying only nodes has no geometry to tessellate, and the bridge says so instead of producing an empty mesh.
 
 ## GeoTransolver via physicsnemo-cfd's evaluation wrappers
 

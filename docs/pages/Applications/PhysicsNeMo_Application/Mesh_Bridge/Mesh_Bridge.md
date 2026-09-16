@@ -320,6 +320,58 @@ Generation is deterministic on the CPU and is pinned there: CUDA generation is n
 
 To carry a solution onto a generated mesh, use the mapping bridge — `MappingBridge(old_part, new_part, {"mapper_type": "nearest_element"})` + `MapFields`, which is exact for linear fields and handles non-matching topology. It maps *historical nodal* variables. When the new mesh comes from MMG instead of from generation, MMG's own `interpolate_nodal_values` has already done the transfer.
 
+## Mesh operations: curvature, repair, subdivision, smoothing, extrusion
+
+`bridges/mesh_bridge/operations.py` exposes the `physicsnemo.mesh` primitives the bridge had no use for until a surrogate met real geometry.
+
+| Function | What it gives |
+|---|---|
+| `WriteCurvatureFields(model_part, settings)` | mean and Gaussian curvature on the nodes, a geometric feature next to the signed distance field |
+| `ComputeCurvature(mesh, kind)` | the same on a surface mesh, as a tensor |
+| `RepairMesh(mesh)` | upstream's duplicate/degenerate/orientation pass, with a report of what changed |
+| `SubdivideMesh(mesh, scheme, levels)` | `"loop"`, `"butterfly"` (both move the surface) or `"linear"` (points stay put) |
+| `SmoothMesh(mesh, n_iter, relaxation_factor)` | Laplacian smoothing, boundaries preserved |
+| `IntegrateMoment(mesh, left, right)` | the P0 moment `sum_c |cell_c| left_c (x) right_c`; ones give the measure |
+| `ExtrudeModelPart(model, part, vector, name)` | a planar Kratos case swept into a 3-D one, as real entities |
+
+Three facts measured while writing them:
+
+- **Curvature is NaN at interior nodes.** A node on no boundary facet has zero vertex area and upstream divides by it. Every interior node of a volume mesh is such a node, so `WriteCurvatureFields` writes zero there instead: an interior node has no surface curvature, and a NaN on a Kratos variable would poison every gather downstream.
+- **A sweep is decomposed into simplices, not prisms.** A swept triangle arrives as three tetrahedra, so a two-triangle square extruded once becomes six elements.
+- **An in-plane vector sweeps nothing, silently.** Upstream returns the flat result; `ExtrudeModelPart` checks the swept measure and refuses a zero one rather than materializing a degenerate part.
+
+Two more deformers joined `deformation.py` as `DeformMesh(mesh, method, **options)`. They take a MESH rather than points, because they need connectivity, so they sit apart from `DeformPoints`:
+
+- `"shrinkwrap"` projects every vertex onto the nearest point of a `target` surface, optionally offset along its normal.
+- `"sobolev"` solves `(M + l^2 K) u = M d`, filtering a raw per-vertex `displacement` through the mesh's own stiffness so it spreads instead of denting single nodes. It is the smoothing `MeshMovingApplication` does for the shape-optimization loop, in torch and differentiable.
+
+Both live in `physicsnemo.mesh.transformations.deform`, not in `physicsnemo.nn.functional` with the point deformers - the roadmap had them in the wrong module.
+
+## Torch-native sampling over a BVH
+
+`bridges/mesh_bridge/sampling.py` wraps `physicsnemo.mesh.sampling.sample_data_at_points` over the mesh's own `physicsnemo.mesh.spatial.BVH`. `SampleModelPartAtPoints` tessellates a model part and samples its fields at arbitrary points; `BuildBvh` builds the hierarchy once so repeated queries do not pay for it again.
+
+`grid_bridge.SampleFieldsOnGrid` takes `backend="kratos"` (the point locator, the default) or `backend="physicsnemo"`, with the same `(C, D, H, W)` contract, and the two agree to 1e-6 on a linear field. What the BVH path gives that the locator cannot is the **gradient**: a sampled value is differentiable with respect to the mesh's own data.
+
+Whether it is faster is a measurement, and at the sizes measured so far it is not - see the [Performance](../General/Performance.html) page. That is why the default did not change.
+
+## Zarr without physicsnemo-curator
+
+physicsnemo 2.2 writes Zarr itself, so the AI-ready store no longer needs physicsnemo-curator - a git-only package that downloads a Rust toolchain at install time, and whose sinks are `Mesh`-typed so a `DomainMesh` fails in them. `domain_mesh_builder.SaveMeshZarr` and `LoadMeshZarr` round-trip a `Mesh` or a `DomainMesh` with its boundary names; the store records which it holds.
+
+`CuratorExportProcess` gained `"zarr_backend"`: `"physicsnemo"` (the default) writes one `<prefix>_<step>.zarr` store per step through `mesh.io.to_zarr`, and `"curator"` keeps the old sink. `LoadMesh` also learned `domain=True`, since the native `.pmsh` and `.pdmsh` formats are distinct and each loader rejects the other's files.
+
+## Reading Kratos's own VTK output
+
+`bridges/vtk_bridge.py` turns an existing simulation campaign's `VtkOutputProcess` output into training data. It is a **read-only** path: a VTK file is a rendering of the mesh, not the model part, so it carries no provenance and nothing can be written back onto Kratos entities from it.
+
+Two mismatches had to be bridged, and neither raises an error on its own:
+
+- **Kratos writes legacy `.vtk`, and physicsnemo's `VTKReader` reads only `.vtu`, `.vtp` and `.stl`.** `ArrangeVtkOutputForReader` converts through pyvista and lays the files out one sample per subdirectory, which is the layout the reader wants.
+- **`VTKReader` is not a general VTK reader.** It recognizes a fixed vocabulary of external-aerodynamics keys (`stl_coordinates`, `volume_mesh_centers`, `volume_fields`, ...) and returns an **empty** sample for anything else. A file carrying a field called `PRESSURE` reads as nothing. It is the right reader for a DrivAer-style dataset and the wrong one for ordinary solver output.
+
+The general path is `CreateVtkMeshDataset`, a torch Dataset built on `physicsnemo.mesh.io.from_pyvista`, which reads fields by their own names and auto-triangulates polyhedra. The HDF5 half of this item stays open: `HDF5Application` is not compiled in the reference build.
+
 ## Grid divergence, curl and Laplacian
 
 `grid_bridge.ComputeGridVectorOperator` completes the grid-operator set that `ComputeGridDerivatives` started, sharing its `operator`/`boundary` conventions. Three details are worth knowing, all of them upstream contracts this wrapper makes explicit:
@@ -329,3 +381,9 @@ To carry a solution onto a generated mesh, use the mapping bridge — `MappingBr
 - The stencils are still periodic-only, so `"boundary": "trim"` crops the wrapped layer exactly as it does for the gradients. There is no spectral variant upstream.
 
 One performance-versus-accuracy trap is handled for you: the Warp backend computes in float32 and is selected automatically whenever a CUDA device exists, silently costing about seven digits on float64 input. The wrapper therefore keeps the torch backend for float64 grids (`"implementation": "auto"`, the default) and leaves float32 on the fast path; pass `"implementation": "default"` to restore upstream's own choice.
+
+## What an IGA analysis actually hands back
+
+`nurbs_sampling` was written against `NurbsSurfaceGeometry3D` and `NurbsVolumeGeometry`, the types one builds by hand. An IGA ANALYSIS produces neither: its modelers build Brep geometries that WRAP the NURBS surface, and a Brep's background part comes back through the Python binding as a plain `Geometry`. The sampler's `isinstance` check therefore accepted geometries built for a test and rejected the ones a solve produces - the single case the isogeometric gather exists for.
+
+The check is now duck-typed: a geometry is sampleable when it offers the parametric span, the polynomial degrees, the control-point counts, exact `GlobalCoordinates` evaluation and `CreateQuadraturePointGeometries`, which is everything the lattice and the gather use. A solved Scordelis-Lo roof now samples and gathers directly, and the gathered surface displacement stays inside the convex hull of the control-point values - the B-spline property that says the gather went through the basis rather than around it.

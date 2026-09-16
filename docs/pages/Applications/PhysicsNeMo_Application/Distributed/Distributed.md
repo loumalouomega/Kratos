@@ -139,6 +139,27 @@ Two rules the implementation encodes because the obvious alternatives fail:
 
 **What this is and is not.** This is **data parallelism** — every rank trains the same model on its own subgraph and gradients are averaged. It is *not* domain-parallel sharding of one tensor's activations across devices; that is physicsnemo's `ShardTensor` story, and it ships separately in `domain_parallel_utils` (next section). Both are asserted over CPU/gloo only: the mathematics is proven, the NCCL transport is not, and two or three ranks on one box measures correctness rather than throughput.
 
+## The halo exchange through autograd
+
+`BuildHaloSubgraph` exchanges node features eagerly over the Kratos `DataCommunicator`. That is correct for a forward pass and enough for data-parallel training, where the features are inputs and only the WEIGHTS carry gradients. It is not enough when the features themselves are being learned - an encoder upstream of the graph, or features that are optimization variables - because a halo row is then a copy whose gradient has nowhere to go.
+
+`HaloExchangePlan` and `ExchangeHaloFeatures` move that copy through `physicsnemo.distributed.autograd.indexed_all_to_all_v`, whose backward sums the gradient of every copy onto the rank that owns the original:
+
+```python
+node_features, edge_index, edge_features, node_ids, owned_mask = \
+    graph_partition_utils.BuildHaloSubgraph(model_part, 1, field_specs=fields)
+plan = graph_partition_utils.HaloExchangePlan(node_ids, owned_mask, data_communicator)
+full = graph_partition_utils.ExchangeHaloFeatures(owned_features, plan)   # (N, C)
+```
+
+The topology half stays eager, because connectivity carries no gradient.
+
+**Gloo cannot do a ragged all-to-all, and a halo is ragged by definition.** A rank sends many rows to the neighbour it shares an interface with, none to itself, and none to a rank on the far side of the mesh. Gloo's `alltoall` requires every block in the list to have the same shape and rejects the mixture with `invalid tensor size at index 1`. The same limitation sinks `all_gather_v` on gloo, which refuses unequal per-rank sizes outright.
+
+So the plan pads every block to one common size and slices the true rows back out on receipt. The padding rows are repeats of an existing index, and because their received copies are discarded, their gradient is exactly zero - the property the exchange exists for survives the workaround. A NCCL transport would not need the padding, but NCCL needs one GPU per rank, so the padded path is the one that can actually be tested here, and it is the one that is.
+
+A trap worth repeating from this: a uniform test case hides a raggedness bug completely. The first probe of this collective exchanged two rows between every pair and passed; the real partition, exchanging seven rows one way and none the other, failed immediately. The MPI test now asserts that the exchange under test really is ragged before asserting that it works.
+
 ## Domain parallelism with `ShardTensor`
 
 `distributed.domain_parallel_utils` puts ONE tensor across the ranks — each holds the rows it owns, or its slab of a grid — and lets physicsnemo's registered handlers make the model's own ops mesh-aware: a pointwise layer runs on the local rows, a convolution exchanges the halo it needs, and a reduction becomes a mesh-wide quantity.

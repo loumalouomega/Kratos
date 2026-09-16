@@ -221,6 +221,8 @@ Each field above is a genuine mesh-aware render — real element connectivity vi
 
 Supported metrics: `mse`, `rmse` (from `physicsnemo.metrics.general.mse`), `max_abs_error`, and `wasserstein` (`wasserstein_from_samples` over the flattened fields).
 
+Three more look past pointwise error. `relative_mse` is the square of `relative_l2`, local because physicsnemo 2.2 ships no `relative_mse` whatever the changelog suggests. `histogram_l1` and `entropy_difference` compare the two fields' DISTRIBUTIONS on shared bin edges (`"bins"`, 32 by default): a surrogate can match a field on average while collapsing its extremes, and these say so. A separate `"spectral_comparisons"` block samples both fields onto a grid and compares their azimuthally averaged power spectra, reporting `power_spectrum_relative_l2` and `high_wavenumber_energy_ratio` - the metric a superresolution model should be judged on, since a smooth prediction of a rough field scores a small RMSE while carrying almost none of the fine-scale energy it was meant to recover. See [Uncertainty and Governance](../Uncertainty/Uncertainty.html) for the ensemble and calibration blocks.
+
 ## physicsnemo-cfd delegation
 
 `cfd_bridge` delegates to the separately installable [`nvidia-physicsnemo-cfd`](https://github.com/NVIDIA/physicsnemo-cfd) package (importable as `physicsnemo.cfd`; `pyvista` comes with it). Both dependencies are optional and imported lazily with actionable errors, like torch/physicsnemo.

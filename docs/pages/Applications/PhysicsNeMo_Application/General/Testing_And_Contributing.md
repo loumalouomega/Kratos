@@ -76,3 +76,29 @@ Several real bugs shipped through a green suite before these rules were written 
 The Kratos branch convention is `subject/short-description`; this application's history uses a `[PhysicsNeMo]` prefix on commit subjects. Do not modify `external_libraries/`, do not add the CMake gate, and keep the CI JSON lists byte-exact when touching them (they have no trailing newline).
 
 Next: [Troubleshooting and traps](Troubleshooting_And_Traps.html).
+
+## Solver cases, and the fixtures they borrow
+
+`tests/kratos_solver_cases/` holds the real solves the bridges are tested against. The older ones are built entirely IN MEMORY - the thermal, structural, fluid-cavity and coupled sintering cases construct their mesh and add every solution-step variable before the nodes exist, because `use_input_model_part` fails at construction otherwise.
+
+The cases added for the compiled-but-unexercised applications work differently. Each one REUSES the owning application's own test data in place rather than copying it, and reports its absence instead of failing:
+
+| Case | Drives | Cost on the reference machine |
+|---|---|---|
+| `cylinder_case` | transient flow past a cylinder (FluidDynamics) | 1110 nodes, 0.2 s to t = 0.2 |
+| `rans_case` | k-epsilon channel flow (RANS) | 49 nodes, 0.04 s |
+| `airfoil_case` | NACA 0012 in compressible potential flow | 22 nodes, 0.02 s |
+| `geomechanics_case` | one-dimensional consolidation (GeoMechanics) | 201 nodes, 0.14 s per stage |
+| `contact_case` | an ALM frictionless patch test (ContactStructuralMechanics) | 8 nodes, 0.05 s |
+| `iga_case` | the Scordelis-Lo roof (Iga) | 36 control points |
+| `compliance_case` | a SIMP cantilever, built in memory | scales with the design grid |
+
+Borrowing rather than copying keeps a 216 kB cylinder mesh out of this application and means the fixtures cannot drift from the cases they came from. Each module exposes `IsAvailable()`, and its tests skip when the owning application's data is not there.
+
+What borrowing costs is a little parameter surgery, and the traps are worth knowing:
+
+- **Reference-file comparisons travel with the parameters.** Every borrowed case carries processes that compare against `.json` or `.dat` files relative to the owning directory. They belong to that application's regression, so each case filters them out BY PROCESS NAME - the lists they sit in are named differently from one application to the next (`json_check_process` here, `json_check_process_list` there).
+- **Dropping the whole `processes` block is not the shortcut it looks like.** It also removes the boundary conditions: the cylinder then runs to completion in no time at all with a maximum velocity of exactly zero, which reads like a fast case rather than an undriven one.
+- **Paths hide in more places than `model_import_settings`.** The contact mesh is named inside a MODELER's own import settings, two levels down, and as an ARRAY of two blocks. The materials file, the geometry and physics files of an IGA modeler, and the results files all need the same treatment.
+- **The RANS parameters are a template**, carrying placeholders like `<STABILIZATION_METHOD>` that the owning driver substitutes per test; the case substitutes them rather than shipping a second copy.
+- **A case that runs is not a case that solves.** IgaApplication's `single_patch_test` is structurally singular - a direct solver reports a zero column, and the iterative solver it is configured with returns NaN displacements without complaining - which its own test never notices because it asserts nothing numerically. The Scordelis roof is used instead.

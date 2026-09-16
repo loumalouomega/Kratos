@@ -70,6 +70,20 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 | Adapt a pretrained DoMINO | `training.domino_finetune` |
 | Learn dynamics in ROM space | `training.rom_temporal` |
 | Add a physics term to the loss | `physics.physics_informed`, `physics.differentiable_residual` |
+| Steer a diffusion model with measurements or with the PDE | `training.diffusion_utils` (the `guidance` block), `physics.diffusion_residual_operator` |
+| Give a point-cloud model a token budget | `utilities.point_subsampling` |
+| Check whether a GEOMETRY is in the training family | `deployment.geometry_guard_utils` |
+| Predict a field from boundary data alone | `bridges.globe_bridge`, `training.globe_training` |
+| Put curvature on the nodes, repair, subdivide, smooth or extrude a mesh | `bridges.mesh_bridge.operations` |
+| Sample mesh fields at arbitrary points, differentiably | `bridges.mesh_bridge.sampling` |
+| Write Zarr without physicsnemo-curator | `bridges.mesh_bridge.domain_mesh_builder.SaveMeshZarr` |
+| Train on existing Kratos VTK output | `bridges.vtk_bridge` |
+| Train with mixed precision, a schedule, or resume after a stop | `training.training_utils.TrainModel` (the `performance` block) |
+| Ask whether a prediction has the right SPECTRUM or distribution | `processes.validation_metrics_process` |
+| Deploy a PDE foundation model on a grid series | `processes.inference.sequence_inference_process` (`model_interface` `dpot`) |
+| Generate designs conditioned on supports and loads | `training.diffusion_utils` (`topodiff`) |
+| Pretrain on geometry before any solve exists | `training.aerojepa_pretraining` |
+| Drive a real solve of a compiled application | `tests/kratos_solver_cases/` (cylinder, RANS, airfoil, consolidation, contact, IGA, compliance) |
 | Train on exact gradients too (Sobolev) | `training.sobolev_training` |
 | Measure multi-step error growth | `training.rollout_utils.EvaluateRollout` |
 | Save it | `training.training_utils.SaveTrainedModel` |
@@ -135,7 +149,7 @@ Each package's `__init__.py` carries a docstring saying what belongs in it — r
 ## Tests and examples
 
 - `tests/` mirrors the sources by name: `test_<module>.py`. Subdirectories (`tests/bridges/mesh_bridge/`, `tests/active_learning/`) are discovered automatically by the suite runner.
-- `examples/notebooks/` — nineteen notebooks, executed by `tests/test_notebooks.py` so a changed signature breaks a test rather than rotting.
+- `examples/notebooks/` — twenty notebooks, executed by `tests/test_notebooks.py` so a changed signature breaks a test rather than rotting.
 - The [Examples repository](https://github.com/KratosMultiphysics/Examples/tree/master/physics_nemo_application) holds twenty-one fully documented use cases against real solves; both are indexed on [Examples](../Examples/Examples.html).
 
 New here? [From scratch](From_Scratch.html) walks one path end to end. New to PhysicsNeMo itself? [PhysicsNeMo Basics](../PhysicsNeMo_Basics/Overview.html).

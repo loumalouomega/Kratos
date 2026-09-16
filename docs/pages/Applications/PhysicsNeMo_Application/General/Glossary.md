@@ -34,7 +34,7 @@ summary: The terms used across this documentation, from both sides of the bridge
 
 **DomainMesh.** A PhysicsNeMo `Mesh` plus named boundary meshes plus global data - the natural image of a Kratos model part with sub-model-parts.
 
-**DPS guidance.** Diffusion posterior sampling: steering a diffusion sampler toward observations or a forward model at sampling time, without retraining. A roadmap item.
+**DPS guidance.** Diffusion posterior sampling: steering a diffusion sampler toward observations or a forward model at sampling time, without retraining. Shipped as the `"guidance"` block of `sampler_settings`, whose `"kratos_residual"` operator is the exact discrete FEM residual.
 
 **EDM.** The "elucidating the design space" diffusion formulation whose preconditioner and losses the bridge uses; its `sigma_data` sets the scale fields must be brought to.
 

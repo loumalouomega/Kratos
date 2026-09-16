@@ -63,7 +63,7 @@ And a fifth stage that is specific to a solver coupling: **moving data between K
 
 `training_utils.SaveTrainedModel` writes `.mdlus` or TorchScript plus the model card, gathering FSDP2 shards first; `training_utils.ExportOnnxModel` writes the ONNX file and its card.
 
-What it does **not** yet do is the upstream tooling above: no AMP, no CUDA-graph capture, no resumable optimizer checkpoints, no experiment tracker. That is one roadmap item, kept separate from correctness work on purpose. `torch.compile` and NVTX ranges *are* available, at deployment, through `model_settings` (see [Inference](../Inference/Inference.html)).
+The upstream tooling above is reached through one opt-in `"performance"` block: `"amp"` with its dtype, `"static_capture"` (physicsnemo's `StaticCaptureTraining`, which accepts only a physicsnemo `Module` and drops CUDA graphs on CPU), `"gradient_clip_norm"`, `"profile"`, `"launch_logger"` with mlflow or wandb, a `"scheduler"`, `"checkpoint_directory"`/`"resume"` for resumable optimizer-and-scheduler state, and `"optimizer": "muon"` (Muon rejects parameters of rank below 2, so the matrices go to Muon and the rest to Adam through `CombinedOptimizer`). Everything in it is off by default and an empty block reproduces the previous history exactly. `torch.compile` and NVTX ranges are separate, at deployment, through `model_settings` (see [Inference](../Inference/Inference.html)).
 
 ## Where the bridge's own time goes
 

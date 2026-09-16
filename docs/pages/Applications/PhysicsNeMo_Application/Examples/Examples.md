@@ -3,7 +3,7 @@ title: Examples
 keywords: examples notebooks use cases gallery learning path
 tags: [Examples.md]
 sidebar: physicsnemo_application
-summary: Twenty-one documented use cases against real solves in the Examples repository, shown as a gallery, and the nineteen executable notebooks that form the learning path.
+summary: Twenty-one documented use cases against real solves in the Examples repository, shown as a gallery, and the twenty executable notebooks that form the learning path.
 ---
 
 # Examples
@@ -79,6 +79,7 @@ Runnable, CPU-capable, ordered as a learning path; each states its prerequisites
 | 17 - Exact shape gradients and shape optimization | `ComputeShapeSensitivityField` from one element-local pass, `ComputeControlSensitivities` onto an FFD lattice, a gradient descent onto a target (asserts to ten digits) |
 | 18 - Fine-tuning a pretrained DoMINO | The public `nvidia/domino_drivaerml` checkpoint, its de-normalization, the predictor-corrector decomposition and LoRA adapters merged back into a plain `.mdlus` (asserts) |
 | 19 - Adjoint integration | Kratos's adjoint gradients as arrays and as data: `adjoint_bridge`, `AdjointSensitivityProcess`, Sobolev training, `SurrogateResponseFunction` (asserts) |
+| 20 - Molecular dynamics with a MeshGraphNet | Lennard-Jones in a periodic box: the minimum-image radius graph, force and potential-energy heads, `ParticleInferenceProcess` deployment against the mean-force baseline (asserts) |
 
 ```bash
 export PYTHONPATH=/path/to/Kratos/bin/Release

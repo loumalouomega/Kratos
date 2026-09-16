@@ -66,6 +66,8 @@ Locations: `node_historical`, `node_non_historical`, `element`, `condition`, `el
 
 **`ood_guard`** on the same processes: `{"guard_file": "<checkpoint>.ood_guard", "policy": "advisory"}` - the guard written by `TrainModel`, and what a flagged input does (`"advisory"` warns, `"strict"` raises, `"ignore"` disables). Inputs are normalized per the card *before* the check. See [Uncertainty](../Uncertainty/Uncertainty.html).
 
+**`geometry_guard`** on the same processes: `{"guard_file": "<checkpoint>.geometry_guard.npz", "policy": "advisory"}` - the same policy vocabulary asked of the *shape* instead of the field values. The model part's boundary surface is scored against a density model of the training family, checked once at the first execution and again whenever the node count changes. See [Uncertainty](../Uncertainty/Uncertainty.html).
+
 **`execution_point`** (`"finalize_solution_step"` by default, or `"initialize_solution_step"`) and **`output_interval`** (`1`) appear on every per-step process.
 
 **Tessellation keys** on the mesh-based exporters and DoMINO: `tessellation_mode` (`"smallest_id_diagonal"` or the legacy `"fan"`), `higher_order_mode` (`"reduce"`, `"subdivide"`, `"curved"`), `curved_refinement_levels` (`2`), `source_container` (`"Elements"` or `"Conditions"`). See [Mesh Bridge](../Mesh_Bridge/Mesh_Bridge.html).
@@ -154,11 +156,12 @@ Per-case `.npz` in the exact layout of `physicsnemo.datapipes.cae` (triangulated
 
 ### `curator_export_process`
 
-A tessellated mesh series through physicsnemo-curator's sinks: an AI-ready Zarr store or a VTU series. Needs the git-only `physicsnemo_curator`.
+A tessellated mesh series as an AI-ready Zarr store or a VTU series. Zarr is written by physicsnemo itself by default; only `"zarr_backend" : "curator"` or `"sink" : "vtu"` needs the git-only `physicsnemo_curator`.
 
 | Key | Default | Meaning |
 |---|---|---|
 | `sink` | `"zarr"` | or `"vtu"` |
+| `zarr_backend` | `"physicsnemo"` | `"physicsnemo"` (`mesh.io.to_zarr`, one store per step) or `"curator"` |
 | `compression_level`, `chunk_size_mb` | `3`, `1.0` | Zarr chunking |
 | `source_container`, tessellation keys, `output_path` (`"physics_nemo_curated"`), `file_prefix` (`"mesh"`), `output_interval` | | |
 
@@ -208,7 +211,7 @@ The base contract: input fields concatenated into one `(n_entities, width)` tens
 | `model_part_name`, `model_settings` | mandatory | |
 | `input_fields`, `output_fields` | placeholders | entities are those of the first location; outputs default to `node_non_historical` |
 | `execution_point`, `output_interval` | `"finalize_solution_step"`, `1` | |
-| `ood_guard`, `uncertainty` | `{}` | the shared blocks |
+| `ood_guard`, `geometry_guard`, `uncertainty` | `{}` | the shared blocks |
 
 ### `hybrid_initialization_process`
 
@@ -239,13 +242,23 @@ The `inference_process` contract against a running Triton Inference Server; the 
 
 ### `point_cloud_inference_process`
 
-The nodes as an unordered cloud: coordinates plus features in, per-node fields out, for Transolver, GeoTransolver, FLARE, FIGConvNet and generic point models. `inference_process` settings plus:
+The nodes as an unordered cloud: coordinates plus features in, per-node fields out, for Transolver, GeoTransolver, FLARE, FIGConvNet and generic point models - plus two OPERATOR interfaces that map a whole case to a field instead, xDeepONet from case parameters and GLOBE from boundary data. `inference_process` settings plus:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `model_interface` | `"generic"` | `"generic"` (coordinates prepended to the features, a batch axis added), `"transolver"`, `"geotransolver"`, `"flare"`, `"figconvnet"` |
+| `model_interface` | `"generic"` | `"generic"` (coordinates prepended to the features, a batch axis added), `"transolver"`, `"geotransolver"`, `"flare"`, `"figconvnet"`, `"deeponet"`, `"globe"` |
 | `normalize_coordinates` | `true` | min-max per model part |
 | `pass_geometry` | `true` | hand the geometry tensor to models built with a geometry input |
+| `subsampling` | `{}` | a token budget - keys below |
+| `branch_input` | `{}` | `"deeponet"` only - the case parameters, keys below |
+| `trunk_dimension` | `0` | `"deeponet"`/`"globe"` only - how many coordinate columns the model takes; `0` follows `DOMAIN_SIZE` |
+| `globe` | `{}` | `"globe"` only - the boundaries, keys below |
+
+`subsampling` keys: `method` (`"none"`, `"farthest_point"`, `"uniform"`), `num_points` (0 = no budget), `bounding_box_min`/`bounding_box_max` (`[]`, in the model part's own coordinates), `seed` (-1). Unselected nodes take their nearest selected node's prediction.
+
+`branch_input` keys: `process_info_variables` (`[]`), `properties_variables` (`[]`), `constants` (`[]`), concatenated in that order.
+
+`globe` keys: `boundary_sub_model_parts` (`[]`), `boundary_fields` (`[]`, entries `variable_name`/`data_location`/`rank`), `reference_lengths` (`{}`), `output_names` (`[]`), `source_container` (`"Elements"`).
 
 ### `rom_surrogate_process`
 
@@ -317,6 +330,8 @@ One-to-many grid sequence models (`One2ManyRNN`, or FNO with a fourth dimension)
 | `window_size` | `2` | states per window |
 | `window_as_time_axis` | `false` | present the window as a fourth spatial axis (FNO dimension 4) |
 
+`model_interface` (`"grid"`, or `"dpot"` for `physicsnemo.models.dpot.DPOTNet`, whose `(B, H, W, T, C)` layout the process permutes to and from).
+
 ### `diffusion_inference_process`
 
 Conditional diffusion on grids: the condition sampled from the model part, an ensemble generated, its mean written to the output fields and its standard deviation to the uncertainty fields, optionally onto a second (finer) model part.
@@ -326,8 +341,14 @@ Conditional diffusion on grids: the condition sampled from the model part, an en
 | `output_model_part_name` | `""` | write onto another part (downscaling); empty means the input part |
 | `uncertainty_fields` | `[]` | one entry per output field, receives the ensemble std |
 | `grid_shape`, `bounding_box`, `squeeze_axis` | `[8, 8, 2]`, `[]`, `-1` | |
-| `denoiser_interface` | `"edm"` | `"edm"`, `"dit"`, `"unet3d"` |
-| `sampler_settings` | `{}` | ensemble size, steps, seeds, and the optional `"regression_settings"` adding a CorrDiff regression mean |
+| `denoiser_interface` | `"edm"` | `"edm"`, `"dit"`, `"unet3d"`, `"topodiff"` (a model already speaking the protocol contract uses `"protocol"` in `sampler_settings`) |
+| `sampler_settings` | `{}` | ensemble size, steps, seeds, solver, and the `"guidance"` and `"patching"` blocks below |
+
+`sampler_settings` keys: `num_samples` (8), `num_steps` (18, at least 2), `solver` (`"heun"`, `"euler"`, `"edm_stochastic_euler"`, `"edm_stochastic_heun"`), `solver_options` (`{}`, reaching the solver's constructor), `output_channels` (0 = the model's own), `seed` (-1), `api` (`"auto"`), `denoiser_interface` (`"edm"`), `preconditioner` (`"none"`), `sigma_min` (0.002), `sigma_max` (80.0), `rho` (7.0), `sigma_data` (0.5), `guidance` (`{}`), `patching` (`{}`). The separate `"regression_settings"` block, alongside `sampler_settings`, adds a CorrDiff regression mean.
+
+`guidance` keys: `type` (`"none"`, `"data_consistency"`, `"model_consistency"`), `std_y` (0.1), `gamma` (0.0), `norm` (2), `observation_fields` (`[]`), `mask_field`, `operator` (`"kratos_residual"`), `residual_fields` (`[]`), `residual_model_part_name` (`""`), `use_stored_fixed_values` (`true`).
+
+`patching` keys: `patch_shape` (`[]` = off), `overlap_pix` (0), `boundary_pix` (0), `chunk_size` (0). 2-D latents only.
 
 ### `particle_inference_process`
 
@@ -402,11 +423,13 @@ Compares predicted fields against reference fields every `output_interval` steps
 
 | Key | Default | Meaning |
 |---|---|---|
-| `list_of_comparisons` | one placeholder | entries with `predicted_variable`/`predicted_location`, `reference_variable`/`reference_location`, optional `weight_variable`/`weight_location`, and `metrics` from `mse`, `rmse`, `max_abs_error`, `wasserstein`, `relative_l2`, `weighted_mse`, `weighted_rmse` |
+| `list_of_comparisons` | one placeholder | entries with `predicted_variable`/`predicted_location`, `reference_variable`/`reference_location`, optional `weight_variable`/`weight_location`, and `metrics` from `mse`, `rmse`, `max_abs_error`, `wasserstein`, `relative_l2`, `relative_mse`, `weighted_mse`, `weighted_rmse`, `histogram_l1`, `entropy_difference` |
 | `cfd_metrics` | `[]` | entries `{"name", "domain"}` from physicsnemo-cfd's registry plus a free-form `fields` block |
 | `uncertainty_comparisons` | `[]` | mean and std variables against a reference: `coverage`, `nll`, `sharpness`, `calibration_error`, with `confidence_z` |
 | `ensemble_comparisons` | `[]` | explicitly named `member_variables` (at least two): `crps`, `kcrps` |
 | `output_interval`, `output_file` | `1`, `"validation_metrics.json"` | |
+
+`list_of_comparisons` entries also take `bins` (32) for the distribution metrics. A `spectral_comparisons` block compares power spectra, with entries: `predicted_variable`/`predicted_location`, `reference_variable`/`reference_location`, `grid_shape` (`[32, 32, 2]`), `bounding_box` (`[]`), `squeeze_axis` (2), `high_wavenumber_fraction` (0.5) and `metrics` (`power_spectrum_relative_l2`, `high_wavenumber_energy_ratio`). Both default to `[]`, so an existing configuration gains nothing it did not ask for.
 
 ### `adaptive_remesh_process`
 

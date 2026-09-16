@@ -31,11 +31,21 @@ The shape of the result has been stable across machines:
 | graph edge features | about 0.04 us | vectorized differences of positions |
 | element scatter-back through provenance | about 2 us | one `bincount` per source entity |
 | grid sampling (`SampleFieldsOnGrid`) | about 3 to 9 us per grid point | one Kratos point-locator query per grid point |
+| grid sampling over physicsnemo's BVH (`backend="physicsnemo"`) | about 7 to 10 us per grid point | tessellate, build the hierarchy, sample - 2 to 3 times the locator |
 | provenance construction, tetrahedra | about 4 to 8 us | the homogeneous-simplex fast path |
 | provenance construction, hexahedra | about 30 to 40 us | per-element Dompierre tables in Python |
 | particle proximity graph, brute force | about 50 us at N = 2000 | the quadratic distance matrix - the one path where CuPy pays unconditionally |
 
 Two conclusions were drawn from these and are recorded so they are not re-derived. **No custom C++ adaptors are warranted**: the per-entity arithmetic is already sub-microsecond or close, and the core `TensorAdaptors` (including `ConnectivityIdsTensorAdaptor`) provide the contiguous connectivity a C++ path would. And **most of what looked like array cost was interpreter cost**: replacing `{id: row}` dictionaries and `numpy.fromiter` with `searchsorted`, and `numpy.add.at` with `bincount`, made the nodal gather 15x and the scatter 10x faster with no new dependency.
+
+**The mesh BVH does not beat the Kratos locator, so the default did not move.** The roadmap asked for `physicsnemo.mesh.sampling.sample_data_at_points` to be measured against the point locator before switching anything, and `--sampling both` does exactly that:
+
+| Case | Locator | BVH | Ratio |
+|---|---|---|---|
+| 24^3 lattice, 12^3-cell tetrahedral cube | 42 ms | 144 ms | 0.29x |
+| 64^3 lattice, 196,608 tetrahedra | 795 ms | 1767 ms | 0.45x |
+
+The gap narrows as the problem grows, so a much larger mesh or a GPU could reverse it; neither is what this machine measured. The BVH path stays available through `backend="physicsnemo"` for what it uniquely offers, which is a sampled value that is differentiable with respect to the mesh's own data.
 
 ## Per-step costs, and the caching rule
 

@@ -41,7 +41,7 @@ Serving (ONNX export and Triton) is covered in [Inference](../Inference/Inferenc
 | **Super-Resolution**, **Graph Neural Networks**, **Particle Methods**, **Sequence Models**, **Point Clouds**, **CAE Datapipes**, **Reduced Order Models**, **Diffusion** | one page per data shape and model family |
 | **Adjoint**, **Physics-Informed** | gradients and residuals through the real solver |
 | **Uncertainty**, **CoSimulation**, **Distributed** | trust, coupling, ranks |
-| **Examples** | the gallery of twenty-one use cases and the nineteen notebooks |
+| **Examples** | the gallery of twenty-one use cases and the twenty notebooks |
 
 The README's roadmap lists what is pending, with its gate; nothing there is duplicated here.
 
@@ -71,7 +71,7 @@ Tests are always registered and skip cleanly (with an explanatory message) on bu
 
 ## Examples
 
-Nineteen runnable notebooks live in `applications/PhysicsNeMoApplication/examples/notebooks/`, and twenty-one documented use cases against real solves in the Examples repository; both are indexed on the [Examples](../Examples/Examples.html) page.
+Twenty runnable notebooks live in `applications/PhysicsNeMoApplication/examples/notebooks/`, and twenty-one documented use cases against real solves in the Examples repository; both are indexed on the [Examples](../Examples/Examples.html) page.
 
 ## Installation
 

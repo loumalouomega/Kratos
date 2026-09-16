@@ -46,7 +46,7 @@ Around 150 layer classes in total. The practical rule: if you want a small custo
 | Neighbors | `knn`, `radius_search` (ball query), batched radius search | Warp-accelerated; upstream measured its ball query at up to 1384x faster and 249x less peak memory than a naive torch implementation |
 | Derivatives | `uniform_grid_gradient`/`divergence`/`curl`/`laplacian`, the `rectilinear_grid_` family (2.2), spectral and finite-difference stencils | gradients take a bare scalar field and prepend a derivative axis; divergence and curl take a channels-first vector with channels equal to the spatial rank; the stencils are periodic unless you trim |
 | Geometry | `signed_distance_field` (returns `(sdf, hit_points, hit_faces)` since 2.2), `free_form_deform_points`, `displace_points`, `morph_points`, `radial_basis_function_deform_points`, the strain / measure / inversion / bending / volume energies | the Warp backend computes in float32 and is auto-selected whenever CUDA exists |
-| Sampling | `farthest_point_sampling` (2.2), `weighted_multinomial`, Poisson-disk sampling, voxelization | subsampling point clouds to a token budget - a roadmap item for the point-cloud process |
+| Sampling | `farthest_point_sampling` (2.2), `weighted_multinomial`, Poisson-disk sampling, voxelization | subsampling point clouds to a token budget - `utilities.point_subsampling` and the point-cloud process's `"subsampling"` block |
 | Interpolation and FFT | `grid_to_point_interpolation`, `irfft`/`irfft2` helpers, equivariant ops, regularization and parameterization functionals (`shrink_and_perturb_` lives one level up in `physicsnemo.nn`) | |
 | Rendering | differentiable rendering functionals | geometry-from-image problems; unused here |
 

@@ -65,3 +65,21 @@ training_utils.SaveTrainedModel(model, "rnn_surrogate.mdlus")
 ## Spatiotemporal block operators (FNO dimension=4)
 
 `"window_as_time_axis": true` targets operators that treat time as a fourth grid axis — `FNO(dimension=4)` and seq2seq RNNs: the process accumulates the sampled grid at each due step into a rolling window of `"window_size"` states (warm-up steps are logged, nothing written) and, once full, feeds the model the whole `(1, C, K, *spatial)` block; the returned `(C, T, *spatial)` block is buffered and written one state per subsequent step, as usual. `FNO(dimension=4)` preserves the block shape (`T == K`) — the standard FNO time-block surrogate predicting the next K states; use per-axis modes (e.g. `num_fno_modes=[1, 2, 2, 2]`) so the temporal modes fit the window.
+
+## DPOT, the PDE foundation model
+
+`physicsnemo.models.dpot.DPOTNet` is an AFNO-mixing operator transformer meant to be pretrained across PDE families and fine-tuned on one. Through this process it is an ordinary grid-series surrogate - a window of states in, the next ones out - reached with `"model_interface" : "dpot"` alongside `"window_as_time_axis"`.
+
+```json
+"model_interface"     : "dpot",
+"window_as_time_axis" : true,
+"window_size"         : 2,
+"grid_shape"          : [64, 64, 2],
+"squeeze_axis"        : 2
+```
+
+The whole adapter is a pair of permutations, because DPOT's tensor layout is its own: it reads `(B, H, W, T, C)` where every other grid model in this application reads `(B, C, T, H, W)`. Getting that wrong transposes the domain silently rather than raising, so the test feeds an identity model through the process and requires the field to come back as its own grid round trip.
+
+Two guards: a window that disagrees with the checkpoint's `in_timesteps` is named rather than left to fail inside the model, and a volumetric grid is refused, since this path is 2-D (planar cases reach it through `squeeze_axis`).
+
+Fine-tuning needs nothing new - `domino_finetune`'s LoRA helpers take a target pattern, so a DPOT block pattern works unchanged. The authors' pretrained weights are not verified from here; the architecture and the deployment path are.

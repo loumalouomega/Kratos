@@ -21,7 +21,7 @@ Not stable API, but several things here are the *only* implementation of what th
 | Module | What it holds |
 |---|---|
 | `experimental.guardrails.embedded` | `OODGuard`, `OODGuardConfig` — out-of-distribution detection on a model's *inputs* (bridged: `deployment.ood_guard_utils`) |
-| `experimental.guardrails.geometry` | `GeometryGuardrail`, `extract_features`, `validate_mesh` — out-of-distribution detection on the *shape* of a triangular surface mesh (2.2; a roadmap item) |
+| `experimental.guardrails.geometry` | `GeometryGuardrail`, `extract_features`, `validate_mesh` — out-of-distribution detection on the *shape* of a triangular surface mesh (2.2; bridged: `deployment.geometry_guard_utils`) |
 | `experimental.uq` | variational GP heads (`variational_gp_head`, `field_variational_gp_head`) for calibrated posterior variance |
 | `experimental.peft` | LoRA adapters — `apply`, `merge`, `io` (bridged: `training.domino_finetune`) |
 | `experimental.models` | `flare`, `geotransolver`, `aerojepa`, `globe`, `healda`, `strata`, `xdeeponet`, `diffusion`, `diffusion_unets` |

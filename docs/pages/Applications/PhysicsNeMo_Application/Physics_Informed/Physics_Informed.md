@@ -128,3 +128,20 @@ Two things this pinned that are easy to get wrong:
 - **Only the reference configuration matters** for a small-displacement element: perturbing `X` alone leaves the residual exactly unchanged, while perturbing `X0` gives a derivative stable across four decades of step size.
 
 The shipped adjoint is in fact *more* accurate than Kratos's `semi_analytic` gradient here, which carries its own `step_size` error — so the test gives Kratos the looser of the two tolerances.
+
+## The lid-driven cavity
+
+NVIDIA's canonical PINN tutorial, on the Navier-Stokes cavity this application already solves with FEM. `PinnSolveProcess` takes the builtin incompressible Navier-Stokes residual and the cavity's own Dirichlet data, and the result is compared against the VMS solution node for node:
+
+```json
+"physics" : {
+    "pde"           : "builtin:incompressible_navier_stokes",
+    "pde_arguments" : { "rho" : 1.0, "mu" : 0.05, "dim" : 2 }
+},
+"fields"          : [ { "name" : "velocity", "width" : 2 }, { "name" : "pressure", "width" : 1 } ],
+"solution_fields" : [ { "variable_name" : "VELOCITY" }, { "variable_name" : "PRESSURE" } ]
+```
+
+At a few hundred epochs it reaches a relative L2 of about 0.5 against the FEM solve: it recovers the cavity's structure - the lid drags the top one way, the recirculation sends the interior back - and not its detail. That is what this budget buys, and the test asserts the structure rather than an accuracy the method does not deliver here.
+
+**A bug this case exposed.** The process sized its network from the PDE field widths and its boundary mask from the KRATOS variable widths. For a scalar that is the same number, so the diffusion tests never noticed; for a 2-D velocity it is two against three, and every 2-D vector PINN failed on a shape mismatch. Both the gathered targets and the written output now follow the PDE widths, with the out-of-plane component written back as zero.

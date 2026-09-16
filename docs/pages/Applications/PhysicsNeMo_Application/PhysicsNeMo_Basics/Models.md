@@ -93,7 +93,7 @@ flowchart TD
 |---|---|---|
 | `diffusion_unets` | `SongUNet`, `SongUNetPosEmbd`, `DhariwalUNet`, `CorrDiffRegressionUNet`, `UNet`, `StormCastUNet` | The denoiser backbones. **2-D image oriented** |
 | `dit` | `DiT` | Diffusion transformer — the denoiser this application wraps for non-image data |
-| `topodiff` | `TopoDiff` | Diffusion for topology optimization |
+| `topodiff` | `TopoDiff` | Diffusion for topology optimization — deployed through `denoiser_interface: "topodiff"`, its constraint channels passed natively as the model's second argument |
 
 A **volumetric** 3-D denoiser exists too, under `physicsnemo.experimental.models.diffusion_unets.DiffusionUNet3D` — this application deploys it through `denoiser_interface: "unet3d"` (see the [Diffusion](../Diffusion/Diffusion.html) page and [Companion packages](Companion_Packages.html)).
 
@@ -107,16 +107,11 @@ A **volumetric** 3-D denoiser exists too, under `physicsnemo.experimental.models
 
 ### In physicsnemo 2.2 but not deployed here
 
-Each of these exists in the installed release and is a roadmap item, with the gate recorded in the README's roadmap table.
+Five families left this table and are now deployed: `dpot` (`DPOTNet`) through `SequenceInferenceProcess`'s `"model_interface": "dpot"`, `topodiff` through `denoiser_interface: "topodiff"`, `experimental.xdeeponet` and `experimental.globe` through the point-cloud process's `"deeponet"` and `"globe"` interfaces, and `experimental.aerojepa` through `training.aerojepa_pretraining`. What remains below has no Kratos counterpart deployed; only `VideoHealDA` is a roadmap row, the rest are listed so the gap stays visible rather than because a bridge is planned.
 
 | Family | Class | What it would bring to Kratos |
 |---|---|---|
-| `dpot` | `DPOTNet` | a PDE *foundation model* (AFNO mixing, pretrained across equation families) to fine-tune on Kratos grids the way `domino_finetune` does for DoMINO |
-| `topodiff` | `TopoDiff` | generative topology optimization with constraint channels, on StructuralMechanics compliance data |
 | `pix2pix` | `Pix2Pix`, `Pix2PixUnet` | a plain convolutional image-to-image translator; fits the grid process mechanically |
-| `experimental.xdeeponet` | `DeepONet` | branch (parameters) plus trunk (coordinates) operator learning - parameters in, field at the Kratos nodes out, without a POD basis |
-| `experimental.globe` | `GLOBE` | boundary-driven elliptic problems from the named boundary meshes `BuildDomainMesh` already produces |
-| `experimental.aerojepa` | `AeroJEPA` | self-supervised pretraining on geometry alone before any labels exist |
 | `experimental.strata`, `experimental.healda` | `Strata`, `VideoHealDA` | weather emulation on the sphere and HEALPix data assimilation; the assimilation idea matters for digital twins, the API is calendar-shaped |
 | `pangu`, `fengwu`, `swinvrnn`, `dlwp_healpix` | as named | global weather architectures with no Kratos counterpart |
 

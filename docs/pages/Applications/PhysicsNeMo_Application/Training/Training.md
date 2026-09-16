@@ -43,6 +43,58 @@ SaveTrainedModel(model, "surrogate.mdlus", card={
 
 ![A trained surrogate deployed with InferenceProcess reproducing the exact field it was trained on](images/surrogate_fit.png)
 
+## Self-supervised geometry pretraining
+
+`physicsnemo.experimental.models.aerojepa.AeroJEPA` learns from point sets: a CONTEXT cloud describing a shape, and QUERY points at which something about that shape is predicted. What makes it worth having here is that the context cloud costs nothing - it is the surface of any geometry the mesh bridge can produce - so a model can be pretrained across a family of shapes BEFORE a single solve exists.
+
+`training/aerojepa_pretraining.py` ships the pieces: `CreateAeroJepaModel`, `CreateGeometryFamilyDataset` (spheres and boxes through the SDF generator, labelled by their own signed distance), `PretrainOnGeometry`, and `EncodeGeometry` for the descriptor a downstream head consumes.
+
+**The JEPA objective itself is not upstream.** The recipe the architecture is named for - predict the target encoder's tokens, keep that encoder as an exponential moving average of the context encoder - has no loss and no EMA in physicsnemo 2.2; only the forward pass exists. Rather than guess at the token-level objective, the pretext task here is one the public forward supports directly: predict the signed distance at query points from the context cloud. It is self-supervised in the sense that matters, since the labels come from the geometry rather than from a solver.
+
+**What it does not yet buy.** Pretraining drives the loss down reliably, but the pooled descriptor does not separate the shape families: measured on six geometries after six epochs, the distance between the sphere and box means is 0.74 against a within-class spread of 2.00. The test records that rather than asserting a separation that is not there. A real transfer claim needs the token-level objective, more shapes and more epochs than a unit test can spend.
+
+Two traps: the point tokenizer's default strategy REQUIRES a voxel size and raises deep inside the forward long after the model was built, so it is a settings key with a default; and the target encoder concatenates its surface and volume feature blocks and refuses mismatched widths.
+
+## Performance layer
+
+`TrainModel`'s loop was plain eager PyTorch: one optimizer, no schedule, no mixed precision, no way to resume. A `"performance"` block adds the pieces physicsnemo already ships, all of them off by default so an existing configuration trains exactly as before.
+
+```json
+"optimizer"   : "muon",
+"performance" : {
+    "amp"                  : true,
+    "amp_dtype"            : "bfloat16",
+    "static_capture"       : false,
+    "cuda_graphs"          : false,
+    "gradient_clip_norm"   : 1.0,
+    "profile"              : false,
+    "profile_output"       : "train_profile.json",
+    "launch_logger"        : true,
+    "logger_backend"       : "console",
+    "checkpoint_directory" : "checkpoints",
+    "checkpoint_interval"  : 10,
+    "resume"               : true,
+    "scheduler"            : { "type" : "cosine" }
+}
+```
+
+| Key | What it does |
+|---|---|
+| `amp`, `amp_dtype` | `torch.autocast` in bfloat16 or float16. A `GradScaler` is created only where it does anything, which is float16 on CUDA |
+| `static_capture`, `cuda_graphs` | physicsnemo's `StaticCaptureTraining`: CUDA graphs plus AMP, owning zero-grad, backward and the step itself. Graphs are switched off automatically off CUDA |
+| `gradient_clip_norm` | clipped in both paths, and handed to the static capture as its own argument |
+| `profile`, `profile_output` | a chrome trace of the run, openable in Perfetto |
+| `launch_logger`, `logger_backend` | physicsnemo's `LaunchLogger` to the console, mlflow or wandb |
+| `checkpoint_directory`, `checkpoint_interval`, `resume` | physicsnemo's resumable checkpoints: model, optimizer, scheduler and scaler |
+| `scheduler` | `none`, `step` (`step_size`, `gamma`) or `cosine` (`t_max`, defaulting to the epoch count), stepped once per epoch |
+
+Four things worth knowing before reaching for them:
+
+- **`"optimizer" : "muon"` splits the parameters.** physicsnemo's Muon orthogonalizes each update matrix and therefore REJECTS parameters of rank below 2 outright. The weight matrices go to Muon and the biases and norm gains to Adam, joined by `CombinedOptimizer` - a real `torch.optim.Optimizer`, so schedulers and checkpoints take it unchanged. A model with no matrix at all is refused rather than silently left to Adam.
+- **Static capture accepts only a physicsnemo `Module`.** A plain `torch.nn.Module` raises, and the bridge's message says so and points at `Module.from_torch`.
+- **Resuming returns the history of THIS call.** A run that stops after two of four epochs and is resumed returns two entries the second time, and they are the same two the uninterrupted run produced - the test asserts exactly that, which is what makes the checkpoint resumable rather than merely loadable.
+- **The profiler is torch's own.** physicsnemo's `Profiler` is a registry in front of the same torch profiler plus others; configuring it well is its own subject, so the block writes a plain chrome trace.
+
 ## Saving checkpoints
 
 `SaveTrainedModel(model, checkpoint_file, card=None)` writes the checkpoint in whichever of the two `model_registry.LoadModel` formats fits: physicsnemo `Module`s save natively (the file **must** end in `.mdlus`; checkpoint type `"physicsnemo"`), anything else is scripted to TorchScript (checkpoint type `"torchscript"`, the return value tells you which). An optional `card` dict writes the model card alongside.
