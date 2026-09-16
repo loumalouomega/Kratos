@@ -52,6 +52,8 @@ bridges/                            Kratos data <-> physicsnemo data
 │   ├── nurbs_sampling              exact NURBS (IGA) geometry on a lattice
 │   ├── spatial                     signed distance fields as features
 │   ├── deformation                 differentiable shape parameterizations
+│   ├── operations                  curvature, repair, subdivision, extrusion
+│   ├── sampling                    differentiable point sampling over a BVH
 │   └── adaptive_remeshing          residual-driven MMG adaptation
 ├── graph_bridge                    the element-edge graph
 ├── grid_bridge                     unstructured fields <-> voxel grids
@@ -61,7 +63,9 @@ bridges/                            Kratos data <-> physicsnemo data
 ├── rom_bridge                      RomApplication POD bases
 ├── adjoint_bridge                  Kratos adjoint gradients in row order
 ├── cfd_bridge                      pyvista and physicsnemo-cfd
+├── globe_bridge                    boundary data -> the interior (GLOBE)
 ├── curator_bridge                  a solve as a physicsnemo-curator source
+├── vtk_bridge                      Kratos VTK output as read-only training data
 └── vfgn_bridge                     Virtual Foundry GraphNet, sintering / AM
 
 training/                           loops, datasets, schemes
@@ -69,7 +73,9 @@ training/                           loops, datasets, schemes
 ├── torch_dataset                   dataset and datapipe factories
 ├── streaming_dataset               train out of a running solve
 ├── temporal_training               window datasets, BPTT through a rollout
-├── diffusion_utils                 diffusion and the CorrDiff two-stage recipe
+├── diffusion_utils                 diffusion, DPS guidance, multi-diffusion, CorrDiff
+├── globe_training                  the boundary-driven operator's own loop
+├── aerojepa_pretraining            geometry pretraining before any solve
 ├── sobolev_training                grade the surrogate on exact gradients too
 ├── domino_finetune                 predictor-corrector and LoRA adaptation
 ├── rom_temporal                    temporal attention in ROM space
@@ -79,6 +85,7 @@ physics/                            physics as a signal
 ├── solver_residuals                the real PDE residual - a score, not a gradient
 ├── physics_informed                SymPy strong-form residuals as a loss
 ├── differentiable_residual         the exact discrete residual, differentiable
+├── diffusion_residual_operator     that residual as a diffusion guidance operator
 └── sensitivity_utils               adjoints and exact shape gradients
 
 deployment/                         checkpoint -> production
@@ -90,6 +97,7 @@ deployment/                         checkpoint -> production
 ├── cosim_surrogate_solver_wrapper  a model as a CoSimulation solver
 ├── surrogate_response_function     a model as a Kratos response function
 ├── uncertainty_utils               MC dropout, ensembles, GP heads
+├── geometry_guard_utils            OOD detection on the shape
 └── ood_guard_utils                 out-of-distribution guardrails
 
 distributed/                        MPI and multi-rank
@@ -102,6 +110,7 @@ active_learning/                    Kratos as the labeling oracle
 utilities/                          small shared helpers
 ├── tensor_adaptor_dataset_utils    the shared gather/scatter entry point
 ├── array_backend_utils             opt-in CuPy, with numpy the default
+├── point_subsampling               point-cloud token budgets
 ├── nvtx_utils                      Nsight Systems ranges
 ├── shallow_water_reference         a numpy-only reference integrator (GraphCast recipe)
 └── lennard_jones_reference         a numpy-only MD integrator (Lennard-Jones recipe)
