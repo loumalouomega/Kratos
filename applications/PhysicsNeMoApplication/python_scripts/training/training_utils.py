@@ -1,3 +1,4 @@
+import contextlib
 """Parameters-driven training loop and checkpoint saving.
 
 Removes the boilerplate every surrogate needs: TrainModel runs a standard
@@ -71,6 +72,261 @@ def _WantsTargets(loss_term) -> bool:
     return len(positional) >= 4
 
 
+_OPTIMIZERS = ("adam", "sgd", "muon")
+_SCHEDULERS = ("none", "step", "cosine")
+_AMP_DTYPES = ("bfloat16", "float16")
+_LOGGER_BACKENDS = ("console", "mlflow", "wandb")
+
+
+def _TryImportStaticCapture():
+    try:
+        from physicsnemo.utils import StaticCaptureTraining
+        return StaticCaptureTraining
+    except ImportError as e:
+        raise ImportError(
+            "\"static_capture\" requires physicsnemo, which could not be imported. "
+            "Install it with e.g. 'pip install -U nvidia-physicsnemo'.") from e
+
+
+def _TryImportCheckpointing():
+    try:
+        from physicsnemo.utils import load_checkpoint, save_checkpoint
+        return save_checkpoint, load_checkpoint
+    except ImportError as e:
+        raise ImportError(
+            "Resumable checkpoints require physicsnemo, which could not be imported. "
+            "Install it with e.g. 'pip install -U nvidia-physicsnemo'.") from e
+
+
+def _TryImportMuon():
+    try:
+        from physicsnemo.optim import CombinedOptimizer, Muon
+        return Muon, CombinedOptimizer
+    except ImportError as e:
+        raise ImportError(
+            "The \"muon\" optimizer requires physicsnemo >= 2.2, which could not be "
+            "imported. Install it with e.g. 'pip install -U nvidia-physicsnemo'.") from e
+
+
+def _TryImportLaunchLogger():
+    try:
+        from physicsnemo.utils import LaunchLogger
+        return LaunchLogger
+    except ImportError as e:
+        raise ImportError(
+            "\"launch_logger\" requires physicsnemo, which could not be imported. "
+            "Install it with e.g. 'pip install -U nvidia-physicsnemo'.") from e
+
+
+def _ReadPerformanceSettings(settings: Kratos.Parameters) -> dict:
+    """The "performance" block of TrainModel, validated, as a plain dict."""
+    scheduler_settings = Kratos.Parameters("{}")
+    if settings.Has("scheduler"):
+        scheduler_settings = settings["scheduler"].Clone()
+        settings.RemoveValue("scheduler")
+    settings.ValidateAndAssignDefaults(Kratos.Parameters("""{
+        "amp"                  : false,
+        "amp_dtype"            : "bfloat16",
+        "static_capture"       : false,
+        "cuda_graphs"          : false,
+        "gradient_clip_norm"   : 0.0,
+        "profile"              : false,
+        "profile_output"       : "train_profile.json",
+        "launch_logger"        : false,
+        "logger_backend"       : "console",
+        "checkpoint_directory" : "",
+        "checkpoint_interval"  : 0,
+        "resume"               : false
+    }"""))
+    scheduler_settings.ValidateAndAssignDefaults(Kratos.Parameters("""{
+        "type"      : "none",
+        "step_size" : 1,
+        "gamma"     : 0.1,
+        "t_max"     : 0
+    }"""))
+
+    performance = {
+        "amp": settings["amp"].GetBool(),
+        "amp_dtype": settings["amp_dtype"].GetString(),
+        "static_capture": settings["static_capture"].GetBool(),
+        "cuda_graphs": settings["cuda_graphs"].GetBool(),
+        "gradient_clip_norm": settings["gradient_clip_norm"].GetDouble(),
+        "profile": settings["profile"].GetBool(),
+        "profile_output": settings["profile_output"].GetString(),
+        "launch_logger": settings["launch_logger"].GetBool(),
+        "logger_backend": settings["logger_backend"].GetString(),
+        "checkpoint_directory": settings["checkpoint_directory"].GetString(),
+        "checkpoint_interval": settings["checkpoint_interval"].GetInt(),
+        "resume": settings["resume"].GetBool(),
+        "scheduler": {
+            "type": scheduler_settings["type"].GetString(),
+            "step_size": scheduler_settings["step_size"].GetInt(),
+            "gamma": scheduler_settings["gamma"].GetDouble(),
+            "t_max": scheduler_settings["t_max"].GetInt(),
+        },
+    }
+    if performance["amp_dtype"] not in _AMP_DTYPES:
+        raise ValueError(
+            f"Unsupported amp_dtype \"{performance['amp_dtype']}\". Use one of {_AMP_DTYPES}.")
+    if performance["logger_backend"] not in _LOGGER_BACKENDS:
+        raise ValueError(
+            f"Unsupported logger_backend \"{performance['logger_backend']}\". Use one of "
+            f"{_LOGGER_BACKENDS}.")
+    if performance["scheduler"]["type"] not in _SCHEDULERS:
+        raise ValueError(
+            f"Unsupported scheduler \"{performance['scheduler']['type']}\". Use one of "
+            f"{_SCHEDULERS}.")
+    if performance["resume"] and not performance["checkpoint_directory"]:
+        raise ValueError(
+            "\"resume\" needs a \"checkpoint_directory\" to resume from.")
+    return performance
+
+
+def _BuildOptimizer(model, optimizer_name: str, learning_rate: float):
+    """adam, sgd, or muon - the last split across parameter ranks.
+
+    physicsnemo's Muon orthogonalizes each update matrix, so it REJECTS
+    1-D parameters outright (biases, norm gains): "Muon only supports 2D
+    parameters". The matrices go to Muon and everything else to Adam,
+    through physicsnemo's CombinedOptimizer, which is a genuine
+    torch Optimizer - schedulers and checkpoints accept it unchanged.
+    """
+    torch = _TryImportTorch()
+    parameters = [p for p in model.parameters() if p.requires_grad]
+    if optimizer_name == "adam":
+        return torch.optim.Adam(parameters, lr=learning_rate)
+    if optimizer_name == "sgd":
+        return torch.optim.SGD(parameters, lr=learning_rate)
+    if optimizer_name == "muon":
+        Muon, CombinedOptimizer = _TryImportMuon()
+        matrices = [p for p in parameters if p.ndim >= 2]
+        others = [p for p in parameters if p.ndim < 2]
+        if not matrices:
+            raise ValueError(
+                "\"muon\" found no parameter of rank >= 2 to optimize; it updates "
+                "weight MATRICES only. Use \"adam\" for this model.")
+        optimizers = [Muon(matrices, lr=learning_rate)]
+        if others:
+            optimizers.append(torch.optim.Adam(others, lr=learning_rate))
+        return CombinedOptimizer(optimizers)
+    raise ValueError(
+        f"Unsupported optimizer \"{optimizer_name}\". Use one of {_OPTIMIZERS}.")
+
+
+def _BuildScheduler(optimizer, scheduler_settings: dict, epochs: int):
+    """A learning-rate schedule stepped once per epoch, or None."""
+    torch = _TryImportTorch()
+    kind = scheduler_settings["type"]
+    if kind == "none":
+        return None
+    if kind == "step":
+        return torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=scheduler_settings["step_size"],
+            gamma=scheduler_settings["gamma"])
+    return torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=scheduler_settings["t_max"] or epochs)
+
+
+class _TrainingStep:
+    """One optimizer step, eager or statically captured.
+
+    The two paths are kept apart deliberately rather than merged: physicsnemo's
+    StaticCaptureTraining owns zero_grad, backward, the scaler and the step
+    itself, and accepts ONLY a physicsnemo Module. The eager path does those
+    things by hand, with torch.autocast for AMP and a GradScaler only where
+    it does anything (float16 on CUDA).
+    """
+
+    def __init__(self, model, optimizer, objective, performance: dict, device) -> None:
+        torch = _TryImportTorch()
+        self._torch = torch
+        self._model = model
+        self._optimizer = optimizer
+        self._objective = objective
+        self._clip = performance["gradient_clip_norm"]
+        self.scaler = None
+        self._static = None
+
+        amp = performance["amp"]
+        amp_dtype = torch.bfloat16 if performance["amp_dtype"] == "bfloat16" else torch.float16
+        if performance["static_capture"]:
+            StaticCaptureTraining = _TryImportStaticCapture()
+            try:
+                self._static = StaticCaptureTraining(
+                    model=model, optim=optimizer,
+                    use_graphs=performance["cuda_graphs"] and device.type == "cuda",
+                    use_amp=amp, amp_type=amp_dtype,
+                    gradient_clip_norm=self._clip or None)(objective)
+            except ValueError as error:
+                raise ValueError(
+                    f"\"static_capture\" failed: {error}. physicsnemo's "
+                    "StaticCaptureTraining accepts only a physicsnemo Module; wrap a "
+                    "plain torch model with physicsnemo.Module.from_torch, or leave "
+                    "static_capture off and use \"amp\" alone.") from error
+            return
+
+        if amp:
+            self._autocast = lambda: torch.autocast(device_type=device.type, dtype=amp_dtype)
+            if amp_dtype == torch.float16 and device.type == "cuda":
+                self.scaler = torch.amp.GradScaler("cuda")
+        else:
+            self._autocast = contextlib.nullcontext
+
+    def __call__(self, inputs, targets) -> float:
+        if self._static is not None:
+            return float(self._static(inputs, targets))
+
+        torch = self._torch
+        self._optimizer.zero_grad()
+        with self._autocast():
+            loss = self._objective(inputs, targets)
+        if self.scaler is not None:
+            self.scaler.scale(loss).backward()
+            if self._clip > 0.0:
+                self.scaler.unscale_(self._optimizer)
+                torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip)
+            self.scaler.step(self._optimizer)
+            self.scaler.update()
+        else:
+            loss.backward()
+            if self._clip > 0.0:
+                torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip)
+            self._optimizer.step()
+        return loss.item()
+
+
+def _HasCheckpoint(directory: str) -> bool:
+    from pathlib import Path
+
+    return bool(directory) and any(Path(directory).glob("checkpoint.*.pt"))
+
+
+def _ProfilerContext(performance: dict):
+    """torch.profiler around the whole run, exported as a chrome trace.
+
+    torch's own profiler rather than physicsnemo's Profiler registry: the
+    registry is a manager in front of this same profiler plus others, and
+    configuring it well is its own subject. The trace opens in
+    chrome://tracing or Perfetto.
+    """
+    if not performance["profile"]:
+        return contextlib.nullcontext()
+    torch = _TryImportTorch()
+    activities = [torch.profiler.ProfilerActivity.CPU]
+    if torch.cuda.is_available():
+        activities.append(torch.profiler.ProfilerActivity.CUDA)
+    output = performance["profile_output"]
+
+    @contextlib.contextmanager
+    def profiled():
+        with torch.profiler.profile(activities=activities) as profiler:
+            yield profiler
+        profiler.export_chrome_trace(output)
+        Kratos.Logger.PrintInfo("TrainModel", f"Wrote the training profile to \"{output}\".")
+
+    return profiled()
+
+
 def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None,
                extra_loss_terms=None):
     """Trains a model on an (inputs, targets) dataset.
@@ -93,6 +349,22 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
                 sensitivity field alongside the solution has the gradient in
                 its trailing columns, there for a loss term rather than for
                 the model to reproduce (see sobolev_training).
+            optimizer also accepts "muon": physicsnemo's Muon on the weight
+                matrices and Adam on everything of rank < 2, which Muon
+                rejects outright.
+            performance ({} = off): the training performance layer -
+                amp/amp_dtype (torch.autocast, a GradScaler only for float16
+                on CUDA), static_capture/cuda_graphs (physicsnemo's
+                StaticCaptureTraining; physicsnemo Modules only),
+                gradient_clip_norm, profile/profile_output (a chrome trace),
+                launch_logger/logger_backend (physicsnemo's LaunchLogger:
+                console, mlflow or wandb), checkpoint_directory/
+                checkpoint_interval/resume (physicsnemo's resumable
+                checkpoints - model, optimizer, scheduler and scaler), and a
+                scheduler block {type: none|step|cosine, step_size, gamma,
+                t_max}. Resuming returns the history of the epochs run in
+                THIS call, so a resumed run's history continues where the
+                interrupted one stopped.
             ood_guard ({} = off; {"guard_file": "...", "buffer_size": 0 =
                 len(dataset), "knn_k", "sensitivity"} calibrates an OOD
                 guard on the training inputs during the first epoch and
@@ -145,7 +417,8 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
         "target_channels"             : [],
         "streaming"                   : false,
         "warm_restart"                : {},
-        "ood_guard"                   : {}
+        "ood_guard"                   : {},
+        "performance"                 : {}
     }""")
     settings.ValidateAndAssignDefaults(default_settings)
 
@@ -178,13 +451,11 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
     if warm_restart.Has("shrink") or warm_restart.Has("perturb"):
         _ApplyWarmRestart(model, warm_restart, seed)
 
-    optimizer_name = settings["optimizer"].GetString()
-    if optimizer_name == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=settings["learning_rate"].GetDouble())
-    elif optimizer_name == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(), lr=settings["learning_rate"].GetDouble())
-    else:
-        raise ValueError(f"Unsupported optimizer \"{optimizer_name}\". Use \"adam\" or \"sgd\".")
+    optimizer = _BuildOptimizer(
+        model, settings["optimizer"].GetString(), settings["learning_rate"].GetDouble())
+    performance = _ReadPerformanceSettings(settings["performance"])
+    epochs = settings["epochs"].GetInt()
+    scheduler = _BuildScheduler(optimizer, performance["scheduler"], epochs)
 
     loss_name = settings["loss"].GetString()
     if loss_name == "mse":
@@ -220,68 +491,106 @@ def TrainModel(model, dataset, settings: Kratos.Parameters, epoch_callbacks=None
     resolved_loss_terms = [(term, _WantsTargets(term)) for term in (extra_loss_terms or ())]
     target_channels = [int(v) for v in settings["target_channels"].GetVector()]
 
+    def ComputeObjective(inputs, targets):
+        prediction = model(inputs)
+        loss = loss_fn(prediction,
+                       targets[..., target_channels] if target_channels else targets)
+        for loss_term, wants_targets in resolved_loss_terms:
+            loss = loss + (loss_term(model, inputs, prediction, targets) if wants_targets
+                           else loss_term(model, inputs, prediction))
+        if concrete_reg_weight > 0.0:
+            from KratosMultiphysics.PhysicsNeMoApplication.deployment import uncertainty_utils
+            loss = loss + concrete_reg_weight * uncertainty_utils.CollectConcreteDropoutLosses(model)
+        return loss
+
+    step = _TrainingStep(model, optimizer, ComputeObjective, performance, device)
+
+    checkpoint_directory = performance["checkpoint_directory"]
+    start_epoch = 0
+    if performance["resume"]:
+        if _HasCheckpoint(checkpoint_directory):
+            _, load_checkpoint = _TryImportCheckpointing()
+            start_epoch = int(load_checkpoint(
+                checkpoint_directory, models=model, optimizer=optimizer,
+                scheduler=scheduler, scaler=step.scaler, device=device))
+            Kratos.Logger.PrintInfo(
+                "TrainModel", f"Resumed from \"{checkpoint_directory}\" at epoch {start_epoch}.")
+        else:
+            Kratos.Logger.PrintInfo(
+                "TrainModel", f"No checkpoint in \"{checkpoint_directory}\"; starting fresh.")
+
+    launch_logger = None
+    if performance["launch_logger"]:
+        launch_logger = _TryImportLaunchLogger()
+        backend = performance["logger_backend"]
+        launch_logger.initialize(use_mlflow=backend == "mlflow", use_wandb=backend == "wandb")
+
     history = []
     model.train()
-    for epoch in range(settings["epochs"].GetInt()):
-        epoch_loss = 0.0
-        batches = 0
-        for inputs, targets in loader:
-            optimizer.zero_grad()
-            inputs = inputs.to(device)
-            targets = targets.to(device)
-            prediction = model(inputs)
-            loss = loss_fn(prediction,
-                           targets[..., target_channels] if target_channels else targets)
-            for loss_term, wants_targets in resolved_loss_terms:
-                loss = loss + (loss_term(model, inputs, prediction, targets) if wants_targets
-                               else loss_term(model, inputs, prediction))
-            if concrete_reg_weight > 0.0:
-                from KratosMultiphysics.PhysicsNeMoApplication.deployment import uncertainty_utils
-                loss = loss + concrete_reg_weight * uncertainty_utils.CollectConcreteDropoutLosses(model)
-            loss.backward()
-            optimizer.step()
-            epoch_loss += loss.item()
-            batches += 1
-            if guard_file and epoch == 0:  # calibrate on the first pass over the data
-                from KratosMultiphysics.PhysicsNeMoApplication.deployment import ood_guard_utils
+    with _ProfilerContext(performance):
+        for epoch in range(start_epoch, epochs):
+            epoch_loss = 0.0
+            batches = 0
+            epoch_log = (launch_logger("train", epoch=epoch + 1) if launch_logger is not None
+                         else contextlib.nullcontext())
+            with epoch_log as log:
+                for inputs, targets in loader:
+                    inputs = inputs.to(device)
+                    targets = targets.to(device)
+                    loss_value = step(inputs, targets)
+                    epoch_loss += loss_value
+                    batches += 1
+                    if log is not None:
+                        log.log_minibatch({"loss": loss_value})
+                    if guard_file and epoch == 0:  # calibrate on the first pass over the data
+                        from KratosMultiphysics.PhysicsNeMoApplication.deployment import ood_guard_utils
+                        with torch.no_grad():
+                            # the guard is a CPU-resident deployment artifact (the
+                            # inference processes score CPU features against it), so
+                            # feed it CPU tensors regardless of the training device -
+                            # collect() otherwise fails on CUDA with a device mismatch
+                            rows = _GuardCalibrationRows(
+                                inputs.detach().to("cpu", torch.float32))
+                        if guard is None:
+                            feature_width = int(rows.shape[-1])
+                            rows_per_sample = max(1, rows.shape[0] // max(1, inputs.shape[0]))
+                            buffer_size = guard_settings["buffer_size"].GetInt()
+                            if buffer_size <= 0:
+                                if streaming:
+                                    raise ValueError(
+                                        "The OOD guard needs an explicit \"buffer_size\" when "
+                                        "\"streaming\" is set: a live stream has no len().")
+                                buffer_size = min(4096, len(dataset) * rows_per_sample)
+                            guard = ood_guard_utils.CreateOODGuard(
+                                buffer_size, feature_width,
+                                guard_settings["knn_k"].GetInt(),
+                                guard_settings["sensitivity"].GetDouble())
+                            guard_quota = max(1, -(-buffer_size * int(inputs.shape[0]) //
+                                                   max(1, len(dataset))))
+                        with torch.no_grad():
+                            if rows.shape[0] > guard_quota:  # spread the buffer over the epoch
+                                rows = rows[torch.randperm(rows.shape[0])[:guard_quota]]
+                            sample_latents = rows.mean(dim=0, keepdim=True)
+                            guard.collect(rows, sample_latents)
+            if scheduler is not None:
+                scheduler.step()
+            history.append(epoch_loss / max(batches, 1))
+            if echo_interval > 0 and (epoch + 1) % echo_interval == 0:
+                Kratos.Logger.PrintInfo(
+                    "TrainModel", f"epoch {epoch + 1}/{settings['epochs'].GetInt()}: loss = {history[-1]:.6e}")
+            if epoch_callbacks:
+                model.eval()
                 with torch.no_grad():
-                    # the guard is a CPU-resident deployment artifact (the
-                    # inference processes score CPU features against it), so
-                    # feed it CPU tensors regardless of the training device -
-                    # collect() otherwise fails on CUDA with a device mismatch
-                    rows = _GuardCalibrationRows(
-                        inputs.detach().to("cpu", torch.float32))
-                if guard is None:
-                    feature_width = int(rows.shape[-1])
-                    rows_per_sample = max(1, rows.shape[0] // max(1, inputs.shape[0]))
-                    buffer_size = guard_settings["buffer_size"].GetInt()
-                    if buffer_size <= 0:
-                        if streaming:
-                            raise ValueError(
-                                "The OOD guard needs an explicit \"buffer_size\" when "
-                                "\"streaming\" is set: a live stream has no len().")
-                        buffer_size = min(4096, len(dataset) * rows_per_sample)
-                    guard = ood_guard_utils.CreateOODGuard(
-                        buffer_size, feature_width,
-                        guard_settings["knn_k"].GetInt(),
-                        guard_settings["sensitivity"].GetDouble())
-                    guard_quota = max(1, -(-buffer_size * int(inputs.shape[0]) //
-                                           max(1, len(dataset))))
-                with torch.no_grad():
-                    if rows.shape[0] > guard_quota:  # spread the buffer over the epoch
-                        rows = rows[torch.randperm(rows.shape[0])[:guard_quota]]
-                    sample_latents = rows.mean(dim=0, keepdim=True)
-                    guard.collect(rows, sample_latents)
-        history.append(epoch_loss / max(batches, 1))
-        if echo_interval > 0 and (epoch + 1) % echo_interval == 0:
-            Kratos.Logger.PrintInfo(
-                "TrainModel", f"epoch {epoch + 1}/{settings['epochs'].GetInt()}: loss = {history[-1]:.6e}")
-        if epoch_callbacks:
-            model.eval()
-            with torch.no_grad():
-                for callback in epoch_callbacks:
-                    callback(epoch, model, history)
-            model.train()
+                    for callback in epoch_callbacks:
+                        callback(epoch, model, history)
+                model.train()
+            if (checkpoint_directory and performance["checkpoint_interval"] > 0
+                    and ((epoch + 1) % performance["checkpoint_interval"] == 0 or epoch + 1 == epochs)):
+                from pathlib import Path
+                save_checkpoint, _ = _TryImportCheckpointing()
+                Path(checkpoint_directory).mkdir(parents=True, exist_ok=True)
+                save_checkpoint(checkpoint_directory, models=model, optimizer=optimizer,
+                                scheduler=scheduler, scaler=step.scaler, epoch=epoch + 1)
     model.eval()
     if guard is not None:
         from KratosMultiphysics.PhysicsNeMoApplication.deployment import ood_guard_utils

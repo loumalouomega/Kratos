@@ -6,6 +6,9 @@ Module                   Provides
 ``training_utils``       ``TrainModel``/``SaveTrainedModel`` - the
                          ``Parameters``-driven loop, callbacks, warm restarts,
                          OOD calibration and FSDP2-safe checkpoint writing
+    A ``performance`` block adds mixed precision, physicsnemo's static
+    capture, the Muon optimizer, learning-rate schedules, profiling and
+    resumable checkpoints - all off by default.
 ``torch_dataset``        dataset and datapipe factories over exported files
                          (``.npz``, ``.pmsh``, DoMINO/Transolver, augmentation,
                          mixing)
@@ -23,6 +26,11 @@ Module                   Provides
                          trained time-series surrogate
 ``sobolev_training``     ``MakeSensitivityLossTerm`` - derivative-informed
                          training against Kratos's adjoint dJ/dX
+``globe_training``       ``TrainGlobe`` - the dict-in/dict-out loop GLOBE needs,
+                         which the tensor-batch ``TrainModel`` cannot express
+``aerojepa_pretraining`` self-supervised geometry pretraining, with the JEPA
+                         objective and EMA target encoder upstream declares but
+                         does not ship
 ======================== ======================================================
 
 Nothing here defines a Kratos ``Process``; the process that fills the streaming
