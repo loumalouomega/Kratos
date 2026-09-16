@@ -29,6 +29,8 @@ class GiDOutputProcess(KM.OutputProcess):
             },
             "file_label": "time",
             "time_label_format": "{:.12f}",
+            "real_number_format": "%g",
+            "time_step_number_format": "%.16g",
             "output_control_type": "step",
             "output_interval": 1.0,
             "flush_after_output": false,
@@ -176,6 +178,15 @@ class GiDOutputProcess(KM.OutputProcess):
         # Retrieve gidpost flags and setup GiD output tool
         gidpost_flags = result_file_configuration["gidpost_flags"]
         gidpost_flags.ValidateAndAssignDefaults(self.defaults["result_file_configuration"]["gidpost_flags"])
+
+        # "real_number_format"/"time_step_number_format" are C printf conversion specifiers gidpost
+        # uses to print numbers INSIDE the result file. Not to be confused with "time_label_format"
+        # (set up further below), which is a Python str.format spec used to build result FILE NAMES.
+        # gidpost only reads these once, the first time each kind of ASCII output is written in the
+        # process, and ignores later changes -- they only reliably take effect on the very first
+        # GidIO output produced by a run.
+        self.real_number_format = result_file_configuration["real_number_format"].GetString()
+        self.time_step_number_format = result_file_configuration["time_step_number_format"].GetString()
 
         self._InitializeGiDIO(gidpost_flags,gidpost_flags)
 
@@ -351,7 +362,9 @@ class GiDOutputProcess(KM.OutputProcess):
                                     self.multifile_flag,
                                     self.write_deformed_mesh,
                                     self.write_conditions,
-                                    self.param["result_file_configuration"]["gauss_point_results"].size()>0)
+                                    self.param["result_file_configuration"]["gauss_point_results"].size()>0,
+                                    self.real_number_format,
+                                    self.time_step_number_format)
 
         if self.skin_output or self.num_planes > 0:
             self.cut_io = KM.GidIO(self.cut_file_name,
@@ -359,7 +372,9 @@ class GiDOutputProcess(KM.OutputProcess):
                                 self.multifile_flag,
                                 self.write_deformed_mesh,
                                 KM.WriteConditionsFlag.WriteConditionsOnly,
-                                self.param["result_file_configuration"]["gauss_point_results"].size()>0) # Cuts are conditions, so we always print conditions in the cut ModelPart
+                                self.param["result_file_configuration"]["gauss_point_results"].size()>0, # Cuts are conditions, so we always print conditions in the cut ModelPart
+                                self.real_number_format,
+                                self.time_step_number_format)
 
     def __get_pretty_time(self,time):
         pretty_time = self.time_label_format.format(time)
