@@ -20,4 +20,9 @@ mistake:
 ``sensitivity_utils`` sits alongside them: cheap surrogate ``dJ/dx`` by autograd,
 exact adjoint parameter sensitivities, and the discretely exact shape gradient
 at every node from one pass over the mesh.
+
+``diffusion_residual_operator`` puts the third notion to a different use: the
+same assembly, wrapped as the observation operator of a diffusion posterior
+sampling guidance term, so the physics steers a generative model at SAMPLING
+time rather than grading it during training.
 """
