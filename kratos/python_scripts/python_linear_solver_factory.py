@@ -3,29 +3,8 @@ from KratosMultiphysics import kratos_utilities as kratos_utils
 from importlib import import_module
 
 def ConstructSolver(Settings):
-    """Construct a linear solver using the factory specified in ``Settings``.
-
-    Reads the ``kratos_module`` and ``factory_module`` entries from
-    ``Settings`` to locate and instantiate the appropriate
-    ``PythonLinearSolverFactory`` subclass, then delegates to its
-    ``CreateLinearSolver`` method.
-
-    Missing factory-related keys (``kratos_module``, ``factory_module``,
-    ``solver_type``) are filled in with default values pointing to
-    ``PythonLinearSolverFactory``.
-
-    Args:
-        Settings (KratosMultiphysics.Parameters): Parameters object that must
-            contain at least a ``"solver_type"`` entry. The optional
-            ``"kratos_module"`` and ``"factory_module"`` entries control which
-            factory class is used.
-
-    Returns:
-        LinearSolver: A Kratos linear solver instance.
-
-    Raises:
-        Exception: If ``Settings`` is not a
-            ``KratosMultiphysics.Parameters`` object.
+    """
+    Construct a linear solver using the factory specified in ``Settings``.
     """
     # Check input
     if type(Settings) != KM.Parameters:
@@ -55,24 +34,8 @@ def ConstructSolver(Settings):
     return factory_instance.CreateLinearSolver(Settings)
 
 def CreateFastestAvailableDirectLinearSolver(Settings = KM.Parameters("{}")):
-    """Create the fastest available direct linear solver using the configured factory.
-
-    Reads the ``kratos_module`` and ``factory_module`` entries from
-    ``Settings`` (defaulting to ``PythonLinearSolverFactory``) to locate and
-    instantiate the appropriate factory class, then delegates to its
-    ``CreateFastestAvailableDirectLinearSolver`` method.
-
-    Args:
-        Settings (KratosMultiphysics.Parameters, optional): Parameters object
-            that may contain ``"kratos_module"`` and ``"factory_module"``
-            entries to override the default factory. Defaults to an empty
-            Parameters object, which selects ``PythonLinearSolverFactory``.
-
-    Returns:
-        LinearSolver: The fastest available direct Kratos linear solver.
-
-    Raises:
-        Exception: If no suitable direct solver can be found.
+    """
+    Create the fastest available direct linear solver using the configured factory.
     """
     # Fill in missing factory keys from defaults (do NOT inject into Settings)
     kratos_module_name = Settings["kratos_module"].GetString() if Settings.Has("kratos_module") else "KratosMultiphysics"
@@ -90,32 +53,12 @@ def CreateFastestAvailableDirectLinearSolver(Settings = KM.Parameters("{}")):
     return factory_instance.CreateFastestAvailableDirectLinearSolver()
 
 class PythonLinearSolverFactory(object):
-    """Factory class for creating linear solvers in Kratos.
-
-    Provides methods to construct linear solvers (both regular and complex)
-    from a Parameters configuration object, and to select the fastest available
-    direct solver on the current system.
+    """
+    Factory class for creating linear solvers in Kratos.
     """
     def CreateLinearSolver(self, configuration):
-        """Create a linear solver from a Parameters configuration object.
-
-        Automatically determines whether to construct a complex or regular
-        (non-complex) linear solver based on the registered solver types.
-        If the solver belongs to an external application, that application
-        is imported first.
-
-        Args:
-            configuration (KratosMultiphysics.Parameters): Parameters object
-                containing at least a ``"solver_type"`` entry. Optionally may
-                contain an ``"inner_solver_settings"`` block for preconditioners
-                or nested solvers.
-
-        Returns:
-            LinearSolver: A Kratos linear solver instance.
-
-        Raises:
-            Exception: If ``configuration`` is not a
-                ``KratosMultiphysics.Parameters`` object.
+        """
+        Create a linear solver from a Parameters configuration object.
         """
         if type(configuration) != KM.Parameters:
             raise Exception("input is expected to be provided as a Kratos Parameters object")
@@ -134,19 +77,8 @@ class PythonLinearSolverFactory(object):
             return KM.LinearSolverFactory().Create(configuration)
 
     def CreateFastestAvailableDirectLinearSolver(self):
-        """Create the fastest available direct linear solver on the current system.
-
-        Iterates over the list of direct solvers ordered by speed
-        (``UblasSparseSpace.FastestDirectSolverList``) and returns the first
-        one that is registered in the ``LinearSolverFactory``. If the
-        ``LinearSolversApplication`` is available it is loaded beforehand so
-        that its solvers are registered.
-
-        Returns:
-            LinearSolver: The fastest available direct Kratos linear solver.
-
-        Raises:
-            Exception: If no suitable direct solver can be found.
+        """
+        Create the fastest available direct linear solver on the current system.
         """
         # Using a default linear solver (selecting the fastest one available)
         if kratos_utils.CheckIfApplicationsAvailable("LinearSolversApplication"):
@@ -164,34 +96,14 @@ class PythonLinearSolverFactory(object):
         raise Exception("Linear-Solver could not be constructed!")
 
     def __GetLabel(self):
-        """Return the label used for logger messages.
-
-        Returns:
-            str: The label string ``"Linear-Solver-Factory"``.
+        """
+        Return the label used for logger messages.
         """
         return "Linear-Solver-Factory"
 
     def __GetSolverTypeAndImportApplication(self, solver_type):
-        """Resolve the solver type string and import its application if needed.
-
-        Strips the leading ``"KratosMultiphysics."`` prefix when present. If
-        the solver type includes an application qualifier
-        (``"ApplicationName.solver_type"``), the corresponding Kratos
-        application module is imported so that its solvers are registered in
-        the factory.
-
-        Args:
-            solver_type (str): Raw solver type string, e.g.
-                ``"LinearSolversApplication.sparse_lu"`` or
-                ``"KratosMultiphysics.LinearSolversApplication.sparse_lu"``.
-
-        Returns:
-            str: The bare solver type name without application or namespace
-            prefix, e.g. ``"sparse_lu"``.
-
-        Raises:
-            NameError: If the qualified name does not follow the expected
-                ``"ApplicationName.solver_type"`` format.
+        """
+        Resolve the solver type string and import its application if needed.
         """
         # remove unused "KratosMultiphysics.
         if solver_type.startswith("KratosMultiphysics."):
