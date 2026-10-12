@@ -1,0 +1,9 @@
+{
+    "custom_entries": [
+        "Overview.md",
+        "Algorithm.md",
+        "Implementation.md",
+        "MPI.md",
+        "Design_Decisions_and_Results.md"
+    ]
+}
