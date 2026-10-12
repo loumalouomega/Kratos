@@ -32,6 +32,8 @@
 
 // FluidDynamicsApplication dependencies
 #include "custom_processes/distance_smoothing_process.h"
+#include "custom_processes/particle_mesh_pde_projection_process.h"
+#include "trilinos_extension/custom_utilities/trilinos_facet_linear_system.h"
 
 namespace Kratos {
 namespace Python {
@@ -83,6 +85,16 @@ void AddTrilinosProcessesToPython(pybind11::module& m)
 
     DistanceSmoothingConstructionHelper<DistanceSmoothing2DBinderType,2>(distance_smoothing_2d_binder);
     DistanceSmoothingConstructionHelper<DistanceSmoothing3DBinderType,3>(distance_smoothing_3d_binder);
+
+    // Particle level set transport (the process type is registered by the FluidDynamicsApplication module)
+    const char* particle_projection_doc = "Creates the MPI version of ParticleMeshPdeProjectionProcess (particle level set transport with the LEoPart PDE-constrained\n"
+        "projection). The particles migrate between the ranks and the facet system of the projection is distributed with Epetra.";
+    m.def("TrilinosParticleMeshPdeProjectionProcess2D", [](Epetra_MpiComm& rComm, ModelPart& rModelPart, TrilinosLinearSolverType::Pointer pLinearSolver, Parameters Settings) {
+        return Kratos::make_shared<ParticleMeshPdeProjectionProcess<2>>(rModelPart, Kratos::make_shared<TrilinosFacetLinearSystem>(rComm, pLinearSolver), Settings);
+    }, py::arg("epetra_communicator"), py::arg("model_part"), py::arg("linear_solver"), py::arg("parameters"), particle_projection_doc);
+    m.def("TrilinosParticleMeshPdeProjectionProcess3D", [](Epetra_MpiComm& rComm, ModelPart& rModelPart, TrilinosLinearSolverType::Pointer pLinearSolver, Parameters Settings) {
+        return Kratos::make_shared<ParticleMeshPdeProjectionProcess<3>>(rModelPart, Kratos::make_shared<TrilinosFacetLinearSystem>(rComm, pLinearSolver), Settings);
+    }, py::arg("epetra_communicator"), py::arg("model_part"), py::arg("linear_solver"), py::arg("parameters"), particle_projection_doc);
 }
 
 }
