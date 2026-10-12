@@ -11,6 +11,7 @@ if have_conv_diff:
 # Import base class file
 from KratosMultiphysics.FluidDynamicsApplication.fluid_solver import FluidSolver
 from KratosMultiphysics.FluidDynamicsApplication.read_distance_from_file import DistanceImportUtility
+from KratosMultiphysics.FluidDynamicsApplication import particle_pde_projection_utilities
 
 from pathlib import Path
 
@@ -85,6 +86,8 @@ class NavierStokesTwoFluidsSolver(FluidSolver):
                     "cross_wind_stabilization_factor" : 0.7
                 }
             },
+            "levelset_transport_type": "eulerian",
+            "particle_pde_projection_settings": {},
             "distance_reinitialization": "variational",
             "parallel_redistance_max_layers" : 25,
             "distance_smoothing": false,
@@ -149,6 +152,13 @@ class NavierStokesTwoFluidsSolver(FluidSolver):
         self.main_model_part.ProcessInfo.SetValue(KratosCFD.MOMENTUM_CORRECTION, self.momentum_correction)
 
         self._reinitialization_type = self.settings["distance_reinitialization"].GetString()
+
+        # Level set transport: Eulerian convection or Lagrangian particles with the PDE-constrained projection
+        self._levelset_transport_type = particle_pde_projection_utilities.GetLevelSetTransportType(self.settings, self.__class__.__name__)
+        if self._UseParticleLevelSetTransport():
+            if self.settings["formulation"].Has("mass_source") and self.settings["formulation"]["mass_source"].GetBool():
+                KratosMultiphysics.Logger.PrintWarning(self.__class__.__name__, "'mass_source' is not used with the particle level set transport, which conserves the phase volume itself.")
+                self.settings["formulation"]["mass_source"].SetBool(False)
 
         self._distance_smoothing = self.settings["distance_smoothing"].GetBool()
         smoothing_coefficient = self.settings["distance_smoothing_coefficient"].GetDouble()
@@ -313,6 +323,10 @@ class NavierStokesTwoFluidsSolver(FluidSolver):
         # Prepare distance correction for next step
         self._GetDistanceModificationProcess().ExecuteFinalizeSolutionStep()
 
+        # Transfer the distance changes done after the transport (e.g. redistancing) to the particles
+        if self._UseParticleLevelSetTransport():
+            self._GetLevelSetConvectionProcess().ExecuteFinalizeSolutionStep()
+
         # Finalize the solver current step
         self._GetSolutionStrategy().FinalizeSolutionStep()
         # Limit the obtained acceleration for the next step
@@ -324,6 +338,9 @@ class NavierStokesTwoFluidsSolver(FluidSolver):
     def _PerformLevelSetConvection(self):
         # Solve the levelset convection problem
         self._GetLevelSetConvectionProcess().Execute()
+
+    def _UseParticleLevelSetTransport(self):
+        return self._levelset_transport_type == particle_pde_projection_utilities.PARTICLE_PDE_PROJECTION_TRANSPORT
 
     # TODO: Remove this method as soon as the subproperties are available
     def _SetPhysicalProperties(self):
@@ -489,6 +506,12 @@ class NavierStokesTwoFluidsSolver(FluidSolver):
         # Construct the level set convection process
         domain_size = self.main_model_part.ProcessInfo[KratosMultiphysics.DOMAIN_SIZE]
         computing_model_part = self.GetComputingModelPart()
+        if self._UseParticleLevelSetTransport():
+            return particle_pde_projection_utilities.CreateParticlePdeProjectionProcess(
+                computing_model_part,
+                domain_size,
+                self.settings["particle_pde_projection_settings"])
+
         linear_solver = self._GetLevelsetLinearSolver()
         levelset_convection_settings = self.settings["levelset_convection_settings"]
         if domain_size == 2:
