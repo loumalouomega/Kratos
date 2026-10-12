@@ -45,7 +45,7 @@ double FluidAuxiliaryUtilities::CalculateFluidVolume(const ModelPart& rModelPart
             return r_geom.DomainSize();
         });
     }
-    r_communicator.GetDataCommunicator().SumAll(fluid_volume);
+    fluid_volume = r_communicator.GetDataCommunicator().SumAll(fluid_volume);
 
     return fluid_volume;
 }
@@ -92,7 +92,7 @@ double FluidAuxiliaryUtilities::CalculateFluidCutElementsPositiveVolume(const Mo
     }
 
     // Synchronize among processors
-    r_communicator.GetDataCommunicator().SumAll(cut_positive_fluid_volume);
+    cut_positive_fluid_volume = r_communicator.GetDataCommunicator().SumAll(cut_positive_fluid_volume);
 
     return cut_positive_fluid_volume;
 }
@@ -136,7 +136,7 @@ double FluidAuxiliaryUtilities::CalculateFluidCutElementsNegativeVolume(const Mo
     }
 
     // Synchronize among processors
-    r_communicator.GetDataCommunicator().SumAll(cut_negative_fluid_volume);
+    cut_negative_fluid_volume = r_communicator.GetDataCommunicator().SumAll(cut_negative_fluid_volume);
 
     return cut_negative_fluid_volume;
 }
@@ -181,7 +181,7 @@ double FluidAuxiliaryUtilities::CalculateFluidPositiveVolume(const ModelPart& rM
     }
 
     // Synchronize among processors
-    r_communicator.GetDataCommunicator().SumAll(fluid_volume);
+    fluid_volume = r_communicator.GetDataCommunicator().SumAll(fluid_volume);
 
     return fluid_volume;
 }
@@ -227,7 +227,7 @@ double FluidAuxiliaryUtilities::CalculateFluidNegativeVolume(const ModelPart& rM
     }
 
     // Synchronize among processors
-    r_communicator.GetDataCommunicator().SumAll(fluid_volume);
+    fluid_volume = r_communicator.GetDataCommunicator().SumAll(fluid_volume);
 
     return fluid_volume;
 }
