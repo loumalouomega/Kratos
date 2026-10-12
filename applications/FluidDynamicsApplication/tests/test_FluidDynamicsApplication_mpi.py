@@ -11,6 +11,8 @@ import KratosMultiphysics.KratosUnittest as KratosUnittest
 
 # Shell tests
 from adjoint_fluid_test import AdjointFluidTest
+from test_particle_mesh_pde_projection_mpi import TestParticleMeshPdeProjectionMPI
+from test_particle_mesh_pde_projection_mpi import TestTrilinosTwoFluidsParticleLevelSetTransport
 
 def AssembleTestSuites():
     ''' Populates the test suites to run.
@@ -25,6 +27,8 @@ def AssembleTestSuites():
 
     ### Small MPI tests ########################################################
     smallMPISuite = suites['mpi_small']
+    smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestParticleMeshPdeProjectionMPI]))
+    smallMPISuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TestTrilinosTwoFluidsParticleLevelSetTransport]))
 
     ### Nightly MPI tests ######################################################
     nightlyMPISuite = suites['mpi_nightly']
