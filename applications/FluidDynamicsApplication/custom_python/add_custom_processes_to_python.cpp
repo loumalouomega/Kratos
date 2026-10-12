@@ -35,6 +35,7 @@
 #include "custom_processes/embedded_skin_visualization_process.h"
 #include "custom_processes/integration_point_statistics_process.h"
 #include "custom_processes/mass_conservation_check_process.h"
+#include "custom_processes/particle_mesh_pde_projection_process.h"
 #include "custom_processes/two_fluids_inlet_process.h"
 #include "custom_processes/shock_capturing_entropy_viscosity_process.h"
 #include "custom_processes/shock_capturing_physics_based_process.h"
@@ -55,6 +56,46 @@ namespace Kratos
 
 namespace Python
 {
+
+namespace
+{
+
+template<std::size_t TDim>
+void AddParticleMeshPdeProjectionProcessToPython(
+    pybind11::module& m,
+    const std::string& rName
+    )
+{
+    namespace py = pybind11;
+    using ProcessType = ParticleMeshPdeProjectionProcess<TDim>;
+    using LinearSolverType = typename ProcessType::LinearSolverType;
+
+    py::class_<ProcessType, typename ProcessType::Pointer, Process>(m, rName.c_str(),
+        "Particle-based level set transport with the LEoPart PDE-constrained particle-mesh projection.\n"
+        "Each Execute advects Lagrangian particles carrying a binary phase indicator and a signed distance, projects the indicator\n"
+        "conservatively (cell-wise and globally) onto a discontinuous P1 field, projects the distance to the nodal DISTANCE and shifts it\n"
+        "so that its negative volume equals the conserved phase volume. The indicator is written to PHASE_FRACTION (non-historical).")
+    .def(py::init<ModelPart&, typename LinearSolverType::Pointer, Parameters>(), py::arg("model_part"), py::arg("linear_solver"), py::arg("parameters"))
+    .def(py::init<Model&, typename LinearSolverType::Pointer, Parameters>(), py::arg("model"), py::arg("linear_solver"), py::arg("parameters"))
+    .def("GetIndicatorIntegral", &ProcessType::GetIndicatorIntegral, "Returns the integral of the projected phase indicator (the conserved phase volume). Collective in MPI runs: call it in all the ranks.")
+    .def("GetNumberOfParticles", &ProcessType::GetNumberOfParticles, "Returns the current (global) number of particles. Collective in MPI runs: call it in all the ranks.")
+    .def("GetLastVolumeCorrectionShift", &ProcessType::GetLastVolumeCorrectionShift, "Returns the shift applied to DISTANCE by the last volume correction.")
+    .def("GetLastProjectionInfo", [](const ProcessType& rSelf) {
+            const auto& r_info = rSelf.GetLastProjectionInfo();
+            py::dict info;
+            info["previous_integral"] = r_info.PreviousIntegral;
+            info["integral"] = r_info.Integral;
+            info["net_boundary_outflow"] = r_info.NetBoundaryOutflow;
+            info["max_cell_residual"] = r_info.MaxCellResidual;
+            info["min_value"] = r_info.MinValue;
+            info["max_value"] = r_info.MaxValue;
+            info["facet_system_residual"] = r_info.FacetSystemResidual;
+            return info;
+        }, "Returns a dict with the diagnostics of the last projection (integrals, net boundary outflow, maximum relative cell residual, indicator range and relative residual of the facet system solve).")
+    ;
+}
+
+} // namespace
 
 void AddCustomProcessesToPython(pybind11::module& m)
 {
@@ -191,6 +232,9 @@ void AddCustomProcessesToPython(pybind11::module& m)
     py::class_<TwoFluidNavierStokesFractionalConvectionProcess<3, SparseSpaceType, LocalSpaceType, LinearSolverType>, TwoFluidNavierStokesFractionalConvectionProcess<3, SparseSpaceType, LocalSpaceType, LinearSolverType>::Pointer, Process>(m, "TwoFluidNavierStokesFractionalConvectionProcess3D")
         .def(py::init<Model&, LinearSolverType::Pointer, Parameters>())
     ;
+
+    AddParticleMeshPdeProjectionProcessToPython<2>(m, "ParticleMeshPdeProjectionProcess2D");
+    AddParticleMeshPdeProjectionProcessToPython<3>(m, "ParticleMeshPdeProjectionProcess3D");
 }
 
 } // namespace Python.
