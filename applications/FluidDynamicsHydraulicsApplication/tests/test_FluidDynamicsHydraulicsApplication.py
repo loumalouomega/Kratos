@@ -11,6 +11,7 @@ from test_hydraulic_fluid_auxiliary_utilities import HydraulicFluidAuxiliaryUtil
 from apply_hydraulic_inlet_process_test import ApplyHydraulicInletProcessTest
 from two_fluid_hydraulic_test import TwoFluidHydraulicSolverTest
 from two_fluid_hydraulic_fractional_test import TwoFluidHydraulicFractionalSolverTest
+from two_fluid_hydraulic_particle_transport_test import TwoFluidHydraulicParticleTransportTest
 
 
 def AssembleTestSuites():
@@ -37,6 +38,7 @@ def AssembleTestSuites():
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([HydraulicFluidAuxiliaryUtilitiesTest]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TwoFluidHydraulicSolverTest]))
     smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TwoFluidHydraulicFractionalSolverTest]))
+    smallSuite.addTests(KratosUnittest.TestLoader().loadTestsFromTestCases([TwoFluidHydraulicParticleTransportTest]))
 
 
 
