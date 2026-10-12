@@ -10,6 +10,7 @@ from KratosMultiphysics.TrilinosApplication import trilinos_linear_solver_factor
 
 # Import serial two fluid solver
 from KratosMultiphysics.FluidDynamicsApplication.navier_stokes_two_fluids_solver import NavierStokesTwoFluidsSolver
+from KratosMultiphysics.FluidDynamicsApplication import particle_pde_projection_utilities
 from KratosMultiphysics.mpi.distributed_import_model_part_utility import DistributedImportModelPartUtility
 
 def CreateSolver(model, custom_settings):
@@ -119,6 +120,13 @@ class NavierStokesMPITwoFluidsSolver(NavierStokesTwoFluidsSolver):
             self.settings["move_mesh_flag"].GetBool())
 
     def _CreateLevelSetConvectionProcess(self):
+        if self._UseParticleLevelSetTransport():
+            return particle_pde_projection_utilities.CreateParticlePdeProjectionProcess(
+                self.GetComputingModelPart(),
+                self.main_model_part.ProcessInfo[KratosMultiphysics.DOMAIN_SIZE],
+                self.settings["particle_pde_projection_settings"],
+                self._GetEpetraCommunicator())
+
         # Construct the level set convection process
         domain_size = self.main_model_part.ProcessInfo[KratosMultiphysics.DOMAIN_SIZE]
         levelset_linear_solver = self._GetLevelsetLinearSolver()
