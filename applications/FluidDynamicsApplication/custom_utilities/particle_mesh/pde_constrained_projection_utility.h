@@ -45,10 +45,13 @@ namespace Kratos
  * 1/2 sum_p (c_h(x_p) - c_p)^2 + 1/2 beta sum_K int_{dK} (cbar - c_h)^2 + 1/2 zeta sum_K int_K |grad c_h|^2
  * subject to the weak (HDG-type) advection constraint, tested with an elementwise constant multiplier lambda (l = 0)
  * int_K (c_h - c*) + dt sum_F int_F (u.n) ctilde = 0 for every element K,
- * where the flux value ctilde is the single-valued facet unknown cbar on interior facets and, on the boundary, the level set
- * indicator g = H(-d) on inflowing points and either g (default) or the interior trace c_h (LEoPart) on outflowing points.
+ * where the flux value ctilde is the single-valued facet unknown cbar on interior facets and, on the boundary:
+ * - at inlet faces (all nodes flagged as inlet) the level set indicator g = H(-d), for inflowing and outflowing points;
+ * - at the other open faces, on outflowing points either g (default) or the interior trace c_h (LEoPart), and on inflowing points
+ *   (backflow) air (c = 0) by default, or g if requested (e.g. a submerged outlet where the incoming fluid really is water).
  * Using g on the outflow lets the phase leave the domain only where the level set says it does, so the small indicator values
- * spread over the other phase by the projection cannot leak through open boundaries. The cell content therefore changes
+ * spread over the other phase by the projection cannot leak through open boundaries. Taking the incoming fluid from the level set
+ * outside the inlets would create phase at outlets where the interface touches the boundary, since nothing entered from outside. The cell content therefore changes
  * exactly by its facet fluxes, which are single valued because the nodal velocity is continuous, so the projection is
  * conservative both locally and globally. This holds for any value of cbar, so it does not depend on the accuracy of the
  * global solve. Per element, the (c_h, lambda) unknowns are condensed and a global symmetric system is solved for the
@@ -108,6 +111,7 @@ public:
         double Zeta = 0.0;      /// Gradient penalty
         double DeltaTime = 1.0; /// Time step
         bool OutflowFromLevelSet = true; /// Outflow flux with the level set indicator (true) or the interior trace (false, LEoPart)
+        bool BackflowFromLevelSet = false; /// Fluid coming in through open faces that are not inlets: the level set indicator (true) or air (false)
     };
 
     /// Local saddle point system of an element

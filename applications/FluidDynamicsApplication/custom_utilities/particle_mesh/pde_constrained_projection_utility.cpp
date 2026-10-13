@@ -267,7 +267,9 @@ void PdeConstrainedProjectionUtility<TDim>::BuildLocalSystem(
                 r_C(NumNodes, slots[j]) = dt * flux;
             }
         } else if (rFaceTypes[i_face] != ParticleContainerType::FaceType::Wall) {
-            // Open boundary face: upwind flux with the level set indicator (inflow, and outflow by default) or the interior trace (outflow)
+            // Open boundary face: upwind flux. The incoming fluid is the level set indicator at the inlets and air elsewhere (unless
+            // requested); the outgoing fluid is the level set indicator (default) or the interior trace
+            const bool is_inlet = rFaceTypes[i_face] == ParticleContainerType::FaceType::Inlet;
             std::array<double, TDim> normal_velocity;
             std::array<double, TDim> distance;
             for (std::size_t i = 0; i < TDim; ++i) {
@@ -286,6 +288,9 @@ void PdeConstrainedProjectionUtility<TDim>::BuildLocalSystem(
                     for (std::size_t i = 0; i < TDim; ++i) {
                         r_outflow[face_nodes[i]] += weight * u_n * r_lambda[i];
                     }
+                } else if (u_n < 0.0 && !is_inlet && !rSettings.BackflowFromLevelSet) {
+                    // Backflow through an open face that is not an inlet: air comes in, there is no phase flux
+                    continue;
                 } else {
                     double point_distance = 0.0;
                     for (std::size_t i = 0; i < TDim; ++i) {
