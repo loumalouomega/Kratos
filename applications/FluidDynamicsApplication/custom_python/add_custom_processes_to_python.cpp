@@ -80,6 +80,10 @@ void AddParticleMeshPdeProjectionProcessToPython(
     .def("GetIndicatorIntegral", &ProcessType::GetIndicatorIntegral, "Returns the integral of the projected phase indicator (the conserved phase volume). Collective in MPI runs: call it in all the ranks.")
     .def("GetNumberOfParticles", &ProcessType::GetNumberOfParticles, "Returns the current (global) number of particles. Collective in MPI runs: call it in all the ranks.")
     .def("GetLastVolumeCorrectionShift", &ProcessType::GetLastVolumeCorrectionShift, "Returns the shift applied to DISTANCE by the last volume correction.")
+    .def("UpdateParticlesModelPart", &ProcessType::UpdateParticlesModelPart, py::arg("particles_model_part"), py::arg("stride") = 1,
+        "Copies the current particles (every stride-th one) to the given model part as nodes with point conditions, with the particle\n"
+        "distance and indicator as the non-historical DISTANCE and PHASE_FRACTION, so that they can be written by the output processes.\n"
+        "Collective in MPI runs.")
     .def("GetLastProjectionInfo", [](const ProcessType& rSelf) {
             const auto& r_info = rSelf.GetLastProjectionInfo();
             py::dict info;
