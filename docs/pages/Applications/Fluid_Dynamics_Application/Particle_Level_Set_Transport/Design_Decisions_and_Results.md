@@ -55,9 +55,19 @@ With `preconditioner_type: relaxation`, the Kratos AMGCL wrapper writes `smoothe
 
 LEoPart uses the interior trace of the projected field for the outflow. With that choice the thin indicator layer spread over the air leaves through open air boundaries. The dam break lost 5.3e-4 of the water volume in 0.2 s through its top outlet, which only air reaches in that time.
 
-The dual representation already defines where the water crosses the boundary: where `DISTANCE < 0`. Open boundary faces therefore use the level set indicator $$g = H(-d)$$ for both inflow and outflow (`outflow_flux_from_level_set: true`, the default).
+The dual representation already defines where the water crosses the boundary: where `DISTANCE < 0`. The **outgoing** flux on open boundary faces therefore uses the level set indicator $$g = H(-d)$$ (`outflow_flux_from_level_set: true`, the default).
+
+The **incoming** fluid is a different matter: the level set only knows it where the distance is imposed from outside, i.e. at the inlets. Outside the inlets the incoming fluid is air by default (`backflow_fluid: "air"`), see [Backflow at an outlet](#backflow-at-an-outlet).
 
 Slip walls must then carry **no** flux. Their nodal velocity is tangent to nodal normals averaged over several faces, so at edges and corners it has a normal component relative to each face. With the level set flux this created 6.0e-4 of the water volume in 0.2 s. Faces whose nodes are all slip (`SLIP`) or fixed at zero velocity are classified as walls and excluded from the fluxes, and particles leaving through them are pushed back.
+
+### Backflow at an outlet
+
+<a id="backflow-at-an-outlet"></a>
+
+In a first version, every open face took the level set indicator as the incoming fluid. The 3D dam break run to 2 s showed the problem: the conserved volume $$\int c_h$$ stayed at 0.6742 until t = 1.4 s and then rose to 0.795, while the local cell balance stayed at 1e-16. From t = 1.49 s the splash reaches the top face (an outlet), where the velocity points into the domain and the level set says water. The water flux through the outlet triangles, computed from the saved velocity and distance fields, was 0.124 m³ into the domain by t = 2 s, against a rise of $$\int c_h$$ of 0.121 m³. The projection was conserving exactly; the source was the boundary value.
+
+Nothing can enter from outside at an outlet where the water is already inside the domain, so outside the inlets the incoming fluid is **air** (no phase flux) by default. Inlets are the faces whose nodes are all flagged `INLET`, which both inlet processes of the fluid applications set. `backflow_fluid: "level_set"` restores the previous treatment, for a submerged outlet where backflow really is water.
 
 ### Volume correction by a global shift
 
@@ -74,7 +84,7 @@ $$c_h$$ is not clipped to [0, 1], because clipping would destroy the conservatio
 ### Other choices
 
 * **`mass_source`** is disabled with the particle transport, because the transport conserves the volume itself.
-* **FM-ALE** velocity correction of the hydraulic solver is kept, because it only modifies the velocity history.
+* **FM-ALE.** The hydraulic solver option `eulerian_fm_ale` (default `true`) sets the mesh velocity equal to the fluid velocity at the free nodes. The Eulerian level set convection advects `DISTANCE` with the velocity relative to the mesh, so with the option on it does not move the interface (measured in the wave example: no node changes in 10 s). The particles use the fluid velocity directly and are not affected. Particle runs therefore keep the default `true`, while a moving Eulerian reference needs `false`. With `false` both transports fail when the wave of the wave example breaks (the Eulerian run after losing 7 % of the water), which points to the flow solution with that option, not to the level set transport. The solver itself was not changed.
 * **Zero distances.** Elements with nodal distances exactly zero are split with the same criterion as the geometry division utilities (zero values belong to neither side). The criterion of `FluidAuxiliaryUtilities::IsSplit`, which counts zero as negative, made the division utilities throw "non-split element" errors.
 * **MPI.** It reuses Kratos' `DataCommunicator` and the Trilinos extension rather than new communication layers. See [MPI parallelization](MPI.html).
 
@@ -139,10 +149,29 @@ With the defaults:
 
 * the cell residuals stay around 5e-16 and the facet solve below 1e-8 every step;
 * the indicator stays in [-0.12, 1.20];
-* the solver `InitializeSolutionStep` (FM-ALE correction, particle transport and distance modification) takes 2.2-7.3 s, against about 1.1 s with the Eulerian convection;
-* the whole run takes 537 s, against 228 s with the default Eulerian transport (SUPG, with the global `mass_source` correction).
+* the solver `InitializeSolutionStep` (FM-ALE correction, particle transport and distance modification) takes 2.2-7.3 s.
 
 The initial conserved volume (0.67420) is slightly larger than the negative volume of the initial `DISTANCE` (0.67404). The distance modification process moves near-zero nodal distances before the first step, and the initialization uses the modified field.
+
+### Full 3D dam break (2 s) and 2D wave (10 s)
+
+The final runs use the defaults above (`backflow_fluid: "air"`, `eulerian_fm_ale: true`) and are the examples `two_fluid_dam_break_particles` and `two_fluid_wave_particles` of the Examples repository.
+
+| | 3D dam break, 2 s | 2D wave, 10 s |
+|---|---|---|
+| Time steps | 1,000 (Δt = 0.002 s) | 1,169 (automatic Δt) |
+| Particles | 3.70M to 4.28M | 140,875 to 157,213 |
+| $$\int c_h$$ change | 0 (round-off, 2.9e-15 m³ per step at most) | 1.9e-13 % |
+| Cell residual | below 1.7e-15 | below 6e-16 |
+| Indicator range | [-0.18, 1.77] | [-0.042, 1.38] |
+| Volume of `DISTANCE < 0` after the transport | within 0.013 % of $$\int c_h$$ | within 0.026 % |
+| Volume of `DISTANCE < 0` at the end of the step | -6.2 % to +0.5 % of $$\int c_h$$ | within 0.026 % |
+| Steps with facet residual above 1e-6 | 81 (worst 3.2e-5) | 0 (worst 1e-8) |
+| Run time | 10,668 s on 8 threads | 450 s on 8 threads |
+
+The difference between the volume of `DISTANCE < 0` at the end of the step and $$\int c_h$$ comes from the redistancing and the flow solution, not from the transport: right after the transport and the shift the two agree. It grows where thin sheets of water are narrower than the mesh, and the next step's shift removes it. The Eulerian convection with a moving interface (`eulerian_fm_ale: false`) lost 7 % of the water by 0.5 s in the dam break and failed at 1.0 s, and in the wave it lost 1.75 % at 2 s and failed at 4.67 s. The particle run with `eulerian_fm_ale: false` also fails in the wave, at 4.48 s.
+
+With the default boundary rule no water is created at the outlet: $$\int c_h$$ stays constant although the flow solution still shows an inward flux of the water-marked nodes through the outlet faces touched by the splash (about 0.1 m³/s from 1.4 s). The maximum nodal velocity of the water has isolated spikes in thin films near corners and walls (up to 315 m/s), while the 99th percentile stays at 3.5 to 6.5 m/s.
 
 ### MPI
 
@@ -152,7 +181,9 @@ On the closed vortex with 32,768 triangles and 820k particles, 4 MPI ranks run t
 
 * **Bounds.** The projected indicator is not bounded. ζ limits the over/undershoot, and it is larger at the start of 3D runs and near fast-moving interfaces.
 * **Volume correction.** `DISTANCE` matches the conserved volume through a single global shift. Local volume errors of the level set are not corrected.
-* **Cost.** The transport is more expensive than the Eulerian convection. In the 3D dam break, `InitializeSolutionStep` took 2 to 7 times longer and the whole run 2.4 times longer. The cost is dominated by the particle advection and the facet solve.
+* **Thin water sheets.** Where the water is thinner than the mesh size, the volume of `DISTANCE < 0` at the end of the step can differ from the conserved volume by several percent, and nodal velocities have isolated spikes.
+* **Facet solver.** In the 3D dam break the facet system missed the tolerance 1e-6 in 8 % of the steps; the conservation holds anyway.
+* **Cost.** The transport is more expensive than the Eulerian convection. The cost is dominated by the particle advection and the facet solve, and grows as the flow accelerates and the facet system gets harder to solve.
 * **Solvers.** No MPI hydraulic solver exists, and the fractional hydraulic solver does not use the particle transport.
 * **Meshes.** Remeshing, moving meshes and restarts are not supported.
 * **MPI accuracy.** Runge-Kutta stage points beyond a partition use the clipped local velocity, which is first-order accurate there.

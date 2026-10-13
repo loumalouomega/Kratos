@@ -70,7 +70,11 @@ The terms are:
 
 * $$c^*$$, the projected indicator of the previous step (pure transport, no constitutive update);
 * $$u = \tfrac12 (u^n + u^{n+1})$$, the nodal velocity used in the fluxes;
-* $$\tilde c$$, the boundary value. By default it is the level set indicator $$g = H(-d)$$ evaluated at each quadrature point of every open boundary face. With `outflow_flux_from_level_set: false` the outflowing part $$(u\cdot n)^+$$ uses the interior trace $$c_h$$ instead, as in LEoPart. Wall faces carry no flux.
+* $$\tilde c$$, the boundary value, evaluated at each quadrature point of the open boundary faces with the level set indicator $$g = H(-d)$$:
+  * at **inlet faces** (all the nodes flagged `INLET`) the incoming fluid is $$g$$, for inflowing and outflowing points;
+  * at the other open faces, outflowing points $$(u\cdot n)>0$$ use $$g$$, or the interior trace $$c_h$$ with `outflow_flux_from_level_set: false` (as in LEoPart);
+  * at the other open faces, inflowing points $$(u\cdot n)<0$$ (backflow) bring in **air**: $$\tilde c = 0$$, so there is no phase flux. With `backflow_fluid: "level_set"` they use $$g$$.
+  * Wall faces carry no flux.
 * $$\beta_K$$ and $$\zeta_K$$, the facet and gradient penalties, scaled with the element size $$h_K$$ (the minimum height) so that they do not depend on the mesh units:
 $$\beta_K = \beta\, h_K^{1-d}, \qquad \zeta_K = \zeta\, h_K^{2-d}.$$
 
@@ -118,14 +122,18 @@ The recovery solves the element constraint exactly for **any** $$\bar c$$. The l
 
 A boundary face is a **wall** if all its nodes are impermeable: nodes flagged `SLIP`, or nodes with all the velocity components fixed to zero. Walls carry no indicator flux and push particles back.
 
-The other boundary faces are **outflow** or **inflow** according to the sign of the face-averaged normal velocity. Walls have to be detected explicitly: the nodal velocity of slip walls has a small normal component with respect to the face normals, especially at edges and corners, and using it would create or destroy volume (see [results](Design_Decisions_and_Results.html#boundary-fluxes)).
+Among the open faces, those whose nodes are all flagged `INLET` are **inlets** (the inlet processes set the flag and impose the distance there). The remaining open faces are **outflow** or **backflow** faces according to the sign of the face-averaged normal velocity. Only particles leaving through outflow faces are deleted; walls, backflow faces and inlets push them back.
+
+Walls have to be detected explicitly: the nodal velocity of slip walls has a small normal component with respect to the face normals, especially at edges and corners, and using it would create or destroy volume (see [results](Design_Decisions_and_Results.html#boundary-fluxes)).
+
+The inlets have to be distinguished too: the level set only tells the incoming fluid where the distance is imposed from outside. At an outlet where the interface touches the boundary, `DISTANCE < 0` describes water that is already inside the domain, so taking it as the incoming fluid would create water (see [results](Design_Decisions_and_Results.html#backflow-at-an-outlet)).
 
 ### Population control
 
 After the advection the number of particles of every element is brought into [`minimum`, `maximum`]:
 
 * **Adding particles.** Each new particle is placed at a random position. Its values depend on the element:
-  * if the element has an inflow face, both values come from the nodal `DISTANCE` (imposed by the inlet);
+  * if the element has an open face where the flow comes in (an inlet or a backflow face), both values come from the nodal `DISTANCE`: the material that enters is not in the domain, so the level set is the best information;
   * otherwise, if the element has particles, the indicator is copied from the closest one. The distance is extrapolated from it with the gradient of the elemental $$\phi_h$$.
   * otherwise (empty element), the values come from the elemental $$c_h$$ (snapped to 0 or 1) and $$\phi_h$$.
 * **Removing particles.** The particles with the smallest nearest-neighbour distance are removed until the maximum is reached.

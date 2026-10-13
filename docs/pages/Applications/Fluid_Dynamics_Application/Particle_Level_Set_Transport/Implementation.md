@@ -56,7 +56,7 @@ Main methods:
 | Method | Description |
 |---|---|
 | `Seed(n, nodal_distance)` | Seeds $$n$$ random particles per element. |
-| `ClassifyFaces(table, velocity, is_closed_node, face_types)` | Static. Classifies the faces as `Interior`, `Wall`, `Outflow` or `Inflow`. |
+| `ClassifyFaces(table, velocity, is_closed_node, is_inlet_node, face_types)` | Static. Classifies the faces as `Interior`, `Wall` (all nodes closed), `Inlet` (all nodes flagged inlet), `Outflow` or `Backflow` (the other open faces, by the sign of the average normal velocity). |
 | `Advect(old_velocity, new_velocity, face_types, dt, max_CFL, rk_order)` | Advects the particles (OpenMP over particles). Returns the number of particles that left the domain. Particles crossing MPI partitions are migrated (see [MPI](MPI.html)). |
 | `ControlPopulation(min, max, face_types, nodal_distance, c_h, phi_h)` | Keeps the particle count per element between the bounds (OpenMP over elements). |
 | `IncrementDistance(nodal_increment)` | FLIP-like update of the particle distances. |
@@ -131,7 +131,7 @@ The process requires linear simplices, the historical variables `DISTANCE` and `
   * call its `ExecuteFinalizeSolutionStep` at the end of `FinalizeSolutionStep`;
   * switch off `mass_source`.
 
-  The FM-ALE velocity correction of the hydraulic solver is compatible: it only modifies the velocity history.
+  The FM-ALE velocity correction of the hydraulic solver is compatible with the particle transport; note that with `eulerian_fm_ale: true` the Eulerian convection does not move the interface (see the design decisions).
 
 ## Tests
 

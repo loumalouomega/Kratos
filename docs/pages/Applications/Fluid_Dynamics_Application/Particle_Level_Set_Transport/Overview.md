@@ -30,7 +30,7 @@ The pages of this section describe:
 Use it when the volume of each fluid must be preserved, for example long sloshing or dam break simulations, where the Eulerian transport loses or gains volume. Expect the following:
 
 * **Conservation.** The water volume is conserved to round-off in closed domains. With inlets or outlets it changes only by the fluxes through the open boundaries.
-* **Cost.** The transport step is several times more expensive than the Eulerian convection. On the 3D dam break benchmark (92k tetrahedra, 3.7M particles) the whole simulation took about 2.4 times longer (see [results](Design_Decisions_and_Results.html#results)).
+* **Cost.** The transport step is more expensive than the Eulerian convection: it advects tens of particles per element and solves a global system for the facet unknowns. The 3D dam break benchmark (92k tetrahedra, 3.7M particles) took 10.7 s per time step on average (2.96 h for 1,000 steps) on 8 threads of a 16-core workstation, including the Navier–Stokes solution (see [results](Design_Decisions_and_Results.html#results)).
 * **Over/undershoot.** The projected indicator is not bounded, with typical values in [-0.1, 1.2] next to the interface. It is only used through its integral and for visualization.
 
 ## Availability
@@ -82,6 +82,7 @@ All the settings are optional. The defaults depend on the dimension:
 | `volume_correction.relative_tolerance` | 1e-10 | 1e-10 | Tolerance of the shift, relative to the domain volume. |
 | `volume_correction.max_iterations` | 50 | 50 | Maximum number of iterations of the shift. |
 | `outflow_flux_from_level_set` | true | true | Outflow boundary flux computed from the level set (true) or from the projected field (false, as in LEoPart). |
+| `backflow_fluid` | "air" | "air" | Fluid that comes in through an open face that is **not an inlet** (e.g. backflow at an outlet): `"air"` (no phase flux, default) or `"level_set"` (the level set indicator, for a submerged outlet where the incoming fluid really is the one given by the level set). At the inlets (faces whose nodes are all flagged `INLET`) the incoming fluid is always given by the level set. |
 | `update_particle_distance_after_redistancing` | true | true | Transfer the change of `DISTANCE` made after the transport (redistancing) to the particles. |
 | `random_seed` | 0 | 0 | Seed of the particle sampling. |
 | `particles_output.model_part_name` | "" | "" | If set, the particles are copied to a model part with this name, created in the same `Model`, so they can be written to output (see [below](#visualizing-the-particles)). |
