@@ -108,6 +108,9 @@ ParticleMeshPdeProjectionProcess(ModelPart&, FacetLinearSystem::Pointer, Paramet
 * `ExecuteInitialize`: builds the facet table, the particles and the projection utility, and initializes $$c_h$$ and $$\phi_h$$. It is called automatically by the first `Execute`.
 * `Execute`: one transport step. `ExecuteFinalizeSolutionStep`: distance update after redistancing.
 * Accessors: `GetIndicatorIntegral()`, `GetNumberOfParticles()`, `GetLastVolumeCorrectionShift()` and `GetLastProjectionInfo()`. The first two are **collective in MPI** (call them on all the ranks).
+* `UpdateParticlesModelPart(model_part, stride)` copies the particles to a model part for output. The model part is cleared and filled with one node and one `PointCondition2D1N`/`PointCondition3D1N` per particle, with `DISTANCE` and `PHASE_FRACTION` as non-historical values. Node Ids are globally unique: each rank gets a contiguous range from `ScanSum`.
+  * With `particles_output.model_part_name`, the process creates that model part in its constructor, before the output processes are built, and makes it share the fluid `ProcessInfo`. It refreshes the model part in the first step and every `interval` steps.
+  * In MPI, the Python helper first gives the model part an MPI communicator, so that the VTK output names the files by rank.
 
 Nodal averages are accumulated in the non-historical variable `PARTICLE_MESH_NODAL_SUMS` (registered by the application). It is assembled across ranks with `Communicator::AssembleNonHistoricalData`, which does nothing in serial runs.
 
@@ -134,10 +137,10 @@ The process requires linear simplices, the historical variables `DISTANCE` and `
 
 | Test | Suite | What it checks |
 |---|---|---|
-| `tests/cpp_tests/test_particle_mesh_pde_projection.cpp` (11 tests) | C++ fast suite | Facet table consistency (2D/3D), exact negative volumes, symmetry of the Schur complement, exact local conservation for arbitrary facet values, reproduction of a linear field (2D/3D), conservation with inflow/outflow (2D with both outflow options, 3D), RK3 particle rotation, closed vortex with the process. |
-| `tests/test_particle_mesh_pde_projection.py` | FluidDynamics `small` | Slotted disk in a closed vortex (conservation, range, volume correction), settings validation, `two_fluids` sloshing tank with constant water volume. |
+| `tests/cpp_tests/test_particle_mesh_pde_projection.cpp` (12 tests) | C++ fast suite | Facet table consistency (2D/3D), exact negative volumes, symmetry of the Schur complement, exact local conservation for arbitrary facet values, reproduction of a linear field (2D/3D), conservation with inflow/outflow (2D with both outflow options, 3D), RK3 particle rotation, closed vortex with the process, particle output model part. |
+| `tests/test_particle_mesh_pde_projection.py` | FluidDynamics `small` | Slotted disk in a closed vortex (conservation, range, volume correction), particle VTK output, settings validation, `two_fluids` sloshing tank with constant water volume. |
 | `FluidDynamicsHydraulicsApplication/tests/two_fluid_hydraulic_particle_transport_test.py` | Hydraulics `small` | 2D and 3D hydraulic sloshing tank with constant water volume. |
-| `tests/test_particle_mesh_pde_projection_mpi.py` | FluidDynamics `mpi_small` | Distributed versus serial closed vortex (conservation, particle counts, nodal `DISTANCE`), Trilinos `two_fluids` sloshing tank. |
+| `tests/test_particle_mesh_pde_projection_mpi.py` | FluidDynamics `mpi_small` | Distributed versus serial closed vortex (conservation, particle counts, nodal `DISTANCE`), particle output in MPI (globally unique Ids, one VTK file per rank), Trilinos `two_fluids` sloshing tank. |
 
 Running them:
 

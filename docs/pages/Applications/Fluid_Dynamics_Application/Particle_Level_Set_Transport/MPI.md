@@ -42,7 +42,7 @@ The facet DOFs keep the serial definition (`global_facet_id * TDim + rank of the
 
 * **Initialization.** Builds an `Epetra_Map` with the owned contiguous range, and the `Epetra_FECrsGraph` and matrix with `TrilinosSpace::BuildSystemStructure`, from the element DOF blocks. A block may reference DOFs owned by another rank.
 * **Assembly.** `AssembleLHS`/`AssembleRHS` (`SumIntoGlobalValues`) are serialized with a mutex, because Epetra assembly is not thread-safe. The rows of other ranks are communicated in `GlobalAssemble`.
-* **Solution.** Any Trilinos linear solver can be used. The default is AMGCL conjugate gradients with a relaxation preconditioner and an integer `block_size: 1`; there is no DOF set to deduce it from. The relative residual is computed with Epetra.
+* **Solution.** Any Trilinos linear solver can be used. The default is AMGCL conjugate gradients with a relaxation (SPAI0) preconditioner and an integer `block_size: 1`; there is no DOF set to deduce it from. The relative residual is computed with Epetra.
 * **Ghost values.** An `Epetra_Import` brings the values of all the DOFs referenced by local elements, owned or not, to each rank. The import is collective, so ranks that need no values still take part.
 
 The system keeps its own copy of the Epetra communicator, which is reference counted, so it does not depend on the lifetime of the communicator passed from Python.

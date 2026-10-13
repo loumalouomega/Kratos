@@ -84,16 +84,18 @@ All the settings are optional. The defaults depend on the dimension:
 | `outflow_flux_from_level_set` | true | true | Outflow boundary flux computed from the level set (true) or from the projected field (false, as in LEoPart). |
 | `update_particle_distance_after_redistancing` | true | true | Transfer the change of `DISTANCE` made after the transport (redistancing) to the particles. |
 | `random_seed` | 0 | 0 | Seed of the particle sampling. |
+| `particles_output.model_part_name` | "" | "" | If set, the particles are copied to a model part with this name, created in the same `Model`, so they can be written to output (see [below](#visualizing-the-particles)). |
+| `particles_output.interval` | 1 | 1 | Copy the particles in the first step and every `interval` steps. |
+| `particles_output.stride` | 1 | 1 | Copy only every `stride`-th particle, to keep 3D output files small. |
 | `linear_solver_settings` | see below | see below | Solver of the global facet system. |
 
-The default facet solver is AMGCL conjugate gradients with a Jacobi relaxation preconditioner. Algebraic multigrid does not help for this system; see [Design decisions](Design_Decisions_and_Results.html#facet-system-solver).
+The default facet solver is AMGCL conjugate gradients with a single-level relaxation preconditioner (AMGCL's default SPAI0). Algebraic multigrid does not help for this system; see [Design decisions](Design_Decisions_and_Results.html#facet-system-solver).
 
 ```json
 "linear_solver_settings": {
     "solver_type"         : "amgcl",
     "krylov_type"         : "cg",
     "preconditioner_type" : "relaxation",
-    "smoother_type"       : "damped_jacobi",
     "tolerance"           : 1e-8,
     "max_iteration"       : 1000,
     "block_size"          : 1
@@ -101,6 +103,46 @@ The default facet solver is AMGCL conjugate gradients with a Jacobi relaxation p
 ```
 
 In MPI runs the same settings are passed to the Trilinos linear solver factory.
+
+## Visualizing the particles
+
+The particles are internal data of the process. To see them, set `particles_output.model_part_name`:
+
+* The process creates a model part with that name. Each particle becomes one node with a point condition, carrying its distance (`DISTANCE`) and indicator (`PHASE_FRACTION`) as non-historical nodal values.
+* The model part shares the `ProcessInfo` of the fluid, so any output process can write it.
+* In MPI runs, each rank writes its own particles.
+
+```json
+"solver_settings": {
+    "levelset_transport_type": "particle_pde_projection",
+    "particle_pde_projection_settings": {
+        "particles_output": {
+            "model_part_name": "FluidParticles",
+            "interval": 25,
+            "stride": 10
+        }
+    }
+},
+"output_processes": {
+    "vtk_output": [{
+        "python_module": "vtk_output_process",
+        "kratos_module": "KratosMultiphysics",
+        "Parameters": {
+            "model_part_name": "FluidParticles",
+            "output_control_type": "step",
+            "output_interval": 25,
+            "output_path": "vtk_output_particles",
+            "nodal_data_value_variables": ["DISTANCE", "PHASE_FRACTION"]
+        }
+    }]
+}
+```
+
+Use `"output_control_type": "step"` with the same interval as `particles_output.interval`. The particles are copied in the first step and at every multiple of the interval, which are exactly the steps the step-controlled output writes. In ParaView, display the particle files with the *Point Gaussian* representation and colour them by `PHASE_FRACTION`.
+
+The copy can also be triggered from Python at any time with `process.UpdateParticlesModelPart(model_part, stride)`. In MPI runs, call it on every rank.
+
+A 3D case with tens of particles per element produces large particle files (e.g. 3.7M particles for 92k tetrahedra), so use `stride` and a coarse `interval`.
 
 ## References
 

@@ -47,9 +47,9 @@ The conservation does not depend on β: it holds for any value. With a capable d
 
 ### Facet system solver
 
-The condensed facet system is symmetric positive definite, but it is not elliptic: it is a sum of rank-one flux blocks plus a small penalty. Algebraic multigrid coarsening does not fit it, so the default is **conjugate gradients with a Jacobi relaxation preconditioner** (AMGCL `relaxation` with `damped_jacobi`, tolerance 1e-8). The previous solution is used as initial guess.
+The condensed facet system is symmetric positive definite, but it is not elliptic: it is a sum of rank-one flux blocks plus a small penalty. Algebraic multigrid coarsening does not fit it, so the default is **conjugate gradients with AMGCL's single-level relaxation preconditioner** (`preconditioner_type: relaxation`, tolerance 1e-8). The previous solution is used as initial guess.
 
-In MPI the AMGCL relaxation preconditioner does not read `smoother_type`: the serial wrapper writes it to `precond.relax.type`, a key the MPI relaxation preconditioner does not read. AMGCL prints "Unknown parameter relax" and uses its default single-level relaxation, which still converges to the requested tolerance.
+With `preconditioner_type: relaxation`, the Kratos AMGCL wrapper writes `smoother_type` under `precond.relax`, which the relaxation preconditioner does not read. AMGCL prints "Unknown parameter relax" and uses its default relaxation, **SPAI0** (a diagonal sparse approximate inverse), in serial and in MPI. The default settings therefore do not set `smoother_type`. All the "relaxation" runs below used SPAI0, whatever smoother they named, which is why they behave alike.
 
 ### Boundary fluxes from the level set, and flux-free walls
 
@@ -121,11 +121,11 @@ Solver and penalty choices, all with LEoPart's trace outflow:
 |---|---|
 | β = 1e-6, AMGCL GMRES + AMG | Facet solve stalls (relative residual 6e-3, 0.13 and 0.20 at steps 2-4, after 500 iterations). 33-47 s per step in `InitializeSolutionStep`. The indicator explodes ([-50, 8] at step 20, [-4365, 10190] at step 30) and the volume collapses. |
 | β = 1e-6, Eigen sparse LU | The first factorization exceeded the available 22 GB of memory and was stopped. |
-| β = 1e-6, CG + Jacobi, SPAI0 or BiCGStab + ILU0 | Converges at first, then reaches the 2000-iteration limit at a residual of about 2e-8. 12-49 s per step in `InitializeSolutionStep`. |
-| β = 1e-3, CG + Jacobi | Stable, indicator up to 1.053, but the `InitializeSolutionStep` time grows from 2.3 to 6.8 s as the flow accelerates. |
-| β = 1e-2, CG + Jacobi | Stable, residual below 1e-8 every step, 2.4-3.4 s per `InitializeSolutionStep` over the first 30 steps, indicator in [-0.10, 1.12]. |
+| β = 1e-6, CG or BiCGStab with the relaxation (SPAI0) preconditioner | Converges at first, then reaches the 2000-iteration limit at a residual of about 2e-8. 12-49 s per step in `InitializeSolutionStep`. |
+| β = 1e-3, CG + SPAI0 | Stable, indicator up to 1.053, but the `InitializeSolutionStep` time grows from 2.3 to 6.8 s as the flow accelerates. |
+| β = 1e-2, CG + SPAI0 | Stable, residual below 1e-8 every step, 2.4-3.4 s per `InitializeSolutionStep` over the first 30 steps, indicator in [-0.10, 1.12]. |
 
-Boundary flux choices, with β = 1e-2 and CG + Jacobi, over 0.2 s:
+Boundary flux choices, with β = 1e-2 and CG + SPAI0, over 0.2 s:
 
 <a id="boundary-fluxes"></a>
 
