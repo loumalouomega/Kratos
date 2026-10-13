@@ -72,6 +72,9 @@ ParticleMeshPdeProjectionProcess<TDim>::ParticleMeshPdeProjectionProcess(
     KRATOS_ERROR_IF(mParameters["max_CFL"].GetDouble() <= 0.0) << "'max_CFL' must be positive." << std::endl;
     KRATOS_ERROR_IF(mParameters["beta"].GetDouble() <= 0.0) << "'beta' must be positive." << std::endl;
     KRATOS_ERROR_IF(mParameters["zeta"].GetDouble() < 0.0) << "'zeta' must be non-negative." << std::endl;
+    const std::string& r_backflow_fluid = mParameters["backflow_fluid"].GetString();
+    KRATOS_ERROR_IF(r_backflow_fluid != "air" && r_backflow_fluid != "level_set")
+        << "'backflow_fluid' must be \"air\" or \"level_set\". Got \"" << r_backflow_fluid << "\"." << std::endl;
     KRATOS_ERROR_IF(mParameters["particles_output"]["interval"].GetInt() < 1) << "'particles_output.interval' must be at least 1." << std::endl;
     KRATOS_ERROR_IF(mParameters["particles_output"]["stride"].GetInt() < 1) << "'particles_output.stride' must be at least 1." << std::endl;
 
@@ -130,6 +133,7 @@ const Parameters ParticleMeshPdeProjectionProcess<TDim>::GetDefaultParameters() 
             "max_iterations"     : 50
         },
         "outflow_flux_from_level_set" : true,
+        "backflow_fluid"          : "air",
         "update_particle_distance_after_redistancing" : true,
         "particles_output"        : {
             "model_part_name" : "",
@@ -261,7 +265,11 @@ void ParticleMeshPdeProjectionProcess<TDim>::Execute()
 
     // Particle advection and population control
     std::vector<typename ParticleContainerType::FaceTypesType> face_types;
-    ParticleContainerType::ClassifyFaces(*mpFacetTable, flux_velocity, is_closed, face_types);
+    std::vector<bool> is_inlet(n_nodes);
+    for (std::size_t i_node = 0; i_node < n_nodes; ++i_node) {
+        is_inlet[i_node] = (mrModelPart.NodesBegin() + i_node)->Is(INLET);
+    }
+    ParticleContainerType::ClassifyFaces(*mpFacetTable, flux_velocity, is_closed, is_inlet, face_types);
     const std::size_t n_lost = mpParticles->Advect(old_velocity, new_velocity, face_types, dt, mParameters["max_CFL"].GetDouble(), mParameters["runge_kutta_order"].GetInt());
     const auto& r_counts = mParameters["particles_per_element"];
     const auto population = mpParticles->ControlPopulation(r_counts["minimum"].GetInt(), r_counts["maximum"].GetInt(), face_types, nodal_distance, mIndicator, mDistance);
@@ -272,6 +280,7 @@ void ParticleMeshPdeProjectionProcess<TDim>::Execute()
     settings.Zeta = mParameters["zeta"].GetDouble();
     settings.DeltaTime = dt;
     settings.OutflowFromLevelSet = mParameters["outflow_flux_from_level_set"].GetBool();
+    settings.BackflowFromLevelSet = mParameters["backflow_fluid"].GetString() == "level_set";
     mLastProjectionInfo = mpProjection->Project(*mpParticles, flux_velocity, face_types, nodal_distance, settings, *mpFacetSystem, mIndicator);
 
     // Projection of the distance and volume correction

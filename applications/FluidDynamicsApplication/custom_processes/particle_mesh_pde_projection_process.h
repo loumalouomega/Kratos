@@ -48,8 +48,11 @@ namespace Kratos
  * 2. The number of particles per element is kept between the given bounds.
  * 3. The indicator is projected onto a discontinuous P1 field c_h with the PDE-constrained projection (Maljaars et al.,
  *    CMAME 348, 2019), which makes the integral of c_h change exactly by the boundary fluxes, both per element and globally.
- *    By default the boundary fluxes use the level set indicator H(-DISTANCE) ("outflow_flux_from_level_set"), so the phase only
+ *    By default the outgoing boundary fluxes use the level set indicator H(-DISTANCE) ("outflow_flux_from_level_set"), so the phase only
  *    leaves the domain where the level set says it does; set it to false to use the interior trace on outflow (LEoPart).
+ *    The level set is the incoming fluid only at the inlets (faces whose nodes are all flagged INLET). Where fluid comes in through any
+ *    other open face (backflow at an outlet) the incoming fluid is air ("backflow_fluid": "air", default) so that outlets cannot create
+ *    phase; use "level_set" if the incoming fluid is really the one given by the level set (e.g. a submerged outlet).
  * 4. The particle distance is projected elementwise (l2) and averaged to the nodal DISTANCE.
  * 5. The nodal DISTANCE is shifted so that the volume of its negative side equals the integral of c_h (global volume correction).
  * 6. The indicator is written to the elemental and nodal (non-historical) PHASE_FRACTION for visualization.
