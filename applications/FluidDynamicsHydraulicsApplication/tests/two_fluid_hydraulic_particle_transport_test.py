@@ -59,9 +59,19 @@ class TwoFluidHydraulicParticleTransportTest(UnitTest.TestCase):
             parameters["problem_data"]["end_time"].SetDouble(number_of_steps * time_step)
             parameters["solver_settings"]["echo_level"].SetInt(0)
             parameters["solver_settings"].AddEmptyValue("levelset_transport_type").SetString("particle_pde_projection")
+            parameters["solver_settings"].AddValue("particle_pde_projection_settings", KratosMultiphysics.Parameters("""{
+                "particles_output" : {"model_part_name" : "FluidParticles", "interval" : 1, "stride" : 4}
+            }"""))
             parameters["processes"]["json_check_process_list"] = KratosMultiphysics.Parameters("[]")
 
-            _ParticleTransportHydraulicAnalysis(KratosMultiphysics.Model(), parameters, self).Run()
+            # The particles output model part exists before the processes are created (an output process may use it)
+            model = KratosMultiphysics.Model()
+            analysis = _ParticleTransportHydraulicAnalysis(model, parameters, self)
+            self.assertTrue(model.HasModelPart("FluidParticles"))
+            analysis.Run()
+            particles = model.GetModelPart("FluidParticles")
+            self.assertGreater(particles.NumberOfNodes(), 0)
+            self.assertEqual(particles.NumberOfConditions(), particles.NumberOfNodes())
 
         # The tank is closed: the water volume does not change
         self.assertEqual(len(self.volumes), number_of_steps)
