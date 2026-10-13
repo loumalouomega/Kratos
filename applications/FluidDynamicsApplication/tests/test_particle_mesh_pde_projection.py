@@ -1,7 +1,9 @@
 import math
+import os
 
 import KratosMultiphysics
 import KratosMultiphysics.KratosUnittest as KratosUnittest
+import KratosMultiphysics.kratos_utilities as KratosUtilities
 import KratosMultiphysics.FluidDynamicsApplication as KratosCFD
 from KratosMultiphysics.FluidDynamicsApplication.fluid_dynamics_analysis import FluidDynamicsAnalysis
 from KratosMultiphysics.FluidDynamicsApplication.navier_stokes_two_fluids_solver import NavierStokesTwoFluidsSolver
@@ -77,6 +79,50 @@ class TestParticleMeshPdeProjection(KratosUnittest.TestCase):
         self.assertAlmostEqual(negative_volume, process.GetIndicatorIntegral(), delta=1.0e-8)
         for node in model_part.Nodes:
             self.assertTrue(node.Has(KratosMultiphysics.PHASE_FRACTION))
+
+    def testParticlesVtkOutput2D(self):
+        model_part = self._CreateUnitSquare(8)
+        model_part.ProcessInfo[KratosMultiphysics.DELTA_TIME] = 0.02
+        for node in model_part.Nodes:
+            node.SetSolutionStepValue(KratosMultiphysics.DISTANCE, _SlottedDiskDistance(node.X, node.Y))
+
+        settings = KratosMultiphysics.Parameters("""{
+            "particles_per_element"  : {"initial" : 10, "minimum" : 6, "maximum" : 20},
+            "particles_output"       : {"model_part_name" : "Particles", "interval" : 1, "stride" : 2},
+            "linear_solver_settings" : {"solver_type" : "skyline_lu_factorization"}
+        }""")
+        process = CreateParticlePdeProjectionProcess(model_part, settings)
+        process.ExecuteInitialize()
+        model_part.ProcessInfo[KratosMultiphysics.STEP] = 1
+        process.Execute()
+
+        particles_model_part = self.model.GetModelPart("Particles")
+        self.assertEqual(particles_model_part.NumberOfNodes(), (process.GetNumberOfParticles() + 1) // 2)
+        self.assertEqual(particles_model_part.NumberOfConditions(), particles_model_part.NumberOfNodes())
+
+        # The particles can be written with the standard VTK output
+        with KratosUnittest.WorkFolderScope(".", __file__):
+            output_path = "particle_mesh_vtk_output_test"
+            vtk_settings = KratosMultiphysics.Parameters("""{
+                "model_part_name"            : "Particles",
+                "file_format"                : "ascii",
+                "output_path"                : "",
+                "nodal_data_value_variables" : ["DISTANCE", "PHASE_FRACTION"]
+            }""")
+            vtk_settings["output_path"].SetString(output_path)
+            vtk_output = KratosMultiphysics.VtkOutput(particles_model_part, vtk_settings)
+            vtk_output.PrintOutput()
+            try:
+                output_files = [file_name for file_name in os.listdir(output_path) if file_name.endswith(".vtk")]
+                self.assertEqual(len(output_files), 1)
+                with open(os.path.join(output_path, output_files[0])) as vtk_file:
+                    content = vtk_file.read()
+                self.assertIn("POINTS {}".format(particles_model_part.NumberOfNodes()), content)
+                self.assertIn("CELLS {}".format(particles_model_part.NumberOfNodes()), content)
+                self.assertIn("PHASE_FRACTION", content)
+                self.assertIn("DISTANCE", content)
+            finally:
+                KratosUtilities.DeleteDirectoryIfExisting(output_path)
 
     def testDefaultSettingsValidation(self):
         model_part = self._CreateUnitSquare(2)

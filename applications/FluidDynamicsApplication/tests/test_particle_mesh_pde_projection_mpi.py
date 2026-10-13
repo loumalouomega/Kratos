@@ -1,7 +1,9 @@
 import math
+import os
 
 import KratosMultiphysics as KM
 import KratosMultiphysics.KratosUnittest as KratosUnittest
+import KratosMultiphysics.kratos_utilities as KratosUtilities
 import KratosMultiphysics.FluidDynamicsApplication as KratosCFD
 import KratosMultiphysics.TrilinosApplication as KratosTrilinos
 from KratosMultiphysics.FluidDynamicsApplication import particle_pde_projection_utilities
@@ -101,6 +103,50 @@ class TestParticleMeshPdeProjectionMPI(KratosUnittest.TestCase):
                 max_difference = max(max_difference, abs(node.GetSolutionStepValue(KM.DISTANCE) - serial_node.GetSolutionStepValue(KM.DISTANCE)))
         max_difference = data_communicator.MaxAll(max_difference)
         self.assertLess(max_difference, 1.0e-3)
+
+    def testParticlesVtkOutputMPI2D(self):
+        data_communicator = KM.ParallelEnvironment.GetDefaultDataCommunicator()
+        model = KM.Model()
+        model_part = _CreateUnitSquare(model, "Distributed", 12, 0.02)
+        PartitionInStripes(model_part, data_communicator)
+        settings = KM.Parameters("""{
+            "particles_per_element" : {"initial" : 10, "minimum" : 6, "maximum" : 20},
+            "particles_output"      : {"model_part_name" : "Particles", "interval" : 1, "stride" : 1}
+        }""")
+        epetra_communicator = KratosTrilinos.CreateEpetraCommunicator(data_communicator)
+        process = particle_pde_projection_utilities.CreateParticlePdeProjectionProcess(model_part, 2, settings, epetra_communicator)
+        process.ExecuteInitialize()
+        model_part.ProcessInfo[KM.STEP] = 1
+        process.Execute()
+
+        # Every rank holds its own particles, with globally unique Ids
+        particles_model_part = model.GetModelPart("Particles")
+        self.assertTrue(particles_model_part.IsDistributed())
+        n_particles = process.GetNumberOfParticles()
+        self.assertEqual(data_communicator.SumAll(particles_model_part.NumberOfNodes()), n_particles)
+        self.assertEqual(particles_model_part.GetCommunicator().GlobalNumberOfNodes(), n_particles)
+        self.assertEqual(particles_model_part.GetCommunicator().GlobalNumberOfConditions(), n_particles)
+        max_id = data_communicator.MaxAll(max((node.Id for node in particles_model_part.Nodes), default=0))
+        self.assertEqual(max_id, n_particles)
+
+        # Each rank writes its own VTK file
+        output_path = "particle_mesh_vtk_output_mpi_test"
+        vtk_settings = KM.Parameters("""{
+            "model_part_name"            : "Particles",
+            "output_path"                : "",
+            "nodal_data_value_variables" : ["DISTANCE", "PHASE_FRACTION"]
+        }""")
+        vtk_settings["output_path"].SetString(output_path)
+        with KratosUnittest.WorkFolderScope(".", __file__):
+            KM.VtkOutput(particles_model_part, vtk_settings).PrintOutput()
+            data_communicator.Barrier()
+            try:
+                output_files = sorted(file_name for file_name in os.listdir(output_path) if file_name.endswith(".vtk"))
+                self.assertEqual(len(output_files), data_communicator.Size())
+            finally:
+                data_communicator.Barrier()
+                if data_communicator.Rank() == 0:
+                    KratosUtilities.DeleteDirectoryIfExisting(output_path)
 
 class _StripePartitionedTwoFluidsSolver(NavierStokesMPITwoFluidsSolver):
     """MPI two-fluids solver whose mesh is read in every rank and partitioned in stripes (no METIS needed)."""
