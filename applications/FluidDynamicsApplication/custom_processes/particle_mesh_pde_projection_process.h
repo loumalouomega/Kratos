@@ -55,6 +55,9 @@ namespace Kratos
  * 6. The indicator is written to the elemental and nodal (non-historical) PHASE_FRACTION for visualization.
  * ExecuteFinalizeSolutionStep adds the DISTANCE change done by other processes (e.g. redistancing) to the particle distance,
  * without changing the particle indicator.
+ * If "particles_output.model_part_name" is set, the particles are copied to that model part (created in the same Model and
+ * sharing the process info of the fluid) in the first step and every "particles_output.interval" steps, so that it can be
+ * written by the standard output processes.
  * @note For fixed linear simplex meshes (no remeshing, no moving mesh). In MPI runs the particles migrate between the ranks, the facet
  * system is distributed (TrilinosParticleMeshPdeProjectionProcess in the FluidDynamics TrilinosExtension) and all the reductions are global.
  * @tparam TDim Working space dimension
@@ -146,6 +149,19 @@ public:
 
     /// Checks the model part and the settings
     int Check() override;
+
+    /**
+     * @brief Copies the current particles to a model part, for visualization
+     * @details The model part is cleared and filled with one node per particle (every Stride-th particle), with the particle
+     * distance and indicator as the non-historical DISTANCE and PHASE_FRACTION, and one point condition per node so that the
+     * output processes (VTK, GiD) write them as points. Node Ids are globally unique in MPI runs (collective call).
+     * @param rParticlesModelPart The model part of the particles (it must not be the fluid model part)
+     * @param Stride Only every Stride-th particle is copied
+     */
+    void UpdateParticlesModelPart(
+        ModelPart& rParticlesModelPart,
+        const std::size_t Stride = 1
+        );
 
     /// Returns the default parameters
     const Parameters GetDefaultParameters() const override;

@@ -72,6 +72,18 @@ ParticleMeshPdeProjectionProcess<TDim>::ParticleMeshPdeProjectionProcess(
     KRATOS_ERROR_IF(mParameters["max_CFL"].GetDouble() <= 0.0) << "'max_CFL' must be positive." << std::endl;
     KRATOS_ERROR_IF(mParameters["beta"].GetDouble() <= 0.0) << "'beta' must be positive." << std::endl;
     KRATOS_ERROR_IF(mParameters["zeta"].GetDouble() < 0.0) << "'zeta' must be non-negative." << std::endl;
+    KRATOS_ERROR_IF(mParameters["particles_output"]["interval"].GetInt() < 1) << "'particles_output.interval' must be at least 1." << std::endl;
+    KRATOS_ERROR_IF(mParameters["particles_output"]["stride"].GetInt() < 1) << "'particles_output.stride' must be at least 1." << std::endl;
+
+    // Model part to output the particles, created here so that the output processes can be built before the first step
+    // It shares the process info of the fluid, so the output processes see the same time and step
+    const std::string& r_particles_model_part_name = mParameters["particles_output"]["model_part_name"].GetString();
+    if (!r_particles_model_part_name.empty()) {
+        auto& r_model = rModelPart.GetModel();
+        auto& r_particles_model_part = r_model.HasModelPart(r_particles_model_part_name) ? r_model.GetModelPart(r_particles_model_part_name) : r_model.CreateModelPart(r_particles_model_part_name);
+        KRATOS_ERROR_IF(&r_particles_model_part == &rModelPart) << "The particles cannot be written to the fluid model part." << std::endl;
+        r_particles_model_part.SetProcessInfo(rModelPart.pGetProcessInfo());
+    }
 
     KRATOS_CATCH("")
 }
@@ -119,6 +131,11 @@ const Parameters ParticleMeshPdeProjectionProcess<TDim>::GetDefaultParameters() 
         },
         "outflow_flux_from_level_set" : true,
         "update_particle_distance_after_redistancing" : true,
+        "particles_output"        : {
+            "model_part_name" : "",
+            "interval"        : 1,
+            "stride"          : 1
+        },
         "random_seed"             : 0
     })");
     if constexpr (TDim == 3) {
@@ -190,6 +207,12 @@ void ParticleMeshPdeProjectionProcess<TDim>::ExecuteInitialize()
     WritePhaseFraction();
 
     mIsInitialized = true;
+
+    // Initial particles in the output model part
+    const std::string& r_particles_model_part_name = mParameters["particles_output"]["model_part_name"].GetString();
+    if (!r_particles_model_part_name.empty()) {
+        UpdateParticlesModelPart(mrModelPart.GetModel().GetModelPart(r_particles_model_part_name), static_cast<std::size_t>(mParameters["particles_output"]["stride"].GetInt()));
+    }
 
     const std::size_t n_particles = GetNumberOfParticles();
     KRATOS_INFO_IF("ParticleMeshPdeProjectionProcess", mParameters["echo_level"].GetInt() > 0 && IsLoggingRank())
@@ -276,6 +299,16 @@ void ParticleMeshPdeProjectionProcess<TDim>::Execute()
     });
     mDistanceAfterExecute = nodal_distance;
     WritePhaseFraction();
+
+    // Particles output (first step and every "interval" steps, as the step-controlled output processes)
+    const auto& r_output_settings = mParameters["particles_output"];
+    const std::string& r_particles_model_part_name = r_output_settings["model_part_name"].GetString();
+    if (!r_particles_model_part_name.empty()) {
+        const int step = mrModelPart.GetProcessInfo()[STEP];
+        if (step <= 1 || step % r_output_settings["interval"].GetInt() == 0) {
+            UpdateParticlesModelPart(mrModelPart.GetModel().GetModelPart(r_particles_model_part_name), static_cast<std::size_t>(r_output_settings["stride"].GetInt()));
+        }
+    }
 
     const auto& r_info = mLastProjectionInfo;
     KRATOS_WARNING_IF("ParticleMeshPdeProjectionProcess", r_info.FacetSystemResidual > 1.0e-6 && IsLoggingRank())
@@ -511,6 +544,54 @@ void ParticleMeshPdeProjectionProcess<TDim>::WritePhaseFraction() const
         const auto& r_values = mIndicator[iElement];
         (mrModelPart.ElementsBegin() + iElement)->SetValue(PHASE_FRACTION, std::accumulate(r_values.begin(), r_values.end(), 0.0) / static_cast<double>(TDim + 1));
     });
+}
+
+/***********************************************************************************/
+/***********************************************************************************/
+
+template<std::size_t TDim>
+void ParticleMeshPdeProjectionProcess<TDim>::UpdateParticlesModelPart(
+    ModelPart& rParticlesModelPart,
+    const std::size_t Stride
+    )
+{
+    KRATOS_TRY
+
+    KRATOS_ERROR_IF(Stride == 0) << "The particles output stride must be at least 1." << std::endl;
+    KRATOS_ERROR_IF(&rParticlesModelPart == &mrModelPart) << "The particles cannot be written to the fluid model part." << std::endl;
+    if (!mIsInitialized) {
+        ExecuteInitialize();
+    }
+
+    // Remove the previous particles
+    rParticlesModelPart.Conditions().clear();
+    rParticlesModelPart.Nodes().clear();
+
+    // Globally unique Ids (contiguous per rank)
+    const auto& r_particles = mpParticles->GetParticles();
+    const std::size_t n_local = (r_particles.size() + Stride - 1) / Stride;
+    const auto& r_data_communicator = mrModelPart.GetCommunicator().GetDataCommunicator();
+    const std::size_t first_id = r_data_communicator.ScanSum(static_cast<unsigned long>(n_local)) - n_local + 1;
+
+    // One node and one point condition per particle (the condition makes the point visible in VTK and GiD)
+    auto p_properties = rParticlesModelPart.HasProperties(0) ? rParticlesModelPart.pGetProperties(0) : rParticlesModelPart.CreateNewProperties(0);
+    const std::string condition_name = TDim == 2 ? "PointCondition2D1N" : "PointCondition3D1N";
+    std::size_t id = first_id;
+    for (std::size_t i_particle = 0; i_particle < r_particles.size(); i_particle += Stride) {
+        const auto& r_particle = r_particles[i_particle];
+        auto p_node = rParticlesModelPart.CreateNewNode(id, r_particle.Coordinates[0], r_particle.Coordinates[1], r_particle.Coordinates[2]);
+        p_node->SetValue(DISTANCE, r_particle.Distance);
+        p_node->SetValue(PHASE_FRACTION, r_particle.Indicator);
+        rParticlesModelPart.CreateNewCondition(condition_name, id, std::vector<IndexType>{id}, p_properties);
+        ++id;
+    }
+
+    // All the particles are local (keeps the global counts of distributed model parts consistent)
+    auto& r_local_mesh = rParticlesModelPart.GetCommunicator().LocalMesh();
+    r_local_mesh.SetNodes(rParticlesModelPart.pNodes());
+    r_local_mesh.SetConditions(rParticlesModelPart.pConditions());
+
+    KRATOS_CATCH("")
 }
 
 /***********************************************************************************/
