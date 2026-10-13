@@ -222,7 +222,7 @@ KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionLocalSystem2D, FluidDynamicsA
     settings.Zeta = 10.0;
     settings.DeltaTime = 0.05;
     std::vector<LagrangianParticleContainer<2>::FaceTypesType> face_types;
-    LagrangianParticleContainer<2>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), face_types);
+    LagrangianParticleContainer<2>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), std::vector<bool>(table.NumberOfNodes(), false), face_types);
 
     for (std::size_t i_element = 0; i_element < table.NumberOfElements(); ++i_element) {
         UtilityType::LocalSystem local;
@@ -291,7 +291,7 @@ void TestProjectionReproducesLinearField(ModelPart& rModelPart)
     SerialFacetLinearSystem facet_system(Kratos::make_shared<SolverType>());
     UtilityType projection(table);
     std::vector<typename LagrangianParticleContainer<TDim>::FaceTypesType> face_types;
-    LagrangianParticleContainer<TDim>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), face_types);
+    LagrangianParticleContainer<TDim>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), std::vector<bool>(table.NumberOfNodes(), false), face_types);
     const auto info = projection.Project(particles, velocity, face_types, zero_distance, settings, facet_system, indicator);
     for (std::size_t i_element = 0; i_element < table.NumberOfElements(); ++i_element) {
         KRATOS_EXPECT_VECTOR_NEAR(indicator[i_element], expected[i_element], 1.0e-9);
@@ -331,7 +331,7 @@ void TestProjectionIsConservative(
     SerialFacetLinearSystem facet_system(Kratos::make_shared<SolverType>());
     UtilityType projection(table);
     std::vector<typename LagrangianParticleContainer<TDim>::FaceTypesType> face_types;
-    LagrangianParticleContainer<TDim>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), face_types);
+    LagrangianParticleContainer<TDim>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), std::vector<bool>(table.NumberOfNodes(), false), face_types);
     const auto info = projection.Project(particles, velocity, face_types, previous_distance, settings, facet_system, indicator);
 
     KRATOS_EXPECT_NEAR(info.PreviousIntegral, previous_integral, 1.0e-14);
@@ -390,7 +390,7 @@ KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionParticleAdvection2D, FluidDyn
         velocity.push_back(array_1d<double, 3>{-(r_node.Y() - 0.5), r_node.X() - 0.5, 0.0});
     }
     std::vector<LagrangianParticleContainer<2>::FaceTypesType> face_types;
-    LagrangianParticleContainer<2>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), face_types);
+    LagrangianParticleContainer<2>::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), std::vector<bool>(table.NumberOfNodes(), false), face_types);
     const std::size_t n_steps = 100;
     const double dt = 2.0 * Globals::Pi / static_cast<double>(n_steps);
     for (std::size_t i_step = 0; i_step < n_steps; ++i_step) {
@@ -493,6 +493,158 @@ KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionParticlesOutput2D, FluidDynam
     ModelPart& r_all_particles = model.CreateModelPart("AllParticles");
     process.UpdateParticlesModelPart(r_all_particles);
     KRATOS_EXPECT_EQ(r_all_particles.NumberOfNodes(), process.GetNumberOfParticles());
+}
+
+namespace
+{
+
+struct DownwardFlowResult
+{
+    double PreviousIntegral = 0.0;
+    double Integral = 0.0;
+    double NetBoundaryOutflow = 0.0;
+    double MaxCellResidual = 0.0;
+    std::size_t NumberOfInletFaces = 0;
+    std::size_t NumberOfBackflowFaces = 0;
+    std::size_t NumberOfOutflowFaces = 0;
+};
+
+/// Unit square full of water with a uniform downward velocity: the water leaves through the bottom (open face) and the top face is
+/// a backflow face, or an inlet if TopIsInlet. Nothing else crosses the boundary (the normal velocity is zero on the sides)
+DownwardFlowResult ProjectDownwardFlow(
+    const bool TopIsInlet,
+    const bool BackflowFromLevelSet
+    )
+{
+    using ContainerType = LagrangianParticleContainer<2>;
+    using UtilityType = PdeConstrainedProjectionUtility<2>;
+    Model model;
+    auto& r_model_part = CreateUnitSquareModelPart(model, 6);
+    const MeshFacetTable<2> table(r_model_part);
+    ContainerType particles(table, r_model_part, 5);
+    const std::vector<double> distance(table.NumberOfNodes(), -1.0);
+    particles.Seed(12, distance);
+    std::vector<UtilityType::ElementalValuesType> indicator;
+    UtilityType::InitializeIndicatorFromDistance(table, r_model_part, distance, indicator);
+
+    const std::vector<array_1d<double, 3>> velocity(table.NumberOfNodes(), array_1d<double, 3>{0.0, -1.0, 0.0});
+    std::vector<bool> is_inlet(table.NumberOfNodes(), false);
+    std::size_t i_node = 0;
+    for (const auto& r_node : r_model_part.Nodes()) {
+        is_inlet[i_node++] = TopIsInlet && r_node.Y() > 1.0 - 1.0e-12;
+    }
+    std::vector<ContainerType::FaceTypesType> face_types;
+    ContainerType::ClassifyFaces(table, velocity, std::vector<bool>(table.NumberOfNodes(), false), is_inlet, face_types);
+
+    DownwardFlowResult result;
+    for (std::size_t i_element = 0; i_element < table.NumberOfElements(); ++i_element) {
+        for (std::size_t i_face = 0; i_face < 3; ++i_face) {
+            const auto type = face_types[i_element][i_face];
+            result.NumberOfInletFaces += type == ContainerType::FaceType::Inlet ? 1 : 0;
+            result.NumberOfBackflowFaces += type == ContainerType::FaceType::Backflow ? 1 : 0;
+            result.NumberOfOutflowFaces += type == ContainerType::FaceType::Outflow ? 1 : 0;
+        }
+    }
+
+    UtilityType::ProjectionSettings settings;
+    settings.Beta = 1.0e-2;
+    settings.Zeta = 10.0;
+    settings.DeltaTime = 0.01;
+    settings.BackflowFromLevelSet = BackflowFromLevelSet;
+    SerialFacetLinearSystem facet_system(Kratos::make_shared<SolverType>());
+    UtilityType projection(table);
+    const auto info = projection.Project(particles, velocity, face_types, distance, settings, facet_system, indicator);
+    result.PreviousIntegral = info.PreviousIntegral;
+    result.Integral = info.Integral;
+    result.NetBoundaryOutflow = info.NetBoundaryOutflow;
+    result.MaxCellResidual = info.MaxCellResidual;
+    return result;
+}
+
+} // namespace
+
+KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionBackflowIsAir2D, FluidDynamicsApplicationFastSuite)
+{
+    // Water leaves through the bottom and nothing comes in through the top (an outlet): the content decreases by dt * 1 * 1
+    const auto result = ProjectDownwardFlow(false, false);
+    KRATOS_EXPECT_EQ(result.NumberOfInletFaces, 0);
+    KRATOS_EXPECT_EQ(result.NumberOfBackflowFaces, 6);
+    KRATOS_EXPECT_EQ(result.NumberOfOutflowFaces, 18);
+    KRATOS_EXPECT_NEAR(result.PreviousIntegral, 1.0, 1.0e-12);
+    KRATOS_EXPECT_NEAR(result.NetBoundaryOutflow, 0.01, 1.0e-12);
+    KRATOS_EXPECT_NEAR(result.Integral, 0.99, 1.0e-12);
+    KRATOS_EXPECT_NEAR(result.MaxCellResidual, 0.0, 1.0e-11);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionBackflowFromLevelSet2D, FluidDynamicsApplicationFastSuite)
+{
+    // With the level set as incoming fluid, the water that comes in through the top compensates the water that leaves through the bottom
+    const auto result = ProjectDownwardFlow(false, true);
+    KRATOS_EXPECT_EQ(result.NumberOfInletFaces, 0);
+    KRATOS_EXPECT_EQ(result.NumberOfBackflowFaces, 6);
+    KRATOS_EXPECT_NEAR(result.NetBoundaryOutflow, 0.0, 1.0e-12);
+    KRATOS_EXPECT_NEAR(result.Integral, 1.0, 1.0e-12);
+    KRATOS_EXPECT_NEAR(result.MaxCellResidual, 0.0, 1.0e-11);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionInletFaceUsesLevelSet2D, FluidDynamicsApplicationFastSuite)
+{
+    // The same face flagged as inlet brings in the fluid given by the level set, even with the default (air) backflow
+    const auto result = ProjectDownwardFlow(true, false);
+    KRATOS_EXPECT_EQ(result.NumberOfInletFaces, 6);
+    KRATOS_EXPECT_EQ(result.NumberOfBackflowFaces, 0);
+    KRATOS_EXPECT_EQ(result.NumberOfOutflowFaces, 18);
+    KRATOS_EXPECT_NEAR(result.NetBoundaryOutflow, 0.0, 1.0e-12);
+    KRATOS_EXPECT_NEAR(result.Integral, 1.0, 1.0e-12);
+    KRATOS_EXPECT_NEAR(result.MaxCellResidual, 0.0, 1.0e-11);
+}
+
+KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionSeedingAtInflowFaces2D, FluidDynamicsApplicationFastSuite)
+{
+    using ContainerType = LagrangianParticleContainer<2>;
+    Model model;
+    auto& r_model_part = CreateUnitSquareModelPart(model, 4);
+    const MeshFacetTable<2> table(r_model_part);
+    const auto nodal_distance = EvaluateAtNodes(r_model_part, [](const array_1d<double, 3>& rX) {return rX[0] - 0.5;});
+
+    // Elemental fields that disagree with the nodal distance (used only for empty elements without inflow faces)
+    const std::vector<ContainerType::ElementalValuesType> elemental_indicator(table.NumberOfElements(), ContainerType::ElementalValuesType{0.0, 0.0, 0.0});
+    const std::vector<ContainerType::ElementalValuesType> elemental_distance(table.NumberOfElements(), ContainerType::ElementalValuesType{5.0, 5.0, 5.0});
+
+    for (const auto face_type : {ContainerType::FaceType::Interior, ContainerType::FaceType::Backflow, ContainerType::FaceType::Inlet}) {
+        ContainerType particles(table, r_model_part, 11);
+        particles.Seed(8, nodal_distance);
+
+        // Empty the first element
+        std::vector<ContainerType::Particle> remaining;
+        for (const auto& r_particle : particles.GetParticles()) {
+            if (r_particle.Element != 0) {
+                remaining.push_back(r_particle);
+            }
+        }
+        particles.SetParticles(remaining);
+        KRATOS_EXPECT_EQ(particles.NumberOfParticles(0), 0);
+
+        std::vector<ContainerType::FaceTypesType> face_types(table.NumberOfElements());
+        for (auto& r_types : face_types) {
+            r_types.fill(ContainerType::FaceType::Interior);
+        }
+        face_types[0][0] = face_type;
+        particles.ControlPopulation(5, 20, face_types, nodal_distance, elemental_indicator, elemental_distance);
+        KRATOS_EXPECT_GE(particles.NumberOfParticles(0), 5);
+
+        for (auto it = particles.ParticlesBegin(0); it != particles.ParticlesEnd(0); ++it) {
+            if (face_type == ContainerType::FaceType::Interior) {
+                // Without an inflow face an empty element takes the elemental fields
+                KRATOS_EXPECT_NEAR(it->Distance, 5.0, 1.0e-12);
+                KRATOS_EXPECT_EQ(it->Indicator, 0.0);
+            } else {
+                // With an inlet or backflow face the new particles take the nodal distance (here the linear field x - 0.5)
+                KRATOS_EXPECT_NEAR(it->Distance, it->Coordinates[0] - 0.5, 1.0e-12);
+                KRATOS_EXPECT_EQ(it->Indicator, it->Distance < 0.0 ? 1.0 : 0.0);
+            }
+        }
+    }
 }
 
 } // namespace Kratos::Testing
