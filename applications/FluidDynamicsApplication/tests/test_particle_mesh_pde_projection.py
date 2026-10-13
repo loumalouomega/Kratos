@@ -124,6 +124,54 @@ class TestParticleMeshPdeProjection(KratosUnittest.TestCase):
             finally:
                 KratosUtilities.DeleteDirectoryIfExisting(output_path)
 
+    def _RunDownwardFlowWithWaterAtTheTop(self, extra_settings, top_nodes_are_inlet=False):
+        """Water in the left half of the box, including its top edge, with a uniform downward velocity and a wall at the bottom.
+
+        The top is an open face where the flow comes in and the level set says water. Nothing can leave through the
+        other faces (wall at the bottom, zero normal velocity on the sides). Returns the water volume of each step.
+        """
+        model_part = self._CreateUnitSquare(8)
+        model_part.ProcessInfo[KratosMultiphysics.DELTA_TIME] = 0.02
+        for node in model_part.Nodes:
+            node.SetSolutionStepValue(KratosMultiphysics.DISTANCE, node.X - 0.5)
+            for buffer_index in (0, 1):
+                node.SetSolutionStepValue(KratosMultiphysics.VELOCITY, buffer_index, [0.0, -1.0, 0.0])
+            if node.Y < 1.0e-12:
+                node.Set(KratosMultiphysics.SLIP, True)
+            if top_nodes_are_inlet and node.Y > 1.0 - 1.0e-12:
+                node.Set(KratosMultiphysics.INLET, True)
+
+        settings = KratosMultiphysics.Parameters("""{
+            "particles_per_element"  : {"initial" : 10, "minimum" : 6, "maximum" : 20},
+            "linear_solver_settings" : {"solver_type" : "skyline_lu_factorization"}
+        }""")
+        settings.AddMissingParameters(extra_settings)
+        process = CreateParticlePdeProjectionProcess(model_part, settings)
+        process.ExecuteInitialize()
+        volumes = [process.GetIndicatorIntegral()]
+        for step in range(1, 4):
+            model_part.ProcessInfo[KratosMultiphysics.STEP] = step
+            process.Execute()
+            volumes.append(process.GetIndicatorIntegral())
+        return volumes
+
+    def testBackflowAtAnOutletDoesNotCreateWater2D(self):
+        # The default: the fluid that comes in through an open face that is not an inlet is air
+        volumes = self._RunDownwardFlowWithWaterAtTheTop(KratosMultiphysics.Parameters("{}"))
+        self.assertAlmostEqual(volumes[0], 0.5, delta=1.0e-12)
+        for volume in volumes[1:]:
+            self.assertAlmostEqual(volume, 0.5, delta=1.0e-10)
+
+    def testBackflowFromTheLevelSetCreatesWater2D(self):
+        # The previous behaviour, still available (for instance for a submerged outlet): water comes in at 0.5 * dt per step
+        volumes = self._RunDownwardFlowWithWaterAtTheTop(KratosMultiphysics.Parameters("""{"backflow_fluid" : "level_set"}"""))
+        self.assertAlmostEqual(volumes[-1] - volumes[0], 3 * 0.02 * 0.5, delta=2.0e-3)
+
+    def testInletBringsInTheLevelSetFluid2D(self):
+        # The same top face flagged as inlet brings in water even with the default backflow
+        volumes = self._RunDownwardFlowWithWaterAtTheTop(KratosMultiphysics.Parameters("{}"), top_nodes_are_inlet=True)
+        self.assertAlmostEqual(volumes[-1] - volumes[0], 3 * 0.02 * 0.5, delta=2.0e-3)
+
     def testDefaultSettingsValidation(self):
         model_part = self._CreateUnitSquare(2)
         wrong_settings = KratosMultiphysics.Parameters("""{
@@ -132,6 +180,12 @@ class TestParticleMeshPdeProjection(KratosUnittest.TestCase):
         }""")
         with self.assertRaisesRegex(RuntimeError, "At least 3 particles per element"):
             CreateParticlePdeProjectionProcess(model_part, wrong_settings)
+        wrong_backflow = KratosMultiphysics.Parameters("""{
+            "backflow_fluid"         : "water",
+            "linear_solver_settings" : {"solver_type" : "skyline_lu_factorization"}
+        }""")
+        with self.assertRaisesRegex(RuntimeError, "backflow_fluid"):
+            CreateParticlePdeProjectionProcess(model_part, wrong_backflow)
 
 def CreateParticlePdeProjectionProcess(model_part, settings):
     from KratosMultiphysics.FluidDynamicsApplication import particle_pde_projection_utilities
