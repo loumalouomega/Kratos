@@ -137,6 +137,7 @@ void LagrangianParticleContainer<TDim>::ClassifyFaces(
     const FacetTableType& rFacetTable,
     const NodalVectorValuesType& rVelocity,
     const std::vector<bool>& rIsClosedNode,
+    const std::vector<bool>& rIsInletNode,
     std::vector<FaceTypesType>& rFaceTypes
     )
 {
@@ -156,19 +157,24 @@ void LagrangianParticleContainer<TDim>::ClassifyFaces(
             const double area = norm_2(r_area_normal);
             array_1d<double, 3> mean_velocity = ZeroVector(3);
             bool all_closed = true;
+            bool all_inlet = true;
             for (std::size_t i_node = 0; i_node < NumNodes; ++i_node) {
                 if (i_node != i_face) {
                     const std::size_t node = r_data.NodeIndices[i_node];
                     noalias(mean_velocity) += rVelocity[node] / static_cast<double>(TDim);
                     all_closed = all_closed && rIsClosedNode[node];
+                    all_inlet = all_inlet && rIsInletNode[node];
                 }
             }
-            // Impermeable walls carry no flux even if the nodal velocity has a small normal component (e.g. at slip wall edges)
             if (all_closed) {
+                // Impermeable walls carry no flux even if the nodal velocity has a small normal component (e.g. at slip wall edges)
                 r_types[i_face] = FaceType::Wall;
+            } else if (all_inlet) {
+                // The incoming fluid is only known at the inlets (their distance is imposed)
+                r_types[i_face] = FaceType::Inlet;
             } else {
                 const double normal_velocity = inner_prod(mean_velocity, r_area_normal) / area;
-                r_types[i_face] = normal_velocity >= 0.0 ? FaceType::Outflow : FaceType::Inflow;
+                r_types[i_face] = normal_velocity >= 0.0 ? FaceType::Outflow : FaceType::Backflow;
             }
         }
     });
@@ -497,7 +503,10 @@ typename LagrangianParticleContainer<TDim>::PopulationStatistics LagrangianParti
             }
         } else if (count < new_count) {
             SplitMix64 generator(CombineSeed(mSeed, counter, mrFacetTable.GetElementId(iElement)));
-            const bool is_inflow_element = std::any_of(rFaceTypes[iElement].begin(), rFaceTypes[iElement].end(), [](const FaceType Type) {return Type == FaceType::Inflow;});
+            // Elements with an open face where the flow comes in (inlet or backflow): the material that enters is not in the domain,
+            // so the nodal distance is the best information for the new particles. Copying the closest particle there made the
+            // 2D wave example unstable (it accumulated spurious water next to the outlet).
+            const bool is_inflow_element = std::any_of(rFaceTypes[iElement].begin(), rFaceTypes[iElement].end(), [](const FaceType Type) {return Type == FaceType::Inlet || Type == FaceType::Backflow;});
 
             // Gradient of the elemental distance (used to extrapolate the distance of the closest particle)
             array_1d<double, 3> distance_gradient = ZeroVector(3);
@@ -514,7 +523,7 @@ typename LagrangianParticleContainer<TDim>::PopulationStatistics LagrangianParti
                 new_particle.Element = iElement;
                 mrFacetTable.ShapeFunctions(iElement, new_particle.Coordinates, N);
                 if (is_inflow_element) {
-                    // Values from the nodal distance (imposed by the inlet)
+                    // Values from the nodal distance
                     double distance = 0.0;
                     for (std::size_t i_node = 0; i_node < NumNodes; ++i_node) {
                         distance += N[i_node] * rNodalDistance[r_data.NodeIndices[i_node]];

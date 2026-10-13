@@ -84,10 +84,11 @@ public:
     /// Classification of the element faces
     enum class FaceType : unsigned char
     {
-        Interior,
-        Wall,
-        Outflow,
-        Inflow
+        Interior,   /// Shared by two elements
+        Wall,       /// Impermeable boundary: no flux
+        Outflow,    /// Open boundary (not an inlet) with outward average normal velocity
+        Backflow,   /// Open boundary (not an inlet) with inward average normal velocity
+        Inlet       /// Open boundary whose nodes are all flagged as inlet: the incoming fluid is given by the level set
     };
 
     /// Face types of an element
@@ -154,17 +155,20 @@ public:
 
     /**
      * @brief Classifies the boundary faces of each element
-     * @details Boundary faces whose nodes are all closed (impermeable) are Wall. The other boundary faces are open: Outflow if the
-     * face averaged normal velocity is non-negative and Inflow otherwise. Wall faces carry no indicator flux and push particles back.
+     * @details Boundary faces whose nodes are all closed (impermeable) are Wall. Among the open faces, those whose nodes are all inlet nodes
+     * are Inlet. The remaining open faces are Outflow if the face averaged normal velocity is non-negative and Backflow otherwise.
+     * Wall faces carry no indicator flux and push particles back. Only particles leaving through Outflow faces are deleted.
      * @param rFacetTable The facet table of the mesh
      * @param rVelocity Nodal velocity
      * @param rIsClosedNode Impermeable flag of each node (e.g. slip or no-slip wall nodes)
+     * @param rIsInletNode Inlet flag of each node (the level set is the incoming fluid at inlets)
      * @param rFaceTypes Face types of each element
      */
     static void ClassifyFaces(
         const FacetTableType& rFacetTable,
         const NodalVectorValuesType& rVelocity,
         const std::vector<bool>& rIsClosedNode,
+        const std::vector<bool>& rIsInletNode,
         std::vector<FaceTypesType>& rFaceTypes
         );
 
@@ -191,7 +195,7 @@ public:
      * @brief Keeps the number of particles of each element between the given bounds
      * @param MinPerElement Minimum number of particles per element
      * @param MaxPerElement Maximum number of particles per element
-     * @param rFaceTypes Face types (new particles in elements with inflow faces take their values from the nodal distance)
+     * @param rFaceTypes Face types (new particles in elements with an inlet or backflow face take their values from the nodal distance)
      * @param rNodalDistance Current nodal distance
      * @param rElementalIndicator Elemental indicator field (used for elements without particles)
      * @param rElementalDistance Elemental distance field (used to extrapolate the distance of new particles)
