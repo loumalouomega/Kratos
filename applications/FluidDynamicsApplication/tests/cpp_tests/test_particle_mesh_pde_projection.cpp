@@ -448,4 +448,51 @@ KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionProcessVolume2D, FluidDynamic
     }
 }
 
+KRATOS_TEST_CASE_IN_SUITE(ParticleMeshPdeProjectionParticlesOutput2D, FluidDynamicsApplicationFastSuite)
+{
+    Model model;
+    auto& r_model_part = CreateUnitSquareModelPart(model, 8);
+    r_model_part.GetProcessInfo().SetValue(DELTA_TIME, 0.01);
+    for (auto& r_node : r_model_part.Nodes()) {
+        r_node.FastGetSolutionStepValue(DISTANCE) = r_node.X() - 0.5;
+        const array_1d<double, 3> velocity{0.1, 0.0, 0.0};
+        r_node.FastGetSolutionStepValue(VELOCITY) = velocity;
+        r_node.FastGetSolutionStepValue(VELOCITY, 1) = velocity;
+    }
+
+    Parameters parameters(R"({
+        "particles_per_element" : {"initial" : 12, "minimum" : 6, "maximum" : 24},
+        "particles_output"      : {"model_part_name" : "Particles", "interval" : 2, "stride" : 3}
+    })");
+    ParticleMeshPdeProjectionProcess<2> process(r_model_part, Kratos::make_shared<SolverType>(), parameters);
+    process.ExecuteInitialize();
+    r_model_part.GetProcessInfo().SetValue(STEP, 1);
+    process.Execute();
+
+    // The particles model part is created in the same model, shares the process info and holds every third particle
+    KRATOS_EXPECT_TRUE(model.HasModelPart("Particles"));
+    const auto& r_particles = model.GetModelPart("Particles");
+    KRATOS_EXPECT_EQ(&r_particles.GetProcessInfo(), &r_model_part.GetProcessInfo());
+    const std::size_t n_expected = (process.GetNumberOfParticles() + 2) / 3;
+    KRATOS_EXPECT_EQ(r_particles.NumberOfNodes(), n_expected);
+    KRATOS_EXPECT_EQ(r_particles.NumberOfConditions(), n_expected);
+    IndexType expected_id = 1;
+    for (const auto& r_node : r_particles.Nodes()) {
+        KRATOS_EXPECT_EQ(r_node.Id(), expected_id++);
+        KRATOS_EXPECT_TRUE(r_node.X() >= -1.0e-12 && r_node.X() <= 1.0 + 1.0e-12 && r_node.Y() >= -1.0e-12 && r_node.Y() <= 1.0 + 1.0e-12);
+        const double indicator = r_node.GetValue(PHASE_FRACTION);
+        KRATOS_EXPECT_TRUE(indicator == 0.0 || indicator == 1.0);
+        KRATOS_EXPECT_TRUE(std::isfinite(r_node.GetValue(DISTANCE)));
+    }
+    for (const auto& r_condition : r_particles.Conditions()) {
+        KRATOS_EXPECT_EQ(r_condition.GetGeometry().PointsNumber(), 1);
+        KRATOS_EXPECT_EQ(r_condition.GetGeometry()[0].Id(), r_condition.Id());
+    }
+
+    // Explicit update with another stride
+    ModelPart& r_all_particles = model.CreateModelPart("AllParticles");
+    process.UpdateParticlesModelPart(r_all_particles);
+    KRATOS_EXPECT_EQ(r_all_particles.NumberOfNodes(), process.GetNumberOfParticles());
+}
+
 } // namespace Kratos::Testing
