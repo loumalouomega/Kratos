@@ -156,6 +156,7 @@ class NavierStokesTwoFluidsSolver(FluidSolver):
         # Level set transport: Eulerian convection or Lagrangian particles with the PDE-constrained projection
         self._levelset_transport_type = particle_pde_projection_utilities.GetLevelSetTransportType(self.settings, self.__class__.__name__)
         if self._UseParticleLevelSetTransport():
+            particle_pde_projection_utilities.CreateParticlesOutputModelPart(self.model, self.settings["particle_pde_projection_settings"])
             if self.settings["formulation"].Has("mass_source") and self.settings["formulation"]["mass_source"].GetBool():
                 KratosMultiphysics.Logger.PrintWarning(self.__class__.__name__, "'mass_source' is not used with the particle level set transport, which conserves the phase volume itself.")
                 self.settings["formulation"]["mass_source"].SetBool(False)
