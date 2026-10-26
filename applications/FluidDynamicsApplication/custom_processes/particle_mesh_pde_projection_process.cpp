@@ -330,8 +330,10 @@ void ParticleMeshPdeProjectionProcess<TDim>::Execute()
         << ", facet system relative residual " << r_info.FacetSystemResidual << "." << std::endl;
     if (echo_level > 1) {
         const auto& r_data_communicator = mrModelPart.GetCommunicator().GetDataCommunicator();
-        const std::vector<unsigned long> counts = r_data_communicator.SumAll(std::vector<unsigned long>{
-            mpParticles->NumberOfParticles(), n_lost, population.Added, population.Removed, population.EmptyElements});
+        const std::vector<unsigned int> counts = r_data_communicator.SumAll(std::vector<unsigned int>{
+            static_cast<unsigned int>(mpParticles->NumberOfParticles()), static_cast<unsigned int>(n_lost),
+            static_cast<unsigned int>(population.Added), static_cast<unsigned int>(population.Removed),
+            static_cast<unsigned int>(population.EmptyElements)});
         KRATOS_INFO_IF("ParticleMeshPdeProjectionProcess", IsLoggingRank())
             << counts[0] << " particles (" << counts[1] << " left the domain, " << counts[2] << " added, "
             << counts[3] << " removed, " << counts[4] << " empty elements before reseeding)." << std::endl;
