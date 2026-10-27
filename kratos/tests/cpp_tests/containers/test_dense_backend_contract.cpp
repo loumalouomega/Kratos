@@ -174,7 +174,7 @@ KRATOS_TEST_CASE_IN_SUITE(DenseBackendBoundedTypesBasics, KratosCoreFastSuite)
     // full-size resize is accepted and preserves
     m.resize(2, 3);
     KRATOS_EXPECT_EQ(m(1, 2), 5.0);
-    v.resize(3);
+    v.resize(3, true);
     KRATOS_EXPECT_EQ(v[2], 3.0);
 }
 
