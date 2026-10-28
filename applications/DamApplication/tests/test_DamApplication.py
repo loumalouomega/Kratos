@@ -8,9 +8,14 @@ from generalTests import KratosDamGeneralTests
 from test_apply_load_vector_dam_processes import TestApplyLoadVectorDamProcesses
 from test_dam_linear_solver import TestDamLinearSolver
 from test_dam_nodal_young_modulus_process import TestImposeNodalYoungModulusProcess
+from test_dam_nonlocal_ownership import DamNonlocalOwnershipTest
 from test_dam_process_lifecycle import TestDamProcessLifetime
 from test_global_tangent_consistency import TestGlobalTangentConsistency
 from test_interface_tangent_consistency import TestSmallDisplacementInterfaceTangent
+from test_initial_gp_output_before_solve import TestInitialGaussPointOutputBeforeSolve
+from test_process_based_nodal_smoothing import DamProcessBasedNodalSmoothingTest
+from test_dam_output_processes import TestDamOutputProcesses
+from test_dam_gid_output_process import TestDamGiDOutputProcess
 
 
 def AssembleTestSuites():
@@ -61,7 +66,16 @@ def AssembleTestSuites():
         )
     )
     smallSuite.addTests(
-        KratosUnittest.TestLoader().loadTestsFromTestCases([TestDamProcessLifetime])
+        KratosUnittest.TestLoader().loadTestsFromTestCases(
+            [
+                TestInitialGaussPointOutputBeforeSolve,
+                DamProcessBasedNodalSmoothingTest,
+                DamNonlocalOwnershipTest,
+                TestDamProcessLifetime,
+                TestDamOutputProcesses,
+                TestDamGiDOutputProcess,
+            ]
+        )
     )
 
     # Create a test suit with the selected tests
@@ -83,8 +97,13 @@ def AssembleTestSuites():
                 TestDamLinearSolver,
                 TestGlobalTangentConsistency,
                 TestImposeNodalYoungModulusProcess,
+                TestInitialGaussPointOutputBeforeSolve,
+                DamNonlocalOwnershipTest,
+                DamProcessBasedNodalSmoothingTest,
                 TestDamProcessLifetime,
                 TestSmallDisplacementInterfaceTangent,
+                TestDamOutputProcesses,
+                TestDamGiDOutputProcess,
             ]
         )
     )
